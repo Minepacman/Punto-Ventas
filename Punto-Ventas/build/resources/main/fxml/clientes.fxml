@@ -4,10 +4,7 @@
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
-<!--
-    clientes.fxml  –  Crédito a Clientes (F2)
-    Controlador: ClientesController.java
--->
+
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ClientesController">
 

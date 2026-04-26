@@ -4,18 +4,6 @@
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
-<!--
-    ventas.fxml  –  Pantalla de venta (F1)
-    Controlador: VentasController.java
-
-    Layout:
-    ┌──────────────────────────┬──────────────┐
-    │  Código producto + ENTER │  TOTALES     │
-    ├──────────────────────────┤  $0.00       │
-    │  Tabla de productos      │              │
-    │  en el ticket actual     │  [F12 Cobrar]│
-    └──────────────────────────┴──────────────┘
--->
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.VentasController">
 

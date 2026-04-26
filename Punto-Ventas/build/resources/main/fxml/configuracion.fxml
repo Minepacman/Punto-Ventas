@@ -44,9 +44,9 @@
                             prefWidth="110" prefHeight="80"/>
                     <Button text="💳 Formas de\nPago"           onAction="#onFormasPago"
                             prefWidth="110" prefHeight="80"/>
-                    <Button text="&#37; Impuestos"                  onAction="#onImpuestos"
+                    <Button text="(%) Impuestos"                  onAction="#onImpuestos"
                             prefWidth="110" prefHeight="80"/>
-                    <Button text="&#36; Moneda"                     onAction="#onMoneda"
+                    <Button text="($) Moneda"                     onAction="#onMoneda"
                             prefWidth="110" prefHeight="80"/>
                     <Button text="📐 Unidades de\nMedida"       onAction="#onUnidades"
                             prefWidth="110" prefHeight="80"/>
