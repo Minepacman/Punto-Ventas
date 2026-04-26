@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion.fxml  –  Configuración del sistema
+    Controlador: ConfiguracionController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionController">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox spacing="24">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <!-- ── General ──────────────────────────────────── -->
+                <Label text="General" styleClass="config-section-title"/>
+                <TilePane hgap="16" vgap="16" prefColumns="4">
+                    <Button text="⚙ Opciones\nHabilitadas"   onAction="#onOpciones"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="👤 Cajeros"                  onAction="#onCajeros"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="🗄 Base de Datos"            onAction="#onBaseDatos"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="📦 Artículos\nPrecargados"   onAction="#onArticulosPrec"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="🧾 Facturación"              onAction="#onFacturacion"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="🔢 Modificar\nFolios"        onAction="#onFolios"
+                            prefWidth="110" prefHeight="80"/>
+                </TilePane>
+
+                <Separator/>
+
+                <!-- ── Personalización ──────────────────────────── -->
+                <Label text="Personalización" styleClass="config-section-title"/>
+                <TilePane hgap="16" vgap="16" prefColumns="4">
+                    <Button text="🖼 Logotipo"                  onAction="#onLogotipo"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="🎫 Ticket"                    onAction="#onTicket"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="💳 Formas de\nPago"           onAction="#onFormasPago"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="% Impuestos"                  onAction="#onImpuestos"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="$ Moneda"                     onAction="#onMoneda"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="📐 Unidades de\nMedida"       onAction="#onUnidades"
+                            prefWidth="110" prefHeight="80"/>
+                </TilePane>
+
+                <Separator/>
+
+                <!-- ── Dispositivos ──────────────────────────────── -->
+                <Label text="Dispositivos" styleClass="config-section-title"/>
+                <TilePane hgap="16" vgap="16" prefColumns="4">
+                    <Button text="🖨 Impresora\nde Tickets"     onAction="#onImpresora"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="📷 Lector de\nCódigos"        onAction="#onLector"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="💰 Cajón de\nDinero"          onAction="#onCajon"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="⚖ Báscula"                    onAction="#onBascula"
+                            prefWidth="110" prefHeight="80"/>
+                </TilePane>
+
+                <Separator/>
+
+                <!-- ── Mantenimiento ─────────────────────────────── -->
+                <Label text="Mantenimiento" styleClass="config-section-title"/>
+                <TilePane hgap="16" vgap="16" prefColumns="4">
+                    <Button text="💾 Respaldo\nAutomático"       onAction="#onRespaldo"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="🔑 Licencia"                   onAction="#onLicencia"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="🔄 Actualizaciones"            onAction="#onActualizaciones"
+                            prefWidth="110" prefHeight="80"/>
+                </TilePane>
+
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

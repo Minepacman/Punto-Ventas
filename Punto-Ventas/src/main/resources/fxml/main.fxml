@@ -1,40 +1,76 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.scene.control.Label?>
-<?import javafx.scene.control.Tab?>
-<?import javafx.scene.control.TabPane?>
-<?import javafx.scene.layout.AnchorPane?>
-<?import javafx.scene.layout.BorderPane?>
-<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
 
-<BorderPane prefHeight="720.0" prefWidth="1200.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="me.eliassanchezfernandez.puntodeventa.controller.MainController">
-   <center>
-      <TabPane fx:id="tabPane" prefHeight="200.0" prefWidth="200.0" tabClosingPolicy="UNAVAILABLE" BorderPane.alignment="CENTER">
-        <tabs>
-          <Tab text="Caja (F1)">
-            <content>
-              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0">
-                     <children>
-                        <Label layoutX="523.0" layoutY="324.0" style="-fx-font-size: 24px;" text="¡Hola Mundo POS!" />
-                     </children>
-                  </AnchorPane>
-            </content>
-          </Tab>
-          <Tab text="Inventario (F2)">
-            <content>
-              <AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0" />
-            </content>
-          </Tab>
-        </tabs>
-      </TabPane>
-   </center>
-   <bottom>
-      <HBox alignment="CENTER_RIGHT" prefHeight="30.0" prefWidth="200.0" spacing="20.0" style="-fx-background-color: #161b22; -fx-padding: 5px 15px;" BorderPane.alignment="CENTER">
-         <children>
-            <Label fx:id="labelUsuario" text="Usuario: -" textFill="WHITE" />
-            <Label fx:id="labelVersion" text="v0.0" textFill="WHITE" />
-            <Label fx:id="labelFecha" text="00/00/0000 00:00" textFill="WHITE" />
-         </children>
-      </HBox>
-   </bottom>
+<BorderPane   xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.MainController"
+            stylesheets="@../css/app.css" >
+
+    <top>
+        <ToolBar fx:id="toolbar" styleClass="main-toolbar">
+            <Label text="Punto de Venta" styleClass="brand-label"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="labelUsuario" text="Usuario: —"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="btnSalir" text="Salir" onAction="#onSalir"
+                    styleClass="button-danger"/>
+        </ToolBar>
+    </top>
+
+    <!-- ── NAVEGACIÓN POR PESTAÑAS ───────────────── -->
+    <center>
+        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE"
+                 styleClass="main-tabs">
+
+            <!-- F1 – Ventas -->
+            <Tab fx:id="tabVentas" text="F1 · Ventas">
+                <fx:include source="ventas.fxml"
+                            fx:id="ventasView"/>
+            </Tab>
+
+            <!-- F2 – Clientes -->
+            <Tab fx:id="tabClientes" text="F2 · Clientes">
+                <fx:include source="clientes.fxml"
+                            fx:id="clientesView"/>
+            </Tab>
+
+            <!-- F3 – Productos -->
+            <Tab fx:id="tabProductos" text="F3 · Productos">
+                <fx:include source="productos.fxml"
+                            fx:id="productosView"/>
+            </Tab>
+
+            <!-- F4 – Inventario -->
+            <Tab fx:id="tabInventario" text="F4 · Inventario">
+                <fx:include source="inventario.fxml"
+                            fx:id="inventarioView"/>
+            </Tab>
+
+            <!-- Configuración -->
+            <Tab fx:id="tabConfig" text="⚙ Configuración">
+                <fx:include source="configuracion.fxml"
+                            fx:id="configuracionView"/>
+            </Tab>
+
+            <!-- Corte -->
+            <Tab fx:id="tabCorte" text="✂ Corte">
+                <fx:include source="corte.fxml"
+                            fx:id="corteView"/>
+            </Tab>
+
+        </TabPane>
+    </center>
+
+    <!-- ── BARRA DE ESTADO INFERIOR ──────────────── -->
+    <bottom>
+        <HBox styleClass="status-bar" spacing="12">
+            <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
+            <Label fx:id="labelFecha" text="—"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="labelVersion" text="v1.0.0"/>
+        </HBox>
+    </bottom>
+
 </BorderPane>

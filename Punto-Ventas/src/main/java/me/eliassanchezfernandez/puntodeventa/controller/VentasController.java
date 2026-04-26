@@ -22,6 +22,7 @@ import java.util.ResourceBundle;
  *  3. Cajero ingresa pago → onCobrar()
  *  4. Servicio registra la venta y descuenta inventario
  */
+
 @Component
 public class VentasController implements Initializable {
 
@@ -63,7 +64,6 @@ public class VentasController implements Initializable {
         String codigo = txtCodigo.getText().trim();
         if (codigo.isEmpty()) return;
 
-        // TODO: llamar ventaService.buscarProducto(codigo)
         //       y agregar al ticket si existe
 
         txtCodigo.clear();

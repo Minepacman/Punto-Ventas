@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    inventario.fxml  –  Gestión de Inventario (F4)
+    Controlador: InventarioController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.InventarioController">
+
+    <top>
+        <HBox styleClass="section-toolbar" spacing="8">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Button text="➕ Agregar a Inv."        onAction="#onAgregar"
+                    styleClass="button-success"/>
+            <Button text="⚖ Ajustes"                onAction="#onAjustes"/>
+            <Button text="⚠ Productos Bajos"         onAction="#onProductosBajos"/>
+            <Separator orientation="VERTICAL"/>
+            <Button text="📊 Reporte de Inventario"  onAction="#onReporteInventario"/>
+            <Button text="📋 Reporte de Movimientos" onAction="#onReporteMovimientos"/>
+        </HBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.4">
+
+            <!-- Panel izquierdo: formulario de entrada rápida -->
+            <VBox styleClass="form-panel" spacing="12">
+                <padding><Insets topRightBottomLeft="16"/></padding>
+
+                <Label text="AGREGAR INVENTARIO" styleClass="section-title"/>
+                <Separator/>
+
+                <Label text="Código del Producto:"/>
+                <TextField fx:id="txtCodigo" promptText="Escanea o escribe..."
+                           onAction="#onBuscarProducto"/>
+
+                <Label text="Descripción:"/>
+                <Label fx:id="labelDescripcion" text="—" styleClass="info-label"/>
+
+                <Label text="Cantidad Actual:"/>
+                <Label fx:id="labelCantidadActual" text="0.00" styleClass="info-label"/>
+
+                <Label text="Cantidad a Agregar:"/>
+                <TextField fx:id="txtCantidad" promptText="0.00"/>
+
+                <Button text="✅ Agregar cantidad a Inventario"
+                        onAction="#onAgregarCantidad"
+                        styleClass="button-success"
+                        maxWidth="Infinity"/>
+            </VBox>
+
+            <!-- Panel derecho: tabla de productos en inventario bajo -->
+            <TableView fx:id="tablaInventario">
+                <columns>
+                    <TableColumn fx:id="colCodigo"      text="Código"     prefWidth="130"/>
+                    <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="260"/>
+                    <TableColumn fx:id="colActual"      text="Actual"      prefWidth="90"/>
+                    <TableColumn fx:id="colMinimo"      text="Mínimo"      prefWidth="90"/>
+                    <TableColumn fx:id="colEstado"      text="Estado"      prefWidth="100"/>
+                </columns>
+            </TableView>
+
+        </SplitPane>
+    </center>
+
+</BorderPane>

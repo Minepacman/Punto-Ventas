@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    ventas.fxml  –  Pantalla de venta (F1)
+    Controlador: VentasController.java
+
+    Layout:
+    ┌──────────────────────────┬──────────────┐
+    │  Código producto + ENTER │  TOTALES     │
+    ├──────────────────────────┤  $0.00       │
+    │  Tabla de productos      │              │
+    │  en el ticket actual     │  [F12 Cobrar]│
+    └──────────────────────────┴──────────────┘
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.VentasController">
+
+    <!-- ── BARRA SUPERIOR: búsqueda de producto ── -->
+    <top>
+        <HBox styleClass="search-bar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Label text="Código del Producto:"/>
+            <TextField fx:id="txtCodigo" promptText="Escanea o escribe el código"
+                       HBox.hgrow="ALWAYS"
+                       onAction="#onAgregarProducto"/>
+            <Button fx:id="btnAgregar" text="↵ Agregar"
+                    onAction="#onAgregarProducto"
+                    styleClass="button-success"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="btnBuscar"  text="🔍 Buscar"  onAction="#onBuscar"/>
+            <Button fx:id="btnMayoreo" text="Mayoreo"    onAction="#onMayoreo"/>
+        </HBox>
+    </top>
+
+    <!-- ── TABLA DE PRODUCTOS EN TICKET ──────────── -->
+    <center>
+        <TableView fx:id="tablaProductos" styleClass="ticket-table">
+            <columns>
+                <TableColumn fx:id="colCodigo"      text="Código"      prefWidth="130"/>
+                <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="300"/>
+                <TableColumn fx:id="colPrecio"      text="Precio"      prefWidth="90"/>
+                <TableColumn fx:id="colCantidad"    text="Cant."       prefWidth="60"/>
+                <TableColumn fx:id="colImporte"     text="Importe"     prefWidth="90"/>
+                <TableColumn fx:id="colExistencia"  text="Existencia"  prefWidth="90"/>
+                <TableColumn fx:id="colDescuento"   text="Descuento"   prefWidth="90"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <!-- ── PANEL DERECHO: totales y cobro ────────── -->
+    <right>
+        <VBox styleClass="totales-panel" spacing="12" minWidth="220">
+            <padding><Insets topRightBottomLeft="16"/></padding>
+
+            <Label text="TOTAL" styleClass="total-label-title"/>
+            <Label fx:id="labelTotal" text="\$0.00" styleClass="total-amount"/>
+
+            <Separator/>
+
+            <Label text="Pagó con:"/>
+            <TextField fx:id="txtPago" promptText="\$0.00"/>
+
+            <Label text="Cambio:"/>
+            <Label fx:id="labelCambio" text="\$0.00" styleClass="cambio-label"/>
+
+            <Region VBox.vgrow="ALWAYS"/>
+
+            <Button fx:id="btnCobrar" text="F12 · Cobrar"
+                    onAction="#onCobrar"
+                    maxWidth="Infinity"
+                    styleClass="button-primary, btn-cobrar"/>
+
+            <Button fx:id="btnCancelar" text="Cancelar ticket"
+                    onAction="#onCancelarTicket"
+                    maxWidth="Infinity"
+                    styleClass="button-danger"/>
+        </VBox>
+    </right>
+
+    <!-- ── BARRA INFERIOR: info del ticket ────────── -->
+    <bottom>
+        <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
+            <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
+            <Label fx:id="labelNumProductos" text="0 productos en la venta actual."/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label text="Total pagado:"/>
+            <Label fx:id="labelTotalPagado" text="\$0.00"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    productos.fxml  –  Catálogo de Productos (F3)
+    Controlador: ProductosController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ProductosController">
+
+    <top>
+        <VBox>
+            <!-- Acciones principales -->
+            <HBox styleClass="section-toolbar" spacing="8">
+                <padding><Insets topRightBottomLeft="10"/></padding>
+                <Button text="+ Nuevo"           onAction="#onNuevo"
+                        styleClass="button-success"/>
+                <Button text="✏ Modificar"        onAction="#onModificar"/>
+                <Button text="🗑 Eliminar"         onAction="#onEliminar"
+                        styleClass="button-danger"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="Departamentos"      onAction="#onDepartamentos"/>
+                <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
+                <Button text="⭐ Promociones"      onAction="#onPromociones"/>
+                <Button text="📥 Importar"         onAction="#onImportar"/>
+            </HBox>
+
+            <!-- Búsqueda -->
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
+                <Label text="🔍"/>
+                <TextField fx:id="txtBuscar"
+                           promptText="Buscar por código o descripción..."
+                           HBox.hgrow="ALWAYS"
+                           onKeyReleased="#onBuscar"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tablaProductos">
+            <columns>
+                <TableColumn fx:id="colCodigo"       text="Código"        prefWidth="140"/>
+                <TableColumn fx:id="colDescripcion"  text="Descripción"   prefWidth="280"/>
+                <TableColumn fx:id="colPrecioCosto"  text="Costo"         prefWidth="90"/>
+                <TableColumn fx:id="colPrecioVenta"  text="Venta"         prefWidth="90"/>
+                <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"       prefWidth="90"/>
+                <TableColumn fx:id="colExistencia"   text="Existencia"    prefWidth="100"/>
+                <TableColumn fx:id="colDepartamento" text="Departamento"  prefWidth="130"/>
+            </columns>
+        </TableView>
+    </center>
+
+</BorderPane>

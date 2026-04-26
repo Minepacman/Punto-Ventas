@@ -1,6 +1,5 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
-
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Label;
@@ -20,7 +19,6 @@ import java.util.ResourceBundle;
  *  - Controlar accesos por rol (cajero / admin)
  *  - Escuchar atajos de teclado F1–F4
  */
-
 @Component
 public class MainController implements Initializable {
 

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    clientes.fxml  –  Crédito a Clientes (F2)
+    Controlador: ClientesController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ClientesController">
+
+    <top>
+        <VBox>
+            <HBox styleClass="section-toolbar" spacing="8">
+                <padding><Insets topRightBottomLeft="10"/></padding>
+                <Button text="Estado de Cuenta" onAction="#onEstadoCuenta"/>
+                <Button text="+ Nuevo Cliente"  onAction="#onNuevoCliente"
+                        styleClass="button-success"/>
+                <Button text="✏ Modificar"       onAction="#onModificar"/>
+                <Button text="🗑 Eliminar"        onAction="#onEliminar"
+                        styleClass="button-danger"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="Reporte de Saldos" onAction="#onReporteSaldos"/>
+            </HBox>
+
+            <!-- Barra de búsqueda -->
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
+                <Label text="🔍"/>
+                <TextField fx:id="txtBuscar" promptText="Buscar por nombre o número..."
+                           HBox.hgrow="ALWAYS" onKeyReleased="#onBuscar"/>
+            </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tablaClientes">
+            <columns>
+                <TableColumn fx:id="colId"       text="#"              prefWidth="60"/>
+                <TableColumn fx:id="colNombre"   text="Nombre"         prefWidth="250"/>
+                <TableColumn fx:id="colTelefono" text="Teléfono"       prefWidth="130"/>
+                <TableColumn fx:id="colLimite"   text="Límite Crédito" prefWidth="130"/>
+                <TableColumn fx:id="colSaldo"    text="Saldo Deuda"    prefWidth="130"/>
+            </columns>
+        </TableView>
+    </center>
+
+</BorderPane>
