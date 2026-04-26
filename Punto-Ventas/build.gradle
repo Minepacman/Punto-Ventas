@@ -1,10 +1,13 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.0.6'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'application'
+    id 'org.springframework.boot'       version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'org.openjfx.javafxplugin'       version '0.1.0'
 }
 
-group = 'me.EliasSanchezFernandez'
+// Es buena práctica usar minúsculas para el group
+group = 'me.eliassanchezfernandez'
 version = '0.0.1-SNAPSHOT'
 description = 'Punto-de-venta'
 
@@ -12,23 +15,75 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
     }
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 repositories {
     mavenCentral()
 }
 
+javafx {
+    // CAMBIO: Sincronizado con Java 17 para máxima estabilidad en Windows 7
+    version = '17.0.10' 
+    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
+}
+
 dependencies {
+    // Spring Boot dependencies
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter'
+    // Descomenta security solo cuando ya tengas las ventanas funcionando
+    // implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // Database dependencies
+    runtimeOnly 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'org.hibernate.orm:hibernate-community-dialects:6.4.4.Final'
+
+    // JavaFX dependencies
+    implementation 'de.robinaberle:spring-javafx:1.0.4'
+    implementation 'io.github.mkpaz:atlantafx-base:2.0.1'
+
+    // Lombok dependencies
     compileOnly 'org.projectlombok:lombok'
-    runtimeOnly 'org.xerial:sqlite-jdbc'
     annotationProcessor 'org.projectlombok:lombok'
+
+    // Additional dependencies
+    implementation 'org.apache.commons:commons-lang3:3.14.0'
+    implementation 'net.sf.jasperreports:jasperreports:6.21.3' 
+
+    // Testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testCompileOnly 'org.projectlombok:lombok'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'me.eliassanchezfernandez.puntodeventa.Launcher'
+}
+
+
+springBoot {
+    mainClass = 'me.eliassanchezfernandez.puntodeventa.Launcher'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// Tarea para empaquetar el instalador nativo
+tasks.register('jpackageTask', Exec) {
+    dependsOn 'bootJar' 
+    
+    commandLine 'jpackage',
+            '--input',           'build/libs',
+            '--name',            'PuntoDeVenta',
+            '--main-jar',        "${project.name}-${project.version}.jar",
+            '--main-class',      'org.springframework.boot.loader.launch.JarLauncher',
+            '--type',            'dmg', 
+            '--app-version',     '1.0.0',
+            '--vendor',          'Elias Sanchez',
+            '--dest',            'build/installer'
 }
