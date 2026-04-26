@@ -1,6 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.repository;
 
-import com.pos.puntodeventa.model.Venta;
+import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;

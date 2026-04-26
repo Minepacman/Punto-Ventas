@@ -1,0 +1,76 @@
+/*
+ * app.css  –  Estilos personalizados sobre el tema AtlantaFX PrimerDark
+ *
+ * AtlantaFX ya aplica sus variables CSS base; aquí solo ajustamos
+ * los componentes específicos del POS.
+ */
+
+/* ── TOOLBAR ──────────────────────────────────────────────────────── */
+.main-toolbar {
+    -fx-padding: 8 16 8 16;
+    -fx-spacing: 12;
+}
+
+.brand-label {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+}
+
+/* ── TABS ─────────────────────────────────────────────────────────── */
+.main-tabs > .tab-header-area > .headers-region > .tab {
+    -fx-padding: 6 20 6 20;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+/* ── TABLA DE TICKET ──────────────────────────────────────────────── */
+.ticket-table {
+    -fx-font-size: 14px;
+}
+
+.ticket-table .table-row-cell:selected {
+    /* AtlantaFX ya lo maneja, pero puedes sobrescribir aquí */
+}
+
+/* ── PANEL DE TOTALES ─────────────────────────────────────────────── */
+.totales-panel {
+    -fx-padding: 16;
+    -fx-min-width: 220;
+}
+
+.total-label-title {
+    -fx-font-size: 13px;
+    -fx-text-fill: -color-fg-muted;
+}
+
+.total-amount {
+    -fx-font-size: 36px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-success-fg;
+}
+
+.cambio-label {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+
+.btn-cobrar {
+    -fx-font-size: 16px;
+    -fx-padding: 12 0 12 0;
+}
+
+/* ── BARRA DE ESTADO ──────────────────────────────────────────────── */
+.status-bar {
+    -fx-font-size: 11px;
+    -fx-text-fill: -color-fg-muted;
+}
+
+/* ── BOTONES SEMÁNTICOS ───────────────────────────────────────────── */
+/* AtlantaFX ya provee .button-success y .button-danger como accent */
+
+/* ── SEARCH BAR ───────────────────────────────────────────────────── */
+.search-bar {
+    -fx-padding: 10;
+    -fx-border-color: -color-border-default;
+    -fx-border-width: 0 0 1 0;
+}

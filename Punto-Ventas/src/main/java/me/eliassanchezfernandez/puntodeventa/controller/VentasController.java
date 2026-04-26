@@ -1,7 +1,7 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
-import com.pos.puntodeventa.model.DetalleVenta;
-import com.pos.puntodeventa.service.VentaService;
+import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
+import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
