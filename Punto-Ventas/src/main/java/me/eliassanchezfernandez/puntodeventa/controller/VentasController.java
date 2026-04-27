@@ -13,15 +13,6 @@ import org.springframework.stereotype.Component;
 import java.net.URL;
 import java.util.ResourceBundle;
 
-/**
- * Controlador de la pantalla de Ventas (F1).
- *
- * Flujo principal:
- *  1. Cajero escanea código → onAgregarProducto()
- *  2. Servicio busca producto y actualiza la tabla
- *  3. Cajero ingresa pago → onCobrar()
- *  4. Servicio registra la venta y descuenta inventario
- */
 
 @Component
 public class VentasController implements Initializable {

@@ -25,6 +25,7 @@
     </top>
 
     <center>
+
         <SplitPane dividerPositions="0.4">
 
             <!-- Panel izquierdo: formulario de entrada rápida -->
@@ -55,6 +56,7 @@
 
             <!-- Panel derecho: tabla de productos en inventario bajo -->
             <TableView fx:id="tablaInventario">
+
                 <columns>
                     <TableColumn fx:id="colCodigo"      text="Código"     prefWidth="130"/>
                     <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="260"/>
@@ -62,9 +64,11 @@
                     <TableColumn fx:id="colMinimo"      text="Mínimo"      prefWidth="90"/>
                     <TableColumn fx:id="colEstado"      text="Estado"      prefWidth="100"/>
                 </columns>
+                
             </TableView>
 
         </SplitPane>
+
     </center>
 
 </BorderPane>
