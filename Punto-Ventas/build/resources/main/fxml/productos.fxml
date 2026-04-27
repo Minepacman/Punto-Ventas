@@ -7,28 +7,36 @@
 <!--
     productos.fxml  –  Catálogo de Productos (F3)
     Controlador: ProductosController.java
+
+    Layout:
+    ┌─────────────────────────────────────┬──────────────────────────┐
+    │  Toolbar (Nuevo / Modificar / …)    │                          │
+    ├─────────────────────────────────────┤   FORMULARIO             │
+    │  Búsqueda                           │   (visible al pulsar     │
+    ├─────────────────────────────────────┤    Nuevo / Modificar)    │
+    │  TableView de productos             │                          │
+    └─────────────────────────────────────┴──────────────────────────┘
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ProductosController">
 
+    <!-- ── TOOLBAR ───────────────────────────────────────────────── -->
     <top>
         <VBox>
-            <!-- Acciones principales -->
-            <HBox styleClass="section-toolbar" spacing="8">
+            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
                 <padding><Insets topRightBottomLeft="10"/></padding>
-                <Button text="+ Nuevo"           onAction="#onNuevo"
-                        styleClass="button-success"/>
-                <Button text="✏ Modificar"        onAction="#onModificar"/>
-                <Button text="🗑 Eliminar"         onAction="#onEliminar"
-                        styleClass="button-danger"/>
+                <Button fx:id="btnNuevo"     text="+ Nuevo"
+                        onAction="#onNuevo"  styleClass="button-success"/>
+                <Button fx:id="btnModificar" text="✏ Modificar"
+                        onAction="#onModificar"/>
+                <Button fx:id="btnEliminar"  text="🗑 Eliminar"
+                        onAction="#onEliminar" styleClass="button-danger"/>
                 <Separator orientation="VERTICAL"/>
                 <Button text="Departamentos"      onAction="#onDepartamentos"/>
                 <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
                 <Button text="⭐ Promociones"      onAction="#onPromociones"/>
                 <Button text="📥 Importar"         onAction="#onImportar"/>
             </HBox>
-
-            <!-- Búsqueda -->
             <HBox spacing="8" alignment="CENTER_LEFT">
                 <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
                 <Label text="🔍"/>
@@ -40,18 +48,196 @@
         </VBox>
     </top>
 
+    <!-- ── TABLA + FORMULARIO (SplitPane) ────────────────────────── -->
     <center>
-        <TableView fx:id="tablaProductos">
-            <columns>
-                <TableColumn fx:id="colCodigo"       text="Código"        prefWidth="140"/>
-                <TableColumn fx:id="colDescripcion"  text="Descripción"   prefWidth="280"/>
-                <TableColumn fx:id="colPrecioCosto"  text="Costo"         prefWidth="90"/>
-                <TableColumn fx:id="colPrecioVenta"  text="Venta"         prefWidth="90"/>
-                <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"       prefWidth="90"/>
-                <TableColumn fx:id="colExistencia"   text="Existencia"    prefWidth="100"/>
-                <TableColumn fx:id="colDepartamento" text="Departamento"  prefWidth="130"/>
-            </columns>
-        </TableView>
+        <SplitPane fx:id="splitPane" dividerPositions="1.0">
+
+            <!-- ══ TABLA ════════════════════════════════════════════ -->
+            <TableView fx:id="tablaProductos"
+                       onMouseClicked="#onTablaClick"
+                       styleClass="producto-table">
+                <columns>
+                    <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="140"/>
+                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="250"/>
+                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="80"/>
+                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="80"/>
+                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="80"/>
+                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="70"/>
+                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="130"/>
+                </columns>
+                <placeholder>
+                    <Label text="No hay productos. Pulsa + Nuevo para agregar."/>
+                </placeholder>
+            </TableView>
+
+            <!-- ══ FORMULARIO ════════════════════════════════════════ -->
+            <ScrollPane fx:id="scrollFormulario"
+                        fitToWidth="true"
+                        visible="false" managed="false"
+                        minWidth="390" maxWidth="430">
+
+                <VBox styleClass="form-panel" spacing="14">
+                    <padding><Insets topRightBottomLeft="18"/></padding>
+
+                    <!-- Título -->
+                    <Label fx:id="lblTituloForm" text="NUEVO PRODUCTO"
+                           styleClass="form-section-title"/>
+                    <Separator/>
+
+                    <!-- ── CÓDIGO DE BARRAS ─────────────────────── -->
+                    <VBox spacing="4">
+                        <Label text="Código de Barras *" styleClass="field-label"/>
+                        <TextField fx:id="txtCodigoBarras"
+                                   promptText="Escanea o escribe el código"
+                                   onKeyReleased="#onCodigoBarrasChanged"/>
+
+                        <!-- Aviso: producto ya existe -->
+                        <HBox fx:id="hboxYaExiste"
+                              visible="false" managed="false"
+                              spacing="6" alignment="CENTER_LEFT"
+                              style="-fx-background-color:rgba(220,53,69,0.12);-fx-background-radius:6;-fx-padding:8;">
+                            <Label text="⚠"
+                                   style="-fx-text-fill:#C0392B;-fx-font-size:14"/>
+                            <VBox spacing="1">
+                                <Label text="Este código ya está registrado."
+                                       style="-fx-text-fill:#C0392B;-fx-font-weight:bold;-fx-font-size:12"/>
+                                <Label fx:id="lblProductoExistente" text=""
+                                       style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+
+                    <!-- ── DESCRIPCIÓN ─────────────────────────── -->
+                    <VBox spacing="4">
+                        <Label text="Descripción *" styleClass="field-label"/>
+                        <TextField fx:id="txtDescripcion"
+                                   promptText="Nombre del producto"/>
+                    </VBox>
+
+                    <!-- ── TIPO DE VENTA ───────────────────────── -->
+                    <VBox spacing="6">
+                        <Label text="Se vende" styleClass="field-label"/>
+                        <RadioButton fx:id="rbUnidad"
+                                     text="Por Unidad / Pieza"
+                                     selected="true">
+                            <toggleGroup><ToggleGroup fx:id="toggleTipoVenta"/></toggleGroup>
+                        </RadioButton>
+                        <RadioButton fx:id="rbGranel"
+                                     text="A Granel  (usa decimales)"
+                                     toggleGroup="$toggleTipoVenta"/>
+                        <RadioButton fx:id="rbPaquete"
+                                     text="Como Paquete (kit)"
+                                     toggleGroup="$toggleTipoVenta"/>
+                    </VBox>
+
+                    <Separator/>
+
+                    <!-- ── PRECIOS ─────────────────────────────── -->
+                    <Label text="Precios" styleClass="form-subsection-title"/>
+
+                    <GridPane hgap="10" vgap="8">
+                        <Label text="Precio Costo *"
+                               GridPane.columnIndex="0" GridPane.rowIndex="0"
+                               styleClass="field-label"/>
+                        <TextField fx:id="txtPrecioCosto"  promptText="0.00"
+                                   GridPane.columnIndex="1" GridPane.rowIndex="0"
+                                   onKeyReleased="#onValidarPrecio"/>
+
+                        <Label text="Precio Venta *"
+                               GridPane.columnIndex="0" GridPane.rowIndex="1"
+                               styleClass="field-label"/>
+                        <TextField fx:id="txtPrecioVenta"  promptText="0.00"
+                                   GridPane.columnIndex="1" GridPane.rowIndex="1"
+                                   onKeyReleased="#onValidarPrecio"/>
+
+                        <Label text="Precio Mayoreo"
+                               GridPane.columnIndex="0" GridPane.rowIndex="2"
+                               styleClass="field-label"/>
+                        <TextField fx:id="txtPrecioMayoreo" promptText="0.00"
+                                   GridPane.columnIndex="1" GridPane.rowIndex="2"
+                                   onKeyReleased="#onValidarPrecio"/>
+
+                        <columnConstraints>
+                            <ColumnConstraints prefWidth="135"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                        </columnConstraints>
+                    </GridPane>
+
+                    <Label fx:id="lblErrorPrecio"
+                           text="⚠ Los precios no pueden ser negativos."
+                           visible="false" managed="false"
+                           style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
+
+                    <Separator/>
+
+                    <!-- ── DEPARTAMENTO ────────────────────────── -->
+                    <VBox spacing="4">
+                        <Label text="Departamento" styleClass="field-label"/>
+                        <ComboBox fx:id="comboDepartamento"
+                                  promptText="— Sin Departamento —"
+                                  maxWidth="Infinity"/>
+                    </VBox>
+
+                    <Separator/>
+
+                    <!-- ── INVENTARIO ──────────────────────────── -->
+                    <Label text="Inventario" styleClass="form-subsection-title"/>
+
+                    <CheckBox fx:id="chkUsaInventario"
+                              text="Este producto SÍ utiliza inventario"
+                              selected="true"
+                              onAction="#onToggleInventario"/>
+
+                    <GridPane fx:id="gridInventario" hgap="10" vgap="8">
+                        <Label text="Cantidad Actual"
+                               GridPane.columnIndex="0" GridPane.rowIndex="0"
+                               styleClass="field-label"/>
+                        <TextField fx:id="txtCantidadActual" promptText="0"
+                                   GridPane.columnIndex="1" GridPane.rowIndex="0"
+                                   onKeyReleased="#onValidarInventario"/>
+
+                        <Label text="Cantidad Mínima"
+                               GridPane.columnIndex="0" GridPane.rowIndex="1"
+                               styleClass="field-label"/>
+                        <TextField fx:id="txtCantidadMinima" promptText="0"
+                                   GridPane.columnIndex="1" GridPane.rowIndex="1"
+                                   onKeyReleased="#onValidarInventario"/>
+
+                        <Label text="(Alerta de stock bajo al llegar a este valor)"
+                               style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"
+                               GridPane.columnIndex="0" GridPane.rowIndex="2"
+                               GridPane.columnSpan="2"/>
+
+                        <columnConstraints>
+                            <ColumnConstraints prefWidth="135"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                        </columnConstraints>
+                    </GridPane>
+
+                    <Label fx:id="lblErrorInventario"
+                           text="⚠ Las cantidades no pueden ser negativas."
+                           visible="false" managed="false"
+                           style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
+
+                    <Region VBox.vgrow="ALWAYS" minHeight="16"/>
+
+                    <!-- ── BOTONES ─────────────────────────────── -->
+                    <HBox spacing="10">
+                        <Button fx:id="btnGuardar"
+                                text="✅ Guardar Producto"
+                                onAction="#onGuardarProducto"
+                                styleClass="button-success"
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Button fx:id="btnCancelarForm"
+                                text="✖ Cancelar"
+                                onAction="#onCancelarFormulario"
+                                styleClass="button-danger"/>
+                    </HBox>
+
+                </VBox>
+            </ScrollPane>
+
+        </SplitPane>
     </center>
 
 </BorderPane>
