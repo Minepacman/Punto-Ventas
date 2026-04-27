@@ -1,7 +1,10 @@
 package me.eliassanchezfernandez.puntodeventa;
 
 
+import atlantafx.base.theme.CupertinoLight;
+import atlantafx.base.theme.Dracula;
 import atlantafx.base.theme.PrimerDark;
+import atlantafx.base.theme.NordLight;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -32,13 +35,18 @@ public class PuntoDeVentaApp extends Application {
     public void init() {
         // Se ejecuta en el hilo de JavaFX Launcher, ANTES de start()
         springContext = SpringApplication.run(PuntoDeVentaApp.class);
+
     }
 
     // ── JavaFX: construir la ventana principal ────────────────────────────
     @Override
     public void start(Stage primaryStage) throws Exception {
+
         // Aplicar tema moderno AtlantaFX (modo oscuro estilo GitHub)
-        Application.setUserAgentStylesheet(new PrimerDark().getUserAgentStylesheet());
+        //Application.setUserAgentStylesheet(new CupertinoLight().getUserAgentStylesheet());
+        //Application.setUserAgentStylesheet(new PrimerDark().getUserAgentStylesheet());
+        //Application.setUserAgentStylesheet(new Dracula().getUserAgentStylesheet());
+        Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()); // tema clásico
 
         FXMLLoader loader = new FXMLLoader(
                 getClass().getResource("/fxml/main.fxml"));
