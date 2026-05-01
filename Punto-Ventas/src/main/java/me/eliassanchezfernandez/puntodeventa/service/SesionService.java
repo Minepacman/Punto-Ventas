@@ -6,7 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 
+import java.time.LocalDate;
 import java.util.Optional;
 
 /**
@@ -24,6 +26,9 @@ public class SesionService {
 
     /** Cajero que inició sesión actualmente (null = nadie autenticado) */
     private Cajero cajeroActual = null;
+
+    private Double fondoDeCajaDelDia = null;
+    private LocalDate fechaDelFondo = null;
 
     // ── Autenticación ─────────────────────────────────────────────────────
 
@@ -86,6 +91,11 @@ public class SesionService {
         public CredencialesInvalidasException(String msg) { super(msg); }
     }
 
+    @PostConstruct
+    
+    public void init() {
+        crearAdminPorDefectoSiNecesario();
+    }
     // ── Inicialización: crear admin por defecto si no hay cajeros ─────────
 
     /**
@@ -95,6 +105,7 @@ public class SesionService {
      * IMPORTANTE: cambiar la contraseña en producción.
      */
     public void crearAdminPorDefectoSiNecesario() {
+
         if (cajeroRepo.count() == 0) {
             Cajero admin = new Cajero();
             admin.setUsuario("admin");
@@ -105,5 +116,19 @@ public class SesionService {
             cajeroRepo.save(admin);
             System.out.println("✅ Cajero admin creado por defecto. Usuario: admin / Contraseña: admin123");
         }
+    }
+    public boolean requireIngresarFondo() {
+        // si no hay un fondo registrado, o si el fondo guardado no es de hoy 
+        return fondoDeCajaDelDia == null || !LocalDate.now().equals(fechaDelFondo);
+
+    }
+
+    public void registrarFindoDeCaja(double monto){
+        this.fondoDeCajaDelDia = monto;
+        this.fechaDelFondo = LocalDate.now();
+    }
+
+    public Double getFondoDeCajaDelDia() {
+        return fondoDeCajaDelDia;
     }
 }

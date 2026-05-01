@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane styleClass="login-root" stylesheets="@../css/app.css" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/26" fx:controller="me.eliassanchezfernandez.puntodeventa.controller.LoginController">
+
+    <!-- Fondo con gradiente sutil definido en CSS -->
+    <Pane styleClass="login-background" />
+
+    <!-- Tarjeta central -->
+    <VBox alignment="CENTER" maxHeight="500" maxWidth="400" spacing="0" styleClass="login-card">
+
+        <!-- ── CABECERA / MARCA ──────────────────────────── -->
+        <VBox alignment="CENTER" spacing="6" styleClass="login-header">
+            <padding><Insets bottom="24" left="32" right="32" top="32" /></padding>
+            <Label styleClass="login-brand-title" text="Punto de Venta" />
+            <Label fx:id="lblNombreTienda" styleClass="login-brand-subtitle" text="Mi Tienda" />
+        </VBox>
+
+        <Separator />
+
+        <!-- ── FORMULARIO ────────────────────────────────── -->
+        <VBox spacing="14" styleClass="login-form">
+            <padding><Insets bottom="8" left="32" right="32" top="24" /></padding>
+
+            <!-- Usuario -->
+            <VBox spacing="4">
+                <Label styleClass="field-label" text="Usuario" />
+                <TextField fx:id="txtUsuario" onAction="#onIniciarSesion" promptText="Ingresa tu usuario" />
+            </VBox>
+
+            <!-- Contraseña -->
+            <VBox spacing="4">
+                <Label styleClass="field-label" text="Contraseña" />
+                <PasswordField fx:id="txtContrasena" onAction="#onIniciarSesion" promptText="Ingresa tu contraseña" />
+            </VBox>
+
+            <!-- Aviso de error (oculto por defecto) -->
+            <HBox fx:id="hboxError" alignment="CENTER_LEFT" managed="false" spacing="8" style="-fx-background-color:rgba(220,53,69,0.12);                          -fx-background-radius:6;                          -fx-padding:10;" visible="false">
+                <Label style="-fx-text-fill:#C0392B;-fx-font-size:14" text="⚠" />
+                <Label fx:id="lblError" style="-fx-text-fill:#C0392B;-fx-font-size:12" text="Usuario o contraseña incorrectos." wrapText="true" />
+            </HBox>
+
+        </VBox>
+
+        <!-- ── BOTÓN ─────────────────────────────────────── -->
+        <VBox spacing="10">
+            <padding><Insets bottom="32" left="32" right="32" top="8" /></padding>
+
+            <Button fx:id="btnLogin" defaultButton="true" maxWidth="Infinity" onAction="#onIniciarSesion" styleClass="button-primary, btn-login" text="Iniciar Sesión" />
+
+            <!-- Indicador de carga (oculto por defecto) -->
+            <ProgressIndicator fx:id="progressLogin" managed="false" prefHeight="24" prefWidth="24" style="-fx-alignment:center" visible="false" />
+        </VBox>
+
+    </VBox>
+
+</StackPane>

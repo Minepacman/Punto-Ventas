@@ -8,81 +8,98 @@
     productos.fxml  –  Catálogo de Productos (F3)
     Controlador: ProductosController.java
 
-    Layout:
-    ┌─────────────────────────────────────┬──────────────────────────┐
-    │  Toolbar (Nuevo / Modificar / …)    │                          │
-    ├─────────────────────────────────────┤   FORMULARIO             │
-    │  Búsqueda                           │   (visible al pulsar     │
-    ├─────────────────────────────────────┤    Nuevo / Modificar)    │
-    │  TableView de productos             │                          │
-    └─────────────────────────────────────┴──────────────────────────┘
+    Dos vistas que se intercambian a pantalla completa:
+    ┌────────────────────────────────────────────────┐
+    │  VISTA A – Tabla  (visible por defecto)        │
+    │  toolbar + búsqueda + TableView                │
+    └────────────────────────────────────────────────┘
+    ┌────────────────────────────────────────────────┐
+    │  VISTA B – Formulario  (visible al pulsar      │
+    │  Nuevo / Modificar, ocupa TODO el espacio)     │
+    └────────────────────────────────────────────────┘
 -->
-<BorderPane xmlns:fx="http://javafx.com/fxml"
-            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ProductosController">
+<StackPane xmlns:fx="http://javafx.com/fxml"
+           fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ProductosController">
 
-    <!-- ── TOOLBAR ───────────────────────────────────────────────── -->
-    <top>
-        <VBox>
-            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
-                <padding><Insets topRightBottomLeft="10"/></padding>
-                <Button fx:id="btnNuevo"     text="+ Nuevo"
-                        onAction="#onNuevo"  styleClass="button-success"/>
-                <Button fx:id="btnModificar" text="✏ Modificar"
-                        onAction="#onModificar"/>
-                <Button fx:id="btnEliminar"  text="🗑 Eliminar"
-                        onAction="#onEliminar" styleClass="button-danger"/>
-                <Separator orientation="VERTICAL"/>
-                <Button text="Departamentos"      onAction="#onDepartamentos"/>
-                <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
-                <Button text="⭐ Promociones"      onAction="#onPromociones"/>
-                <Button text="📥 Importar"         onAction="#onImportar"/>
-            </HBox>
-            <HBox spacing="8" alignment="CENTER_LEFT">
-                <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
-                <Label text="🔍"/>
-                <TextField fx:id="txtBuscar"
-                           promptText="Buscar por código o descripción..."
-                           HBox.hgrow="ALWAYS"
-                           onKeyReleased="#onBuscar"/>
-            </HBox>
-        </VBox>
-    </top>
+    <!-- ══════════════════════════════════════════════════════════════
+         VISTA A – TABLA DE PRODUCTOS
+    ══════════════════════════════════════════════════════════════ -->
+    <BorderPane fx:id="vistaTabla">
 
-    <!-- ── TABLA + FORMULARIO (SplitPane) ────────────────────────── -->
-    <center>
-        <SplitPane fx:id="splitPane" dividerPositions="1.0">
+        <!-- Toolbar + búsqueda -->
+        <top>
+            <VBox>
 
-            <!-- ══ TABLA ════════════════════════════════════════════ -->
+                <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+                    <padding><Insets topRightBottomLeft="10"/></padding>
+                    <Button fx:id="btnNuevo"      text="+ Nuevo"
+                            onAction="#onNuevo"   styleClass="button-success"/>
+                    <Button fx:id="btnModificar"  text="✏ Modificar"
+                            onAction="#onModificar"/>
+                    <Button fx:id="btnEliminar"   text="🗑 Eliminar"
+                            onAction="#onEliminar" styleClass="button-danger"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Button text="Departamentos"      onAction="#onDepartamentos"/>
+                    <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
+                    <Button text="⭐ Promociones"      onAction="#onPromociones"/>
+                    <Button text="📥 Importar"         onAction="#onImportar"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
+                    <Label text="🔍"/>
+                    <TextField fx:id="txtBuscar"
+                               promptText="Buscar por código o descripción..."
+                               HBox.hgrow="ALWAYS"
+                               onKeyReleased="#onBuscar"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Tabla -->
+        <center>
             <TableView fx:id="tablaProductos"
-                       onMouseClicked="#onTablaClick"
-                       styleClass="producto-table">
+                       onMouseClicked="#onTablaDobleClick">
                 <columns>
                     <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="140"/>
-                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="250"/>
-                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="80"/>
-                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="80"/>
-                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="80"/>
-                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="70"/>
-                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="130"/>
+                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="260"/>
+                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="85"/>
+                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="85"/>
+                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="85"/>
+                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="75"/>
+                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="140"/>
                 </columns>
                 <placeholder>
-                    <Label text="No hay productos. Pulsa + Nuevo para agregar."/>
+                    <Label text="No hay productos registrados. Pulsa + Nuevo para agregar."/>
                 </placeholder>
             </TableView>
+        </center>
 
-            <!-- ══ FORMULARIO ════════════════════════════════════════ -->
-            <ScrollPane fx:id="scrollFormulario"
-                        fitToWidth="true"
-                        visible="false" managed="false"
-                        minWidth="390" maxWidth="430">
+    </BorderPane>
 
-                <VBox styleClass="form-panel" spacing="14">
-                    <padding><Insets topRightBottomLeft="18"/></padding>
+    <!-- ══════════════════════════════════════════════════════════════
+         VISTA B – FORMULARIO  (oculta por defecto)
+    ══════════════════════════════════════════════════════════════ -->
 
-                    <!-- Título -->
-                    <Label fx:id="lblTituloForm" text="NUEVO PRODUCTO"
-                           styleClass="form-section-title"/>
-                    <Separator/>
+    <BorderPane fx:id="vistaFormulario" visible="false" managed="false">
+        <!-- Cabecera del formulario -->
+        <top>
+            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+                <padding><Insets topRightBottomLeft="10"/></padding>
+                <Button text="← Regresar"
+                        onAction="#onCancelarFormulario"/>
+                <Separator orientation="VERTICAL"/>
+                <Label fx:id="lblTituloForm" text="NUEVO PRODUCTO"
+                       styleClass="form-section-title"/>
+            </HBox>
+        </top>
+
+        <!-- Contenido del formulario centrado y con scroll -->
+        <center>
+            <ScrollPane fitToWidth="true">
+                <VBox styleClass="form-panel" spacing="14"
+                      maxWidth="680" alignment="TOP_CENTER">
+                    <padding><Insets top="24" right="40" bottom="32" left="40"/></padding>
 
                     <!-- ── CÓDIGO DE BARRAS ─────────────────────── -->
                     <VBox spacing="4">
@@ -90,8 +107,6 @@
                         <TextField fx:id="txtCodigoBarras"
                                    promptText="Escanea o escribe el código"
                                    onKeyReleased="#onCodigoBarrasChanged"/>
-
-                        <!-- Aviso: producto ya existe -->
                         <HBox fx:id="hboxYaExiste"
                               visible="false" managed="false"
                               spacing="6" alignment="CENTER_LEFT"
@@ -120,7 +135,9 @@
                         <RadioButton fx:id="rbUnidad"
                                      text="Por Unidad / Pieza"
                                      selected="true">
-                            <toggleGroup><ToggleGroup fx:id="toggleTipoVenta"/></toggleGroup>
+                            <toggleGroup>
+                                <ToggleGroup fx:id="toggleTipoVenta"/>
+                            </toggleGroup>
                         </RadioButton>
                         <RadioButton fx:id="rbGranel"
                                      text="A Granel  (usa decimales)"
@@ -135,18 +152,18 @@
                     <!-- ── PRECIOS ─────────────────────────────── -->
                     <Label text="Precios" styleClass="form-subsection-title"/>
 
-                    <GridPane hgap="10" vgap="8">
+                    <GridPane hgap="16" vgap="10">
                         <Label text="Precio Costo *"
                                GridPane.columnIndex="0" GridPane.rowIndex="0"
                                styleClass="field-label"/>
-                        <TextField fx:id="txtPrecioCosto"  promptText="0.00"
+                        <TextField fx:id="txtPrecioCosto" promptText="0.00"
                                    GridPane.columnIndex="1" GridPane.rowIndex="0"
                                    onKeyReleased="#onValidarPrecio"/>
 
                         <Label text="Precio Venta *"
                                GridPane.columnIndex="0" GridPane.rowIndex="1"
                                styleClass="field-label"/>
-                        <TextField fx:id="txtPrecioVenta"  promptText="0.00"
+                        <TextField fx:id="txtPrecioVenta" promptText="0.00"
                                    GridPane.columnIndex="1" GridPane.rowIndex="1"
                                    onKeyReleased="#onValidarPrecio"/>
 
@@ -158,7 +175,7 @@
                                    onKeyReleased="#onValidarPrecio"/>
 
                         <columnConstraints>
-                            <ColumnConstraints prefWidth="135"/>
+                            <ColumnConstraints prefWidth="160" minWidth="140"/>
                             <ColumnConstraints hgrow="ALWAYS"/>
                         </columnConstraints>
                     </GridPane>
@@ -188,7 +205,7 @@
                               selected="true"
                               onAction="#onToggleInventario"/>
 
-                    <GridPane fx:id="gridInventario" hgap="10" vgap="8">
+                    <GridPane fx:id="gridInventario" hgap="16" vgap="10">
                         <Label text="Cantidad Actual"
                                GridPane.columnIndex="0" GridPane.rowIndex="0"
                                styleClass="field-label"/>
@@ -203,13 +220,13 @@
                                    GridPane.columnIndex="1" GridPane.rowIndex="1"
                                    onKeyReleased="#onValidarInventario"/>
 
-                        <Label text="(Alerta de stock bajo al llegar a este valor)"
+                        <Label text="(Alerta cuando el stock llegue a este valor)"
                                style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"
                                GridPane.columnIndex="0" GridPane.rowIndex="2"
                                GridPane.columnSpan="2"/>
 
                         <columnConstraints>
-                            <ColumnConstraints prefWidth="135"/>
+                            <ColumnConstraints prefWidth="160" minWidth="140"/>
                             <ColumnConstraints hgrow="ALWAYS"/>
                         </columnConstraints>
                     </GridPane>
@@ -219,25 +236,133 @@
                            visible="false" managed="false"
                            style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
 
-                    <Region VBox.vgrow="ALWAYS" minHeight="16"/>
+                    <Region minHeight="12"/>
 
-                    <!-- ── BOTONES ─────────────────────────────── -->
-                    <HBox spacing="10">
+                    <!-- ── BOTONES FINALES ─────────────────────── -->
+                    <HBox spacing="12">
                         <Button fx:id="btnGuardar"
                                 text="✅ Guardar Producto"
                                 onAction="#onGuardarProducto"
                                 styleClass="button-success"
-                                HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                                prefHeight="38"/>
                         <Button fx:id="btnCancelarForm"
                                 text="✖ Cancelar"
                                 onAction="#onCancelarFormulario"
-                                styleClass="button-danger"/>
+                                styleClass="button-danger"
+                                prefHeight="38"/>
                     </HBox>
 
                 </VBox>
             </ScrollPane>
+        </center>
 
+    </BorderPane>
+
+       <!-- vista de departamentos  (ocualta ) -->
+
+    <BorderPane fx:id="vistaDepartamentos"   visible="false" managed="false">
+
+        <!-- Cabecera de la ventana -->
+        <top>
+            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+                <padding><Insets topRightBottomLeft="10"/></padding>
+                <Button text="← Regresar"
+                        onAction="#onCancelarDepartamento"/>
+                <Separator orientation="VERTICAL"/>
+                <!-- Titulo de la ventana -->
+                <Label  text="Departamentos"
+                       styleClass="form-section-title"/>
+            </HBox>
+        </top>
+
+        <!-- Contenido de la ventana deividido ?  -->
+        <center>
+
+        <SplitPane dividerPositions="0.4">
+
+            <VBox spacing="8">
+                <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
+
+                    <Label text="🔍"/>
+
+                    <TextField fx:id="txtBuscarDepartamento"
+                               promptText="Buscar departamento..."
+                               HBox.hgrow="ALWAYS"
+                               onKeyReleased="#onBuscarDepartamento"/>
+                </HBox>
+
+                    <TableView fx:id="tablaDepartamentos"
+
+                            onMouseClicked="#onTablaDobleClick">
+                    <columns>
+                        <TableColumn fx:id="colNombreDepartamento"       text="Nombre"       prefWidth="140"/>
+                    </columns>
+
+                    <placeholder>
+                        <Label text="No hay Departamentos registrados. intente registrar un nuevo Departamento."/>
+                    </placeholder>
+
+                </TableView>    
+            </VBox>
+
+            <VBox>
+            
+                <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+
+                    <padding><Insets topRightBottomLeft="10"/></padding>
+
+                    <Button fx:id="btnNuevoDepartamento"      text="+ Nuevo Departamento"
+                            onAction="#onNuevoDepartamento"   styleClass="button-success"/>
+
+             
+                    <Button fx:id="btnEliminarDepartamento"   text="🗑 Eliminar"
+                            onAction="#onEliminarDepartamento" styleClass="button-danger"/>
+                    
+                </HBox>
+
+                    <Separator orientation="VERTICAL"/>
+    
+                    <Label text="DETALLES DEL DEPARTAMENTO" styleClass="form-section-title">
+                        <padding><Insets top="10" right="10" bottom="10" left="10"/></padding> 
+                    </Label>
+    
+    
+                    <Label text="Nombre del Departamento:" styleClass="field-label">
+                        <padding><Insets top="10" right="10" bottom="0" left="10"/></padding>
+                    </Label>
+                    <TextField fx:id="txtNombreDepartamento" promptText="Escribe el nombre del departamento"
+                                onKeyReleased="#onValidarDepartamento" HBox.hgrow="ALWAYS">
+                        <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
+                    </TextField>
+    
+                    <Label fx:id="lblErrorDepartamento"
+                            text="⚠ El nombre no puede estar vacío."
+                            visible="false" managed="false"
+                            style="-fx-text-fill:#C0392B;-fx-font-size:11">
+                        <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
+                    </Label>
+
+                <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+
+                    <padding><Insets topRightBottomLeft="10"/></padding>
+
+                    <Button fx:id="btnGuardarDepartamento"      text="+ Guardar Departamento"
+                            onAction="#onGuardarDepartamento"   styleClass="button-success"/>
+
+                    <Button fx:id="btnCancelarDepartamento"   text="✖ Cancelar"
+                            onAction="#onCancelarDepartamento" styleClass="button-danger"/>
+                </HBox>
+            
+            </VBox>
+            
         </SplitPane>
-    </center>
 
-</BorderPane>
+        </center>
+
+    </BorderPane>
+
+</StackPane>

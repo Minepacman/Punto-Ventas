@@ -28,7 +28,6 @@ import java.util.ResourceBundle;
  *  4a. Éxito → cargar main.fxml en la misma ventana
  *  4b. Error  → mostrar aviso rojo con el mensaje
  */
-
 @Component
 public class LoginController implements Initializable {
 
