@@ -14,14 +14,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 
-/**
- * Punto de arranque principal.
- *
- * Patrón: Spring Boot arranca primero y levanta el contexto (base de datos,
- * servicios, seguridad). Luego JavaFX toma el hilo de la UI.
- */
+
 
 @SpringBootApplication
+
 public class PuntoDeVentaApp extends Application {
 
     private ConfigurableApplicationContext springContext;
@@ -46,20 +42,19 @@ public class PuntoDeVentaApp extends Application {
         //Application.setUserAgentStylesheet(new CupertinoLight().getUserAgentStylesheet());
         //Application.setUserAgentStylesheet(new PrimerDark().getUserAgentStylesheet());
         //Application.setUserAgentStylesheet(new Dracula().getUserAgentStylesheet());
-        Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()); // tema clásico
+        Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()); //agregar funcion para que el usuario pueda elegir el tema (detalles del codigo extras)
 
         FXMLLoader loader = new FXMLLoader(
-                getClass().getResource("/fxml/main.fxml"));
+                getClass().getResource("/fxml/login.fxml"));
 
         // Inyectar el contexto de Spring en los controladores FXML
         loader.setControllerFactory(springContext::getBean);
 
-        Scene scene = new Scene(loader.load(), 1200, 720);
+        Scene scene = new Scene(loader.load(), 300, 400);
 
         primaryStage.setTitle("Punto de Venta");
         primaryStage.setScene(scene);
-        primaryStage.setMinWidth(1024);
-        primaryStage.setMinHeight(640);
+        primaryStage.setResizable(false);
         primaryStage.show();
     }
 

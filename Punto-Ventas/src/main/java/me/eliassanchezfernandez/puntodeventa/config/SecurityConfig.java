@@ -10,8 +10,8 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // Esto le dice a Spring: "Cuando alguien pida un PasswordEncoder, 
-        // dale esta implementación de BCrypt".
+        
         return new BCryptPasswordEncoder();
+        
     }
 }
