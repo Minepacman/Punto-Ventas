@@ -19,6 +19,7 @@ import java.util.ResourceBundle;
  *  - Controlar accesos por rol (cajero / admin)
  *  - Escuchar atajos de teclado F1–F4
  */
+
 @Component
 public class MainController implements Initializable {
 
@@ -34,7 +35,7 @@ public class MainController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         actualizarReloj();
         // TODO: cargar usuario autenticado desde SecurityContext
-        labelUsuario.setText("Usuario: Sandi");
+        labelUsuario.setText("Usuario:" + getClass().getSimpleName());
         labelVersion.setText("v1.0.0");
         configurarAtajosTeclado();
     }

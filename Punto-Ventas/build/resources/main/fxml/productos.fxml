@@ -7,16 +7,6 @@
 <!--
     productos.fxml  –  Catálogo de Productos (F3)
     Controlador: ProductosController.java
-
-    Dos vistas que se intercambian a pantalla completa:
-    ┌────────────────────────────────────────────────┐
-    │  VISTA A – Tabla  (visible por defecto)        │
-    │  toolbar + búsqueda + TableView                │
-    └────────────────────────────────────────────────┘
-    ┌────────────────────────────────────────────────┐
-    │  VISTA B – Formulario  (visible al pulsar      │
-    │  Nuevo / Modificar, ocupa TODO el espacio)     │
-    └────────────────────────────────────────────────┘
 -->
 <StackPane xmlns:fx="http://javafx.com/fxml"
            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ProductosController">
@@ -38,11 +28,12 @@
                             onAction="#onModificar"/>
                     <Button fx:id="btnEliminar"   text="🗑 Eliminar"
                             onAction="#onEliminar" styleClass="button-danger"/>
+
                     <Separator orientation="VERTICAL"/>
                     <Button text="Departamentos"      onAction="#onDepartamentos"/>
                     <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
                     <Button text="⭐ Promociones"      onAction="#onPromociones"/>
-                    <Button text="📥 Importar"         onAction="#onImportar"/>
+                    
                 </HBox>
 
                 <HBox spacing="8" alignment="CENTER_LEFT">

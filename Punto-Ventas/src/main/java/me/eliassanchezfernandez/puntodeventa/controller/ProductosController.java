@@ -6,12 +6,15 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+
 import javafx.scene.control.*;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+
 import javafx.util.StringConverter;
+
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.repository.DepartamentoRepository;
@@ -254,7 +257,7 @@ public class ProductosController implements Initializable {
 
     @FXML void onVentasPeriodo() { /* TODO */ }
     @FXML void onPromociones()   { /* TODO */ }
-    @FXML void onImportar()      { /* TODO */ }
+ 
 
     // ─────────────────────────────────────────────────────────────────────
     //  Mostrar Vistas 

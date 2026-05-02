@@ -48,8 +48,8 @@ public class LoginController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        // TODO: leer nombre de la tienda desde application.properties
-        lblNombreTienda.setText("Mi Tienda");
+        // lee nombre de la tienda desde application.properties
+        lblNombreTienda.setText("El Chamgarro");
 
         // Ocultar error al empezar a escribir de nuevo
         txtUsuario.setOnKeyTyped(e   -> ocultarError());
@@ -63,6 +63,7 @@ public class LoginController implements Initializable {
 
     @FXML
     private void onIniciarSesion() {
+
         String usuario    = txtUsuario.getText().trim();
         String contrasena = txtContrasena.getText();
 

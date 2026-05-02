@@ -30,38 +30,54 @@
         <Separator />
 
         <!-- ── FORMULARIO ────────────────────────────────── -->
-        <VBox spacing="14" styleClass="login-form">
-            <padding><Insets bottom="8" left="32" right="32" top="24" /></padding>
+        
+        <VBox fx:id="vboxForm" alignment="CENTER" spacing="0">
+            
 
-            <!-- Usuario -->
-            <VBox spacing="4">
-                <Label styleClass="field-label" text="Usuario" />
-                <TextField fx:id="txtUsuario" onAction="#onIniciarSesion" promptText="Ingresa tu usuario" />
+            <VBox  spacing="14" styleClass="login-form">
+
+                <padding><Insets bottom="8" left="32" right="32" top="24" /></padding>
+
+                <!-- Usuario -->
+                <VBox spacing="4">
+                    <Label styleClass="field-label" text="Usuario" />
+                    <TextField fx:id="txtUsuario" onAction="#onIniciarSesion" promptText="Ingresa tu usuario" />
+                </VBox>
+
+                <!-- Contraseña -->
+                <VBox spacing="4">
+                    <Label styleClass="field-label" text="Contraseña" />
+                    <PasswordField fx:id="txtContrasena" onAction="#onIniciarSesion" promptText="Ingresa tu contraseña" />
+                </VBox>
+
+                <!-- Aviso de error (oculto por defecto) -->
+                <HBox fx:id="hboxError" alignment="CENTER_LEFT" managed="false" spacing="8" style="-fx-background-color:rgba(220,53,69,0.12);                          -fx-background-radius:6;                          -fx-padding:10;" visible="false">
+                    <Label style="-fx-text-fill:#C0392B;-fx-font-size:14" text="⚠" />
+                    <Label fx:id="lblError" style="-fx-text-fill:#C0392B;-fx-font-size:12" text="Usuario o contraseña incorrectos." wrapText="true" />
+                </HBox>
+
             </VBox>
 
-            <!-- Contraseña -->
-            <VBox spacing="4">
-                <Label styleClass="field-label" text="Contraseña" />
-                <PasswordField fx:id="txtContrasena" onAction="#onIniciarSesion" promptText="Ingresa tu contraseña" />
+            <!-- ── BOTÓN ─────────────────────────────────────── -->
+            <VBox spacing="10">
+                <padding><Insets bottom="32" left="32" right="32" top="8" /></padding>
+
+                <Button fx:id="btnLogin" defaultButton="true" maxWidth="Infinity" onAction="#onIniciarSesion" styleClass="button-primary, btn-login" text="Iniciar Sesión" />
+
+                <!-- Indicador de carga (oculto por defecto) -->
+                <ProgressIndicator fx:id="progressLogin" managed="false" prefHeight="24" prefWidth="24" style="-fx-alignment:center" visible="false" />
             </VBox>
-
-            <!-- Aviso de error (oculto por defecto) -->
-            <HBox fx:id="hboxError" alignment="CENTER_LEFT" managed="false" spacing="8" style="-fx-background-color:rgba(220,53,69,0.12);                          -fx-background-radius:6;                          -fx-padding:10;" visible="false">
-                <Label style="-fx-text-fill:#C0392B;-fx-font-size:14" text="⚠" />
-                <Label fx:id="lblError" style="-fx-text-fill:#C0392B;-fx-font-size:12" text="Usuario o contraseña incorrectos." wrapText="true" />
-            </HBox>
-
+            
         </VBox>
 
-        <!-- ── BOTÓN ─────────────────────────────────────── -->
-        <VBox spacing="10">
-            <padding><Insets bottom="32" left="32" right="32" top="8" /></padding>
+        <HBox fx:id="dineroEnCaja" visible="false">
+            <padding><Insets bottom="16" left="32" right="32" top="0" /></padding>
+            <Label text="Ingrese la cantidad de dinero en Caja:" style="-fx-font-size:12; -fx-text-fill:#555;" />
+            <TextField fx:id="txtDineroCaja" promptText="$0.00" />
+            <Button text="Aceptar" onAction="#onAceptarDineroCaja" styleClass="button-primary" />
 
-            <Button fx:id="btnLogin" defaultButton="true" maxWidth="Infinity" onAction="#onIniciarSesion" styleClass="button-primary, btn-login" text="Iniciar Sesión" />
-
-            <!-- Indicador de carga (oculto por defecto) -->
-            <ProgressIndicator fx:id="progressLogin" managed="false" prefHeight="24" prefWidth="24" style="-fx-alignment:center" visible="false" />
-        </VBox>
+            
+        </HBox>
 
     </VBox>
 

@@ -28,11 +28,12 @@
                             onAction="#onModificar"/>
                     <Button fx:id="btnEliminar"   text="🗑 Eliminar"
                             onAction="#onEliminar" styleClass="button-danger"/>
+
                     <Separator orientation="VERTICAL"/>
                     <Button text="Departamentos"      onAction="#onDepartamentos"/>
                     <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
                     <Button text="⭐ Promociones"      onAction="#onPromociones"/>
-                    <Button text="📥 Importar"         onAction="#onImportar"/>
+                    
                 </HBox>
 
                 <HBox spacing="8" alignment="CENTER_LEFT">
@@ -249,7 +250,7 @@
 
     </BorderPane>
 
-       <!-- vista de departamentos  (ocualta ) -->
+    <!-- vista de departamentos  (ocualta ) -->
 
     <BorderPane fx:id="vistaDepartamentos"   visible="false" managed="false">
 
