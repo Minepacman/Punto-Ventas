@@ -58,6 +58,7 @@
 
         <!-- Tabla -->
         <center>
+        
             <TableView fx:id="tablaProductos"
                        onMouseClicked="#onTablaDobleClick">
                 <columns>

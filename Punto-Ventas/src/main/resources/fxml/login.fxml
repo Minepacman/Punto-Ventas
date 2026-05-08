@@ -53,6 +53,7 @@
 
         </VBox>
 
+<<<<<<< Updated upstream
         <!-- ── BOTÓN ─────────────────────────────────────── -->
         <VBox spacing="10">
             <padding><Insets bottom="32" left="32" right="32" top="8" /></padding>
@@ -62,6 +63,17 @@
             <!-- Indicador de carga (oculto por defecto) -->
             <ProgressIndicator fx:id="progressLogin" managed="false" prefHeight="24" prefWidth="24" style="-fx-alignment:center" visible="false" />
         </VBox>
+=======
+        <HBox fx:id="dineroEnCaja" visible="false">
+
+            <VBox spacing="8" alignment="CENTER_LEFT">
+                <padding><Insets bottom="16" left="32" right="32" top="0" /></padding>
+                <Label text="Ingrese la cantidad de dinero en Caja:" style="-fx-font-size:12; -fx-text-fill:#555;" />
+                <TextField fx:id="txtDineroCaja" promptText="/$0.00" />
+                <Button text="Aceptar" onAction="#onAceptarDineroCaja" styleClass="button-primary" />
+            </VBox>
+        </HBox>
+>>>>>>> Stashed changes
 
     </VBox>
 
