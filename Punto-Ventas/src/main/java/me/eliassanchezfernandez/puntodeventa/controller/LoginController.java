@@ -172,12 +172,13 @@ public class LoginController implements Initializable {
                     getClass().getResource("/fxml/main.fxml"));
             loader.setControllerFactory(springContext::getBean);
             Parent root = loader.load();
-                System.out.println("DEBUG: main.fxml cargado exitosamente.");
+            System.out.println("DEBUG: main.fxml cargado exitosamente.");
             Stage stage = (Stage) btnLogin.getScene().getWindow();
-            Scene scene = new Scene(root, 1200, 720);
+            Scene scene = new Scene(root);
             scene.getStylesheets().addAll(btnLogin.getScene().getStylesheets());
-
+            stage.setResizable(true);
             stage.setScene(scene);
+            stage.setMaximized(true);
             stage.setTitle("Punto de Venta  —  " + cajero.getNombreCompleto()
                     + "  |  Fondo: $" + String.format("%.2f", fondoCaja));
             stage.setFullScreen(true);
