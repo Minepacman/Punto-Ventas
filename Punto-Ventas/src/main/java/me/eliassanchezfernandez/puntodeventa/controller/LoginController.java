@@ -61,12 +61,8 @@ public class LoginController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-<<<<<<< Updated upstream
         // TODO: leer nombre de la tienda desde application.properties
         lblNombreTienda.setText("Mi Tienda");
-=======
-        lblNombreTienda.setText("Mi Tienda"); // TODO: leer de application.properties
->>>>>>> Stashed changes
 
         // Ocultar error al volver a escribir
         txtUsuario.setOnKeyTyped(e    -> ocultarError());
@@ -171,11 +167,12 @@ public class LoginController implements Initializable {
 
     private void abrirVentanaPrincipal(Cajero cajero, double fondoCaja) {
         try {
+            System.out.println("DEBUG: Intentando cargar main.fxml...");
             FXMLLoader loader = new FXMLLoader(
                     getClass().getResource("/fxml/main.fxml"));
             loader.setControllerFactory(springContext::getBean);
             Parent root = loader.load();
-
+                System.out.println("DEBUG: main.fxml cargado exitosamente.");
             Stage stage = (Stage) btnLogin.getScene().getWindow();
             Scene scene = new Scene(root, 1200, 720);
             scene.getStylesheets().addAll(btnLogin.getScene().getStylesheets());
@@ -183,11 +180,12 @@ public class LoginController implements Initializable {
             stage.setScene(scene);
             stage.setTitle("Punto de Venta  —  " + cajero.getNombreCompleto()
                     + "  |  Fondo: $" + String.format("%.2f", fondoCaja));
-            stage.setMaximized(true);
+            stage.setFullScreen(true);
+            stage.show();
 
         } catch (Exception e) {
             e.printStackTrace();
-            mostrarErrorFondo("Error al cargar la ventana principal: " + e.getMessage());
+            throw new RuntimeException("ERROR FATAL AL CARGAR MAIN: " + e.getMessage(), e);
         }
     }
 

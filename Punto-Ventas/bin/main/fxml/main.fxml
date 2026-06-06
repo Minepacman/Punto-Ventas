@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<BorderPane   xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.MainController"
+            stylesheets="@../css/app.css" >
+
+    <top>
+        <ToolBar fx:id="toolbar" styleClass="main-toolbar">
+            <Label text="Punto de Venta" styleClass="brand-label"/>
+            <Region HBox.hgrow="ALWAYS"/>
+
+            <Label fx:id="labelUsuario" text="Usuario: —"/>
+
+            <Separator orientation="VERTICAL"/>
+
+            <Button fx:id="btnSalir" text="Salir" onAction="#onSalir"
+                    styleClass="button-danger"/>
+
+        </ToolBar>
+    </top>
+
+    <!-- ── NAVEGACIÓN POR PESTAÑAS ───────────────── -->
+    <center>
+        <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE"
+                 styleClass="main-tabs">
+
+            <!-- F1 – Ventas -->
+            <Tab fx:id="tabVentas" text="F1 · Ventas">
+                <fx:include source="ventas.fxml"
+                            fx:id="ventasView"/>
+            </Tab>
+
+            <!-- F2 – Clientes -->
+            <Tab fx:id="tabClientes" text="F2 · Clientes">
+                <fx:include source="clientes.fxml"
+                            fx:id="clientesView"/>
+            </Tab>
+
+            <!-- F3 – Productos -->
+            <Tab fx:id="tabProductos" text="F3 · Productos">
+                <fx:include source="productos.fxml"
+                            fx:id="productosView"/>
+            </Tab>
+
+            <!-- F4 – Inventario -->
+            <Tab fx:id="tabInventario" text="F4 · Inventario">
+                <fx:include source="inventario.fxml"
+                            fx:id="inventarioView"/>
+            </Tab>
+
+            <!-- Configuración -->
+            <Tab fx:id="tabConfig" text="⚙ Configuración">
+                <fx:include source="configuracion.fxml"
+                            fx:id="configuracionView"/>
+            </Tab>
+
+            <!-- Corte -->
+            <Tab fx:id="tabCorte" text="✂ Corte">
+                <fx:include source="corte.fxml"
+                            fx:id="corteView"/>
+            </Tab>
+
+        </TabPane>
+    </center>
+
+    <!-- ── BARRA DE ESTADO INFERIOR ──────────────── -->
+    <bottom>
+        <HBox styleClass="status-bar" spacing="12">
+            <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
+            <Label fx:id="labelFecha" text="—"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="labelVersion" text="v1.0.0"/>
+        </HBox>
+    </bottom>
+
+
+</BorderPane>
