@@ -51,6 +51,8 @@ public class PuntoDeVentaApp extends Application {
     // ── Cierre limpio ─────────────────────────────────────────────────────
     @Override
     public void stop() {
+        // Guardar el ticket sin cobrar también al cerrar con la X o Cmd+Q (USR-15)
+        Ventanas.ejecutarAccionAlCerrar();
         springContext.close();
         Platform.exit();
     }

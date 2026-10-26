@@ -25,6 +25,9 @@
             <Button text="Hoy"         onAction="#onHoy"/>
             <Button text="Esta semana" onAction="#onEstaSemana"/>
             <Button text="Este mes"    onAction="#onEsteMes"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="btnCancelarVenta" text="⛔ Cancelar venta" onAction="#onCancelarVenta"
+                    styleClass="button-danger"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
@@ -36,28 +39,32 @@
             <!-- Ventas -->
             <TableView fx:id="tablaVentas">
                 <columns>
-                    <TableColumn fx:id="colFolio"     text="Folio"        prefWidth="70"/>
-                    <TableColumn fx:id="colFecha"     text="Fecha"        prefWidth="150"/>
-                    <TableColumn fx:id="colCajero"    text="Cajero"       prefWidth="200"/>
-                    <TableColumn fx:id="colFormaPago" text="Forma de pago" prefWidth="110"/>
-                    <TableColumn fx:id="colPiezas"    text="Productos"    prefWidth="90" styleClass="align-right"/>
-                    <TableColumn fx:id="colTotal"     text="Total"        prefWidth="110" styleClass="align-right"/>
+                    <TableColumn fx:id="colFolio"     text="Folio"         prefWidth="60"/>
+                    <TableColumn fx:id="colFecha"     text="Fecha"         prefWidth="130"/>
+                    <TableColumn fx:id="colCajero"    text="Cajero"        prefWidth="160"/>
+                    <TableColumn fx:id="colFormaPago" text="Forma de pago" prefWidth="170"/>
+                    <TableColumn fx:id="colPiezas"    text="Productos"     prefWidth="80"  styleClass="align-right"/>
+                    <TableColumn fx:id="colSubtotal"  text="Subtotal"      prefWidth="90"  styleClass="align-right"/>
+                    <TableColumn fx:id="colIva"       text="IVA"           prefWidth="80"  styleClass="align-right"/>
+                    <TableColumn fx:id="colTotal"     text="Total"         prefWidth="100" styleClass="align-right"/>
+                    <TableColumn fx:id="colEstado"    text="Estado"        prefWidth="90"/>
                 </columns>
             </TableView>
 
             <!-- Detalle de la venta seleccionada -->
             <VBox spacing="4">
-                <Label fx:id="lblDetalleTitulo" text="Detalle de la venta" styleClass="form-section-title">
+                <Label fx:id="lblDetalleTitulo" text="Detalle de la venta" styleClass="form-section-title" wrapText="true">
                     <padding><Insets top="6" right="10" bottom="2" left="10"/></padding>
                 </Label>
                 <TableView fx:id="tablaDetalle" VBox.vgrow="ALWAYS">
                     <columns>
-                        <TableColumn fx:id="colDetCodigo"      text="Código"      prefWidth="130"/>
-                        <TableColumn fx:id="colDetDescripcion" text="Descripción" prefWidth="300"/>
-                        <TableColumn fx:id="colDetCantidad"    text="Cant."       prefWidth="70" styleClass="align-right"/>
-                        <TableColumn fx:id="colDetPrecio"      text="Precio"      prefWidth="90" styleClass="align-right"/>
-                        <TableColumn fx:id="colDetDescuento"   text="Descuento"   prefWidth="90" styleClass="align-right"/>
-                        <TableColumn fx:id="colDetImporte"     text="Importe"     prefWidth="90" styleClass="align-right"/>
+                        <TableColumn fx:id="colDetCodigo"      text="Código"      prefWidth="120"/>
+                        <TableColumn fx:id="colDetDescripcion" text="Descripción" prefWidth="260"/>
+                        <TableColumn fx:id="colDetCantidad"    text="Cant."       prefWidth="70"  styleClass="align-right"/>
+                        <TableColumn fx:id="colDetPrecio"      text="Precio"      prefWidth="90"  styleClass="align-right"/>
+                        <TableColumn fx:id="colDetDescuento"   text="Descuento"   prefWidth="90"  styleClass="align-right"/>
+                        <TableColumn fx:id="colDetConcepto"    text="Concepto"    prefWidth="200"/>
+                        <TableColumn fx:id="colDetImporte"     text="Importe"     prefWidth="90"  styleClass="align-right"/>
                     </columns>
                 </TableView>
             </VBox>
@@ -69,7 +76,7 @@
         <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
             <Label fx:id="lblResumen" text="0 venta(s)  ·  Total: \$0.00"
-                   style="-fx-font-weight:bold"/>
+                   style="-fx-font-weight:bold" wrapText="true"/>
         </HBox>
     </bottom>
 

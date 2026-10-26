@@ -1,33 +1,65 @@
 package me.eliassanchezfernandez.puntodeventa.util;
 
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
+import javafx.geometry.Insets;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.PasswordField;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
+import me.eliassanchezfernandez.puntodeventa.model.Permiso;
+import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
+import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
+import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import org.springframework.context.ApplicationContext;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.Optional;
 
 /**
  * Utilidades de navegación y diálogos.
  *
  * Centraliza la carga de FXML con el contexto de Spring como fábrica de
  * controladores, para que login → principal → login y las ventanas
- * modales (usuarios, promociones, historial) se abran siempre igual.
- * También aplica app.css a los Alert/Dialog, que no heredan los estilos
- * de la escena principal.
+ * modales se abran siempre igual. También aplica app.css a los
+ * Alert/Dialog, que no heredan los estilos de la escena principal, y
+ * ofrece los diálogos comunes (autorización de administrador, motivo).
  */
 public final class Ventanas {
 
     private static final String CSS_APP = "/css/app.css";
 
+    /** Lo que hay que hacer antes de que la aplicación se cierre (guardar el ticket pendiente) */
+    private static volatile Runnable accionAlCerrar;
+
     private Ventanas() { }
+
+    public static void setAccionAlCerrar(Runnable accion) {
+        accionAlCerrar = accion;
+    }
+
+    /** Ejecuta (una vez) la acción registrada; nunca lanza */
+    public static void ejecutarAccionAlCerrar() {
+        Runnable accion = accionAlCerrar;
+        accionAlCerrar = null;
+        if (accion == null) return;
+        try {
+            accion.run();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     // ── Navegación ────────────────────────────────────────────────────────
 
@@ -37,7 +69,7 @@ public final class Ventanas {
 
         stage.setFullScreen(false);
         stage.setMaximized(false);
-        stage.setScene(new Scene(root, 300, 400));
+        stage.setScene(new Scene(root, 320, 460));
         stage.setTitle("Punto de Venta");
         stage.setResizable(false);
         stage.sizeToScene();
@@ -105,6 +137,82 @@ public final class Ventanas {
         a.setHeaderText(null);
         estilizar(a);
         return a.showAndWait().filter(b -> b == ButtonType.YES).isPresent();
+    }
+
+    /** Pide un texto obligatorio (motivo, observación). Vacío si se cancela. */
+    public static Optional<String> pedirTexto(String titulo, String encabezado, String prompt) {
+        Dialog<String> dlg = new Dialog<>();
+        dlg.setTitle(titulo);
+        dlg.setHeaderText(encabezado);
+        TextArea txt = new TextArea();
+        txt.setPromptText(prompt);
+        txt.setPrefRowCount(3);
+        txt.setWrapText(true);
+        VBox caja = new VBox(8, txt);
+        caja.setPadding(new Insets(10));
+        dlg.getDialogPane().setContent(caja);
+        dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dlg.setResultConverter(b -> b == ButtonType.OK ? txt.getText().trim() : null);
+        estilizar(dlg);
+        Platform.runLater(txt::requestFocus);
+        return dlg.showAndWait().filter(s -> !s.isEmpty());
+    }
+
+    /**
+     * Diálogo de autorización con clave de administrador (USR-19). Permite
+     * hasta 3 intentos; cada fallo cuenta para el bloqueo del usuario.
+     * @return la autorización concedida, o vacío si se canceló o falló
+     */
+    public static Optional<Autorizacion> pedirAutorizacion(AutorizacionService servicio, Permiso permiso) {
+        Dialog<Autorizacion> dlg = new Dialog<>();
+        dlg.setTitle("Autorización de administrador");
+        dlg.setHeaderText("Se requiere: " + permiso.getDescripcion()
+                + "\nUn administrador debe capturar su usuario y contraseña.");
+
+        TextField txtUsuario = new TextField();
+        txtUsuario.setPromptText("Usuario administrador");
+        PasswordField txtClave = new PasswordField();
+        txtClave.setPromptText("Contraseña");
+        Label lblError = new Label();
+        lblError.getStyleClass().add("field-error-label");
+        lblError.setWrapText(true);
+        lblError.setVisible(false);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(10));
+        grid.addRow(0, new Label("Usuario:"), txtUsuario);
+        grid.addRow(1, new Label("Contraseña:"), txtClave);
+        grid.add(lblError, 0, 2, 2, 1);
+        dlg.getDialogPane().setContent(grid);
+
+        ButtonType autorizar = new ButtonType("Autorizar", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        dlg.getDialogPane().getButtonTypes().addAll(autorizar, ButtonType.CANCEL);
+        estilizar(dlg);
+
+        final int[] intentos = {0};
+        final Autorizacion[] resultado = {null};
+        javafx.scene.control.Button btn = (javafx.scene.control.Button) dlg.getDialogPane().lookupButton(autorizar);
+        btn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            try {
+                resultado[0] = servicio.autorizar(txtUsuario.getText(), txtClave.getText(), permiso);
+            } catch (NegocioException e) {
+                intentos[0]++;
+                resultado[0] = null;
+                lblError.setText(e.getMessage() + (intentos[0] >= 3 ? "" : "  (intento " + intentos[0] + " de 3)"));
+                lblError.setVisible(true);
+                txtClave.clear();
+                if (intentos[0] >= 3) {
+                    return;              // tercer fallo: el diálogo se cierra sin autorizar
+                }
+                ev.consume();            // mantener el diálogo abierto
+                txtClave.requestFocus();
+            }
+        });
+        dlg.setResultConverter(b -> b == autorizar ? resultado[0] : null);
+        Platform.runLater(txtUsuario::requestFocus);
+        return dlg.showAndWait().filter(a -> a != null);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

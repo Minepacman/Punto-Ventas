@@ -14,26 +14,27 @@
     <top>
         <HBox styleClass="section-toolbar" spacing="8">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button text="➕ Agregar a Inv."        onAction="#onAgregar"
+            <Button text="➕ Entrada de mercancía"   onAction="#onAgregar"
                     styleClass="button-success"/>
             <Button text="⚖ Ajustes"                onAction="#onAjustes"/>
             <ToggleButton fx:id="btnSoloBajos" text="⚠ Productos Bajos"
                           onAction="#onProductosBajos"/>
             <Separator orientation="VERTICAL"/>
             <Button text="📊 Reporte de Inventario"  onAction="#onReporteInventario"/>
-            <Button text="📋 Reporte de Movimientos" onAction="#onReporteMovimientos"/>
+            <Button text="📋 Movimientos"            onAction="#onReporteMovimientos"/>
         </HBox>
     </top>
 
     <center>
 
-        <SplitPane dividerPositions="0.35">
+        <SplitPane dividerPositions="0.38">
 
-            <!-- Panel izquierdo: formulario de entrada rápida -->
+            <!-- Panel izquierdo: formulario de entrada / ajuste -->
+            <ScrollPane fitToWidth="true">
             <VBox styleClass="form-panel" spacing="12">
                 <padding><Insets topRightBottomLeft="16"/></padding>
 
-                <Label fx:id="lblTituloForm" text="AGREGAR INVENTARIO" styleClass="section-title"/>
+                <Label fx:id="lblTituloForm" text="ENTRADA DE MERCANCÍA" styleClass="section-title"/>
                 <Separator/>
 
                 <Label text="Código del Producto:"/>
@@ -46,19 +47,36 @@
                 <Label text="Cantidad Actual:"/>
                 <Label fx:id="labelCantidadActual" text="0.00" styleClass="info-label"/>
 
-                <Label fx:id="lblEtiquetaCantidad" text="Cantidad a Agregar:"/>
+                <Label fx:id="lblEtiquetaCantidad" text="Cantidad que entra:"/>
                 <TextField fx:id="txtCantidad" promptText="0.00"
                            onAction="#onAgregarCantidad"/>
 
+                <!-- Solo en modo ENTRADA -->
+                <VBox fx:id="vboxEntrada" spacing="6">
+                    <Label text="Proveedor: *"/>
+                    <TextField fx:id="txtProveedor" promptText="Nombre del proveedor"/>
+                    <Label text="Costo unitario de compra:"/>
+                    <TextField fx:id="txtCosto" promptText="0.00"/>
+                    <Label text="El costo del producto se actualiza con el de esta entrada."
+                           wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
+                </VBox>
+
+                <!-- Solo en modo AJUSTE -->
+                <VBox fx:id="vboxAjuste" spacing="6" visible="false" managed="false">
+                    <Label text="Motivo del ajuste: *"/>
+                    <ComboBox fx:id="comboMotivo" maxWidth="Infinity" promptText="Merma, robo, caducidad, conteo..."/>
+                </VBox>
+
                 <Button fx:id="btnAplicar"
-                        text="✅ Agregar cantidad a Inventario"
+                        text="✅ Registrar entrada"
                         onAction="#onAgregarCantidad"
                         styleClass="button-success"
                         maxWidth="Infinity"/>
 
-                <Label text="Las filas en amarillo están en o por debajo del mínimo; en rojo, agotadas."
+                <Label text="Las filas en amarillo están en o por debajo del mínimo; en rojo, agotadas. Todo movimiento queda registrado."
                        wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
             </VBox>
+            </ScrollPane>
 
             <!-- Panel derecho: tabla de productos con inventario -->
             <TableView fx:id="tablaInventario">

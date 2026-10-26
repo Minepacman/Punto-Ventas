@@ -5,7 +5,7 @@
 <?import javafx.geometry.Insets?>
 
 <!--
-    usuarios.fxml  –  Administración de usuarios (solo ADMIN)
+    usuarios.fxml  –  Administración de usuarios, roles y permisos
     Controlador: UsuariosController.java
     Se abre como ventana modal desde Configuración → Cajeros.
 -->
@@ -16,30 +16,32 @@
     <top>
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button text="+ Nuevo"        onAction="#onNuevo"   styleClass="button-success"/>
-            <Button fx:id="btnEstado" text="⛔ Desactivar" onAction="#onCambiarEstado"/>
-            <Button text="🗑 Eliminar"    onAction="#onEliminar" styleClass="button-danger"/>
+            <Button fx:id="btnNuevo"       text="+ Nuevo"        onAction="#onNuevo"   styleClass="button-success"/>
+            <Button fx:id="btnEstado"      text="⛔ Desactivar"   onAction="#onCambiarEstado"/>
+            <Button fx:id="btnDesbloquear" text="🔓 Desbloquear"  onAction="#onDesbloquear"/>
+            <Button fx:id="btnEliminar"    text="🗑 Eliminar"     onAction="#onEliminar" styleClass="button-danger"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label text="Usuarios del sistema" styleClass="form-section-title"/>
         </HBox>
     </top>
 
     <center>
-        <SplitPane dividerPositions="0.55">
+        <SplitPane dividerPositions="0.5">
 
             <!-- Tabla -->
             <TableView fx:id="tablaUsuarios">
                 <columns>
-                    <TableColumn fx:id="colUsuario" text="Usuario"  prefWidth="120"/>
-                    <TableColumn fx:id="colNombre"  text="Nombre"   prefWidth="200"/>
+                    <TableColumn fx:id="colUsuario" text="Usuario"  prefWidth="110"/>
+                    <TableColumn fx:id="colNombre"  text="Nombre"   prefWidth="170"/>
                     <TableColumn fx:id="colRol"     text="Rol"      prefWidth="110"/>
-                    <TableColumn fx:id="colActivo"  text="Activo"   prefWidth="60"/>
+                    <TableColumn fx:id="colActivo"  text="Activo"   prefWidth="55"/>
+                    <TableColumn fx:id="colEstado"  text="Estado"   prefWidth="170"/>
                 </columns>
             </TableView>
 
             <!-- Formulario -->
             <ScrollPane fitToWidth="true">
-                <VBox styleClass="form-panel" spacing="12">
+                <VBox fx:id="vboxFormulario" styleClass="form-panel" spacing="12">
                     <padding><Insets topRightBottomLeft="16"/></padding>
 
                     <Label fx:id="lblTituloForm" text="NUEVO USUARIO" styleClass="form-section-title"/>
@@ -58,23 +60,32 @@
                     <VBox spacing="4">
                         <Label text="Contraseña" styleClass="field-label"/>
                         <PasswordField fx:id="txtContrasena"/>
-                        <Label fx:id="lblAyudaContrasena" text=""
+                        <Label fx:id="lblAyudaContrasena" text="" wrapText="true"
                                style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
                     </VBox>
 
                     <VBox spacing="4">
                         <Label text="Rol *" styleClass="field-label"/>
                         <ComboBox fx:id="comboRol" maxWidth="Infinity"/>
-                        <Label text="Administrador: acceso a Configuración, Corte y usuarios. Cajero: ventas e inventario."
+                        <Label text="Administrador: todo. Gerente: edita productos y desactiva usuarios. Cajero: ventas e inventario básico. Los permisos de abajo ajustan lo que el rol permite."
                                wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
                     </VBox>
 
                     <CheckBox fx:id="chkActivo" text="Usuario activo (puede iniciar sesión)"/>
 
+                    <Separator/>
+
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label text="Permisos de este usuario" styleClass="field-label"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="btnPermisosDelRol" text="Los del rol" onAction="#onPermisosDelRol" styleClass="button-ghost"/>
+                    </HBox>
+                    <VBox fx:id="vboxPermisos" spacing="6"/>
+
                     <Region minHeight="8"/>
 
                     <HBox spacing="12">
-                        <Button text="✅ Guardar" onAction="#onGuardar"
+                        <Button fx:id="btnGuardar" text="✅ Guardar" onAction="#onGuardar"
                                 styleClass="button-success"
                                 HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
                         <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>

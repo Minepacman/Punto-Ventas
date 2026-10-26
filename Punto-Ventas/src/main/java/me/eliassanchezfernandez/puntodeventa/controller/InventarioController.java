@@ -7,15 +7,22 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
+import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
+import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
+import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
 
@@ -24,14 +31,16 @@ import java.util.ResourceBundle;
  *
  * Tabla con todos los productos que manejan inventario (se puede filtrar a
  * "solo bajos") y un formulario con dos modos:
- *   - AGREGAR → suma unidades a la existencia (entrada de mercancía)
- *   - AJUSTE  → fija la existencia en un valor exacto (conteo físico)
+ *   - ENTRADA → suma unidades con proveedor y costo (INV-04)
+ *   - AJUSTE  → fija la existencia en un valor exacto con motivo (INV-05)
+ * Requiere AJUSTAR_INVENTARIO o autorización de administrador.
+ * Todo queda en la bitácora de movimientos (INV-07).
  */
 @Component
 @Scope("prototype")
 public class InventarioController implements Initializable {
 
-    private enum Modo { AGREGAR, AJUSTE }
+    private enum Modo { ENTRADA, AJUSTE }
 
     // ── FXML – formulario ─────────────────────────────────────────────────
     @FXML private Label     lblTituloForm;
@@ -40,6 +49,11 @@ public class InventarioController implements Initializable {
     @FXML private Label     labelDescripcion;
     @FXML private Label     labelCantidadActual;
     @FXML private Label     lblEtiquetaCantidad;
+    @FXML private VBox      vboxEntrada;
+    @FXML private TextField txtProveedor;
+    @FXML private TextField txtCosto;
+    @FXML private VBox      vboxAjuste;
+    @FXML private ComboBox<String> comboMotivo;
     @FXML private Button    btnAplicar;
     @FXML private ToggleButton btnSoloBajos;
 
@@ -51,23 +65,29 @@ public class InventarioController implements Initializable {
     @FXML private TableColumn<Producto, Double> colMinimo;
     @FXML private TableColumn<Producto, String> colEstado;
 
-    @Autowired private ProductoService productoService;
+    @Autowired private ProductoService     productoService;
+    @Autowired private SesionService       sesionService;
+    @Autowired private AutorizacionService autorizacionService;
+    @Autowired private ApplicationContext  springContext;
 
     private final ObservableList<Producto> lista = FXCollections.observableArrayList();
     private Producto productoSeleccionado = null;
-    private Modo modo = Modo.AGREGAR;
+    private Modo modo = Modo.ENTRADA;
 
     @Override public void initialize(URL url, ResourceBundle rb) {
         configurarColumnas();
         tablaInventario.setItems(lista);
         tablaInventario.setPlaceholder(new Label("No hay productos con inventario."));
+        comboMotivo.setItems(FXCollections.observableArrayList(
+                "Conteo físico", "Merma", "Robo o extravío", "Caducidad", "Devolución a proveedor", "Otro"));
+        comboMotivo.setEditable(true);
 
         // Al seleccionar una fila se carga en el formulario
         tablaInventario.getSelectionModel().selectedItemProperty().addListener((o, a, p) -> {
             if (p != null) mostrarProducto(p);
         });
 
-        aplicarModo(Modo.AGREGAR);
+        aplicarModo(Modo.ENTRADA);
         recargar();
     }
 
@@ -88,7 +108,7 @@ public class InventarioController implements Initializable {
     // ── Toolbar ───────────────────────────────────────────────────────────
 
     @FXML void onAgregar() {
-        aplicarModo(Modo.AGREGAR);
+        aplicarModo(Modo.ENTRADA);
         txtCodigo.requestFocus();
     }
 
@@ -103,12 +123,19 @@ public class InventarioController implements Initializable {
 
     @FXML void onReporteInventario() {
         alerta(Alert.AlertType.INFORMATION, "Reporte de inventario",
-                "La generación de reportes en PDF no está disponible en esta versión.");
+                "La generación de reportes en PDF no está disponible en esta versión. "
+                + "Usa \"Productos Bajos\" para ver los faltantes.");
     }
 
+    /** Bitácora de movimientos de inventario (INV-07) */
     @FXML void onReporteMovimientos() {
-        alerta(Alert.AlertType.INFORMATION, "Reporte de movimientos",
-                "La generación de reportes en PDF no está disponible en esta versión.");
+        try {
+            Ventanas.abrirModal(springContext, "/fxml/movimientos.fxml", "Movimientos de inventario",
+                    tablaInventario.getScene().getWindow(), 1050, 600);
+        } catch (Exception e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la ventana: " + e.getMessage());
+        }
     }
 
     // ── Formulario ────────────────────────────────────────────────────────
@@ -154,13 +181,61 @@ public class InventarioController implements Initializable {
             return;
         }
 
+        // Validar la captura ANTES de pedir cualquier autorización
+        double costo = 0;
+        String motivo = null;
+        if (modo == Modo.ENTRADA) {
+            if (txtProveedor.getText() == null || txtProveedor.getText().isBlank()) {
+                alerta(Alert.AlertType.WARNING, "Proveedor requerido", "Indica el proveedor de la entrada.");
+                txtProveedor.requestFocus();
+                return;
+            }
+            try {
+                costo = txtCosto.getText().isBlank() ? 0
+                        : Double.parseDouble(txtCosto.getText().trim().replace("$", "").replace(",", ""));
+            } catch (NumberFormatException e) {
+                alerta(Alert.AlertType.WARNING, "Costo inválido", "Escribe el costo unitario como número (ej: 12.50).");
+                txtCosto.requestFocus();
+                return;
+            }
+            if (costo < 0) {
+                alerta(Alert.AlertType.WARNING, "Costo inválido", "El costo no puede ser negativo.");
+                return;
+            }
+        } else {
+            motivo = comboMotivo.getEditor().getText();
+            if (motivo == null || motivo.isBlank()) motivo = comboMotivo.getValue();
+            if (motivo == null || motivo.isBlank()) {
+                alerta(Alert.AlertType.WARNING, "Motivo requerido",
+                        "Indica el motivo del ajuste (merma, robo, caducidad, conteo...).");
+                comboMotivo.requestFocus();
+                return;
+            }
+        }
+
+        // Permiso propio o autorización de administrador
+        List<Autorizacion> auts = List.of();
+        if (!sesionService.tienePermiso(Permiso.AJUSTAR_INVENTARIO)) {
+            Optional<Autorizacion> aut = Ventanas.pedirAutorizacion(autorizacionService, Permiso.AJUSTAR_INVENTARIO);
+            if (aut.isEmpty()) return;
+            auts = List.of(aut.get());
+        }
+
         try {
-            Producto actualizado = (modo == Modo.AGREGAR)
-                    ? productoService.agregarStock(productoSeleccionado.getId(), cantidad)
-                    : productoService.ajustarStock(productoSeleccionado.getId(), cantidad);
+            Producto actualizado;
+            if (modo == Modo.ENTRADA) {
+                actualizado = productoService.registrarEntrada(productoSeleccionado.getId(), cantidad,
+                        txtProveedor.getText(), costo, auts);
+            } else {
+                actualizado = productoService.ajustarStock(productoSeleccionado.getId(), cantidad, motivo, auts);
+            }
 
             productoSeleccionado = actualizado;
             txtCantidad.clear();
+            txtProveedor.clear();
+            txtCosto.clear();
+            comboMotivo.setValue(null);          // el motivo no se arrastra al siguiente ajuste
+            comboMotivo.getEditor().clear();
             recargar();
             tablaInventario.getSelectionModel().select(
                     lista.stream().filter(p -> p.getId().equals(actualizado.getId())).findFirst().orElse(null));
@@ -180,10 +255,15 @@ public class InventarioController implements Initializable {
 
     private void aplicarModo(Modo nuevo) {
         modo = nuevo;
-        if (modo == Modo.AGREGAR) {
-            lblTituloForm.setText("AGREGAR INVENTARIO");
-            lblEtiquetaCantidad.setText("Cantidad a Agregar:");
-            btnAplicar.setText("✅ Agregar cantidad a Inventario");
+        boolean entrada = modo == Modo.ENTRADA;
+        vboxEntrada.setVisible(entrada);
+        vboxEntrada.setManaged(entrada);
+        vboxAjuste.setVisible(!entrada);
+        vboxAjuste.setManaged(!entrada);
+        if (entrada) {
+            lblTituloForm.setText("ENTRADA DE MERCANCÍA");
+            lblEtiquetaCantidad.setText("Cantidad que entra:");
+            btnAplicar.setText("✅ Registrar entrada");
         } else {
             lblTituloForm.setText("AJUSTE DE INVENTARIO");
             lblEtiquetaCantidad.setText("Nueva existencia (conteo físico):");
@@ -196,7 +276,11 @@ public class InventarioController implements Initializable {
         txtCodigo.setText(p.getCodigoBarras());
         labelDescripcion.setText(p.getDescripcion());
         labelCantidadActual.setText(formatoCantidad(p.getCantidadActual())
-                + "   (mínimo: " + formatoCantidad(p.getCantidadMinima()) + ")");
+                + "   (mínimo: " + formatoCantidad(p.getCantidadMinima())
+                + ", costo: $" + String.format("%.2f", p.getPrecioCosto()) + ")");
+        if (txtCosto.getText().isBlank() && p.getPrecioCosto() > 0) {
+            txtCosto.setPromptText(String.format("%.2f", p.getPrecioCosto()));
+        }
     }
 
     private void limpiarFormulario() {
@@ -259,7 +343,8 @@ public class InventarioController implements Initializable {
     }
 
     private static String formatoCantidad(double v) {
-        return v == Math.floor(v) ? String.valueOf((long) v) : String.format("%.2f", v);
+        if (v == Math.floor(v)) return String.valueOf((long) v);
+        return String.format("%.3f", v).replaceAll("0+$", "");
     }
 
     private void alerta(Alert.AlertType tipo, String titulo, String msg) {

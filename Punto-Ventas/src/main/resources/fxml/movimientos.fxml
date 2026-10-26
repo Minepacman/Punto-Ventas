@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    movimientos.fxml  –  Bitácora de movimientos de inventario
+    Controlador: MovimientosController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.MovimientosController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Label text="Desde:"/>
+            <DatePicker fx:id="dpDesde" prefWidth="140"/>
+            <Label text="Hasta:"/>
+            <DatePicker fx:id="dpHasta" prefWidth="140"/>
+            <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
+            <Separator orientation="VERTICAL"/>
+            <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." HBox.hgrow="ALWAYS"/>
+            <Button text="Cerrar" onAction="#onCerrar"/>
+        </HBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tabla">
+            <columns>
+                <TableColumn fx:id="colFecha"    text="Fecha"     prefWidth="130"/>
+                <TableColumn fx:id="colTipo"     text="Tipo"      prefWidth="100"/>
+                <TableColumn fx:id="colProducto" text="Producto"  prefWidth="260"/>
+                <TableColumn fx:id="colCantidad" text="Cantidad"  prefWidth="80"  styleClass="align-right"/>
+                <TableColumn fx:id="colAntes"    text="Antes"     prefWidth="70"  styleClass="align-right"/>
+                <TableColumn fx:id="colDespues"  text="Después"   prefWidth="70"  styleClass="align-right"/>
+                <TableColumn fx:id="colUsuario"  text="Usuario"   prefWidth="150"/>
+                <TableColumn fx:id="colDetalle"  text="Motivo / proveedor" prefWidth="220"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
+            <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+            <Label fx:id="lblResumen" text="0 movimiento(s)" style="-fx-font-weight:bold"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

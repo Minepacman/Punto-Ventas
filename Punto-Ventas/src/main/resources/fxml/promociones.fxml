@@ -5,7 +5,7 @@
 <?import javafx.geometry.Insets?>
 
 <!--
-    promociones.fxml  –  Catálogo de promociones por producto
+    promociones.fxml  –  Catálogo de promociones por producto o departamento
     Controlador: PromocionesController.java
     Se abre como ventana modal desde Productos → Promociones.
 -->
@@ -16,80 +16,127 @@
     <top>
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button text="+ Nueva"     onAction="#onNueva"    styleClass="button-success"/>
-            <Button text="🗑 Eliminar" onAction="#onEliminar" styleClass="button-danger"/>
+            <Button fx:id="btnNueva"    text="+ Nueva"     onAction="#onNueva"    styleClass="button-success"/>
+            <Button fx:id="btnEliminar" text="🗑 Eliminar" onAction="#onEliminar" styleClass="button-danger"/>
+            <Label fx:id="lblSoloLectura" text="Solo consulta: no tienes permiso para crear o editar promociones."
+                   visible="false" managed="false" styleClass="badge, badge-warning"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label text="⭐ Promociones" styleClass="form-section-title"/>
         </HBox>
     </top>
 
     <center>
-        <SplitPane dividerPositions="0.58">
+        <SplitPane dividerPositions="0.52">
 
             <!-- Tabla -->
             <TableView fx:id="tablaPromociones">
                 <columns>
-                    <TableColumn fx:id="colProducto"    text="Producto"    prefWidth="180"/>
-                    <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="140"/>
-                    <TableColumn fx:id="colTipo"        text="Tipo"        prefWidth="90"/>
-                    <TableColumn fx:id="colValor"       text="Valor"       prefWidth="70" styleClass="align-right"/>
-                    <TableColumn fx:id="colVigencia"    text="Vigencia"    prefWidth="190"/>
-                    <TableColumn fx:id="colEstado"      text="Estado"      prefWidth="90"/>
+                    <TableColumn fx:id="colAlcance"     text="Producto / Depto." prefWidth="180"/>
+                    <TableColumn fx:id="colDescripcion" text="Descripción"       prefWidth="130"/>
+                    <TableColumn fx:id="colTipo"        text="Tipo"              prefWidth="100"/>
+                    <TableColumn fx:id="colValor"       text="Valor"             prefWidth="90" styleClass="align-right"/>
+                    <TableColumn fx:id="colVigencia"    text="Vigencia"          prefWidth="220"/>
+                    <TableColumn fx:id="colEstado"      text="Estado"            prefWidth="120"/>
                 </columns>
             </TableView>
 
             <!-- Formulario -->
             <ScrollPane fitToWidth="true">
-                <VBox styleClass="form-panel" spacing="12">
+                <VBox styleClass="form-panel" spacing="10">
                     <padding><Insets topRightBottomLeft="16"/></padding>
 
                     <Label fx:id="lblTituloForm" text="NUEVA PROMOCIÓN" styleClass="form-section-title"/>
                     <Separator/>
 
-                    <VBox spacing="4">
+                    <!-- Alcance -->
+                    <HBox spacing="16">
+                        <RadioButton fx:id="rbPorProducto" text="Por producto" selected="true">
+                            <toggleGroup><ToggleGroup fx:id="toggleAlcance"/></toggleGroup>
+                        </RadioButton>
+                        <RadioButton fx:id="rbPorDepartamento" text="Por departamento" toggleGroup="$toggleAlcance"/>
+                    </HBox>
+
+                    <VBox fx:id="vboxProducto" spacing="4">
                         <Label text="Producto *" styleClass="field-label"/>
                         <TextField fx:id="txtFiltroProducto" promptText="Filtrar por código o nombre..."
                                    onKeyReleased="#onFiltrarProducto"/>
-                        <ComboBox fx:id="comboProducto" maxWidth="Infinity"
-                                  promptText="Selecciona un producto"/>
+                        <ComboBox fx:id="comboProducto" maxWidth="Infinity" promptText="Selecciona un producto"/>
                         <Label fx:id="lblPrecioActual" text="Precio actual: —"
                                style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
                     </VBox>
 
-                    <VBox spacing="4">
-                        <Label text="Descripción" styleClass="field-label"/>
-                        <TextField fx:id="txtDescripcion" promptText="ej: Oferta de fin de semana"/>
+                    <VBox fx:id="vboxDepartamento" spacing="4" visible="false" managed="false">
+                        <Label text="Departamento *" styleClass="field-label"/>
+                        <ComboBox fx:id="comboDepartamento" maxWidth="Infinity" promptText="Selecciona un departamento"/>
                     </VBox>
 
+                    <VBox spacing="4">
+                        <Label text="Nombre de la promoción (aparece en el ticket)" styleClass="field-label"/>
+                        <TextField fx:id="txtDescripcion" promptText="ej: 2x1 fin de semana"/>
+                    </VBox>
+
+                    <!-- Tipo -->
                     <VBox spacing="6">
                         <Label text="Tipo *" styleClass="field-label"/>
                         <RadioButton fx:id="rbPorcentaje" text="Porcentaje de descuento (%)" selected="true">
-                            <toggleGroup>
-                                <ToggleGroup fx:id="toggleTipo"/>
-                            </toggleGroup>
+                            <toggleGroup><ToggleGroup fx:id="toggleTipo"/></toggleGroup>
                         </RadioButton>
-                        <RadioButton fx:id="rbPrecioFijo" text="Precio fijo por unidad ($)"
-                                     toggleGroup="$toggleTipo"/>
+                        <RadioButton fx:id="rbPrecioFijo" text="Precio fijo por unidad ($)" toggleGroup="$toggleTipo"/>
+                        <RadioButton fx:id="rbNxM" text="N x M  (lleva N, paga M: 2x1, 3x2...)" toggleGroup="$toggleTipo"/>
                     </VBox>
 
-                    <VBox spacing="4">
-                        <Label text="Valor *" styleClass="field-label"/>
-                        <TextField fx:id="txtValor" promptText="ej: 10  (10 %)  ó  25.50  ($)"/>
-                        <Label fx:id="lblPrecioResultante" text=""
-                               style="-fx-text-fill:-color-success-fg;-fx-font-size:11;-fx-font-weight:bold"/>
-                    </VBox>
+                    <HBox fx:id="hboxValor" spacing="8" alignment="CENTER_LEFT">
+                        <Label text="Valor *" styleClass="field-label" minWidth="60"/>
+                        <TextField fx:id="txtValor" promptText="ej: 10  (10 %)  ó  25.50  ($)" HBox.hgrow="ALWAYS"/>
+                    </HBox>
+                    <HBox fx:id="hboxNxM" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
+                        <Label text="Lleva (N)" styleClass="field-label"/>
+                        <TextField fx:id="txtN" prefWidth="60" text="2"/>
+                        <Label text="Paga (M)" styleClass="field-label"/>
+                        <TextField fx:id="txtM" prefWidth="60" text="1"/>
+                    </HBox>
+                    <Label fx:id="lblPrecioResultante" text=""
+                           style="-fx-text-fill:-color-success-fg;-fx-font-size:11;-fx-font-weight:bold" wrapText="true"/>
 
-                    <GridPane hgap="16" vgap="8">
-                        <Label text="Desde *" styleClass="field-label"
-                               GridPane.columnIndex="0" GridPane.rowIndex="0"/>
-                        <DatePicker fx:id="dpInicio" maxWidth="Infinity"
-                                    GridPane.columnIndex="1" GridPane.rowIndex="0"/>
-                        <Label text="Hasta" styleClass="field-label"
-                               GridPane.columnIndex="0" GridPane.rowIndex="1"/>
-                        <DatePicker fx:id="dpFin" maxWidth="Infinity" promptText="Sin vencimiento"
-                                    GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                    <Separator/>
+
+                    <!-- Vigencia -->
+                    <GridPane hgap="12" vgap="8">
+                        <Label text="Desde *" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <DatePicker fx:id="dpInicio" maxWidth="Infinity" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                        <Label text="Hasta" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <DatePicker fx:id="dpFin" maxWidth="Infinity" promptText="Sin vencimiento" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                        <Label text="Horario" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                        <HBox spacing="6" alignment="CENTER_LEFT" GridPane.columnIndex="1" GridPane.rowIndex="2">
+                            <TextField fx:id="txtHoraInicio" promptText="09:00" prefWidth="70"/>
+                            <Label text="a"/>
+                            <TextField fx:id="txtHoraFin" promptText="14:00" prefWidth="70"/>
+                            <Label text="(vacío = todo el día)" style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
+                        </HBox>
                         <columnConstraints>
-                            <ColumnConstraints prefWidth="80" minWidth="60"/>
+                            <ColumnConstraints prefWidth="70" minWidth="60"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                        </columnConstraints>
+                    </GridPane>
+
+                    <Label text="Días de la semana" styleClass="field-label"/>
+                    <HBox spacing="8">
+                        <CheckBox fx:id="chkLun" text="L" selected="true"/>
+                        <CheckBox fx:id="chkMar" text="M" selected="true"/>
+                        <CheckBox fx:id="chkMie" text="X" selected="true"/>
+                        <CheckBox fx:id="chkJue" text="J" selected="true"/>
+                        <CheckBox fx:id="chkVie" text="V" selected="true"/>
+                        <CheckBox fx:id="chkSab" text="S" selected="true"/>
+                        <CheckBox fx:id="chkDom" text="D" selected="true"/>
+                    </HBox>
+
+                    <GridPane hgap="12" vgap="8">
+                        <Label text="Hasta agotar (piezas)" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <TextField fx:id="txtLimitePiezas" promptText="vacío = sin límite" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                        <Label text="Máximo por ticket" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <TextField fx:id="txtLimiteTicket" promptText="vacío = sin límite" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                        <columnConstraints>
+                            <ColumnConstraints prefWidth="150" minWidth="120"/>
                             <ColumnConstraints hgrow="ALWAYS"/>
                         </columnConstraints>
                     </GridPane>
@@ -99,7 +146,7 @@
                     <Region minHeight="8"/>
 
                     <HBox spacing="12">
-                        <Button text="✅ Guardar" onAction="#onGuardar"
+                        <Button fx:id="btnGuardar" text="✅ Guardar" onAction="#onGuardar"
                                 styleClass="button-success"
                                 HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
                         <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>

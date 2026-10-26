@@ -28,10 +28,12 @@
                             onAction="#onModificar"/>
                     <Button fx:id="btnEliminar"   text="🗑 Eliminar"
                             onAction="#onEliminar" styleClass="button-danger"/>
+                    <Button fx:id="btnActivar"    text="⏻ Activar / Desactivar"
+                            onAction="#onCambiarActivo"/>
                     <Separator orientation="VERTICAL"/>
-                    <Button text="Departamentos"      onAction="#onDepartamentos"/>
-                    <Button text="Ventas por Período" onAction="#onVentasPeriodo"/>
-                    <Button text="⭐ Promociones"      onAction="#onPromociones"/>
+                    <Button fx:id="btnDepartamentos" text="Departamentos"      onAction="#onDepartamentos"/>
+                    <Button fx:id="btnVentasPeriodo" text="Ventas por Período" onAction="#onVentasPeriodo"/>
+                    <Button fx:id="btnPromociones"   text="⭐ Promociones"      onAction="#onPromociones"/>
                     <Button text="📥 Importar"         onAction="#onImportar"/>
                 </HBox>
 
@@ -58,6 +60,7 @@
                     <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="85" styleClass="align-right"/>
                     <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="75" styleClass="align-right"/>
                     <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="140"/>
+                    <TableColumn fx:id="colEstado"       text="Estado"       prefWidth="80"/>
                 </columns>
                 <placeholder>
                     <Label text="No hay productos registrados. Pulsa + Nuevo para agregar."/>

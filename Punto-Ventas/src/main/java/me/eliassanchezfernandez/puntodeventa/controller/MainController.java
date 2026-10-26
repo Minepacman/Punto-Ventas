@@ -16,6 +16,7 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
+import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,9 +35,9 @@ import java.util.ResourceBundle;
  *
  * Responsabilidades:
  *  - Actualizar el reloj de la barra de estado
- *  - Controlar accesos por rol (cajero / admin)
+ *  - Controlar accesos por rol/permiso (pestañas Configuración y Corte)
  *  - Escuchar atajos de teclado F1–F4 y F12
- *  - Cerrar sesión / salir
+ *  - Cerrar sesión / salir conservando el ticket sin cobrar (USR-15)
  */
 @Component
 @Scope("prototype")
@@ -76,13 +77,30 @@ public class MainController implements Initializable {
 
         Cajero cajero = sesionService.getCajeroActual();
         labelUsuario.setText(cajero != null
-                ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol() + ")"
+                ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol().getEtiqueta() + ")"
                 : "Usuario: —");
         labelVersion.setText("v" + version);
 
-        aplicarPermisosPorRol();
+        aplicarPermisos();
         configurarAtajosTeclado();
         configurarRefrescoDePestanas();
+        configurarCierreDeVentana();
+    }
+
+    /** El ticket sin cobrar se guarda también si cierran la ventana (X) o la app (Cmd+Q) */
+    private void configurarCierreDeVentana() {
+        Ventanas.setAccionAlCerrar(this::guardarTicketPendiente);
+        tabPane.sceneProperty().addListener((obs, old, scene) -> {
+            if (scene == null) return;
+            scene.windowProperty().addListener((o, w0, window) -> {
+                if (window instanceof Stage stage) {
+                    stage.setOnCloseRequest(e -> guardarTicketPendiente());
+                }
+            });
+            if (scene.getWindow() instanceof Stage stage) {
+                stage.setOnCloseRequest(e -> guardarTicketPendiente());
+            }
+        });
     }
 
     // ── Acciones ──────────────────────────────────────────────────────────
@@ -90,13 +108,18 @@ public class MainController implements Initializable {
     @FXML
     private void onCerrarSesion() {
         if (!Ventanas.confirmar("Cerrar sesión",
-                "¿Cerrar la sesión de " + sesionService.getNombreCajero() + "?")) {
+                "¿Cerrar la sesión de " + sesionService.getNombreCajero() + "?"
+                + (ventasViewController != null && ventasViewController.hayTicketEnCaptura()
+                   ? "\nEl ticket sin cobrar se conservará para cuando vuelvas a entrar." : ""))) {
             return;
         }
         try {
             if (reloj != null) reloj.stop();
+            guardarTicketPendiente();
+            Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();
             Stage stage = (Stage) tabPane.getScene().getWindow();
+            stage.setOnCloseRequest(null);
             Ventanas.mostrarLogin(stage, springContext);
         } catch (Exception e) {
             e.printStackTrace();
@@ -108,6 +131,8 @@ public class MainController implements Initializable {
     @FXML
     private void onSalir() {
         if (Ventanas.confirmar("Salir", "¿Salir del Punto de Venta?")) {
+            guardarTicketPendiente();
+            Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();
             Platform.exit(); // PuntoDeVentaApp.stop() cierra el contexto de Spring
         }
@@ -115,10 +140,26 @@ public class MainController implements Initializable {
 
     // ── Helpers privados ─────────────────────────────────────────────────
 
-    /** Los cajeros no ven Configuración ni Corte (solo ADMIN) */
-    private void aplicarPermisosPorRol() {
-        if (!sesionService.esAdmin()) {
-            tabPane.getTabs().removeAll(tabConfig, tabCorte);
+    /** El ticket en captura se guarda para el mismo cajero (USR-15) */
+    private void guardarTicketPendiente() {
+        try {
+            if (ventasViewController != null) ventasViewController.guardarTicketPendiente();
+        } catch (Exception e) {
+            e.printStackTrace();   // no impedir el cierre de sesión por esto
+        }
+    }
+
+    /**
+     * Configuración: ADMIN y GERENTE (usuarios). Corte: quien pueda hacer el
+     * corte o ver ganancias. Lo demás se restringe dentro de cada pantalla.
+     */
+    private void aplicarPermisos() {
+        if (!sesionService.esAdmin() && !sesionService.esGerente()) {
+            tabPane.getTabs().remove(tabConfig);
+        }
+        if (!sesionService.tienePermiso(Permiso.HACER_CORTE)
+                && !sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
+            tabPane.getTabs().remove(tabCorte);
         }
     }
 
@@ -169,5 +210,4 @@ public class MainController implements Initializable {
             if (tab == tabCorte      && corteViewController      != null) corteViewController.recargar();
         });
     }
-
 }
