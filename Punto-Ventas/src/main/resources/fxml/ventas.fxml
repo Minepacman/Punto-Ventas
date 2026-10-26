@@ -21,6 +21,10 @@
             <Separator orientation="VERTICAL"/>
             <Button fx:id="btnBuscar"  text="🔍 Buscar"  onAction="#onBuscar"/>
             <Button fx:id="btnMayoreo" text="Mayoreo"    onAction="#onMayoreo"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="btnCantidad" text="Cantidad…" onAction="#onCambiarCantidad"/>
+            <Button fx:id="btnQuitar"   text="🗑 Quitar"  onAction="#onQuitarLinea"
+                    styleClass="button-danger"/>
         </HBox>
     </top>
 
@@ -30,11 +34,11 @@
             <columns>
                 <TableColumn fx:id="colCodigo"      text="Código"      prefWidth="130"/>
                 <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="300"/>
-                <TableColumn fx:id="colPrecio"      text="Precio"      prefWidth="90"/>
-                <TableColumn fx:id="colCantidad"    text="Cant."       prefWidth="60"/>
-                <TableColumn fx:id="colImporte"     text="Importe"     prefWidth="90"/>
-                <TableColumn fx:id="colExistencia"  text="Existencia"  prefWidth="90"/>
-                <TableColumn fx:id="colDescuento"   text="Descuento"   prefWidth="90"/>
+                <TableColumn fx:id="colPrecio"      text="Precio"      prefWidth="90" styleClass="align-right"/>
+                <TableColumn fx:id="colCantidad"    text="Cant."       prefWidth="70" styleClass="align-right"/>
+                <TableColumn fx:id="colDescuento"   text="Descuento"   prefWidth="90" styleClass="align-right"/>
+                <TableColumn fx:id="colImporte"     text="Importe"     prefWidth="90" styleClass="align-right"/>
+                <TableColumn fx:id="colExistencia"  text="Existencia"  prefWidth="90" styleClass="align-right"/>
             </columns>
         </TableView>
     </center>
@@ -49,8 +53,13 @@
 
             <Separator/>
 
+            <Label text="Forma de pago:"/>
+            <ComboBox fx:id="comboFormaPago" maxWidth="Infinity"/>
+
             <Label text="Pagó con:"/>
-            <TextField fx:id="txtPago" promptText="\$0.00"/>
+            <TextField fx:id="txtPago" promptText="\$0.00"
+                       onKeyReleased="#onPagoChanged"
+                       onAction="#onCobrar"/>
 
             <Label text="Cambio:"/>
             <Label fx:id="labelCambio" text="\$0.00" styleClass="cambio-label"/>
@@ -75,7 +84,7 @@
             <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
             <Label fx:id="labelNumProductos" text="0 productos en la venta actual."/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Label text="Total pagado:"/>
+            <Label text="Vendido hoy:"/>
             <Label fx:id="labelTotalPagado" text="\$0.00"/>
         </HBox>
     </bottom>

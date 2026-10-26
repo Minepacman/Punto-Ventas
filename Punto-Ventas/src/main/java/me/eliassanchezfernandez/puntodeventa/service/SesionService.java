@@ -3,10 +3,11 @@ package me.eliassanchezfernandez.puntodeventa.service;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import jakarta.annotation.PostConstruct;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -20,6 +21,9 @@ import java.util.Optional;
  */
 @Service
 public class SesionService {
+
+    public static final String ADMIN_USUARIO    = "admin";
+    public static final String ADMIN_CONTRASENA = "admin123";
 
     @Autowired private CajeroRepository cajeroRepo;
     @Autowired private PasswordEncoder  passwordEncoder;
@@ -44,8 +48,12 @@ public class SesionService {
     public Cajero autenticar(String usuario, String contrasena)
             throws CredencialesInvalidasException {
 
+        if (usuario == null || usuario.isBlank() || contrasena == null || contrasena.isEmpty()) {
+            throw new CredencialesInvalidasException("Usuario y contraseña son obligatorios.");
+        }
+
         Optional<Cajero> encontrado =
-                cajeroRepo.findByUsuarioIgnoreCaseAndActivoTrue(usuario);
+                cajeroRepo.findByUsuarioIgnoreCaseAndActivoTrue(usuario.trim());
 
         if (encontrado.isEmpty()) {
             throw new CredencialesInvalidasException("Usuario no encontrado o inactivo.");
@@ -61,7 +69,7 @@ public class SesionService {
         return cajero;
     }
 
-    /** Cierra la sesión actual */
+    /** Cierra la sesión actual (el fondo de caja del día se conserva) */
     public void cerrarSesion() {
         cajeroActual = null;
     }
@@ -85,45 +93,75 @@ public class SesionService {
                cajeroActual.getRol() == Cajero.Rol.ADMIN;
     }
 
+    /** Lanza NegocioException si quien está en sesión no es administrador */
+    public void verificarAdmin() {
+        if (!esAdmin()) {
+            throw new NegocioException(
+                    "Solo un administrador puede realizar esta operación.");
+        }
+    }
+
     // ── Excepción interna ─────────────────────────────────────────────────
 
     public static class CredencialesInvalidasException extends Exception {
         public CredencialesInvalidasException(String msg) { super(msg); }
     }
 
-    @PostConstruct
-    
-    public void init() {
-        crearAdminPorDefectoSiNecesario();
-    }
     // ── Inicialización: crear admin por defecto si no hay cajeros ─────────
 
     /**
-     * Crea un cajero administrador por defecto si la tabla está vacía.
-     * Usuario: admin  /  Contraseña: admin123
+     * Se ejecuta cuando el contexto ya está listo. Se usa un @EventListener en
+     * lugar de @PostConstruct para que la llamada pase por el proxy de Spring
+     * y la siembra corra dentro de UNA transacción (@PostConstruct invoca al
+     * bean "crudo" y la anotación @Transactional no aplicaría).
+     */
+    @EventListener(ContextRefreshedEvent.class)
+    public void init() {
+        crearAdminPorDefectoSiNecesario();
+    }
+
+    /**
+     * Crea el administrador por defecto (usuario "admin") cuando el sistema
+     * no tiene ninguno: tabla vacía, o sin ningún ADMIN y sin un usuario
+     * llamado "admin". NUNCA modifica ni restablece un usuario existente.
+     *
+     * Es idempotente: en cuanto existe un ADMIN (o el usuario "admin")
+     * no hace nada. La contraseña por defecto está en ADMIN_CONTRASENA y
+     * no se imprime en consola.
      *
      * IMPORTANTE: cambiar la contraseña en producción.
      */
+    @Transactional
     public void crearAdminPorDefectoSiNecesario() {
 
-        if (cajeroRepo.count() == 0) {
-            Cajero admin = new Cajero();
-            admin.setUsuario("admin");
-            admin.setNombreCompleto("Administrador");
-            admin.setContrasenaHash(passwordEncoder.encode("admin123"));
-            admin.setRol(Cajero.Rol.ADMIN);
-            admin.setActivo(true);
-            cajeroRepo.save(admin);
-            System.out.println("✅ Cajero admin creado por defecto. Usuario: admin / Contraseña: admin123");
+        boolean tablaVacia = cajeroRepo.count() == 0;
+        boolean hayAdmin   = cajeroRepo.existsByRol(Cajero.Rol.ADMIN);
+        boolean existeUsuarioAdmin = cajeroRepo.findByUsuarioIgnoreCase(ADMIN_USUARIO).isPresent();
+
+        if (!tablaVacia && (hayAdmin || existeUsuarioAdmin)) {
+            return;
         }
+
+        Cajero admin = new Cajero();
+        admin.setUsuario(ADMIN_USUARIO);
+        admin.setNombreCompleto("Administrador");
+        admin.setContrasenaHash(passwordEncoder.encode(ADMIN_CONTRASENA));
+        admin.setRol(Cajero.Rol.ADMIN);
+        admin.setActivo(true);
+        cajeroRepo.save(admin);
+
+        System.out.println("✅ Administrador por defecto creado (usuario: "
+                + ADMIN_USUARIO + "). Cambia su contraseña desde Configuración → Cajeros.");
     }
-    public boolean requireIngresarFondo() {
-        // si no hay un fondo registrado, o si el fondo guardado no es de hoy 
+
+    // ── Fondo de caja del día ─────────────────────────────────────────────
+
+    public boolean requiereIngresarFondo() {
+        // si no hay un fondo registrado, o si el fondo guardado no es de hoy
         return fondoDeCajaDelDia == null || !LocalDate.now().equals(fechaDelFondo);
-
     }
 
-    public void registrarFindoDeCaja(double monto){
+    public void registrarFondoDeCaja(double monto) {
         this.fondoDeCajaDelDia = monto;
         this.fechaDelFondo = LocalDate.now();
     }

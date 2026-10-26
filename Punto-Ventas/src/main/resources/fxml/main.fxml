@@ -17,6 +17,8 @@
 
             <Separator orientation="VERTICAL"/>
 
+            <Button fx:id="btnCerrarSesion" text="Cerrar sesión" onAction="#onCerrarSesion"/>
+
             <Button fx:id="btnSalir" text="Salir" onAction="#onSalir"
                     styleClass="button-danger"/>
 
@@ -52,13 +54,13 @@
                             fx:id="inventarioView"/>
             </Tab>
 
-            <!-- Configuración -->
+            <!-- Configuración (solo ADMIN; MainController la quita para cajeros) -->
             <Tab fx:id="tabConfig" text="⚙ Configuración">
                 <fx:include source="configuracion.fxml"
                             fx:id="configuracionView"/>
             </Tab>
 
-            <!-- Corte -->
+            <!-- Corte (solo ADMIN) -->
             <Tab fx:id="tabCorte" text="✂ Corte">
                 <fx:include source="corte.fxml"
                             fx:id="corteView"/>
@@ -72,6 +74,8 @@
         <HBox styleClass="status-bar" spacing="12">
             <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
             <Label fx:id="labelFecha" text="—"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label text="F1 Ventas · F2 Clientes · F3 Productos · F4 Inventario · F12 Cobrar"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="labelVersion" text="v1.0.0"/>
         </HBox>

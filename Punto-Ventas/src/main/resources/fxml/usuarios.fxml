@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    usuarios.fxml  –  Administración de usuarios (solo ADMIN)
+    Controlador: UsuariosController.java
+    Se abre como ventana modal desde Configuración → Cajeros.
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.UsuariosController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Button text="+ Nuevo"        onAction="#onNuevo"   styleClass="button-success"/>
+            <Button fx:id="btnEstado" text="⛔ Desactivar" onAction="#onCambiarEstado"/>
+            <Button text="🗑 Eliminar"    onAction="#onEliminar" styleClass="button-danger"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label text="Usuarios del sistema" styleClass="form-section-title"/>
+        </HBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.55">
+
+            <!-- Tabla -->
+            <TableView fx:id="tablaUsuarios">
+                <columns>
+                    <TableColumn fx:id="colUsuario" text="Usuario"  prefWidth="120"/>
+                    <TableColumn fx:id="colNombre"  text="Nombre"   prefWidth="200"/>
+                    <TableColumn fx:id="colRol"     text="Rol"      prefWidth="110"/>
+                    <TableColumn fx:id="colActivo"  text="Activo"   prefWidth="60"/>
+                </columns>
+            </TableView>
+
+            <!-- Formulario -->
+            <ScrollPane fitToWidth="true">
+                <VBox styleClass="form-panel" spacing="12">
+                    <padding><Insets topRightBottomLeft="16"/></padding>
+
+                    <Label fx:id="lblTituloForm" text="NUEVO USUARIO" styleClass="form-section-title"/>
+                    <Separator/>
+
+                    <VBox spacing="4">
+                        <Label text="Usuario (para iniciar sesión) *" styleClass="field-label"/>
+                        <TextField fx:id="txtUsuario" promptText="ej: maria"/>
+                    </VBox>
+
+                    <VBox spacing="4">
+                        <Label text="Nombre completo *" styleClass="field-label"/>
+                        <TextField fx:id="txtNombre" promptText="ej: María López"/>
+                    </VBox>
+
+                    <VBox spacing="4">
+                        <Label text="Contraseña" styleClass="field-label"/>
+                        <PasswordField fx:id="txtContrasena"/>
+                        <Label fx:id="lblAyudaContrasena" text=""
+                               style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
+                    </VBox>
+
+                    <VBox spacing="4">
+                        <Label text="Rol *" styleClass="field-label"/>
+                        <ComboBox fx:id="comboRol" maxWidth="Infinity"/>
+                        <Label text="Administrador: acceso a Configuración, Corte y usuarios. Cajero: ventas e inventario."
+                               wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
+                    </VBox>
+
+                    <CheckBox fx:id="chkActivo" text="Usuario activo (puede iniciar sesión)"/>
+
+                    <Region minHeight="8"/>
+
+                    <HBox spacing="12">
+                        <Button text="✅ Guardar" onAction="#onGuardar"
+                                styleClass="button-success"
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                        <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
+                    </HBox>
+                </VBox>
+            </ScrollPane>
+
+        </SplitPane>
+    </center>
+
+</BorderPane>

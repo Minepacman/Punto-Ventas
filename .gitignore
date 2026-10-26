@@ -1,0 +1,10 @@
+# Base de datos local
+datos.db
+
+# Salidas de compilación
+build/
+bin/
+.gradle/
+
+# macOS
+.DS_Store

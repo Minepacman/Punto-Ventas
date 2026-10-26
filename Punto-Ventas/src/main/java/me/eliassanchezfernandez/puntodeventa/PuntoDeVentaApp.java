@@ -7,9 +7,8 @@ import atlantafx.base.theme.PrimerDark;
 import atlantafx.base.theme.NordLight;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Scene;
 import javafx.stage.Stage;
+import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -44,18 +43,9 @@ public class PuntoDeVentaApp extends Application {
         //Application.setUserAgentStylesheet(new Dracula().getUserAgentStylesheet());
         Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()); //agregar funcion para que el usuario pueda elegir el tema (detalles del codigo extras)
 
-        FXMLLoader loader = new FXMLLoader(
-                getClass().getResource("/fxml/login.fxml"));
-
-        // Inyectar el contexto de Spring en los controladores FXML
-        loader.setControllerFactory(springContext::getBean);
-
-        Scene scene = new Scene(loader.load(), 300, 400);
-
-        primaryStage.setTitle("Punto de Venta");
-        primaryStage.setScene(scene);
-        primaryStage.setResizable(false);
-        primaryStage.show();
+        // La pantalla de login se abre con el contexto de Spring como
+        // fábrica de controladores (ver Ventanas)
+        Ventanas.mostrarLogin(primaryStage, springContext);
     }
 
     // ── Cierre limpio ─────────────────────────────────────────────────────

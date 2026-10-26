@@ -33,8 +33,10 @@ dependencies {
     // Spring Boot dependencies
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter'
-    // Descomenta security solo cuando ya tengas las ventanas funcionando
-    // implementation 'org.springframework.boot:spring-boot-starter-security'
+
+    // Seguridad: solo usamos BCrypt para las contraseñas (login propio en JavaFX,
+    // no hace falta el starter web de Spring Security)
+    implementation 'org.springframework.security:spring-security-crypto'
 
     // Database dependencies
     runtimeOnly 'org.xerial:sqlite-jdbc:3.45.3.0'
@@ -52,16 +54,10 @@ dependencies {
     implementation 'net.sf.jasperreports:jasperreports:6.21.3' 
 
     // Testing dependencies
-    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    //seguridad  ?
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.security:spring-security-crypto'
-
 }
 
 application {
