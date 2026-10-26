@@ -2,18 +2,18 @@ package me.eliassanchezfernandez.puntodeventa.controller;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
-import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
-import javafx.scene.Parent;
-import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
@@ -27,10 +27,15 @@ import java.util.ResourceBundle;
  *  2. SesionService.autenticar() verifica credenciales (BCrypt)
  *  3a. Error  → mostrar aviso rojo
  *  3b. Éxito  → ocultar formulario, mostrar panel "Fondo de Caja"
+ *      (si el fondo de hoy ya se registró, se salta este paso)
  *  4. Cajero ingresa monto inicial → onAceptarDineroCaja()
  *  5. Se valida el monto y se abre main.fxml en el mismo Stage
+ *
+ * Es prototype porque cada vez que se cierra sesión se vuelve a cargar
+ * el FXML y necesitamos un controlador limpio.
  */
 @Component
+@Scope("prototype")
 public class LoginController implements Initializable {
 
     // ── FXML – Formulario de credenciales ────────────────────────────────
@@ -51,6 +56,9 @@ public class LoginController implements Initializable {
     @Autowired private SesionService      sesionService;
     @Autowired private ApplicationContext springContext;
 
+    @Value("${app.nombre-tienda:Mi Tienda}")
+    private String nombreTienda;
+
     // ── Estado ────────────────────────────────────────────────────────────
     /** Cajero autenticado — se guarda para usarlo al abrir main.fxml */
     private Cajero cajeroAutenticado = null;
@@ -61,12 +69,12 @@ public class LoginController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        // TODO: leer nombre de la tienda desde application.properties
-        lblNombreTienda.setText("Mi Tienda");
+        lblNombreTienda.setText(nombreTienda);
 
         // Ocultar error al volver a escribir
         txtUsuario.setOnKeyTyped(e    -> ocultarError());
         txtContrasena.setOnKeyTyped(e -> ocultarError());
+        txtDineroCaja.setOnKeyTyped(e -> ocultarError());
 
         // Fondo de caja oculto hasta autenticarse
         dineroEnCaja.setVisible(false);
@@ -98,7 +106,12 @@ public class LoginController implements Initializable {
                 Platform.runLater(() -> {
                     cajeroAutenticado = cajero;
                     setUICargando(false);
-                    mostrarPanelFondoDeCaja();
+                    if (sesionService.requiereIngresarFondo()) {
+                        mostrarPanelFondoDeCaja();
+                    } else {
+                        // Ya se abrió caja hoy (p. ej. cambio de turno): entrar directo
+                        abrirVentanaPrincipal(cajero, sesionService.getFondoDeCajaDelDia());
+                    }
                 });
 
             } catch (SesionService.CredencialesInvalidasException e) {
@@ -108,8 +121,14 @@ public class LoginController implements Initializable {
                     txtContrasena.requestFocus();
                     setUICargando(false);
                 });
+            } catch (Exception e) {
+                e.printStackTrace();
+                Platform.runLater(() -> {
+                    mostrarError("No se pudo conectar con la base de datos.");
+                    setUICargando(false);
+                });
             }
-        }).start();
+        }, "login-auth").start();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -120,8 +139,9 @@ public class LoginController implements Initializable {
      * Oculta el formulario de credenciales y muestra el panel
      * para ingresar el dinero inicial en caja.
      */
-    
     private void mostrarPanelFondoDeCaja() {
+        ocultarError();
+
         // Ocultar formulario de login
         vboxForm.setVisible(false);
         vboxForm.setManaged(false);
@@ -129,6 +149,10 @@ public class LoginController implements Initializable {
         // Mostrar panel de fondo de caja
         dineroEnCaja.setVisible(true);
         dineroEnCaja.setManaged(true);
+
+        // El botón principal ahora confirma el fondo en lugar de autenticar
+        btnLogin.setText("Abrir caja");
+        btnLogin.setOnAction(e -> onAceptarDineroCaja());
 
         Platform.runLater(() -> txtDineroCaja.requestFocus());
     }
@@ -155,8 +179,7 @@ public class LoginController implements Initializable {
             return;
         }
 
-        // TODO: guardar fondoCaja en la entidad Corte del día actual
-        //       corteService.registrarFondoInicial(fondoCaja, cajeroAutenticado);
+        sesionService.registrarFondoDeCaja(fondoCaja);
 
         abrirVentanaPrincipal(cajeroAutenticado, fondoCaja);
     }
@@ -167,22 +190,10 @@ public class LoginController implements Initializable {
 
     private void abrirVentanaPrincipal(Cajero cajero, double fondoCaja) {
         try {
-            System.out.println("DEBUG: Intentando cargar main.fxml...");
-            FXMLLoader loader = new FXMLLoader(
-                    getClass().getResource("/fxml/main.fxml"));
-            loader.setControllerFactory(springContext::getBean);
-            Parent root = loader.load();
-            System.out.println("DEBUG: main.fxml cargado exitosamente.");
             Stage stage = (Stage) btnLogin.getScene().getWindow();
-            Scene scene = new Scene(root);
-            scene.getStylesheets().addAll(btnLogin.getScene().getStylesheets());
-            stage.setResizable(true);
-            stage.setScene(scene);
-            stage.setMaximized(true);
-            stage.setTitle("Punto de Venta  —  " + cajero.getNombreCompleto()
-                    + "  |  Fondo: $" + String.format("%.2f", fondoCaja));
-            stage.setFullScreen(true);
-            stage.show();
+            String titulo = "Punto de Venta  —  " + cajero.getNombreCompleto()
+                    + "  |  Fondo: $" + String.format("%.2f", fondoCaja);
+            Ventanas.mostrarPrincipal(stage, springContext, titulo);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -208,9 +219,7 @@ public class LoginController implements Initializable {
     /** Muestra el error dentro del panel de fondo de caja */
     private void mostrarErrorFondo(String mensaje) {
         // Reutiliza el mismo label de error que ya existe en el FXML
-        lblError.setText(mensaje);
-        hboxError.setVisible(true);
-        hboxError.setManaged(true);
+        mostrarError(mensaje);
     }
 
     private void setUICargando(boolean cargando) {

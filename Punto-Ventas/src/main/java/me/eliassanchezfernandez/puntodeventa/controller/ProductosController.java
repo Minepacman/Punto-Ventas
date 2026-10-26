@@ -14,10 +14,12 @@ import javafx.scene.layout.HBox;
 import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
-import me.eliassanchezfernandez.puntodeventa.repository.DepartamentoRepository;
+import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.access.method.P;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
@@ -28,20 +30,25 @@ import java.util.ResourceBundle;
 /**
  * Controlador de la pantalla de Productos (F3).
  *
- * La pantalla tiene DOS vistas que se intercambian a pantalla completa:
- *   - vistaTabla      → lista de productos (por defecto)
- *   - vistaFormulario → formulario de nuevo/editar producto
+ * La pantalla tiene TRES vistas que se intercambian a pantalla completa:
+ *   - vistaTabla         → lista de productos (por defecto)
+ *   - vistaFormulario    → formulario de nuevo/editar producto
+ *   - vistaDepartamentos → catálogo de departamentos
  *
  * Al guardar, cancelar o terminar una edición siempre se regresa
  * a vistaTabla con la tabla actualizada.
+ *
+ * Las validaciones de negocio están en ProductoService; aquí solo se
+ * convierte el texto de los campos y se muestran los mensajes.
  */
 @Component
+@Scope("prototype")
 public class ProductosController implements Initializable {
 
     // ── FXML – Vistas principales ─────────────────────────────────────────
     @FXML private BorderPane vistaTabla;
     @FXML private BorderPane vistaFormulario;
-    @FXML private BorderPane vistaDepartamentos; 
+    @FXML private BorderPane vistaDepartamentos;
 
     // ── FXML – Tabla ─────────────────────────────────────────────────────
     @FXML private TableView<Producto>           tablaProductos;
@@ -55,12 +62,12 @@ public class ProductosController implements Initializable {
     @FXML private TextField                     txtBuscar;
 
     //tabla departamentos
-    @FXML private TableView<Departamento>          tablaDepartamentos;
+    @FXML private TableView<Departamento>           tablaDepartamentos;
     @FXML private TableColumn<Departamento, String> colNombreDepartamento;
-    @FXML private TextField                       txtBuscarDepartamento;
-    @FXML private TextField                      txtNombreDepartamento;
-    @FXML private Label                          lblErrorDepartamento;
-    @FXML private Button                         btnGuardarDepartamento;
+    @FXML private TextField                         txtBuscarDepartamento;
+    @FXML private TextField                         txtNombreDepartamento;
+    @FXML private Label                             lblErrorDepartamento;
+    @FXML private Button                            btnGuardarDepartamento;
 
     // ── FXML – Formulario ─────────────────────────────────────────────────
     @FXML private Label       lblTituloForm;
@@ -80,17 +87,17 @@ public class ProductosController implements Initializable {
     @FXML private CheckBox    chkUsaInventario;
     @FXML private GridPane    gridInventario;
     @FXML private TextField   txtCantidadActual;
+    @FXML private Label       lblAvisoStock;
     @FXML private TextField   txtCantidadMinima;
     @FXML private Label       lblErrorInventario;
     @FXML private Button      btnGuardar;
 
     // ── Spring ────────────────────────────────────────────────────────────
-    @Autowired private ProductoService        productoService;
-    @Autowired private DepartamentoRepository departamentoRepo;
+    @Autowired private ProductoService    productoService;
+    @Autowired private ApplicationContext springContext;
 
     // ── Estado interno ────────────────────────────────────────────────────
-    
-    
+
     private final ObservableList<Producto> listaProductos =
             FXCollections.observableArrayList();
     private final ObservableList<Departamento> listaDepartamentos =
@@ -108,15 +115,22 @@ public class ProductosController implements Initializable {
 
         configurarColumnas();
         configurarColumnasDepartamentos();
+        configurarComboDepartamento();
         cargarProductos();
         cargarDepartamentos();
-
 
         tablaProductos.setItems(listaProductos);
         tablaDepartamentos.setItems(listaDepartamentos);
 
         // Aseguramos el estado inicial: tabla visible, formulario oculto
-        mostrarVistas(true,false,false);
+        mostrarVistas(true, false, false);
+    }
+
+    /** Recarga catálogos desde la BD (lo llama MainController al entrar a la pestaña) */
+    public void recargar() {
+        cargarProductos();
+        cargarDepartamentos();
+        onBuscar();
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -128,7 +142,7 @@ public class ProductosController implements Initializable {
         productoEnEdicion = null;
         lblTituloForm.setText("NUEVO PRODUCTO");
         limpiarFormulario();
-        mostrarVistas(false,true,false);
+        mostrarVistas(false, true, false);
         txtCodigoBarras.requestFocus();
     }
 
@@ -153,17 +167,17 @@ public class ProductosController implements Initializable {
                     "Haz clic en un producto de la tabla para eliminarlo.");
             return;
         }
-        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                "¿Eliminar \"" + sel.getDescripcion() + "\"?\nEsta acción no se puede deshacer.",
-                ButtonType.YES, ButtonType.CANCEL);
-        confirm.setTitle("Confirmar eliminación");
-        confirm.setHeaderText(null);
-        confirm.showAndWait().ifPresent(btn -> {
-            if (btn == ButtonType.YES) {
-                productoService.eliminar(sel.getId());
-                cargarProductos();
-            }
-        });
+        if (!Ventanas.confirmar("Confirmar eliminación",
+                "¿Eliminar \"" + sel.getDescripcion() + "\"?\nEsta acción no se puede deshacer.")) {
+            return;
+        }
+        try {
+            productoService.eliminar(sel.getId());
+            cargarProductos();
+            onBuscar();
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se puede eliminar", e.getMessage());
+        }
     }
 
     /** Doble clic en fila → abrir edición directamente */
@@ -175,6 +189,7 @@ public class ProductosController implements Initializable {
         }
     }
 
+    /** Filtra por código, descripción o departamento */
     @FXML
     private void onBuscar() {
         String texto = txtBuscar.getText().trim().toLowerCase();
@@ -183,19 +198,24 @@ public class ProductosController implements Initializable {
         } else {
             tablaProductos.setItems(listaProductos.filtered(p ->
                     p.getDescripcion().toLowerCase().contains(texto) ||
-                    p.getCodigoBarras().toLowerCase().contains(texto)));
+                    p.getCodigoBarras().toLowerCase().contains(texto) ||
+                    (p.getDepartamento() != null &&
+                     p.getDepartamento().getNombre().toLowerCase().contains(texto))));
         }
     }
 
-    @FXML void onDepartamentos() { 
+    @FXML void onDepartamentos() {
         departamentoEnEdicion = null;
         txtNombreDepartamento.clear();
-        mostrarVistas(false,false,true);
+        txtBuscarDepartamento.clear();
+        cargarDepartamentos();
+        mostrarVistas(false, false, true);
     }
 
-    @FXML 
+    @FXML
     private void onNuevoDepartamento() {
         departamentoEnEdicion = null;
+        tablaDepartamentos.getSelectionModel().clearSelection();
         txtNombreDepartamento.clear();
         txtNombreDepartamento.requestFocus();
     }
@@ -204,28 +224,45 @@ public class ProductosController implements Initializable {
     private void onGuardarDepartamento() {
         String nombre = txtNombreDepartamento.getText().trim();
         if (nombre.isEmpty()) {
-            lblErrorDepartamento.setVisible(true );
+            lblErrorDepartamento.setVisible(true);
             lblErrorDepartamento.setManaged(true);
             return;
         }
 
         Departamento d = (departamentoEnEdicion != null) ? departamentoEnEdicion : new Departamento();
         d.setNombre(nombre);
-        departamentoRepo.save(d);
+        try {
+            productoService.guardarDepartamento(d);
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se pudo guardar", e.getMessage());
+            return;
+        }
 
         cargarDepartamentos();
         onNuevoDepartamento();
-        alerta(Alert.AlertType.INFORMATION, "Exito," , "El departamento se ha guardado correctamente.");       
+        alerta(Alert.AlertType.INFORMATION, "Éxito", "El departamento se ha guardado correctamente.");
     }
 
-    @FXML 
-
+    @FXML
     private void onEliminarDepartamento() {
         Departamento sel = tablaDepartamentos.getSelectionModel().getSelectedItem();
-        if(sel == null) return;
+        if (sel == null) {
+            alerta(Alert.AlertType.WARNING, "Selecciona un departamento",
+                    "Haz clic en un departamento de la tabla para eliminarlo.");
+            return;
+        }
 
-        departamentoRepo.delete(sel);
-        cargarDepartamentos();
+        if (!Ventanas.confirmar("Confirmar eliminación",
+                "¿Eliminar el departamento \"" + sel.getNombre() + "\"?")) {
+            return;
+        }
+        try {
+            productoService.eliminarDepartamento(sel);
+            cargarDepartamentos();
+            onNuevoDepartamento();
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se puede eliminar", e.getMessage());
+        }
     }
 
     @FXML
@@ -241,23 +278,38 @@ public class ProductosController implements Initializable {
 
     @FXML
     private void onCancelarDepartamento(){
-        mostrarVistas(true,false,false);
+        cargarProductos();   // por si cambió el nombre de algún departamento
+        mostrarVistas(true, false, false);
     }
 
     @FXML
-
     private void onValidarDepartamento(){
         boolean error = txtNombreDepartamento.getText().trim().isEmpty();
         lblErrorDepartamento.setVisible(error);
         lblErrorDepartamento.setManaged(error);
     }
 
-    @FXML void onVentasPeriodo() { /* TODO */ }
-    @FXML void onPromociones()   { /* TODO */ }
-    @FXML void onImportar()      { /* TODO */ }
+    /** Abre el historial de ventas con filtro por fechas (ventana modal) */
+    @FXML
+    void onVentasPeriodo() {
+        abrirModal("/fxml/ventas_periodo.fxml", "Ventas por período", 1000, 640);
+    }
+
+    /** Abre el catálogo de promociones (ventana modal) */
+    @FXML
+    void onPromociones() {
+        abrirModal("/fxml/promociones.fxml", "Promociones", 1000, 600);
+        cargarProductos(); // las promociones no cambian productos, pero refrescamos por consistencia
+    }
+
+    @FXML
+    void onImportar() {
+        alerta(Alert.AlertType.INFORMATION, "Importar",
+                "La importación de productos desde archivo no está disponible en esta versión.");
+    }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  Mostrar Vistas 
+    //  Mostrar Vistas
     // ─────────────────────────────────────────────────────────────────────
 
     private void mostrarVistas(boolean tabla, boolean formulario, boolean departamentos) {
@@ -266,13 +318,13 @@ public class ProductosController implements Initializable {
 
         vistaFormulario.setVisible(formulario);
         vistaFormulario.setManaged(formulario);
-        
+
         vistaDepartamentos.setVisible(departamentos);
         vistaDepartamentos.setManaged(departamentos);
     }
 
     private void configurarColumnasDepartamentos(){
-        colNombreDepartamento.setCellValueFactory(c -> 
+        colNombreDepartamento.setCellValueFactory(c ->
             new SimpleStringProperty(c.getValue().getNombre()));
 
             //cargar formulario al seleccionar
@@ -280,6 +332,8 @@ public class ProductosController implements Initializable {
             if (sel != null) {
                 departamentoEnEdicion = sel;
                 txtNombreDepartamento.setText(sel.getNombre());
+                lblErrorDepartamento.setVisible(false);
+                lblErrorDepartamento.setManaged(false);
             }
         });
     }
@@ -359,47 +413,58 @@ public class ProductosController implements Initializable {
             return;
         }
 
-        double precioCosto   = parsear(txtPrecioCosto.getText());
-        double precioVenta   = parsear(txtPrecioVenta.getText());
-        double precioMayoreo = parsear(txtPrecioMayoreo.getText());
+        try {
+            double precioCosto   = parsear(txtPrecioCosto.getText(),   "Precio costo");
+            double precioVenta   = parsear(txtPrecioVenta.getText(),   "Precio venta");
+            double precioMayoreo = parsear(txtPrecioMayoreo.getText(), "Precio mayoreo");
 
-        if (precioCosto < 0 || precioVenta < 0 || precioMayoreo < 0) {
-            alerta(Alert.AlertType.ERROR, "Precios inválidos",
-                    "Los precios no pueden ser negativos.");
-            return;
-        }
-
-        double cantActual = 0, cantMinima = 0;
-        if (chkUsaInventario.isSelected()) {
-            cantActual = parsear(txtCantidadActual.getText());
-            cantMinima = parsear(txtCantidadMinima.getText());
-            if (cantActual < 0 || cantMinima < 0) {
-                alerta(Alert.AlertType.ERROR, "Cantidades inválidas",
-                        "Las cantidades de inventario no pueden ser negativas.");
-                return;
+            double cantActual = 0, cantMinima = 0;
+            if (chkUsaInventario.isSelected()) {
+                cantActual = parsear(txtCantidadActual.getText(), "Cantidad actual");
+                cantMinima = parsear(txtCantidadMinima.getText(), "Cantidad mínima");
             }
+
+            // En edición la existencia NO se toma del formulario: pudo cambiar por
+            // ventas mientras el formulario estaba abierto. Se conserva la de la BD
+            // (solo Inventario F4 y las ventas la modifican). Si el producto no
+            // manejaba inventario y ahora sí, el valor capturado es el stock inicial.
+            if (productoEnEdicion != null) {
+                Producto enBd = productoService.buscarPorId(productoEnEdicion.getId())
+                        .orElseThrow(() -> new NegocioException("El producto ya no existe."));
+                if (enBd.isUsaInventario() && chkUsaInventario.isSelected()) {
+                    cantActual = enBd.getCantidadActual();
+                }
+            }
+
+            // Se arma un objeto nuevo (con el mismo id si es edición) para no
+            // modificar la fila de la tabla si el servicio rechaza los datos
+            Producto p = new Producto();
+            if (productoEnEdicion != null) p.setId(productoEnEdicion.getId());
+            p.setCodigoBarras(txtCodigoBarras.getText().trim());
+            p.setDescripcion(txtDescripcion.getText().trim());
+            p.setTipoVenta(tipoSeleccionado());
+            p.setPrecioCosto(precioCosto);
+            p.setPrecioVenta(precioVenta);
+            p.setPrecioMayoreo(precioMayoreo);
+            p.setDepartamento(comboDepartamento.getValue());
+            p.setUsaInventario(chkUsaInventario.isSelected());
+            p.setCantidadActual(cantActual);
+            p.setCantidadMinima(cantMinima);
+
+            // El servicio valida precios, cantidades y código duplicado
+            productoService.guardar(p);
+
+            // ← Regresar a la tabla con datos actualizados
+            cargarProductos();
+            onBuscar();
+            mostrarVista(false);
+
+            alerta(Alert.AlertType.INFORMATION, "Producto guardado",
+                    "\"" + p.getDescripcion() + "\" se guardó correctamente.");
+
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "Datos inválidos", e.getMessage());
         }
-
-        Producto p = (productoEnEdicion != null) ? productoEnEdicion : new Producto();
-        p.setCodigoBarras(txtCodigoBarras.getText().trim());
-        p.setDescripcion(txtDescripcion.getText().trim());
-        p.setTipoVenta(tipoSeleccionado());
-        p.setPrecioCosto(precioCosto);
-        p.setPrecioVenta(precioVenta);
-        p.setPrecioMayoreo(precioMayoreo);
-        p.setDepartamento(comboDepartamento.getValue());
-        p.setUsaInventario(chkUsaInventario.isSelected());
-        p.setCantidadActual(cantActual);
-        p.setCantidadMinima(cantMinima);
-
-        productoService.guardar(p);
-
-        // ← Regresar a la tabla con datos actualizados
-        cargarProductos();
-        mostrarVista(false);
-
-        alerta(Alert.AlertType.INFORMATION, "Producto guardado",
-                "\"" + p.getDescripcion() + "\" se guardó correctamente.");
     }
 
     @FXML
@@ -426,6 +491,16 @@ public class ProductosController implements Initializable {
         mostrarVista(true);
     }
 
+    private void abrirModal(String fxml, String titulo, double ancho, double alto) {
+        try {
+            Ventanas.abrirModal(springContext, fxml, titulo,
+                    vistaTabla.getScene().getWindow(), ancho, alto);
+        } catch (Exception e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la ventana: " + e.getMessage());
+        }
+    }
+
     private void configurarColumnas() {
         colCodigo.setCellValueFactory(c ->
                 new SimpleStringProperty(c.getValue().getCodigoBarras()));
@@ -447,6 +522,16 @@ public class ProductosController implements Initializable {
         formatoMoneda(colPrecioCosto);
         formatoMoneda(colPrecioVenta);
         formatoMoneda(colPrecioMayor);
+
+        // Stock: "—" si el producto no maneja inventario
+        colExistencia.setCellFactory(tc -> new TableCell<>() {
+            @Override protected void updateItem(Double v, boolean empty) {
+                super.updateItem(v, empty);
+                if (empty || v == null) { setText(null); return; }
+                Producto p = getTableRow() != null ? getTableRow().getItem() : null;
+                setText(p != null && !p.isUsaInventario() ? "—" : formatoCantidad(v));
+            }
+        });
     }
 
     private void formatoMoneda(TableColumn<Producto, Double> col) {
@@ -458,15 +543,23 @@ public class ProductosController implements Initializable {
         });
     }
 
+    private static String formatoCantidad(double v) {
+        return v == Math.floor(v) ? String.valueOf((long) v) : String.format("%.2f", v);
+    }
+
     private void cargarProductos() {
         listaProductos.setAll(productoService.listarTodos());
     }
 
     private void cargarDepartamentos() {
-        List<Departamento> deptos = departamentoRepo.findAll();
+        List<Departamento> deptos = productoService.listarDepartamentos();
         listaDepartamentos.setAll(deptos);
+        Departamento seleccionado = comboDepartamento.getValue();
         comboDepartamento.setItems(FXCollections.observableArrayList(deptos));
+        if (seleccionado != null) comboDepartamento.setValue(seleccionado);
+    }
 
+    private void configurarComboDepartamento() {
         comboDepartamento.setConverter(new StringConverter<>() {
             @Override public String toString(Departamento d) {
                 return d == null ? "— Sin Departamento —" : d.getNombre();
@@ -492,6 +585,12 @@ public class ProductosController implements Initializable {
         gridInventario.setDisable(!p.isUsaInventario());
         txtCantidadActual.setText(String.valueOf(p.getCantidadActual()));
         txtCantidadMinima.setText(String.valueOf(p.getCantidadMinima()));
+
+        // La existencia de un producto con inventario se cambia desde Inventario (F4)
+        boolean bloquearStock = p.isUsaInventario();
+        txtCantidadActual.setEditable(!bloquearStock);
+        lblAvisoStock.setVisible(bloquearStock);
+        lblAvisoStock.setManaged(bloquearStock);
     }
 
     private void limpiarFormulario() {
@@ -505,6 +604,9 @@ public class ProductosController implements Initializable {
         chkUsaInventario.setSelected(true);
         gridInventario.setDisable(false);
         txtCantidadActual.clear();
+        txtCantidadActual.setEditable(true);
+        lblAvisoStock.setVisible(false);
+        lblAvisoStock.setManaged(false);
         txtCantidadMinima.clear();
         ocultarAvisoExiste();
         lblErrorPrecio.setVisible(false);
@@ -539,9 +641,17 @@ public class ProductosController implements Initializable {
         return Producto.TipoVenta.UNIDAD;
     }
 
-    private double parsear(String txt) {
-        try { return Double.parseDouble(txt.trim().replace(",", ".")); }
-        catch (NumberFormatException e) { return 0; }
+    /**
+     * Convierte el texto de un campo numérico. Vacío = 0.
+     * Si no es un número válido lanza NegocioException con el nombre del campo.
+     */
+    private double parsear(String txt, String campo) {
+        if (txt == null || txt.trim().isEmpty()) return 0;
+        try {
+            return Double.parseDouble(txt.trim().replace(",", ".").replace("$", ""));
+        } catch (NumberFormatException e) {
+            throw new NegocioException("\"" + campo + "\" debe ser un número válido (ej: 12.50).");
+        }
     }
 
     private boolean esNegativo(String txt) {
@@ -551,10 +661,6 @@ public class ProductosController implements Initializable {
     }
 
     private void alerta(Alert.AlertType tipo, String titulo, String msg) {
-        Alert a = new Alert(tipo);
-        a.setTitle(titulo);
-        a.setHeaderText(null);
-        a.setContentText(msg);
-        a.showAndWait();
+        Ventanas.alerta(tipo, titulo, msg);
     }
 }

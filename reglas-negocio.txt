@@ -1,0 +1,1222 @@
+================================================================================
+REGLAS DE NEGOCIO DEL PUNTO DE VENTA - REGLAS DESEADAS Y ESTADO ACTUAL
+================================================================================
+
+Fecha: 2026-10-25 (actualizado con respuestas del dueño)
+Proyecto: Punto-Ventas (Spring Boot + JavaFX + SQLite)
+
+IMPORTANTE
+- Esta versión incorpora las respuestas que el dueño escribió en la primera
+  versión del documento. Cada regla ahora dice lo que el dueño QUIERE (regla
+  deseada) y lo que el programa HACE hoy (estado actual).
+- El estado actual refleja el código en el momento de escribir esta versión. El
+  desarrollo sigue en curso, así que algunas cosas pueden cambiar pronto.
+- Las respuestas originales del dueño se conservan sin cambios en el apéndice
+  final "Respuestas del dueño (texto original)".
+- El dueño respondió las secciones 1 a 6. Las secciones 7 (Clientes),
+  8 (Historial) y 9 (Configuración) no tenían respuestas; ahí se mantiene la
+  regla actual como provisional y siguen abiertas sus preguntas.
+
+CÓMO LEER CADA REGLA
+  Regla deseada        = lo que el dueño definió. Si el dueño no respondió, dice
+                         "Sin definir por el dueño" y se describe lo que hay hoy.
+  Estado actual        = lo que hace el programa hoy:
+                           Implementado    = funciona y se usa desde las pantallas.
+                           Parcial         = funciona solo en parte.
+                           No implementado = no existe o el botón solo avisa
+                                             "no disponible en esta versión".
+  Estado vs. lo deseado:
+                           Cumple                    = el programa ya hace lo deseado.
+                           No cumple (qué cambiar)   = el programa hace algo
+                                                       distinto a lo deseado.
+                           Pendiente de implementar  = lo deseado no existe todavía.
+                           Sin definir               = el dueño aún no ha decidido.
+  Fuente               = archivo(s) donde está la regla (para el equipo técnico).
+                         Ruta base: src/main/java/me/eliassanchezfernandez/puntodeventa/
+                         Pantallas: src/main/resources/fxml/
+
+Para comentar, responda con el identificador de la regla (por ejemplo VEN-14).
+Los identificadores no cambian entre versiones; las reglas nuevas que surgieron de
+las respuestas se agregaron al final de cada sección.
+
+RESUMEN DEL ESTADO GENERAL DEL PROGRAMA HOY
+- Ya funcionan: inicio de sesión, fondo de caja, cerrar sesión, administración de
+  usuarios (solo administrador), productos y departamentos, ventas con búsqueda,
+  cantidades, mayoreo, promociones y validación de existencias, inventario
+  (entradas, ajustes, productos bajos), catálogo de promociones, historial de
+  ventas por período y corte del día con datos reales.
+- Las pestañas Configuración y Corte solo las ve el ADMIN. Todo lo demás
+  (productos, precios, promociones, inventario, historial, mayoreo) lo puede usar
+  cualquier cajero.
+- No existen todavía: permisos configurables, rol de gerente, bloqueo por intentos,
+  cancelaciones/devoluciones, pagos mixtos, IVA, impresión de tickets, clientes y
+  crédito, entradas/salidas de efectivo, guardado del corte.
+
+
+================================================================================
+1. USUARIOS, ROLES E INICIO DE SESIÓN (USR)
+================================================================================
+
+USR-01  Roles
+        Regla deseada: tres niveles: ADMINISTRADOR (todo), GERENTE/ENCARGADO
+        (nombre aún por decidir; algunos privilegios de administrador y más
+        auditado en reportes) y CAJERO. Ver USR-17.
+        Estado actual: Implementado solo con dos roles: ADMIN y CAJERO. Todo
+        usuario nuevo es CAJERO salvo que se elija otro.
+        Estado vs. lo deseado: No cumple (falta el rol intermedio gerente/encargado).
+        Fuente: model/Cajero.java
+
+USR-02  Datos de acceso
+        Regla deseada: sin definir por el dueño; se mantiene la regla actual.
+        Usuario y contraseña obligatorios. El usuario no distingue mayúsculas y se
+        ignoran espacios al inicio y al final; la contraseña sí distingue
+        mayúsculas.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/SesionService.java, controller/LoginController.java
+
+USR-03  Usuarios desactivados
+        Regla deseada: un usuario desactivado no puede entrar (implícito en la
+        respuesta "borrar y desactivar").
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple.
+        Fuente: service/SesionService.java
+
+USR-04  Intentos fallidos de inicio de sesión
+        Regla deseada: al quinto intento fallido el usuario se bloquea, y el
+        bloqueo y los intentos quedan registrados (auditoría/log). Ver USR-18.
+        Estado actual: Implementado solo el mensaje genérico "Usuario o contraseña
+        incorrectos". No hay conteo, bloqueo ni registro.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: controller/LoginController.java, service/SesionService.java
+
+USR-05  Contraseñas cifradas
+        Regla deseada: sin definir por el dueño; se mantiene: las contraseñas se
+        guardan cifradas (BCrypt).
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: config/SecurityConfig.java, service/CajeroService.java
+
+USR-06  Administrador por defecto y primer inicio
+        Regla deseada: existe un administrador inicial; en su PRIMER inicio de
+        sesión es obligatorio cambiar la contraseña ("si o si").
+        Estado actual: Parcial. Al arrancar, si no hay ningún ADMIN ni un usuario
+        "admin", se crea "admin" / "admin123". Ya no restablece usuarios
+        existentes ni imprime la contraseña. NO obliga a cambiarla al entrar.
+        Estado vs. lo deseado: No cumple (falta forzar el cambio de contraseña en el
+        primer inicio del administrador).
+        Fuente: service/SesionService.java
+
+USR-07  Requisitos de contraseña
+        Regla deseada: mínimo 5 caracteres e incluir al menos 1 número.
+        Estado actual: Implementado con mínimo 4 caracteres y sin exigir números
+        (la pantalla de usuarios indica "Mínimo 4 caracteres").
+        Estado vs. lo deseado: No cumple (subir a 5 caracteres y exigir 1 número).
+        Fuente: service/CajeroService.java, controller/UsuariosController.java
+
+USR-08  Nombre de usuario
+        Regla deseada: sin definir por el dueño; se mantiene: obligatorio, sin
+        espacios, máximo 60 caracteres, único sin importar mayúsculas; nombre
+        completo obligatorio.
+        Estado actual: Implementado (Configuración > Cajeros).
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/CajeroService.java
+
+USR-09  Quién administra usuarios
+        Regla deseada: el ADMINISTRADOR puede agregar, desactivar y eliminar
+        usuarios. El GERENTE puede desactivar usuarios, pero NO agregarlos ni
+        eliminarlos. El cajero no administra usuarios.
+        Estado actual: Implementado para ADMIN: solo el ADMIN puede ver, crear,
+        modificar, cambiar contraseña, activar/desactivar y eliminar usuarios
+        (Configuración > Cajeros, también validado en la lógica interna).
+        Estado vs. lo deseado: No cumple (falta el permiso de gerente para
+        desactivar sin crear ni eliminar; depende de USR-17).
+        Fuente: service/CajeroService.java, controller/UsuariosController.java,
+                controller/ConfiguracionController.java
+
+USR-10  Siempre un administrador activo
+        Regla deseada: sin definir por el dueño; se mantiene: no se puede
+        desactivar, degradar ni eliminar al último administrador activo.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/CajeroService.java
+
+USR-11  Un administrador no se puede quitar a sí mismo
+        Regla deseada: sin definir por el dueño; se mantiene: un administrador no
+        puede desactivarse, quitarse el rol ni eliminarse a sí mismo.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/CajeroService.java
+
+USR-12  Borrar y desactivar usuarios
+        Regla deseada: se permiten ambas cosas, borrar y desactivar.
+        Estado actual: Implementado. Al borrar, las ventas conservan el nombre del
+        cajero.
+        Estado vs. lo deseado: Cumple.
+        Fuente: service/CajeroService.java, model/Venta.java
+
+USR-13  Qué puede hacer cada rol
+        Regla deseada: solo el ADMINISTRADOR (o quien tenga el permiso, ver USR-16)
+        puede:
+          - ver el historial de ventas
+          - agregar y editar productos, y cambiar precios (ver PRD-11)
+          - agregar promociones
+          - agregar y eliminar usuarios
+          - cancelar ventas (un cajero necesita la clave de un administrador,
+            ver USR-19)
+          - hacer descuentos manuales y aplicar mayoreo (ver VEN-05, VEN-15)
+          - autorizar ventas sin existencia (ver INV-08)
+          - ver ganancias (ver CRT-11)
+        El GERENTE puede agregar y editar productos y desactivar usuarios.
+        Estado actual: Parcial. Lo único restringido es que el CAJERO no ve las
+        pestañas Configuración (usuarios) y Corte (ganancias). Cualquier cajero
+        puede crear, editar y borrar productos, cambiar precios, administrar
+        promociones y departamentos, ajustar inventario, ver el historial de ventas
+        (Productos > Ventas por Período) y aplicar mayoreo.
+        Estado vs. lo deseado: No cumple (restringir productos, precios,
+        promociones, historial y mayoreo a administrador o usuarios con permiso).
+        Fuente: controller/MainController.java, controller/ProductosController.java,
+                service/ProductoService.java, service/PromocionService.java
+
+USR-14  Usuario visible en pantalla
+        Regla deseada: sin definir por el dueño; se mantiene: la barra superior
+        muestra el nombre y el rol de quien inició sesión.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: controller/MainController.java
+
+USR-15  Cerrar sesión / cambiar de cajero
+        Regla deseada: se puede cambiar de cajero sin cerrar el programa ("cerrar
+        sesión" o "cambiar de cajero"). Regresa a la pantalla de inicio de sesión
+        sin perder el historial del día. Si había una venta sin cobrar, se conserva.
+        Estado actual: Parcial. Hay botón "Cerrar sesión" con confirmación que
+        regresa al inicio de sesión. Las ventas cobradas y el fondo del día se
+        conservan. La venta en captura (sin cobrar) SE PIERDE al cerrar sesión. El
+        botón "Salir" cierra el programa con confirmación.
+        Estado vs. lo deseado: No cumple (conservar el ticket sin cobrar al cambiar
+        de cajero).
+        Fuente: controller/MainController.java, controller/VentasController.java,
+                util/Ventanas.java
+
+USR-16  Permisos configurables por usuario (NUEVA)
+        Regla deseada: el administrador puede dar a un cajero (o gerente) permisos
+        que normalmente solo tiene el administrador, y también quitarle permisos
+        que cualquier cajero tiene.
+        Estado actual: No implementado. Los permisos dependen solo del rol.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: model/Cajero.java
+
+USR-17  Rol gerente/encargado (NUEVA)
+        Regla deseada: rol intermedio con parte de los privilegios del
+        administrador: agrega y edita productos, desactiva usuarios (no los crea ni
+        elimina). Queda más auditado en los reportes.
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: model/Cajero.java
+
+USR-18  Bitácora de seguridad / auditoría (NUEVA)
+        Regla deseada: registrar los intentos fallidos y los bloqueos (USR-04) y
+        las acciones del gerente (USR-17).
+        Estado actual: No implementado. No hay bitácora de acciones.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: (no existe)
+
+USR-19  Autorización con clave de administrador (NUEVA)
+        Regla deseada: cuando un cajero sin permiso necesita hacer una acción
+        restringida (por ejemplo cancelar una venta), puede hacerlo si un
+        administrador captura su clave en ese momento.
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: (no existe)
+
+Preguntas para definir (Usuarios):
+  - Nombre definitivo del rol intermedio: ¿"Gerente" o "Encargado"? Además de lo
+    respondido (agregar y editar productos, desactivar usuarios), ¿puede ver el
+    historial, hacer el corte, ver ganancias, crear promociones, cancelar ventas?
+  - Bloqueo tras 5 intentos: ¿por cuánto tiempo, o hasta que un administrador lo
+    desbloquee? ¿Qué pasa si el bloqueado es el único administrador?
+  - Al cambiar de cajero con una venta sin cobrar: ¿la venta queda a nombre del
+    cajero que la empezó o del que la cobra? ¿Cada cajero conserva su propio
+    ticket pendiente o hay uno solo?
+  - Permisos configurables (USR-16): ¿qué lista exacta de permisos se puede dar o
+    quitar? (sugerencia: cancelar venta, descuento manual, mayoreo, vender sin
+    existencia, ver ganancias, ver historial, editar productos/precios, ajustar
+    inventario, crear promociones, hacer corte)
+
+
+================================================================================
+2. PRODUCTOS Y DEPARTAMENTOS (PRD)
+================================================================================
+
+PRD-01  Campos del producto
+        Regla deseada: sin definir por el dueño; se mantiene: código de barras,
+        descripción, forma de venta (Unidad, Granel, Paquete), precio de costo, de
+        venta y de mayoreo, departamento opcional, si usa inventario, existencia
+        actual y mínima.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional). Nota: para PRD-09 hará falta
+        un campo "activo/desactivado".
+        Fuente: model/Producto.java, fxml/productos.fxml
+
+PRD-02  Código y descripción obligatorios
+        Regla deseada: sin definir por el dueño; se mantiene. Ver PRD-16 para
+        productos sin código.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/ProductoService.java
+
+PRD-03  Código de barras único
+        Regla deseada: sin definir por el dueño; se mantiene: código único (máx. 50
+        caracteres, distingue mayúsculas); el formulario avisa si ya existe.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/ProductoService.java, controller/ProductosController.java
+
+PRD-04  Precios no negativos
+        Regla deseada: sin definir por el dueño; se mantiene: ningún precio
+        negativo; precio de venta mayor que cero; costo y mayoreo pueden ser cero.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/ProductoService.java
+
+PRD-05  Captura de números en el formulario
+        Regla deseada: sin definir por el dueño; se mantiene: campo vacío = 0; si
+        se escribe algo que no es número, se avisa qué campo está mal y no se
+        guarda; se acepta "$" y la coma como punto decimal.
+        Estado actual: Implementado (antes un texto inválido se tomaba como 0; ya
+        se corrigió).
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: controller/ProductosController.java
+
+PRD-06  Vender por debajo del costo / relación entre precios
+        Regla deseada: no queda claro (ver Preguntas). El dueño respondió que "se
+        puede vender por mayoreo" y que esa opción la usa el administrador o los
+        perfiles con permiso.
+        Estado actual: Implementado sin restricciones: se permite precio de venta
+        menor que el costo y mayoreo mayor que el precio de venta.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: service/ProductoService.java
+
+PRD-07  IVA en el precio
+        Regla deseada: todos los precios de venta YA INCLUYEN IVA. El administrador
+        elige en Configuración la(s) tasa(s) y cómo se maneja (ver VEN-04).
+        Estado actual: No implementado. El producto no tiene datos de impuestos;
+        los precios se tratan como precio final sin desglose.
+        Estado vs. lo deseado: No cumple (cobrar ya se hace con precio final, pero
+        falta la tasa configurable y el desglose, ver VEN-04).
+        Fuente: model/Producto.java, controller/ConfiguracionController.java
+
+PRD-08  Productos a granel y paquetes
+        Regla deseada: los productos a granel se venden por peso (gramos/kilos)
+        con decimales, y se puede habilitar una báscula externa. "Paquete" puede
+        funcionar como una promoción; el dueño aún no decide cómo descuenta el
+        inventario.
+        Estado actual: Parcial. La forma de venta se guarda pero no cambia nada:
+        las ventas solo aceptan cantidades enteras, no hay báscula y el paquete no
+        descuenta componentes. Configuración > Báscula dice "no disponible".
+        Estado vs. lo deseado: No cumple (permitir cantidades decimales para
+        granel; integrar báscula). Paquetes: sin definir.
+        Fuente: model/DetalleVenta.java (cantidad entera),
+                controller/VentasController.java, controller/ConfiguracionController.java
+
+PRD-09  Eliminar / desactivar productos
+        Regla deseada: los productos descontinuados o sin existencia se
+        "desactivan" en lugar de eliminarse.
+        Estado actual: Implementado solo la eliminación: se pide confirmación, no
+        se permite borrar un producto con ventas, y al borrar se borran sus
+        promociones. No existe "desactivar".
+        Estado vs. lo deseado: Pendiente de implementar (estado activo/inactivo del
+        producto y ocultarlo en ventas).
+        Fuente: service/ProductoService.java, controller/ProductosController.java
+
+PRD-10  Búsqueda de productos
+        Regla deseada: sin definir por el dueño; se mantiene: por parte del nombre,
+        del código o del departamento, sin distinguir mayúsculas.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: controller/ProductosController.java, service/ProductoService.java
+
+PRD-11  Cambios de precio
+        Regla deseada: solo el administrador o los perfiles con permiso pueden
+        cambiar precios, y se guarda historial de precios. Las ventas ya hechas
+        conservan su precio.
+        Estado actual: Parcial. Las ventas conservan su precio. Cualquier usuario
+        puede cambiar precios y no se guarda historial.
+        Estado vs. lo deseado: No cumple (restringir por permiso y guardar historial
+        de precios con fecha y usuario).
+        Fuente: controller/ProductosController.java, model/DetalleVenta.java
+
+PRD-12  Nombre de departamento
+        Regla deseada: sin definir por el dueño; se mantiene: obligatorio y no
+        repetido (sin importar mayúsculas).
+        Estado actual: Implementado (la pantalla ya usa la validación de la lógica
+        interna; antes se la saltaba).
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/ProductoService.java, controller/ProductosController.java
+
+PRD-13  Eliminar departamento
+        Regla deseada: sin definir por el dueño; se mantiene: no se puede borrar un
+        departamento con productos; se pide confirmación.
+        Estado actual: Implementado (antes la pantalla lo permitía; ya se corrigió).
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/ProductoService.java, controller/ProductosController.java
+
+PRD-14  Un departamento por producto
+        Regla deseada: sin definir por el dueño; se mantiene: uno o ninguno.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: model/Producto.java
+
+PRD-15  Importar productos
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado (avisa "no disponible en esta versión").
+        "Ventas por Período" ya funciona (ver HIS-03).
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/ProductosController.java
+
+PRD-16  Producto común / sin código de barras (NUEVA)
+        Regla deseada: los productos sin código de barras se pueden buscar por
+        nombre. Para un artículo que no está en el catálogo, un atajo de teclado
+        (el dueño escribió "control mas p", se entiende Ctrl+P) abre "producto
+        común": el cajero captura a mano nombre, cantidad y precio unitario.
+        Estado actual: Parcial. La búsqueda por nombre en Ventas ya existe (botón
+        Buscar). No existe "producto común": toda venta requiere un producto
+        registrado.
+        Estado vs. lo deseado: Pendiente de implementar (producto común con Ctrl+P).
+        Fuente: controller/VentasController.java, service/VentaService.java
+
+PRD-17  Quién puede crear y editar productos (NUEVA)
+        Regla deseada: el administrador, el gerente y los perfiles con permiso
+        pueden agregar y editar productos.
+        Estado actual: cualquier usuario, incluido el cajero, puede crear, editar y
+        eliminar productos y departamentos.
+        Estado vs. lo deseado: No cumple (restringir por rol/permiso).
+        Fuente: controller/MainController.java, controller/ProductosController.java
+
+Preguntas para definir (Productos):
+  - PRD-06: la respuesta habla de mayoreo, pero la pregunta era si se permite
+    vender por DEBAJO DEL COSTO. ¿El sistema debe avisar o bloquear cuando el
+    precio de venta (o el de mayoreo) quede por debajo del costo? ¿El precio de
+    mayoreo debe ser siempre menor al de venta? (esa parte no se respondió)
+  - PRD-08 Paquetes: ¿el inventario se descuenta al crear el paquete/promoción o
+    al venderlo? (el dueño dijo que aún no lo sabe)
+  - PRD-09: "descontinuados o sin existencia se desactivan". ¿Un producto se
+    desactiva AUTOMÁTICAMENTE al llegar a 0? Eso choca con INV-08 (vender sin
+    existencia con autorización) y con volver a surtir. ¿Se reactiva solo al
+    recibir mercancía? ¿Se sigue permitiendo borrar productos que nunca se
+    vendieron?
+  - PRD-16: ¿el "producto común" descuenta inventario? ¿Requiere permiso? ¿Debe
+    quedar registrado para revisión?
+  - ¿Se necesita importar productos desde Excel?
+
+
+================================================================================
+3. INVENTARIO (INV)
+================================================================================
+
+INV-01  Productos con y sin inventario
+        Regla deseada: sin definir por el dueño; se mantiene: si un producto no usa
+        inventario se vende sin límite y su existencia no se toca. Por defecto sí
+        usa inventario.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: model/Producto.java, service/VentaService.java
+
+INV-02  Existencias no negativas al capturar
+        Regla deseada: sin definir por el dueño; se mantiene: existencia actual y
+        mínima no pueden capturarse negativas.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/ProductoService.java
+
+INV-03  Aviso de stock mínimo
+        Regla deseada: cuando un producto llega a su mínimo se avisa EN PANTALLA y
+        aparece en el REPORTE DE FIN DE DÍA.
+        Estado actual: Parcial. En Inventario (F4) los productos se marcan "BAJO" o
+        "AGOTADO" con color, y hay un filtro "Productos Bajos". No hay aviso
+        emergente (ni al vender ni al iniciar) y el corte/reporte del día no
+        lista los productos bajos.
+        Estado vs. lo deseado: No cumple (agregar aviso en pantalla y la lista de
+        productos bajos en el reporte de fin de día).
+        Fuente: controller/InventarioController.java, service/ProductoService.java,
+                controller/CorteController.java
+
+INV-04  Entrada de mercancía
+        Regla deseada: en cada entrada se registra el PROVEEDOR y el COSTO, y el
+        costo se actualiza.
+        Estado actual: Parcial. Inventario > "Agregar a Inv." suma una cantidad
+        (mayor que cero, admite decimales). No pide proveedor ni costo.
+        Estado vs. lo deseado: No cumple (pedir proveedor y costo; actualizar el
+        costo del producto).
+        Fuente: service/ProductoService.java, controller/InventarioController.java
+
+INV-05  Ajuste manual (conteo físico)
+        Regla deseada: el ajuste puede llevar un motivo (merma, robo, caducidad,
+        conteo) para la auditoría.
+        Estado actual: Parcial. Inventario > "Ajustes" fija la existencia en un
+        número exacto (no negativo). No pide motivo ni registra quién lo hizo.
+        Cualquier cajero puede ajustar.
+        Estado vs. lo deseado: No cumple (agregar motivo y registro en bitácora,
+        ver INV-07).
+        Fuente: service/ProductoService.java, controller/InventarioController.java
+
+INV-06  Cambiar existencia desde Productos
+        Regla deseada: NO se debe poder cambiar la existencia desde la pantalla de
+        Productos; solo desde Inventario, para que quede registro.
+        Estado actual: Parcial. Al editar un producto que usa inventario, el campo
+        de existencia está bloqueado y se avisa que se cambia en Inventario. Pero
+        al dar de alta un producto nuevo (o al activar "usa inventario" en uno que
+        no lo usaba) la existencia inicial se captura en Productos sin registro.
+        Estado vs. lo deseado: No cumple en parte (la existencia inicial también
+        debería quedar como movimiento registrado).
+        Fuente: controller/ProductosController.java
+
+INV-07  Registro de movimientos (bitácora de inventario)
+        Regla deseada: deben quedar registrados los movimientos de inventario
+        (entradas con proveedor y costo, ajustes con motivo) para la auditoría.
+        Estado actual: No implementado. "Reporte de Movimientos" avisa "no
+        disponible en esta versión".
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: controller/InventarioController.java
+
+INV-08  Vender sin existencia (stock negativo)
+        Regla deseada: solo con autorización del administrador. El administrador
+        puede hacerlo directamente, o permitirlo a los usuarios que él decida.
+        Estado actual: Implementado como bloqueo total: si no alcanza la
+        existencia, la venta se rechaza para todos. Se corrigió el error anterior:
+        si el mismo producto está en varios renglones, se suma el total.
+        Estado vs. lo deseado: No cumple (permitir vender sin existencia con
+        autorización o permiso de administrador).
+        Fuente: service/VentaService.java
+
+INV-09  Costo del inventario
+        Regla deseada: se registra el costo de cada entrada y se actualiza el costo
+        del producto (ver INV-04).
+        Estado actual: Solo existe el "precio de costo" actual del producto, que se
+        cambia a mano en Productos.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: model/Producto.java
+
+INV-10  Reporte de inventario
+        Regla deseada: sin definir por el dueño (salvo los productos bajos en el
+        reporte de fin de día, ver INV-03).
+        Estado actual: No implementado (avisa "no disponible en esta versión").
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/InventarioController.java
+
+INV-11  Quién ajusta inventario (NUEVA, abierta)
+        Regla deseada: sin definir (la pregunta "¿Solo ADMIN?" no se contestó).
+        Estado actual: cualquier usuario puede registrar entradas y ajustes.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/MainController.java, controller/InventarioController.java
+
+Preguntas para definir (Inventario):
+  - INV-05: el dueño respondió "Puede, para la auditoria". ¿El motivo del ajuste
+    es OBLIGATORIO u opcional? ¿Qué lista de motivos?
+  - INV-11: ¿solo el administrador (o con permiso) puede hacer ajustes y entradas?
+  - INV-09: ¿con qué costo se actualiza el producto, el de la última compra o un
+    promedio?
+  - INV-08: ¿la autorización es por venta (clave del administrador en ese
+    momento, como en USR-19) o un permiso fijo para ciertos usuarios? (el dueño
+    mencionó ambas cosas; se entiende que deben existir las dos)
+
+
+================================================================================
+4. VENTAS (VEN)
+================================================================================
+
+VEN-01  Agregar productos al ticket
+        Regla deseada: sin definir por el dueño; se mantiene: por código de barras
+        exacto o con el buscador por nombre/código; si el producto ya está en el
+        ticket se suma a su renglón; las cantidades se cambian en el ticket.
+        Estado actual: Implementado. Cantidades enteras (ver PRD-08 para granel).
+        Estado vs. lo deseado: Cumple (provisional), salvo los decimales de granel
+        (PRD-08) y el producto común (PRD-16).
+        Fuente: controller/VentasController.java, service/VentaService.java
+
+VEN-02  Precio guardado en la venta
+        Regla deseada: sin definir por el dueño; se mantiene: se usa el precio
+        vigente del producto y se guarda en la venta. Al cobrar, el sistema vuelve
+        a leer precio y promoción de la base de datos (no confía en la pantalla).
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/VentaService.java, model/DetalleVenta.java
+
+VEN-03  Cálculo del total
+        Regla deseada: sin definir por el dueño; se mantiene: importe = precio x
+        cantidad - descuento; total = suma, redondeado a centavos.
+        Estado actual: Implementado (pantalla y lógica interna ya coinciden).
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: model/DetalleVenta.java, service/VentaService.java
+
+VEN-04  IVA / impuestos
+        Regla deseada: los precios ya incluyen IVA (PRD-07). El administrador
+        elige en Configuración la(s) tasa(s) y la forma de manejar el impuesto.
+        Estado actual: No implementado. No se calcula, no se desglosa ni se guarda
+        IVA. Configuración > Impuestos dice "no disponible en esta versión".
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: service/VentaService.java, model/Venta.java,
+                controller/ConfiguracionController.java
+
+VEN-05  Descuentos manuales
+        Regla deseada: solo el administrador y los usuarios a los que él dé permiso
+        pueden hacer descuentos manuales.
+        Estado actual: No implementado. El único descuento es el automático por
+        promoción.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: service/VentaService.java
+
+VEN-06  Existencia al vender
+        Regla deseada: ver INV-08 (sin existencia solo con autorización).
+        Estado actual: Implementado: se valida al agregar, al cambiar cantidad y al
+        cobrar; si no alcanza, se rechaza.
+        Estado vs. lo deseado: No cumple (falta la excepción con autorización, ver
+        INV-08).
+        Fuente: service/VentaService.java, controller/VentasController.java
+
+VEN-07  Formas de pago y pago dividido
+        Regla deseada: se puede DIVIDIR el pago (por ejemplo parte en efectivo y
+        parte con tarjeta).
+        Estado actual: Implementado con UNA sola forma de pago por venta (Efectivo,
+        Tarjeta o Crédito), elegida en una lista en Ventas.
+        Estado vs. lo deseado: No cumple (permitir varias formas de pago en una
+        misma venta).
+        Fuente: model/Venta.java, controller/VentasController.java,
+                service/VentaService.java
+
+VEN-08  Pago en efectivo y cambio
+        Regla deseada: sin definir por el dueño; se mantiene: el efectivo recibido
+        debe cubrir el total; cambio = recibido - total, mostrado en vivo.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional); se deberá adaptar al pago
+        dividido (VEN-07).
+        Fuente: service/VentaService.java, controller/VentasController.java
+
+VEN-09  Pago con tarjeta
+        Regla deseada: sin definir (no se respondió si se registra referencia o
+        autorización de la tarjeta).
+        Estado actual: Implementado: se registra que se pagó el total exacto,
+        cambio 0, sin referencia.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: service/VentaService.java
+
+VEN-10  Venta a crédito
+        Regla deseada: sin definir (las preguntas de Clientes no se respondieron).
+        Estado actual: Implementado de forma incompleta y RIESGOSA: cualquier
+        cajero puede elegir "Crédito" y la venta se registra como cobrada SIN
+        cliente, sin límite y sin generar deuda.
+        Estado vs. lo deseado: Sin definir. Recomendación: decidir pronto, o
+        quitar "Crédito" de la lista mientras no exista el módulo de clientes.
+        Fuente: model/Venta.java, controller/VentasController.java
+
+VEN-11  Registro de la venta al cobrar
+        Regla deseada: sin definir por el dueño; se mantiene: se guarda fecha y
+        hora, forma de pago, total, pagó con, cambio, cajero y renglones, y se
+        descuenta la existencia, todo en un solo paso.
+        Estado actual: Implementado. El cajero se toma de la sesión activa.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/VentaService.java
+
+VEN-12  Ticket vacío
+        Regla deseada: sin definir por el dueño; se mantiene: no se puede cobrar un
+        ticket vacío.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/VentaService.java, controller/VentasController.java
+
+VEN-13  Cancelar ticket en captura
+        Regla deseada: pedir confirmación.
+        Estado actual: Implementado (pide confirmación si el ticket tiene productos).
+        Estado vs. lo deseado: Cumple.
+        Fuente: controller/VentasController.java
+
+VEN-14  Cancelar una venta ya cobrada
+        Regla deseada: solo el administrador o quien tenga permiso; un cajero
+        necesita la clave de un administrador (USR-19). Se puede cancelar hasta
+        2 días después de la venta. El administrador puede cambiar ese plazo en
+        Configuración, pero el cambio solo aplica a ventas futuras (ver VEN-19).
+        Estado actual: No implementado. La venta no tiene estado "cancelada".
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: model/Venta.java, service/VentaService.java
+
+VEN-15  Precio de mayoreo
+        Regla deseada: siempre se vende al precio normal (menudeo), salvo que el
+        mayoreo se active manualmente o por una oferta. Solo el administrador o los
+        perfiles con permiso pueden activarlo (respuesta en PRD-06).
+        Estado actual: Implementado sin restricción: el botón "Mayoreo" de Ventas
+        alterna el renglón entre precio normal y de mayoreo para cualquier usuario.
+        No se activa por oferta.
+        Estado vs. lo deseado: No cumple (restringir por permiso; activación por
+        oferta pendiente).
+        Fuente: controller/VentasController.java, service/VentaService.java
+
+VEN-16  Ticket impreso
+        Regla deseada: el ticket lleva el nombre y la dirección del negocio. En las
+        promociones muestra el nombre de la promoción, el precio normal y lo
+        descontado (ver PRO-10).
+        Estado actual: No implementado. Al cobrar solo aparece un mensaje en
+        pantalla con folio, total, pago y cambio.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: controller/VentasController.java
+
+VEN-17  Folio de venta
+        Regla deseada: sin definir por el dueño; se mantiene: consecutivo
+        automático.
+        Estado actual: Implementado (automático); "Modificar Folios" no disponible.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: model/Venta.java
+
+VEN-18  Devoluciones (NUEVA)
+        Regla deseada: se aceptan devoluciones y al cliente se le da una NOTA (no
+        dinero).
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: (no existe)
+
+VEN-19  Plazo de cancelación no retroactivo (NUEVA)
+        Regla deseada: el plazo de cancelación vigente al momento de cada venta es
+        el que se le aplica. Si después se amplía el plazo en Configuración, las
+        ventas anteriores no se vuelven cancelables. Ni el administrador puede
+        saltarse esta regla.
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: (no existe)
+
+Preguntas para definir (Ventas):
+  - VEN-04: si todos los precios ya incluyen IVA, ¿qué elige exactamente el
+    administrador en Configuración: la tasa (16 %, 8 % frontera, 0 %/exento por
+    producto) y si el ticket muestra el desglose? ¿O hay productos cuyo precio NO
+    incluye IVA? (las dos respuestas pueden contradecirse)
+  - VEN-07: ¿qué otras formas de pago se aceptan (transferencia, vales)? (no se
+    respondió)
+  - VEN-09: ¿se registra referencia/autorización de la tarjeta? (no se respondió)
+  - VEN-14: "2 días": ¿48 horas o "hoy y ayer" por fecha de calendario?
+    ¿Al cancelar, el producto regresa al inventario? ¿Cómo se refleja en el corte
+    (resta del día de la venta o del día de la cancelación)?
+  - VEN-18: ¿la nota de devolución es un vale para la próxima compra? ¿Tiene
+    vencimiento? ¿Se aceptan devoluciones parciales (algunos productos del
+    ticket)? ¿El producto devuelto regresa al inventario? ¿Quién la autoriza?
+  - VEN-16: ¿el ticket necesita RFC, teléfono o leyendas?
+  - VEN-10: ver Preguntas de Clientes.
+
+
+================================================================================
+5. PROMOCIONES (PRO)
+================================================================================
+
+PRO-01  Alcance y tipos de promoción
+        Regla deseada: promociones predeterminadas (2x1, porcentajes, por
+        departamento) que quien crea la promoción pueda personalizar a su gusto;
+        "lo más personalizable y fácil de implementar".
+        Estado actual: Parcial. Hay pantalla de promociones (Productos >
+        Promociones), pero cada promoción aplica a UN solo producto. No hay 2x1,
+        por departamento ni combos.
+        Estado vs. lo deseado: No cumple (agregar 2x1/NxM, por departamento y
+        promociones configurables).
+        Fuente: model/Promocion.java, controller/PromocionesController.java
+
+PRO-02  Porcentaje y precio fijo
+        Regla deseada: incluidos dentro de los tipos de PRO-01 (porcentaje).
+        Estado actual: Implementado: % de descuento o precio fijo por unidad.
+        Estado vs. lo deseado: Cumple (el porcentaje está; faltan los demás tipos
+        de PRO-01).
+        Fuente: model/Promocion.java
+
+PRO-03  Validaciones de la promoción
+        Regla deseada: sin definir por el dueño; se mantiene: producto y tipo
+        obligatorios, valor mayor que cero, porcentaje máx. 100, precio fijo menor
+        al precio de venta, fecha de inicio obligatoria, fin no anterior al inicio.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/PromocionService.java
+
+PRO-04  Vigencia y horarios
+        Regla deseada: se configura en cada promoción: ciertos días (de la
+        semana), por tiempo limitado, o "por existencia" (hasta agotar).
+        Estado actual: Parcial. Solo rango de fechas (inicio y fin opcional) y
+        activa/inactiva. Sin días de la semana, horas ni "hasta agotar".
+        Estado vs. lo deseado: No cumple (agregar días de la semana, horario y
+        límite por existencia).
+        Fuente: model/Promocion.java
+
+PRO-05  Varias promociones para el mismo producto
+        Regla deseada: se aplica la MÁS RECIENTE.
+        Estado actual: Implementado de otra forma: se aplica la que deja el precio
+        MÁS BAJO para el cliente.
+        Estado vs. lo deseado: No cumple (cambiar a "la más reciente").
+        Fuente: service/PromocionService.java
+
+PRO-06  Límites del precio con promoción
+        Regla deseada: sin definir por el dueño; se mantiene: nunca por encima del
+        precio normal ni por debajo de cero.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: model/Promocion.java
+
+PRO-07  Límite por compra
+        Regla deseada: se puede configurar en la promoción un límite por cliente,
+        es decir, por compra (ticket).
+        Estado actual: No implementado: la promoción aplica a todas las piezas del
+        renglón, sin límite.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: service/VentaService.java, model/Promocion.java
+
+PRO-08  Quién crea promociones
+        Regla deseada: el administrador o los usuarios a los que él dé permiso.
+        Estado actual: cualquier usuario (incluido el cajero) puede crear, editar y
+        borrar promociones desde Productos > Promociones.
+        Estado vs. lo deseado: No cumple (restringir por permiso).
+        Fuente: controller/PromocionesController.java, service/PromocionService.java
+
+PRO-09  Combinación promoción + mayoreo + descuento manual
+        Regla deseada: solo se aplica UNO de los tres, nunca combinados.
+        Estado actual: Implementado de otra forma: si un renglón está en mayoreo y
+        el producto tiene promoción, se aplica la promoción SOBRE el precio de
+        mayoreo (se combinan). El descuento manual no existe.
+        Estado vs. lo deseado: No cumple (aplicar solo uno; falta definir cuál
+        gana).
+        Fuente: service/VentaService.java, controller/VentasController.java
+
+PRO-10  Ahorro en el ticket (NUEVA)
+        Regla deseada: el ticket muestra el nombre de la promoción, los productos
+        con su precio normal y lo descontado.
+        Estado actual: Parcial. En pantalla el ticket muestra una columna
+        "Descuento" por renglón; no muestra el nombre de la promoción. No hay
+        ticket impreso (VEN-16).
+        Estado vs. lo deseado: Pendiente de implementar (en el ticket impreso).
+        Fuente: controller/VentasController.java
+
+Preguntas para definir (Promociones):
+  - PRO-09: si un producto tiene promoción y además se activa mayoreo o
+    descuento manual, ¿cuál gana? ¿La que más beneficia al cliente, o la última
+    aplicada?
+  - PRO-05: "la más reciente": ¿la última creada, o la de fecha de inicio más
+    reciente? Ojo: hoy se aplica la más barata para el cliente; con la nueva
+    regla, una promoción nueva menos generosa reemplazaría a una mejor.
+  - PRO-07: al pasar el límite por compra, ¿las piezas extra se cobran a precio
+    normal?
+  - PRO-04 "por existencia": ¿se refiere a "hasta agotar X piezas en
+    promoción" o a "mientras haya existencia del producto"?
+
+
+================================================================================
+6. FONDO Y CORTE DE CAJA (CRT)
+================================================================================
+
+CRT-01  Captura del fondo de caja
+        Regla deseada: sin definir por el dueño (salvo CRT-02); se mantiene: monto
+        vacío = $0; no negativo; acepta "$" y comas.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: controller/LoginController.java
+
+CRT-02  Cuándo se pide el fondo
+        Regla deseada: SOLO al iniciar el día.
+        Estado actual: Parcial. Se pide al primer inicio de sesión del día y los
+        siguientes cajeros entran directo. Pero el fondo se guarda solo en memoria:
+        si se cierra el programa, al volver a abrirlo se pide de nuevo y se pierde
+        el anterior. No se guarda en la base de datos.
+        Estado vs. lo deseado: No cumple en parte (guardar el fondo del día en la
+        base de datos para que no se pida otra vez ni se pierda al reiniciar).
+        Fuente: service/SesionService.java, controller/LoginController.java
+
+CRT-03  Pantalla de Corte
+        Regla deseada: ver CRT-06, CRT-09 y CRT-10.
+        Estado actual: Implementado con datos reales del día: dinero inicial, ventas
+        en efectivo, total esperado en caja (efectivo + fondo), efectivo, tarjeta,
+        ventas totales, ganancia y ventas por departamento. "Entrada de dinero
+        (cambio)" y "Pago a proveedores" siempre muestran $0.00 porque no se pueden
+        registrar (CRT-08). Solo la ve el ADMIN.
+        Estado vs. lo deseado: Cumple en lo básico (ver CRT-06 a CRT-11 para lo
+        que falta).
+        Fuente: controller/CorteController.java, service/VentaService.java
+
+CRT-04  Periodo del corte
+        Regla deseada: el corte es por DÍA (además, por cajero, ver CRT-09).
+        Estado actual: Implementado por día calendario (00:00 a 24:00), sumando a
+        todos los cajeros.
+        Estado vs. lo deseado: Cumple para el corte por día.
+        Fuente: service/VentaService.java
+
+CRT-05  Ventas a crédito en el corte y cálculo de ganancia
+        Regla deseada: las ventas a crédito NO cuentan como dinero en caja.
+        Estado actual: Implementado: el total esperado en caja solo suma el efectivo
+        y el fondo. Las ventas a crédito sí entran en "ventas totales" y en la
+        ganancia. La ganancia usa el costo ACTUAL del producto, no el que tenía
+        cuando se vendió.
+        Estado vs. lo deseado: Cumple (crédito fuera de caja). Nota para el dueño:
+        si cambia el costo, cambian las ganancias de días anteriores.
+        Fuente: service/VentaService.java, controller/CorteController.java
+
+CRT-06  Hacer el corte: conteo y diferencias
+        Regla deseada: el corte se puede hacer varias veces al día y se puede
+        seguir vendiendo después. Al hacerlo se cuenta el efectivo y se registra
+        el faltante o sobrante.
+        Estado actual: Parcial. "Hacer Corte de Hoy" solo actualiza las cifras y
+        muestra ventas totales y dinero esperado. Se puede repetir y seguir
+        vendiendo. No pide contar el efectivo, no calcula faltante/sobrante y no
+        guarda el corte.
+        Estado vs. lo deseado: No cumple (capturar efectivo contado, calcular y
+        guardar diferencia, guardar cada corte).
+        Fuente: controller/CorteController.java
+
+CRT-07  Imprimir corte
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado (avisa "no disponible en esta versión").
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/CorteController.java
+
+CRT-08  Entradas y salidas de efectivo
+        Regla deseada: cada movimiento registra nombre o categoría, monto, hora,
+        lo que había y lo que queda en caja, y el usuario que lo hizo.
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: fxml/corte.fxml, controller/CorteController.java
+
+CRT-09  Corte por cajero
+        Regla deseada: además del corte del día, se debe poder hacer corte por
+        cajero.
+        Estado actual: No implementado. El corte mezcla a todos los cajeros
+        (aunque cada venta ya guarda qué cajero la cobró).
+        Estado vs. lo deseado: Pendiente de implementar.
+        Fuente: service/VentaService.java, model/Venta.java
+
+CRT-10  Estadísticas del día para el administrador (NUEVA)
+        Regla deseada: una sección donde el administrador vea el estado de las
+        ventas del día en cualquier momento (como alternativa o complemento a
+        hacer varios cortes).
+        Estado actual: Parcial. La pestaña Corte (solo ADMIN) ya muestra el
+        resumen del día al momento; no hay estadísticas adicionales.
+        Estado vs. lo deseado: Cumple en parte (el resumen existe; falta definir
+        qué estadísticas adicionales).
+        Fuente: controller/CorteController.java
+
+CRT-11  Quién ve las ganancias (NUEVA)
+        Regla deseada: un cajero sin permiso NO puede ver las ganancias.
+        Estado actual: Implementado: la ganancia solo aparece en la pestaña Corte,
+        que el cajero no ve. (En Ventas el cajero ve el total vendido del día, no
+        la ganancia.)
+        Estado vs. lo deseado: Cumple para el CAJERO. Falta el permiso
+        configurable (USR-16) para dárselo a quien el administrador decida.
+        Fuente: controller/MainController.java, controller/CorteController.java
+
+Preguntas para definir (Corte):
+  - CRT-09/CRT-11: ¿quién puede HACER el corte (no solo ver la ganancia)? ¿Un
+    cajero puede hacer su propio corte por cajero sin ver ganancias?
+  - CRT-02: si el programa se cierra a media jornada, ¿se conserva el fondo
+    capturado en la mañana? (se asume que sí)
+  - CRT-06: ¿el faltante se le carga al cajero? ¿Se necesita firma o
+    autorización del administrador para cerrar con diferencia?
+  - CRT-08: ¿qué categorías de entradas/salidas (pago a proveedor, retiro,
+    gasto, cambio)? ¿Quién puede registrarlas?
+  - CRT-10: ¿qué estadísticas quiere ver? (más vendidos, por hora, por
+    departamento, por cajero)
+  - ¿Debe el sistema avisar el "total vendido hoy" al cajero en la pantalla de
+    Ventas? (hoy sí lo muestra)
+
+
+================================================================================
+7. CLIENTES Y CRÉDITO (CLI) - SIN RESPUESTAS DEL DUEÑO
+================================================================================
+
+CLI-01  Datos del cliente
+        Regla deseada: sin definir por el dueño.
+        Estado actual: Parcial: solo existe la estructura de datos (nombre
+        obligatorio, teléfono, límite de crédito, saldo de deuda).
+        Estado vs. lo deseado: Sin definir.
+        Fuente: model/Cliente.java
+
+CLI-02  Pantalla de Clientes
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado: todos los botones de F2 avisan "no
+        disponible en esta versión".
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/ClientesController.java
+
+CLI-03  Venta a crédito ligada a cliente, límite y abonos
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado. Ver VEN-10: hoy se puede registrar una
+        venta "a crédito" sin cliente.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: model/Venta.java, model/Cliente.java
+
+CLI-04  Plazos, intereses y eliminación de clientes con deuda
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: model/Cliente.java
+
+Preguntas para definir (Clientes) - siguen abiertas:
+  - ¿Se vende a crédito? ¿A todos los clientes o solo a los autorizados?
+  - ¿Qué pasa si la venta rebasa el límite de crédito? (bloquear, autorización)
+  - ¿Cómo se registran los abonos? ¿Pagos parciales? ¿Se emite comprobante?
+  - ¿Hay plazos o intereses?
+  - ¿Se puede eliminar un cliente con saldo pendiente?
+  - ¿Se necesitan más datos del cliente (RFC para factura, dirección, correo)?
+  - ¿Precio especial o de mayoreo por cliente?
+  - Mientras se define: ¿quitamos la opción "Crédito" de Ventas? (ver VEN-10)
+
+
+================================================================================
+8. REGISTRO E HISTORIAL DE VENTAS (HIS) - SIN RESPUESTAS DIRECTAS DEL DUEÑO
+================================================================================
+
+HIS-01  Datos guardados de cada venta
+        Regla deseada: sin definir por el dueño; se mantiene: folio, fecha y hora,
+        forma de pago, total, pagó con, cambio, cajero (vínculo y nombre) y
+        renglones (producto, precio, cantidad, descuento).
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional). Para VEN-14, VEN-18 y CRT-09
+        hará falta guardar además estado (cancelada), plazo de cancelación y
+        pagos múltiples.
+        Fuente: model/Venta.java, model/DetalleVenta.java
+
+HIS-02  Datos que NO se guardan
+        Regla deseada: sin definir por el dueño.
+        Estado actual: no se guarda cliente, impuestos, costo al momento de la
+        venta, nombre de la promoción aplicada ni motivo de cancelación.
+        Estado vs. lo deseado: Sin definir. (PRO-10 y VEN-16 piden mostrar el nombre
+        de la promoción en el ticket; CRT-05 se beneficiaría de guardar el costo.)
+        Fuente: model/Venta.java, model/DetalleVenta.java
+
+HIS-03  Consulta de ventas por período
+        Regla deseada: solo el administrador (o quien tenga permiso) puede ver el
+        historial de ventas (respuesta de USR-13).
+        Estado actual: Implementado en Productos > "Ventas por Período": rango de
+        fechas con atajos Hoy / Esta semana / Este mes, detalle de cada venta y
+        totales. CUALQUIER usuario puede abrirlo, incluido el cajero.
+        Estado vs. lo deseado: No cumple (restringir a administrador o permiso).
+        Fuente: controller/VentasPeriodoController.java, service/VentaService.java,
+                controller/ProductosController.java
+
+HIS-04  Productos con ventas no se borran
+        Regla deseada: se mantiene; además se pueden desactivar (PRD-09).
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple.
+        Fuente: service/ProductoService.java
+
+HIS-05  Reimprimir, filtrar y exportar
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado (no hay filtro por cajero/forma de pago,
+        reimpresión ni exportación).
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/VentasPeriodoController.java
+
+HIS-06  Las ventas no se modifican ni se borran
+        Regla deseada: se mantiene; las correcciones se harán con cancelación
+        (VEN-14) o devolución (VEN-18).
+        Estado actual: Implementado (no existe forma de editar ni borrar ventas).
+        Estado vs. lo deseado: Cumple.
+        Fuente: service/VentaService.java
+
+Preguntas para definir (Historial) - siguen abiertas:
+  - ¿Qué reportes necesita? (por día, por cajero, por producto, por departamento,
+    más vendidos, ganancias)
+  - ¿Se necesita reimprimir tickets? ¿Exportar a Excel/PDF?
+  - ¿Cuánto tiempo se conserva el historial? ¿Respaldos automáticos?
+
+
+================================================================================
+9. CONFIGURACIÓN DEL NEGOCIO (CFG) - SIN RESPUESTAS DIRECTAS DEL DUEÑO
+================================================================================
+
+CFG-01  Nombre de la tienda
+        Regla deseada: el ticket lleva nombre y dirección del negocio (VEN-16).
+        Estado actual: Parcial. El nombre se lee del archivo de configuración y se
+        muestra en la pantalla de inicio de sesión. No se puede cambiar desde el
+        programa y no existe el dato "dirección".
+        Estado vs. lo deseado: No cumple (agregar dirección y poder editar ambos
+        desde Configuración).
+        Fuente: src/main/resources/application.properties,
+                controller/LoginController.java
+
+CFG-02  Moneda
+        Regla deseada: sin definir por el dueño.
+        Estado actual: Parcial: "MXN" en el archivo de configuración pero no se usa;
+        todo se muestra con "$" y 2 decimales.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: src/main/resources/application.properties
+
+CFG-03  Versión del programa
+        Regla deseada: sin definir por el dueño.
+        Estado actual: Implementado (se lee del archivo de configuración).
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: controller/MainController.java
+
+CFG-04  Base de datos y respaldo
+        Regla deseada: sin definir por el dueño.
+        Estado actual: archivo "datos.db" junto al programa; tablas automáticas.
+        Sin respaldo automático ("no disponible en esta versión"). Observación
+        técnica: el archivo Punto-Ventas/datos.db está incluido en el repositorio
+        git del proyecto (el dueño no dijo nada al respecto).
+        Estado vs. lo deseado: Sin definir.
+        Fuente: src/main/resources/application.properties,
+                controller/ConfiguracionController.java
+
+CFG-05  Pantalla de Configuración
+        Regla deseada: según las respuestas, aquí deben ir al menos: tasa(s) de IVA
+        (VEN-04), plazo de cancelación (VEN-14/VEN-19), permisos por usuario
+        (USR-16), báscula (PRD-08), datos del ticket (VEN-16).
+        Estado actual: Parcial. Solo "Cajeros" (usuarios) funciona; los otros 18
+        botones avisan "no disponible en esta versión". Solo el ADMIN la ve.
+        Estado vs. lo deseado: Pendiente de implementar (las opciones listadas).
+        Fuente: controller/ConfiguracionController.java
+
+CFG-06  Redondeo
+        Regla deseada: sin definir por el dueño; se mantiene: a centavos.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/VentaService.java
+
+CFG-07  Fecha y hora
+        Regla deseada: sin definir por el dueño; se mantiene: reloj de la
+        computadora.
+        Estado actual: Implementado.
+        Estado vs. lo deseado: Cumple (provisional).
+        Fuente: service/VentaService.java
+
+CFG-08  Facturación electrónica (CFDI)
+        Regla deseada: sin definir por el dueño.
+        Estado actual: No implementado.
+        Estado vs. lo deseado: Sin definir.
+        Fuente: controller/ConfiguracionController.java
+
+Preguntas para definir (Configuración) - siguen abiertas:
+  - ¿RFC y logotipo en el ticket? (nombre y dirección ya se respondieron en
+    Ventas)
+  - ¿Se trabaja solo en pesos mexicanos? ¿Se aceptan dólares?
+  - ¿Se necesita facturar (CFDI)?
+  - ¿Qué equipos se usarán: impresora de tickets, cajón de dinero, lector de
+    códigos? (la báscula ya se confirmó en PRD-08)
+  - ¿Cada cuánto y dónde se debe respaldar la base de datos?
+  - ¿Una sola caja o varias computadoras compartiendo la misma información?
+
+
+================================================================================
+RESPUESTAS AMBIGUAS O QUE SE CONTRADICEN (para revisar con el dueño)
+================================================================================
+  1. IVA (PRD-07 / VEN-04): "Todos los productos ya incluyen iva" y, en Ventas,
+     "lo puede elegir el administrador en configuraciones". Hay que aclarar qué
+     se elige: la tasa, el desglose en el ticket, o si algunos precios no
+     incluyen IVA.
+  2. Desactivar productos sin existencia (PRD-09) frente a vender sin existencia
+     con autorización (INV-08): si un producto se desactiva automáticamente al
+     llegar a 0, ya no se podría vender sin existencia.
+  3. Vender por debajo del costo (PRD-06): la respuesta habla del mayoreo y no
+     dice si se permite vender bajo costo.
+  4. Promoción más reciente (PRO-05) frente a una sola entre promoción, mayoreo
+     y descuento manual (PRO-09): no se dice cuál gana entre esas tres.
+  5. Motivo de ajuste (INV-05): "Puede, para la auditoria" no aclara si es
+     obligatorio.
+  6. Plazo de cancelación (VEN-14): "2 días" puede ser 48 horas o fechas de
+     calendario.
+  7. Conservar la venta sin cobrar al cambiar de cajero (USR-15): no se dice a
+     nombre de quién queda.
+  8. Producto común (PRD-16): se entiende "control mas p" como el atajo Ctrl+P.
+
+
+================================================================================
+RESUMEN: NÚMERO DE REGLAS POR SECCIÓN
+================================================================================
+  1. Usuarios, roles e inicio de sesión (USR) .... 19  (4 nuevas: USR-16 a USR-19)
+  2. Productos y departamentos (PRD) ............. 17  (2 nuevas: PRD-16, PRD-17)
+  3. Inventario (INV) ............................ 11  (1 nueva: INV-11)
+  4. Ventas (VEN) ................................ 19  (2 nuevas: VEN-18, VEN-19)
+  5. Promociones (PRO) ........................... 10  (1 nueva: PRO-10)
+  6. Fondo y corte de caja (CRT) ................. 11  (2 nuevas: CRT-10, CRT-11)
+  7. Clientes y crédito (CLI) ..................... 4
+  8. Registro e historial de ventas (HIS) ......... 6
+  9. Configuración del negocio (CFG) .............. 8
+  Total .......................................... 105
+
+  Reglas donde el programa hoy NO CUMPLE lo deseado (hay que cambiarlo):
+    USR-01, USR-06, USR-07, USR-09, USR-13, USR-15, PRD-07, PRD-08, PRD-11,
+    PRD-17, INV-03, INV-04, INV-05, INV-06, INV-08, VEN-06, VEN-07, VEN-15,
+    PRO-01, PRO-04, PRO-05, PRO-08, PRO-09, CRT-02, CRT-06, HIS-03, CFG-01.
+
+Fin del cuerpo del documento. Sigue el apéndice.
+
+
+================================================================================
+APÉNDICE: RESPUESTAS DEL DUEÑO (TEXTO ORIGINAL)
+================================================================================
+A continuación se copian, sin ninguna corrección, las preguntas y respuestas tal
+como el dueño las escribió en la primera versión del documento (2026-10-25). Las
+secciones 7 (Clientes), 8 (Historial) y 9 (Configuración) no tenían respuestas.
+
+--- Sección 1. Usuarios (USR) ---
+Preguntas para definir (Usuarios):
+  - ¿Qué puede hacer exactamente un CAJERO y qué solo el ADMIN? (cambiar precios,
+    borrar productos, ajustar inventario, cancelar ventas, ver ganancias, corte) el administrador puede ver el historial de ventas, puede editar productos, agregar productos, agregar promociones, agregar usuarios, Eliminar usuarios, 
+Solo el administrador puede cancelar una venta, para que un cajero pueda cancelar una venta necesita la clave de un administrador, puede haber otro cajero con el cargo de administrador / gerente, pero este no tiene todos los privilegios y es mas auditado en los reportes, el administrador/ gerente puede agregar productos, editar productos,  no puede agregar usuarios pero si desactivarlo mas no eliminarlos. De igual manera el administrador puede habilitar o deshabilitar funciones que el tiene pero los cajeros no, ósea le puede dar a un cajero ciertos permisos que solo el administrador tiene o incluso desactivar permisos que cualquier cajero tiene. 
+  - ¿Se necesitan más roles (por ejemplo "Encargado" o "Supervisor")? Si, aun no decisdo el cargo pero puede ser gerente o encargado el nombre 
+  - ¿Obligar a cambiar la contraseña "admin123" al primer inicio? Si, al primer inicio se cambia la contraseña si o si para el administrador 
+  - ¿Longitud mínima de contraseña deseada? ¿Bloquear tras X intentos fallidos? Bloqueo y auditado / log al intentar 5 veces, la longitud mínima de 5 caracteres con 1 numero.
+  - ¿Los usuarios se deben poder borrar o solo desactivar? Borrar y desactivar 
+  - ¿Se puede cambiar de cajero sin cerrar el programa? ¿Cada cajero tiene su
+    propio turno/caja? Si, se puede cambiar de cajero sin cerrar el programa, poniendo cerrar sección o cambiar de cajero, lo que te devolverá a la pantalla de inicio de sección sin perder el historial de ese día y si había una venta sin cobrar pues conservarla. 
+
+--- Sección 2. Productos (PRD) ---
+Preguntas para definir (Productos):
+  - ¿Los precios de venta incluyen IVA? ¿Hay productos exentos o con tasa 0 %? Todos los productos ya incluyen iva
+  - ¿Permitir vender por debajo del costo? ¿Avisar o bloquear? Se puede vender por mayoreo, esta opción la puede hacer el administrador o a los perfiles que a el les de permiso 
+  - ¿Cuándo se usa el precio de mayoreo? (a partir de cierta cantidad, por
+    cliente, a elección del cajero) ¿Debe ser siempre menor al de venta? Siempre es al por menor a no ser que se active la opción manualmente o por oferta 
+  - ¿Los productos a granel se venden por peso con decimales? ¿Con báscula? Se pesan por gramos / kilos y se puede habilitar usar una bascula externa 
+  - ¿Qué es un "paquete/kit"? ¿Descuenta el inventario de sus componentes? Un paquete puede ser una promoción y aun no se como tomarlo si descontar del inventario al crear las promociones paquetes o al activarse una de estas promociones 
+  - ¿Se necesitan códigos internos para productos sin código de barras? Puede ser por nombre si es que no tiene código de barras o si es un producto que no esta en el inventario trabajarlo con control mas p para agregar un producto común y que el cajero agregue manualmente el nombre, cantidad y precio unitario. 
+  - ¿Productos descontinuados: desactivar en lugar de eliminar? Si los discontinuados o sin existencia se "desactivan"
+  - ¿Quién puede cambiar precios? ¿Guardar historial de cambios de precio? Se guarda el historial de precios y solo el administrador o los perfiles que tengan permitido pueden hacerlo. 
+
+--- Sección 3. Inventario (INV) ---
+Preguntas para definir (Inventario):
+  - ¿Se permite vender sin existencia (stock negativo)? ¿Siempre, nunca, o con
+    autorización del administrador? Con autorización del administrador, el administrador lo puedehacer de una o puede aplicar esta regla también a los usuarios qu el desee
+  - ¿Qué debe pasar al llegar al mínimo? (aviso en pantalla, al vender, reporte) avisar en pantalla, y en el reporte de final de día.
+  - ¿Los ajustes requieren motivo (merma, robo, caducidad, conteo)? ¿Solo ADMIN? Puede, para la auditoria 
+  - ¿Se debe registrar el proveedor y costo de cada entrada? ¿Actualiza el costo? si
+  - ¿Debe impedirse cambiar la existencia desde la pantalla de Productos y obligar
+    a usar Inventario (para que quede registro)? Si 
+
+--- Sección 4. Ventas (VEN) ---
+Preguntas para definir (Ventas):
+  - ¿Los precios incluyen IVA? ¿Se debe desglosar en el ticket? ¿Qué tasa(s)? lo puede elegir el administrador en configuraciónnes 
+  - ¿El cajero puede hacer descuentos manuales? ¿Por renglón o al total? ¿Con
+    límite o con autorización? Solo el administrador y a ls que el les de permiso 
+  - ¿Se aceptan pagos mixtos (parte efectivo, parte tarjeta)? ¿Otras formas de
+    pago (transferencia, vales)? Si, se puede dividir el pago 
+  - ¿Se registra la referencia/autorización de la tarjeta? 
+  - ¿Quién puede cancelar una venta ya cobrada? ¿Hasta cuándo? ¿El producto
+    regresa al inventario? ¿Cómo afecta al corte? Solo el administrador o los que tengan permisos, hasta 2 días atrás se puede cancelar una venta, el tiempo también lo puede poder el administrador en configuraciónes, pero ni el administrador puede cambiar esta regla para cancelar una venta muy atrasada, es decir si por ejemplo lo tenia para el mismo día y quiero cancelar una venta de ayer no puedo ir a configuración y ponerlo para que me acepte la cancelación de hace 15 días porque solo se va a aplicar esta regla a los registros futuros, no a los atrsados.
+  - ¿Se aceptan devoluciones parciales? ¿Se devuelve dinero o se da nota/vale? Se aceptan devoluciones y se da nota 
+  - ¿Qué debe llevar el ticket impreso (nombre, RFC, dirección, leyendas)? Dirección y nombre del negocio
+  - ¿Pedir confirmación al cancelar un ticket en captura? Si 
+
+--- Sección 5. Promociones (PRO) ---
+Preguntas para definir (Promociones):
+  - ¿Qué tipos de promoción necesita? (porcentaje, precio fijo, 2x1, 3x2, segunda
+    pieza a mitad de precio, por departamento, por monto de compra) promociónnes predeterminadas de 2x1 o porcentajes, departamentos, esto lo pede personalizar a su gusto el que este haciendo las promociones, hazlo lo mas personalizable y fácil de implementar 
+  - Si hay varias promociones para el mismo producto, ¿se aplica la mejor para el
+    cliente (como hoy), la más reciente, o se suman? Se aplica la mas reciente
+  - ¿Promoción + precio de mayoreo + descuento manual se pueden combinar? Solo aplica 1 de las 3 nunca las 3 
+  - ¿Límite de piezas por cliente o cantidad mínima para que aplique? Limite de promociónnes por cliente, ósea en una misma compra, se puede configurar en la sección de promociónnes tambiénn
+  - ¿Promociones por horario o día de la semana? También se puede configurar en la sección de la promoción, establecer si es una promoción ciertos días, si es por tiempo limitado o por existenca
+  - ¿Solo el ADMIN puede crear promociones? El administrador o a los que el les de permisos 
+  - ¿El ticket debe mostrar el ahorro? Si, debe mostrar el nombre de la promoción, los productos con su precio normal y lo que se desconto. 
+
+--- Sección 6. Corte (CRT) ---
+Preguntas para definir (Corte):
+  - ¿El corte es por día, por turno o por cajero? ¿Puede haber varios cortes al
+    día? Por dia, el corte se puede realizar varias veces por día para ver el estado de la venta del día o agregar una sección para el administrador para que pueda ver estas estadísticas  y también debe de poder hacer corte por cajero 
+  - ¿Al hacer el corte se debe contar el efectivo y registrar faltante/sobrante? Si
+  - ¿Después del corte se puede seguir vendiendo en el mismo día? Si
+  - ¿Quién puede hacer y ver el corte? ¿El cajero puede ver la ganancia? No, un cajero sin ese permiso no puede ver las ganancias 
+  - ¿Las ventas a crédito cuentan en el corte como dinero en caja? (hoy no se
+    separa "vendido" de "cobrado") no
+  - ¿Qué entradas y salidas de efectivo se deben registrar y con qué datos? Nombre de la entrada salida / categoría y monto se registra la hora y lo que había y queda en caja también el nombre del usuario que retiro
+  - ¿El fondo de caja se pide una vez al día o en cada inicio de sesión? Solo al iniciar el día
+
+--- Secciones 7 (Clientes), 8 (Historial) y 9 (Configuración) ---
+(sin respuestas del dueño)
+
+Fin del documento.

@@ -53,10 +53,10 @@
                 <columns>
                     <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="140"/>
                     <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="260"/>
-                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="85"/>
-                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="85"/>
-                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="85"/>
-                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="75"/>
+                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="85" styleClass="align-right"/>
+                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="85" styleClass="align-right"/>
+                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="85" styleClass="align-right"/>
+                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="75" styleClass="align-right"/>
                     <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="140"/>
                 </columns>
                 <placeholder>
@@ -215,6 +215,13 @@
                                GridPane.columnIndex="0" GridPane.rowIndex="2"
                                GridPane.columnSpan="2"/>
 
+                        <Label fx:id="lblAvisoStock"
+                               text="La existencia de este producto se modifica desde Inventario (F4) o con las ventas."
+                               visible="false" managed="false" wrapText="true"
+                               style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"
+                               GridPane.columnIndex="0" GridPane.rowIndex="3"
+                               GridPane.columnSpan="2"/>
+
                         <columnConstraints>
                             <ColumnConstraints prefWidth="160" minWidth="140"/>
                             <ColumnConstraints hgrow="ALWAYS"/>
@@ -285,9 +292,7 @@
                                onKeyReleased="#onBuscarDepartamento"/>
                 </HBox>
 
-                    <TableView fx:id="tablaDepartamentos"
-
-                            onMouseClicked="#onTablaDobleClick">
+                    <TableView fx:id="tablaDepartamentos">
                     <columns>
                         <TableColumn fx:id="colNombreDepartamento"       text="Nombre"       prefWidth="140"/>
                     </columns>

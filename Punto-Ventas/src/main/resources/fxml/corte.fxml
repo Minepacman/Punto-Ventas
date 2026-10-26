@@ -71,7 +71,7 @@
                     <TableView fx:id="tablaDepartamentos" prefHeight="160">
                         <columns>
                             <TableColumn fx:id="colDepto"   text="Departamento" prefWidth="180"/>
-                            <TableColumn fx:id="colMonto"   text="Monto"        prefWidth="120"/>
+                            <TableColumn fx:id="colMonto"   text="Monto"        prefWidth="120" styleClass="align-right"/>
                         </columns>
                     </TableView>
                 </VBox>
