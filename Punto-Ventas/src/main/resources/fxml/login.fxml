@@ -12,11 +12,11 @@
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
-<StackPane styleClass="login-root" stylesheets="@../css/app.css" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/26" fx:controller="me.eliassanchezfernandez.puntodeventa.controller.LoginController">
+<StackPane styleClass="login-root" stylesheets="@../css/app.css" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/17" fx:controller="me.eliassanchezfernandez.puntodeventa.controller.LoginController">
 
     <Pane styleClass="login-background" />
 
-    <VBox alignment="CENTER" maxHeight="500" maxWidth="400" spacing="0" styleClass="login-card">
+    <VBox alignment="CENTER" maxHeight="560" maxWidth="400" spacing="0" styleClass="login-card">
 
         <VBox alignment="CENTER" spacing="6" styleClass="login-header">
             <padding><Insets bottom="24" left="32" right="32" top="32" /></padding>
@@ -26,6 +26,7 @@
 
         <Separator />
 
+        <!-- Credenciales -->
         <VBox fx:id="vboxForm" spacing="14" styleClass="login-form">
             <padding><Insets bottom="8" left="32" right="32" top="24" /></padding>
 
@@ -40,6 +41,17 @@
             </VBox>
         </VBox>
 
+        <!-- Cambio de contraseña obligatorio (primer inicio) -->
+        <VBox fx:id="vboxCambioContrasena" spacing="10" managed="false" visible="false">
+            <padding><Insets bottom="8" left="32" right="32" top="24" /></padding>
+            <Label styleClass="field-label" text="Debes definir una contraseña nueva" wrapText="true" />
+            <Label fx:id="lblPoliticaContrasena" text="" wrapText="true"
+                   style="-fx-text-fill:-color-fg-muted;-fx-font-size:11" />
+            <PasswordField fx:id="txtNuevaContrasena" promptText="Nueva contraseña" />
+            <PasswordField fx:id="txtConfirmarContrasena" promptText="Confirmar contraseña" onAction="#onGuardarNuevaContrasena" />
+        </VBox>
+
+        <!-- Fondo de caja del día -->
         <HBox fx:id="dineroEnCaja" alignment="CENTER_LEFT" spacing="8" managed="false" visible="false">
             <padding><Insets bottom="8" left="32" right="32" top="24" /></padding>
             <Label styleClass="field-label" text="Fondo Inicial: $" />
@@ -48,10 +60,10 @@
 
         <VBox spacing="10">
             <padding><Insets bottom="32" left="32" right="32" top="8" /></padding>
-            
-            <HBox fx:id="hboxError" alignment="CENTER_LEFT" managed="false" spacing="8" style="-fx-background-color:rgba(220,53,69,0.12); -fx-background-radius:6; -fx-padding:10;" visible="false">
-                <Label style="-fx-text-fill:#C0392B;-fx-font-size:14" text="⚠" />
-                <Label fx:id="lblError" style="-fx-text-fill:#C0392B;-fx-font-size:12" text="Error." wrapText="true" />
+
+            <HBox fx:id="hboxError" alignment="CENTER_LEFT" managed="false" spacing="8" styleClass="callout, callout-danger" visible="false">
+                <Label text="⚠" />
+                <Label fx:id="lblError" text="Error." wrapText="true" />
             </HBox>
 
             <Button fx:id="btnLogin" defaultButton="true" maxWidth="Infinity" onAction="#onIniciarSesion" styleClass="button-primary, btn-login" text="Iniciar Sesión" />

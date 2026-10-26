@@ -8,10 +8,13 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
+import me.eliassanchezfernandez.puntodeventa.service.CajaService;
+import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
+import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
+import me.eliassanchezfernandez.puntodeventa.service.PoliticaContrasena;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
@@ -24,12 +27,11 @@ import java.util.ResourceBundle;
  *
  * Flujo completo:
  *  1. Cajero ingresa usuario + contraseña → onIniciarSesion()
- *  2. SesionService.autenticar() verifica credenciales (BCrypt)
+ *  2. SesionService.autenticar() verifica credenciales (BCrypt, intentos, bloqueo)
  *  3a. Error  → mostrar aviso rojo
- *  3b. Éxito  → ocultar formulario, mostrar panel "Fondo de Caja"
- *      (si el fondo de hoy ya se registró, se salta este paso)
- *  4. Cajero ingresa monto inicial → onAceptarDineroCaja()
- *  5. Se valida el monto y se abre main.fxml en el mismo Stage
+ *  3b. Éxito y debe cambiar contraseña (USR-06) → panel "Nueva contraseña"
+ *  3c. Éxito → panel "Fondo de Caja" si el cajero aún no capturó el de hoy (CRT-02)
+ *  4. Se abre main.fxml en el mismo Stage
  *
  * Es prototype porque cada vez que se cierra sesión se vuelve a cargar
  * el FXML y necesitamos un controlador limpio.
@@ -48,20 +50,27 @@ public class LoginController implements Initializable {
     @FXML private Label             lblNombreTienda;
     @FXML private VBox              vboxForm;       // contenedor del formulario
 
+    // ── FXML – Panel cambio de contraseña obligatorio ────────────────────
+    @FXML private VBox          vboxCambioContrasena;
+    @FXML private PasswordField txtNuevaContrasena;
+    @FXML private PasswordField txtConfirmarContrasena;
+    @FXML private Label         lblPoliticaContrasena;
+
     // ── FXML – Panel Fondo de Caja ────────────────────────────────────────
     @FXML private HBox      dineroEnCaja;   // panel completo (oculto al inicio)
     @FXML private TextField txtDineroCaja;  // monto inicial
 
     // ── Spring ────────────────────────────────────────────────────────────
-    @Autowired private SesionService      sesionService;
-    @Autowired private ApplicationContext springContext;
-
-    @Value("${app.nombre-tienda:Mi Tienda}")
-    private String nombreTienda;
+    @Autowired private SesionService        sesionService;
+    @Autowired private CajaService          cajaService;
+    @Autowired private ConfiguracionService configuracionService;
+    @Autowired private ApplicationContext   springContext;
 
     // ── Estado ────────────────────────────────────────────────────────────
     /** Cajero autenticado — se guarda para usarlo al abrir main.fxml */
     private Cajero cajeroAutenticado = null;
+    /** Contraseña tecleada en el login (necesaria para el cambio obligatorio) */
+    private String contrasenaCapturada = null;
 
     // ─────────────────────────────────────────────────────────────────────
     //  INICIALIZACIÓN
@@ -69,16 +78,23 @@ public class LoginController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        lblNombreTienda.setText(nombreTienda);
+        try {
+            lblNombreTienda.setText(configuracionService.getNombreTienda());
+        } catch (Exception e) {
+            lblNombreTienda.setText("Punto de Venta");
+        }
+        lblPoliticaContrasena.setText(PoliticaContrasena.DESCRIPCION);
 
         // Ocultar error al volver a escribir
         txtUsuario.setOnKeyTyped(e    -> ocultarError());
         txtContrasena.setOnKeyTyped(e -> ocultarError());
         txtDineroCaja.setOnKeyTyped(e -> ocultarError());
+        txtNuevaContrasena.setOnKeyTyped(e -> ocultarError());
+        txtConfirmarContrasena.setOnKeyTyped(e -> ocultarError());
 
-        // Fondo de caja oculto hasta autenticarse
-        dineroEnCaja.setVisible(false);
-        dineroEnCaja.setManaged(false);
+        // Paneles secundarios ocultos hasta autenticarse
+        mostrar(dineroEnCaja, false);
+        mostrar(vboxCambioContrasena, false);
 
         Platform.runLater(() -> txtUsuario.requestFocus());
     }
@@ -105,18 +121,20 @@ public class LoginController implements Initializable {
 
                 Platform.runLater(() -> {
                     cajeroAutenticado = cajero;
+                    contrasenaCapturada = contrasena;
                     setUICargando(false);
-                    if (sesionService.requiereIngresarFondo()) {
-                        mostrarPanelFondoDeCaja();
+                    txtContrasena.clear();
+                    if (cajero.isDebeCambiarContrasena()) {
+                        mostrarPanelCambioContrasena();
                     } else {
-                        // Ya se abrió caja hoy (p. ej. cambio de turno): entrar directo
-                        abrirVentanaPrincipal(cajero, sesionService.getFondoDeCajaDelDia());
+                        continuarTrasAutenticar();
                     }
                 });
 
             } catch (SesionService.CredencialesInvalidasException e) {
                 Platform.runLater(() -> {
-                    mostrarError("Usuario o contraseña incorrectos.");
+                    mostrarError(e.getMessage().startsWith("Usuario bloqueado")
+                            ? e.getMessage() : "Usuario o contraseña incorrectos.");
                     txtContrasena.clear();
                     txtContrasena.requestFocus();
                     setUICargando(false);
@@ -131,6 +149,53 @@ public class LoginController implements Initializable {
         }, "login-auth").start();
     }
 
+    /** Después de autenticar (y de cambiar contraseña si tocaba): fondo o principal */
+    private void continuarTrasAutenticar() {
+        if (cajaService.requiereFondo(cajeroAutenticado)) {
+            mostrarPanelFondoDeCaja();
+        } else {
+            // Ya capturó su fondo hoy (p. ej. reinicio del programa): entrar directo
+            abrirVentanaPrincipal(cajeroAutenticado, cajaService.fondoDelCajeroActual());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  PASO 1b – CAMBIO DE CONTRASEÑA OBLIGATORIO (USR-06)
+    // ─────────────────────────────────────────────────────────────────────
+
+    private void mostrarPanelCambioContrasena() {
+        ocultarError();
+        mostrar(vboxForm, false);
+        mostrar(vboxCambioContrasena, true);
+        btnLogin.setText("Guardar contraseña");
+        btnLogin.setOnAction(e -> onGuardarNuevaContrasena());
+        Platform.runLater(() -> txtNuevaContrasena.requestFocus());
+    }
+
+    @FXML
+    private void onGuardarNuevaContrasena() {
+        String nueva = txtNuevaContrasena.getText();
+        String confirmar = txtConfirmarContrasena.getText();
+        if (!nueva.equals(confirmar)) {
+            mostrarError("Las contraseñas no coinciden.");
+            txtConfirmarContrasena.clear();
+            txtConfirmarContrasena.requestFocus();
+            return;
+        }
+        try {
+            sesionService.cambiarContrasenaPropia(contrasenaCapturada, nueva);
+        } catch (NegocioException e) {
+            mostrarError(e.getMessage());
+            return;
+        }
+        contrasenaCapturada = null;
+        cajeroAutenticado = sesionService.getCajeroActual();
+        mostrar(vboxCambioContrasena, false);
+        Ventanas.alerta(Alert.AlertType.INFORMATION, "Contraseña actualizada",
+                "Tu contraseña se cambió correctamente.");
+        continuarTrasAutenticar();
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     //  PASO 2 – FONDO DE CAJA
     // ─────────────────────────────────────────────────────────────────────
@@ -141,14 +206,9 @@ public class LoginController implements Initializable {
      */
     private void mostrarPanelFondoDeCaja() {
         ocultarError();
-
-        // Ocultar formulario de login
-        vboxForm.setVisible(false);
-        vboxForm.setManaged(false);
-
-        // Mostrar panel de fondo de caja
-        dineroEnCaja.setVisible(true);
-        dineroEnCaja.setManaged(true);
+        mostrar(vboxForm, false);
+        mostrar(vboxCambioContrasena, false);
+        mostrar(dineroEnCaja, true);
 
         // El botón principal ahora confirma el fondo en lugar de autenticar
         btnLogin.setText("Abrir caja");
@@ -158,8 +218,8 @@ public class LoginController implements Initializable {
     }
 
     /**
-     * Valida el monto ingresado y abre la ventana principal.
-     * Acepta $0 si el cajero no tiene fondo inicial.
+     * Valida el monto ingresado, lo guarda en la BD (una vez por día y por
+     * cajero) y abre la ventana principal. Acepta $0.
      */
     @FXML
     private void onAceptarDineroCaja() {
@@ -170,17 +230,20 @@ public class LoginController implements Initializable {
         try {
             fondoCaja = texto.isEmpty() ? 0.0 : Double.parseDouble(texto);
         } catch (NumberFormatException e) {
-            mostrarErrorFondo("Ingresa un monto válido (ej: 500 o 0).");
+            mostrarError("Ingresa un monto válido (ej: 500 o 0).");
+            return;
+        }
+        if (!Double.isFinite(fondoCaja) || fondoCaja < 0) {
+            mostrarError("El fondo de caja no puede ser negativo.");
             return;
         }
 
-        if (fondoCaja < 0) {
-            mostrarErrorFondo("El fondo de caja no puede ser negativo.");
+        try {
+            cajaService.registrarFondo(cajeroAutenticado, fondoCaja);
+        } catch (NegocioException e) {
+            mostrarError(e.getMessage());
             return;
         }
-
-        sesionService.registrarFondoDeCaja(fondoCaja);
-
         abrirVentanaPrincipal(cajeroAutenticado, fondoCaja);
     }
 
@@ -205,28 +268,24 @@ public class LoginController implements Initializable {
     //  HELPERS
     // ─────────────────────────────────────────────────────────────────────
 
+    private static void mostrar(javafx.scene.Node nodo, boolean visible) {
+        nodo.setVisible(visible);
+        nodo.setManaged(visible);
+    }
+
     private void mostrarError(String mensaje) {
         lblError.setText(mensaje);
-        hboxError.setVisible(true);
-        hboxError.setManaged(true);
+        mostrar(hboxError, true);
     }
 
     private void ocultarError() {
-        hboxError.setVisible(false);
-        hboxError.setManaged(false);
-    }
-
-    /** Muestra el error dentro del panel de fondo de caja */
-    private void mostrarErrorFondo(String mensaje) {
-        // Reutiliza el mismo label de error que ya existe en el FXML
-        mostrarError(mensaje);
+        mostrar(hboxError, false);
     }
 
     private void setUICargando(boolean cargando) {
         btnLogin.setDisable(cargando);
         txtUsuario.setDisable(cargando);
         txtContrasena.setDisable(cargando);
-        progressLogin.setVisible(cargando);
-        progressLogin.setManaged(cargando);
+        mostrar(progressLogin, cargando);
     }
 }

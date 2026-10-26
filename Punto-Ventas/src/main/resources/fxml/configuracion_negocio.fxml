@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_negocio.fxml  –  Nombre, dirección, IVA y plazo de cancelación
+    Controlador: ConfiguracionNegocioController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionNegocioController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="14">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Datos del negocio" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="4">
+                    <Label text="Nombre del negocio *" styleClass="field-label"/>
+                    <TextField fx:id="txtNombre" promptText="ej: Abarrotes Don Pepe"/>
+                </VBox>
+
+                <VBox spacing="4">
+                    <Label text="Dirección (aparece en el ticket)" styleClass="field-label"/>
+                    <TextField fx:id="txtDireccion" promptText="Calle, número, colonia, ciudad"/>
+                </VBox>
+
+                <Separator/>
+                <Label text="Impuestos" styleClass="form-section-title"/>
+
+                <VBox spacing="4">
+                    <Label text="Tasa de IVA (%)" styleClass="field-label"/>
+                    <TextField fx:id="txtIva" promptText="16"/>
+                    <Label text="Todos los precios de venta YA incluyen IVA; la tasa solo se usa para desglosarlo en el historial y el corte."
+                           wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
+                </VBox>
+
+                <Separator/>
+                <Label text="Cancelación de ventas" styleClass="form-section-title"/>
+
+                <VBox spacing="4">
+                    <Label text="Plazo para cancelar una venta (horas)" styleClass="field-label"/>
+                    <TextField fx:id="txtPlazo" promptText="48"/>
+                    <Label text="Cada venta conserva el plazo vigente al momento de cobrarla: cambiarlo no hace cancelables las ventas anteriores."
+                           wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
+                </VBox>
+
+                <Region minHeight="8"/>
+
+                <HBox spacing="12">
+                    <Button text="✅ Guardar" onAction="#onGuardar" styleClass="button-success"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

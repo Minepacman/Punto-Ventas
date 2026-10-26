@@ -8,3 +8,9 @@ bin/
 
 # macOS
 .DS_Store
+
+# Respaldos automáticos creados por la migración de la BD
+datos.db.respaldo-*
+
+# Documento de seguridad interno (el repositorio es público)
+reglas-seguridad.txt

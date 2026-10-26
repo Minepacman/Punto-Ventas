@@ -42,6 +42,13 @@ public class Producto {
     @JoinColumn(name = "departamento_id")
     private Departamento departamento;
 
+    /**
+     * Producto descontinuado = inactivo: no aparece en Ventas (PRD-09).
+     * Nullable para las filas anteriores a este campo (null = activo).
+     */
+    @Column(name = "activo")
+    private Boolean activo;
+
     // ── Inventario ───────────────────────────────────────────────────────
 
     @Column(name = "usa_inventario")
@@ -52,6 +59,17 @@ public class Producto {
 
     @Column(name = "cantidad_minima")
     private double cantidadMinima;
+
+    // ── Lógica de dominio ────────────────────────────────────────────────
+
+    public boolean isActivo() {
+        return activo == null || activo;
+    }
+
+    /** Los productos a granel se venden con cantidades decimales (PRD-08) */
+    public boolean permiteDecimales() {
+        return tipoVenta == TipoVenta.GRANEL;
+    }
 
     // ── Enum interno ─────────────────────────────────────────────────────
 

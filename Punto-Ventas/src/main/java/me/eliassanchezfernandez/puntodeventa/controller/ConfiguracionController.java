@@ -15,9 +15,10 @@ import java.net.URL;
 import java.util.ResourceBundle;
 
 /**
- * Controlador de Configuración (solo ADMIN; MainController oculta la pestaña
- * a los cajeros). Por ahora solo "Cajeros" (usuarios) está implementado;
- * el resto avisa que no está disponible en esta versión.
+ * Controlador de Configuración (ADMIN y GERENTE; MainController oculta la
+ * pestaña a los cajeros). Implementado: "Cajeros" (usuarios y permisos) y
+ * "Opciones" / "Impuestos" / "Ticket" (datos del negocio, IVA y plazo de
+ * cancelación, solo ADMIN). El resto avisa que no está disponible.
  */
 @Component
 @Scope("prototype")
@@ -30,31 +31,36 @@ public class ConfiguracionController implements Initializable {
 
     @Override public void initialize(URL url, ResourceBundle rb) { }
 
-    /** Administración de usuarios (cajeros y administradores) */
+    /** Administración de usuarios (ADMIN completo; GERENTE solo consulta y desactiva) */
     @FXML void onCajeros() {
-        if (!sesionService.esAdmin()) {
+        if (!sesionService.esAdmin() && !sesionService.esGerente()) {
             alerta(Alert.AlertType.ERROR, "Acceso denegado",
-                    "Solo un administrador puede administrar los usuarios.");
+                    "Solo un administrador o gerente puede administrar los usuarios.");
             return;
         }
-        try {
-            Ventanas.abrirModal(springContext, "/fxml/usuarios.fxml",
-                    "Usuarios del sistema", raiz.getScene().getWindow(), 900, 560);
-        } catch (Exception e) {
-            e.printStackTrace();
-            alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la ventana: " + e.getMessage());
-        }
+        abrir("/fxml/usuarios.fxml", "Usuarios del sistema", 1000, 640);
     }
 
-    @FXML void onOpciones()       { noDisponible("Opciones habilitadas"); }
+    /** Datos del negocio, IVA y plazo de cancelación (solo ADMIN) */
+    @FXML void onOpciones()   { abrirNegocio(); }
+    @FXML void onImpuestos()  { abrirNegocio(); }
+    @FXML void onTicket()     { abrirNegocio(); }
+
+    private void abrirNegocio() {
+        if (!sesionService.esAdmin()) {
+            alerta(Alert.AlertType.ERROR, "Acceso denegado",
+                    "Solo un administrador puede cambiar la configuración del negocio.");
+            return;
+        }
+        abrir("/fxml/configuracion_negocio.fxml", "Configuración del negocio", 560, 460);
+    }
+
     @FXML void onBaseDatos()      { noDisponible("Base de datos"); }
     @FXML void onArticulosPrec()  { noDisponible("Artículos precargados"); }
     @FXML void onFacturacion()    { noDisponible("Facturación"); }
     @FXML void onFolios()         { noDisponible("Modificar folios"); }
     @FXML void onLogotipo()       { noDisponible("Logotipo"); }
-    @FXML void onTicket()         { noDisponible("Ticket"); }
     @FXML void onFormasPago()     { noDisponible("Formas de pago"); }
-    @FXML void onImpuestos()      { noDisponible("Impuestos"); }
     @FXML void onMoneda()         { noDisponible("Moneda"); }
     @FXML void onUnidades()       { noDisponible("Unidades de medida"); }
     @FXML void onImpresora()      { noDisponible("Impresora de tickets"); }
@@ -64,6 +70,15 @@ public class ConfiguracionController implements Initializable {
     @FXML void onRespaldo()       { noDisponible("Respaldo automático"); }
     @FXML void onLicencia()       { noDisponible("Licencia"); }
     @FXML void onActualizaciones(){ noDisponible("Actualizaciones"); }
+
+    private void abrir(String fxml, String titulo, double ancho, double alto) {
+        try {
+            Ventanas.abrirModal(springContext, fxml, titulo, raiz.getScene().getWindow(), ancho, alto);
+        } catch (Exception e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la ventana: " + e.getMessage());
+        }
+    }
 
     private void noDisponible(String opcion) {
         alerta(Alert.AlertType.INFORMATION, opcion,

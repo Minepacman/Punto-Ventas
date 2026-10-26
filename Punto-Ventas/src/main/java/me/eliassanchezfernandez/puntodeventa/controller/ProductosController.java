@@ -13,9 +13,11 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
+import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -59,7 +61,15 @@ public class ProductosController implements Initializable {
     @FXML private TableColumn<Producto, Double> colPrecioMayor;
     @FXML private TableColumn<Producto, Double> colExistencia;
     @FXML private TableColumn<Producto, String> colDepartamento;
+    @FXML private TableColumn<Producto, String> colEstado;
     @FXML private TextField                     txtBuscar;
+    @FXML private Button                        btnNuevo;
+    @FXML private Button                        btnModificar;
+    @FXML private Button                        btnEliminar;
+    @FXML private Button                        btnActivar;
+    @FXML private Button                        btnDepartamentos;
+    @FXML private Button                        btnVentasPeriodo;
+    @FXML private Button                        btnPromociones;
 
     //tabla departamentos
     @FXML private TableView<Departamento>           tablaDepartamentos;
@@ -94,6 +104,7 @@ public class ProductosController implements Initializable {
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private ProductoService    productoService;
+    @Autowired private SesionService      sesionService;
     @Autowired private ApplicationContext springContext;
 
     // ── Estado interno ────────────────────────────────────────────────────
@@ -121,9 +132,25 @@ public class ProductosController implements Initializable {
 
         tablaProductos.setItems(listaProductos);
         tablaDepartamentos.setItems(listaDepartamentos);
+        aplicarPermisos();
 
         // Aseguramos el estado inicial: tabla visible, formulario oculto
         mostrarVistas(true, false, false);
+    }
+
+    /**
+     * Botones según permisos (USR-13, PRD-17, HIS-03). El servicio vuelve a
+     * verificarlos; aquí solo se evita ofrecer lo que no se puede hacer.
+     */
+    private void aplicarPermisos() {
+        boolean editar = sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS);
+        btnNuevo.setDisable(!editar);
+        btnModificar.setDisable(!editar);
+        btnEliminar.setDisable(!editar);
+        btnActivar.setDisable(!editar);
+        btnDepartamentos.setDisable(!editar);
+        btnVentasPeriodo.setDisable(!sesionService.tienePermiso(Permiso.VER_HISTORIAL));
+        // Promociones se puede consultar; la ventana bloquea guardar sin permiso
     }
 
     /** Recarga catálogos desde la BD (lo llama MainController al entrar a la pestaña) */
@@ -142,8 +169,36 @@ public class ProductosController implements Initializable {
         productoEnEdicion = null;
         lblTituloForm.setText("NUEVO PRODUCTO");
         limpiarFormulario();
+        txtPrecioCosto.setEditable(true);
+        txtPrecioVenta.setEditable(true);
+        txtPrecioMayoreo.setEditable(true);
+        lblErrorPrecio.setText("⚠ Los precios no pueden ser negativos.");
         mostrarVistas(false, true, false);
         txtCodigoBarras.requestFocus();
+    }
+
+    /** Desactiva (descontinúa) o reactiva el producto seleccionado (PRD-09) */
+    @FXML
+    private void onCambiarActivo() {
+        Producto sel = tablaProductos.getSelectionModel().getSelectedItem();
+        if (sel == null) {
+            alerta(Alert.AlertType.WARNING, "Selecciona un producto",
+                    "Haz clic en un producto de la tabla para activarlo o desactivarlo.");
+            return;
+        }
+        boolean activar = !sel.isActivo();
+        if (!Ventanas.confirmar(activar ? "Activar producto" : "Desactivar producto", activar
+                ? "¿Volver a vender \"" + sel.getDescripcion() + "\"?"
+                : "¿Desactivar \"" + sel.getDescripcion() + "\"? Dejará de aparecer en Ventas, pero conserva su historial.")) {
+            return;
+        }
+        try {
+            productoService.cambiarActivo(sel.getId(), activar);
+            cargarProductos();
+            onBuscar();
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se pudo cambiar", e.getMessage());
+        }
     }
 
     @FXML
@@ -183,6 +238,7 @@ public class ProductosController implements Initializable {
     /** Doble clic en fila → abrir edición directamente */
     @FXML
     private void onTablaDobleClick(javafx.scene.input.MouseEvent e) {
+        if (!sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS)) return;   // solo quien puede editar
         if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
             Producto sel = tablaProductos.getSelectionModel().getSelectedItem();
             if (sel != null) abrirEdicion(sel);
@@ -424,17 +480,8 @@ public class ProductosController implements Initializable {
                 cantMinima = parsear(txtCantidadMinima.getText(), "Cantidad mínima");
             }
 
-            // En edición la existencia NO se toma del formulario: pudo cambiar por
-            // ventas mientras el formulario estaba abierto. Se conserva la de la BD
-            // (solo Inventario F4 y las ventas la modifican). Si el producto no
-            // manejaba inventario y ahora sí, el valor capturado es el stock inicial.
-            if (productoEnEdicion != null) {
-                Producto enBd = productoService.buscarPorId(productoEnEdicion.getId())
-                        .orElseThrow(() -> new NegocioException("El producto ya no existe."));
-                if (enBd.isUsaInventario() && chkUsaInventario.isSelected()) {
-                    cantActual = enBd.getCantidadActual();
-                }
-            }
+            // En edición, ProductoService ignora la existencia capturada si el
+            // producto ya manejaba inventario (solo Inventario F4 y las ventas la cambian).
 
             // Se arma un objeto nuevo (con el mismo id si es edición) para no
             // modificar la fila de la tabla si el servicio rechaza los datos
@@ -450,6 +497,7 @@ public class ProductosController implements Initializable {
             p.setUsaInventario(chkUsaInventario.isSelected());
             p.setCantidadActual(cantActual);
             p.setCantidadMinima(cantMinima);
+            p.setActivo(productoEnEdicion != null ? productoEnEdicion.isActivo() : Boolean.TRUE);
 
             // El servicio valida precios, cantidades y código duplicado
             productoService.guardar(p);
@@ -488,6 +536,15 @@ public class ProductosController implements Initializable {
         productoEnEdicion = p;
         lblTituloForm.setText("MODIFICAR PRODUCTO");
         cargarProductoEnFormulario(p);
+        // Cambiar precios de un producto existente exige CAMBIAR_PRECIOS (PRD-11)
+        boolean puedePrecios = sesionService.tienePermiso(Permiso.CAMBIAR_PRECIOS);
+        txtPrecioCosto.setEditable(puedePrecios);
+        txtPrecioVenta.setEditable(puedePrecios);
+        txtPrecioMayoreo.setEditable(puedePrecios);
+        lblErrorPrecio.setText(puedePrecios ? "⚠ Los precios no pueden ser negativos."
+                : "Solo un usuario con permiso de cambiar precios puede modificarlos.");
+        lblErrorPrecio.setVisible(!puedePrecios);
+        lblErrorPrecio.setManaged(!puedePrecios);
         mostrarVista(true);
     }
 
@@ -517,6 +574,13 @@ public class ProductosController implements Initializable {
         colDepartamento.setCellValueFactory(c -> {
             Departamento d = c.getValue().getDepartamento();
             return new SimpleStringProperty(d != null ? d.getNombre() : "—");
+        });
+        colEstado.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().isActivo() ? "Activo" : "Inactivo"));
+        tablaProductos.setRowFactory(tv -> new TableRow<>() {
+            @Override protected void updateItem(Producto p, boolean empty) {
+                super.updateItem(p, empty);
+                setStyle(!empty && p != null && !p.isActivo() ? "-fx-opacity: 0.55;" : "");
+            }
         });
 
         formatoMoneda(colPrecioCosto);

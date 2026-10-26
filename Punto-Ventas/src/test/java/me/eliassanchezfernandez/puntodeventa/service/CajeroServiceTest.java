@@ -1,36 +1,18 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
-import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Administración de usuarios: solo ADMIN, hash BCrypt, último admin protegido. */
-@SpringBootTest
-@Transactional
-class CajeroServiceTest {
-
-    @Autowired private CajeroService    cajeroService;
-    @Autowired private SesionService    sesionService;
-    @Autowired private CajeroRepository cajeroRepo;
-    @Autowired private PasswordEncoder  passwordEncoder;
+/** Administración de usuarios: solo ADMIN crea/elimina, hash BCrypt, último admin protegido. */
+class CajeroServiceTest extends BaseServicioTest {
 
     @BeforeEach
-    void iniciarComoAdmin() throws Exception {
-        sesionService.autenticar("admin", "admin123");
-    }
-
-    @AfterEach
-    void cerrar() {
-        sesionService.cerrarSesion();
+    void iniciarComoAdministrador() throws Exception {
+        iniciarComoAdmin();
     }
 
     @Test
@@ -47,8 +29,7 @@ class CajeroServiceTest {
     @Test
     void unCajeroNoPuedeAdministrarUsuarios() throws Exception {
         cajeroService.crear("pedro", "Pedro Pérez", "clave1234", Cajero.Rol.CAJERO);
-        sesionService.cerrarSesion();
-        sesionService.autenticar("pedro", "clave1234");
+        iniciarComo("pedro", "clave1234");
 
         assertThatThrownBy(() -> cajeroService.crear("otro", "Otro", "clave1234", Cajero.Rol.CAJERO))
                 .isInstanceOf(NegocioException.class)
@@ -125,19 +106,27 @@ class CajeroServiceTest {
     }
 
     @Test
-    void unSegundoAdminPermiteDegradarAlOtroPeroNoASiMismo() throws Exception {
+    void unSegundoAdminPermiteDegradarAlOtroPeroNoASiMismo() {
         Cajero admin2 = cajeroService.crear("admin2", "Segundo Admin", "clave1234", Cajero.Rol.ADMIN);
         Cajero admin1 = sesionService.getCajeroActual();
 
-        // admin1 no puede degradarse a sí mismo aunque haya otro admin
         assertThatThrownBy(() -> cajeroService.actualizar(admin1.getId(), "admin", "Administrador",
                 Cajero.Rol.CAJERO, true))
                 .isInstanceOf(NegocioException.class);
 
-        // pero sí puede degradar a admin2
         Cajero degradado = cajeroService.actualizar(admin2.getId(), "admin2", "Segundo Admin",
-                Cajero.Rol.CAJERO, true);
-        assertThat(degradado.getRol()).isEqualTo(Cajero.Rol.CAJERO);
+                Cajero.Rol.GERENTE, true);
+        assertThat(degradado.getRol()).isEqualTo(Cajero.Rol.GERENTE);
+    }
+
+    @Test
+    void actualizarConContrasenaInvalidaNoGuardaNada() {
+        Cajero c = cajeroService.crear("mixto", "Mixto", "clave1234", Cajero.Rol.CAJERO);
+
+        assertThatThrownBy(() -> cajeroService.actualizar(c.getId(), "mixto", "Mixto", Cajero.Rol.ADMIN, true, "abc"))
+                .isInstanceOf(NegocioException.class);
+
+        assertThat(cajeroRepo.findById(c.getId()).orElseThrow().getRol()).isEqualTo(Cajero.Rol.CAJERO);
     }
 
     @Test
