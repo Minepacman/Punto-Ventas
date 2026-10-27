@@ -5,12 +5,17 @@
 <?import javafx.geometry.Insets?>
 
 <!--
-    configuracion_basedatos.fxml  –  Información, respaldo y restauración de la BD
+    configuracion_basedatos.fxml  –  Información, respaldo y restauración de la BD,
+    y modo de trabajo de esta caja (una sola caja con SQLite o varias cajas contra un servidor PostgreSQL)
     Controlador: ConfiguracionBaseDatosController.java
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionBaseDatosController"
             stylesheets="@../css/app.css">
+
+    <fx:define>
+        <ToggleGroup fx:id="grupoModo"/>
+    </fx:define>
 
     <center>
         <ScrollPane fitToWidth="true">
@@ -21,7 +26,7 @@
                 <Separator/>
 
                 <VBox spacing="4">
-                    <Label text="Archivo" styleClass="field-label"/>
+                    <Label fx:id="lblRutaTitulo" text="Archivo" styleClass="field-label"/>
                     <Label fx:id="lblRuta" wrapText="true"/>
                 </VBox>
                 <VBox spacing="4">
@@ -34,20 +39,56 @@
                 </VBox>
 
                 <Separator/>
-                <Label text="Respaldo" styleClass="form-section-title"/>
-                <Label text="Crea una copia completa de la base de datos en el lugar que elijas."
+                <Label text="Cajas y servidor" styleClass="form-section-title"/>
+                <Label fx:id="lblModoActual" wrapText="true" styleClass="hint"/>
+                <RadioButton fx:id="rbUnaCaja" text="Una sola caja (base de datos SQLite en este equipo)"
+                             toggleGroup="$grupoModo" onAction="#onCambiarModo"/>
+                <RadioButton fx:id="rbVariasCajas" text="Varias cajas (servidor PostgreSQL en la red local)"
+                             toggleGroup="$grupoModo" onAction="#onCambiarModo"/>
+                <GridPane fx:id="gridServidor" hgap="10" vgap="6">
+                    <padding><Insets left="24"/></padding>
+                    <Label text="Servidor (IP o nombre):" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                    <TextField fx:id="txtHost" promptText="ej. 192.168.1.10" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                    <Label text="Puerto:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                    <TextField fx:id="txtPuerto" text="5432" prefWidth="90" maxWidth="90" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+                    <Label text="Base de datos:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                    <TextField fx:id="txtBase" text="puntodeventa" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+                    <Label text="Usuario:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                    <TextField fx:id="txtUsuario" text="puntodeventa" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                    <Label text="Contraseña:" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                    <PasswordField fx:id="txtContrasena" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+                    <Button fx:id="btnProbar" text="Probar conexión" onAction="#onProbarConexion"
+                            GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+                    <Label fx:id="lblPrueba" wrapText="true" styleClass="hint" GridPane.rowIndex="6" GridPane.columnIndex="0" GridPane.columnSpan="2"/>
+                </GridPane>
+                <GridPane hgap="10" vgap="6">
+                    <Label text="Número de esta caja:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                    <Spinner fx:id="spnCaja" prefWidth="90" editable="true" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                    <Label text="Nombre de esta caja:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                    <TextField fx:id="txtCajaNombre" promptText="ej. Caja 1, Mostrador" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+                </GridPane>
+                <Label text="Cada caja debe tener un número distinto. La contraseña del servidor se guarda ofuscada en la carpeta de datos de este usuario (no es un cifrado seguro). Los cambios aplican al reiniciar el programa."
                        wrapText="true" styleClass="hint"/>
-                <Button text="Respaldar ahora" onAction="#onRespaldar" styleClass="button-primary"
+                <Button fx:id="btnGuardarConexion" text="Guardar conexión y caja" onAction="#onGuardarConexion"
+                        styleClass="button-primary" maxWidth="Infinity" prefHeight="38"/>
+
+                <Separator/>
+                <Label text="Respaldo" styleClass="form-section-title"/>
+                <Label fx:id="lblRespaldoHint" text="Crea una copia completa de la base de datos en el lugar que elijas."
+                       wrapText="true" styleClass="hint"/>
+                <TextArea fx:id="txtRespaldoServidor" editable="false" wrapText="true" prefRowCount="7"
+                          managed="false" visible="false"/>
+                <Button fx:id="btnRespaldar" text="Respaldar ahora" onAction="#onRespaldar" styleClass="button-primary"
                         maxWidth="Infinity" prefHeight="38"/>
 
                 <Separator/>
                 <Label text="Restaurar" styleClass="form-section-title"/>
-                <Label text="Reemplaza los datos actuales por los de un respaldo. Antes se guarda una copia de seguridad de la base actual y se pide la contraseña del administrador. Los cambios se aplican al reiniciar el programa."
+                <Label fx:id="lblRestaurarHint" text="Reemplaza los datos actuales por los de un respaldo. Antes se guarda una copia de seguridad de la base actual y se pide la contraseña del administrador. Los cambios se aplican al reiniciar el programa."
                        wrapText="true" styleClass="hint"/>
                 <Label fx:id="lblPendiente" wrapText="true" styleClass="callout, callout-warning"
                        text="Hay una restauración pendiente: reinicia el programa para aplicarla."
                        managed="false" visible="false"/>
-                <Button text="Restaurar respaldo..." onAction="#onRestaurar" styleClass="button-danger"
+                <Button fx:id="btnRestaurar" text="Restaurar respaldo..." onAction="#onRestaurar" styleClass="button-danger"
                         maxWidth="Infinity" prefHeight="38"/>
 
                 <Region minHeight="8"/>

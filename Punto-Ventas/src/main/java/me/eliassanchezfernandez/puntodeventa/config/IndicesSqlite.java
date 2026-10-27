@@ -18,6 +18,9 @@ import java.util.List;
  * EXISTS, que es idempotente y seguro con la aplicación recién arrancada.
  * Corre después de ddl-auto=update (ContextRefreshedEvent), igual que las
  * siembras de SesionService y UnidadService.
+ *
+ * El nombre es histórico: la misma sentencia vale en PostgreSQL, así que los
+ * índices se crean en los dos motores (en el servidor también hacen falta).
  */
 @Component
 public class IndicesSqlite {
@@ -55,9 +58,16 @@ public class IndicesSqlite {
     /** Punto de entrada reutilizable (también desde las pruebas) */
     public static void crear(DataSource dataSource) throws SQLException {
         try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
-            String producto = c.getMetaData().getDatabaseProductName();
-            if (producto == null || !producto.toLowerCase().contains("sqlite")) return;
-            for (String sql : INDICES) st.execute(sql);
+            SQLException primero = null;
+            for (String sql : INDICES) {
+                try {
+                    st.execute(sql);
+                } catch (SQLException e) {
+                    // Un índice que falle (p. ej. una tabla aún sin esa columna) no debe impedir los demás
+                    if (primero == null) primero = e;
+                }
+            }
+            if (primero != null) throw primero;
         }
     }
 }

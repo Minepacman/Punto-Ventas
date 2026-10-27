@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
+import me.eliassanchezfernandez.puntodeventa.config.PerfilBaseDatos;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
@@ -37,8 +38,13 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Base de datos SQLite: información, respaldo manual, restauración y respaldo
+ * Base de datos: información, respaldo manual, restauración y respaldo
  * automático (CFG-04).
+ *
+ * Los respaldos son de SQLite (una sola caja). En modo PostgreSQL (varias
+ * cajas) la base vive en el servidor y respaldarla es responsabilidad de ese
+ * equipo (pg_dump, ver {@link #instruccionesRespaldoServidor()}): aquí los
+ * métodos de respaldo se rehúsan con un mensaje claro y el automático no hace nada.
  *
  * - Los respaldos usan VACUUM INTO (copia consistente, aun con la app abierta).
  *   NO deben llamarse dentro de una transacción de SQLite, por eso estos
@@ -75,16 +81,36 @@ public class BaseDatosService {
     @Autowired private DepartamentoRepository departamentoRepo;
     @Autowired private MovimientoInventarioRepository movimientoRepo;
 
-    /** Datos que muestra la pantalla Base de datos */
-    public record Informacion(Path archivo, long bytes, Map<String, Long> registros) { }
+    /**
+     * Datos que muestra la pantalla Base de datos. En SQLite {@code archivo} es el
+     * .db y {@code servidor} null; en PostgreSQL es al revés (servidor = host:puerto/base).
+     */
+    public record Informacion(PerfilBaseDatos perfil, Path archivo, long bytes, String servidor,
+                              Map<String, Long> registros) {
+        public boolean esSqlite() { return perfil.esSqlite(); }
+    }
+
+    public PerfilBaseDatos perfil() {
+        return rutas.perfil();
+    }
 
     public Informacion informacion() {
         sesionService.verificarAdmin();
-        Path archivo = rutas.archivoBd();
+        Path archivo = null;
+        String servidor = null;
         long bytes = 0;
-        try {
-            if (Files.exists(archivo)) bytes = Files.size(archivo);
-        } catch (IOException ignorada) { /* se muestra 0 */ }
+        if (rutas.esSqlite()) {
+            archivo = rutas.archivoBd();
+            try {
+                if (Files.exists(archivo)) bytes = Files.size(archivo);
+            } catch (IOException ignorada) { /* se muestra 0 */ }
+        } else {
+            servidor = RutasApp.sinCredenciales(rutas.urlBd()).replace("jdbc:postgresql://", "");
+            try (Connection c = dataSource.getConnection(); Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT pg_database_size(current_database())")) {
+                if (rs.next()) bytes = rs.getLong(1);
+            } catch (SQLException ignorada) { /* se muestra 0 */ }
+        }
         Map<String, Long> n = new LinkedHashMap<>();
         n.put("Productos", productoRepo.count());
         n.put("Departamentos", departamentoRepo.count());
@@ -92,7 +118,32 @@ public class BaseDatosService {
         n.put("Usuarios", cajeroRepo.count());
         n.put("Cortes", corteRepo.count());
         n.put("Movimientos de inventario", movimientoRepo.count());
-        return new Informacion(archivo, bytes, n);
+        return new Informacion(rutas.perfil(), archivo, bytes, servidor, n);
+    }
+
+    /** En modo servidor los respaldos no se hacen desde la caja */
+    private void exigirSqlite() {
+        if (!rutas.esSqlite()) {
+            throw new NegocioException("La base de datos está en el servidor PostgreSQL: el respaldo se hace en ese equipo "
+                    + "con pg_dump (ver las instrucciones en esta pantalla), no desde la caja.");
+        }
+    }
+
+    /** Texto con el comando de respaldo/restauración para el administrador del servidor */
+    public String instruccionesRespaldoServidor() {
+        String url = RutasApp.sinCredenciales(rutas.urlBd()).replace("jdbc:postgresql://", "");
+        String host = url, base = "puntodeventa";
+        int barra = url.lastIndexOf('/');
+        if (barra > 0) { host = url.substring(0, barra); base = url.substring(barra + 1); }
+        String puerto = "5432";
+        int dosPuntos = host.lastIndexOf(':');
+        if (dosPuntos > 0) { puerto = host.substring(dosPuntos + 1); host = host.substring(0, dosPuntos); }
+        return "Respaldo (en el servidor o en cualquier equipo con las herramientas de PostgreSQL):\n"
+                + "  pg_dump -h " + host + " -p " + puerto + " -U puntodeventa -Fc -f respaldo-AAAAMMDD.dump " + base + "\n\n"
+                + "Restaurar en una base vacía:\n"
+                + "  pg_restore -h " + host + " -p " + puerto + " -U puntodeventa -d " + base + " --clean --if-exists respaldo-AAAAMMDD.dump\n\n"
+                + "Conviene programarlo a diario en el servidor (Programador de tareas en Windows, cron en macOS/Linux) "
+                + "y copiar los archivos .dump a otro disco o a la nube.";
     }
 
     // ── Respaldo manual ───────────────────────────────────────────────────
@@ -100,6 +151,7 @@ public class BaseDatosService {
     /** Copia la base de datos al archivo elegido (si existe, se reemplaza) */
     public Path respaldar(Path destino) {
         sesionService.verificarAdmin();
+        exigirSqlite();
         if (destino == null) throw new NegocioException("Elige dónde guardar el respaldo.");
         destino = destino.toAbsolutePath();
         if (destino.equals(rutas.archivoBd())) {
@@ -140,6 +192,7 @@ public class BaseDatosService {
      */
     public Path restaurar(Path respaldo, String contrasenaAdmin) {
         sesionService.verificarAdmin();
+        exigirSqlite();
         Cajero admin = sesionService.getCajeroActual();
         try {
             sesionService.verificarCredenciales(admin.getUsuario(), contrasenaAdmin);
@@ -168,7 +221,7 @@ public class BaseDatosService {
 
     /** ¿Hay una restauración esperando al reinicio? */
     public boolean hayRestauracionPendiente() {
-        return Files.isRegularFile(rutas.archivoRestauracionPendiente());
+        return rutas.esSqlite() && Files.isRegularFile(rutas.archivoRestauracionPendiente());
     }
 
     /**
@@ -224,6 +277,7 @@ public class BaseDatosService {
 
     /** Primer inicio de sesión del día: respalda si está activo y hoy no se ha hecho */
     public Optional<Path> respaldoAutomaticoDelDia() {
+        if (!rutas.esSqlite()) return Optional.empty();   // la base está en el servidor
         Configuracion c = configuracionService.obtener();
         if (!c.isRespaldoAuto() || c.getRespaldoCarpeta() == null) return Optional.empty();
         if (Files.exists(archivoAutomatico(Path.of(c.getRespaldoCarpeta()), LocalDate.now()))) {
@@ -234,6 +288,7 @@ public class BaseDatosService {
 
     /** Al cerrar la app: deja el respaldo de hoy con los últimos cambios */
     public Optional<Path> respaldoAutomaticoAlCerrar() {
+        if (!rutas.esSqlite()) return Optional.empty();   // la base está en el servidor
         Configuracion c = configuracionService.obtener();
         if (!c.isRespaldoAuto() || c.getRespaldoCarpeta() == null) return Optional.empty();
         return respaldoAutomatico("cierre");

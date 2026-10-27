@@ -40,9 +40,10 @@ dependencies {
     // no hace falta el starter web de Spring Security)
     implementation 'org.springframework.security:spring-security-crypto'
 
-    // Database dependencies
+    // Database dependencies: SQLite (una sola caja) y PostgreSQL (varias cajas contra un servidor en la red local)
     runtimeOnly 'org.xerial:sqlite-jdbc:3.45.3.0'
     implementation 'org.hibernate.orm:hibernate-community-dialects:6.4.4.Final'
+    runtimeOnly 'org.postgresql:postgresql'
 
     // JavaFX dependencies
     implementation 'io.github.mkpaz:atlantafx-base:2.0.1'
@@ -76,6 +77,9 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // PostgreSQL embebido SOLO para las pruebas con etiqueta "postgres" (./gradlew testPostgres):
+    // descarga un binario de PostgreSQL para el sistema actual la primera vez; no instala nada en el equipo.
+    testImplementation 'io.zonky.test:embedded-postgres:2.2.2'
 }
 
 // El código fuente y las pruebas están en UTF-8 (acentos, ñ, emojis). Sin esto, compilar en Windows
@@ -107,8 +111,22 @@ springBoot {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    // La suite normal corre contra SQLite; las pruebas contra PostgreSQL llevan @Tag("postgres") y van aparte
+    useJUnitPlatform { excludeTags 'postgres' }
     defaultCharacterEncoding = 'UTF-8'
+}
+
+// Pruebas contra PostgreSQL (esquema, ventas concurrentes, cortes por caja, migración SQLite → servidor):
+//   ./gradlew testPostgres
+// Levanta un PostgreSQL embebido (zonky) en una carpeta temporal y lo apaga al terminar.
+tasks.register('testPostgres', Test) {
+    group = 'verification'
+    description = 'Pruebas con etiqueta "postgres" contra un PostgreSQL embebido temporal'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'postgres' }
+    defaultCharacterEncoding = 'UTF-8'
+    shouldRunAfter tasks.named('test')
 }
 
 // ── Instalador nativo (jpackage) ─────────────────────────────────────────────────────────────

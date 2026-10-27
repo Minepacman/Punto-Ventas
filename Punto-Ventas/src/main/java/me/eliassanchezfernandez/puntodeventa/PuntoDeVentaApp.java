@@ -22,6 +22,18 @@ public class PuntoDeVentaApp extends Application {
 
     private ConfigurableApplicationContext springContext;
 
+    /** true cuando no existe conexion.properties: la primera vez se pregunta cómo se usará esta caja */
+    private static volatile boolean primeraVez;
+
+    /** Lo marca el Launcher antes de arrancar JavaFX */
+    public static void marcarPrimeraVez() {
+        primeraVez = true;
+    }
+
+    public static boolean esPrimeraVez() {
+        return primeraVez;
+    }
+
     /** Para abrir enlaces en el navegador (Configuración → Actualizaciones) */
     private static volatile javafx.application.HostServices servicios;
 
