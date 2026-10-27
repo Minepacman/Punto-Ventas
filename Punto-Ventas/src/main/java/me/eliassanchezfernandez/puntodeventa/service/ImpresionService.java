@@ -14,6 +14,7 @@ import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.ConfiguracionDispositivos;
 import me.eliassanchezfernandez.puntodeventa.model.Corte;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
+import me.eliassanchezfernandez.puntodeventa.model.OrdenCompra;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
@@ -57,6 +58,7 @@ public class ImpresionService {
     @Autowired private VentaRepository ventaRepo;
     @Autowired private VentaService ventaService;
     @Autowired private CajaService cajaService;
+    @Autowired private OrdenCompraService ordenCompraService;
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
     @Autowired private PlatformTransactionManager transacciones;
@@ -229,6 +231,14 @@ public class ImpresionService {
         } catch (Throwable e) {
             return Resultado.fallo(mensaje(falla, e));
         }
+    }
+
+    /** Imprime una orden de compra (GESTIONAR_PROVEEDORES; auditado) */
+    public CompletableFuture<Resultado> imprimirOrdenCompraAsync(Long ordenId) {
+        // obtener() verifica el permiso; el documento se arma aquí, en el hilo que llama
+        OrdenCompra orden = ordenCompraService.obtener(ordenId);
+        DocumentoImpresion doc = ticketService.documentoOrdenCompra(orden, configuracionService.obtener());
+        return imprimirDocumentoAsync(doc, "ORDEN_COMPRA_IMPRESA", "Orden #" + ordenId);
     }
 
     /** Ticket de prueba con la configuración GUARDADA (ADMIN; auditado) */

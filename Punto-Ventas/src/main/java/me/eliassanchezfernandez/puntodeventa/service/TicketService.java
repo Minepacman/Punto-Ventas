@@ -4,6 +4,8 @@ import me.eliassanchezfernandez.puntodeventa.impresion.DocumentoImpresion;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.Corte;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
+import me.eliassanchezfernandez.puntodeventa.model.OrdenCompra;
+import me.eliassanchezfernandez.puntodeventa.model.OrdenCompraLinea;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
@@ -183,6 +185,33 @@ public class TicketService {
                     Moneda.formato(corte.getDiferencia()), cols));
         }
         d.linea(raya);
+        return d;
+    }
+
+    /** Orden de compra para llevar o mandar impresa al proveedor (sin precios de venta ni ganancias) */
+    public DocumentoImpresion documentoOrdenCompra(OrdenCompra o, Configuracion c) {
+        int cols = columnas(c.getTicketAnchoMm());
+        String raya = "-".repeat(cols);
+        DocumentoImpresion d = new DocumentoImpresion();
+        d.titulo(c.getNombreTienda());
+        d.agregar("ORDEN DE COMPRA #" + o.getId(), DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.linea(raya);
+        d.linea("Proveedor: " + o.getProveedor().getNombre());
+        if (o.getProveedor().getContacto() != null) d.linea("Contacto: " + o.getProveedor().getContacto());
+        if (o.getProveedor().getTelefono() != null) d.linea("Tel: " + o.getProveedor().getTelefono());
+        d.linea(dosColumnas("Fecha", o.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        d.linea(dosColumnas("Estado", o.getEstado().getEtiqueta(), cols));
+        d.linea(raya);
+        for (OrdenCompraLinea l : o.getLineas()) {
+            ajustar(cantidad(l.getCantidad()) + " x " + l.getProducto().getDescripcion(), cols).forEach(d::linea);
+            d.linea(dosColumnas("  a " + Moneda.formato(l.getCostoUnitario()), Moneda.formato(l.getImporte()), cols));
+        }
+        d.linea(raya);
+        d.agregar(dosColumnas("TOTAL", Moneda.formato(o.getTotal()), cols), DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
+        if (o.getNotas() != null) {
+            d.linea(raya);
+            ajustar("Notas: " + o.getNotas(), cols).forEach(d::linea);
+        }
         return d;
     }
 

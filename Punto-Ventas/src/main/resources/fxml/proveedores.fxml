@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    proveedores.fxml  –  Catálogo de proveedores (Inventario → Proveedores)
+    Controlador: ProveedoresController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ProveedoresController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Button text="➕ Nuevo proveedor" onAction="#onNuevo" styleClass="button-success"/>
+            <CheckBox fx:id="chkVerInactivos" text="Mostrar desactivados" onAction="#onFiltro"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="lblAviso" text="" styleClass="hint"/>
+            <Button text="Cerrar" onAction="#onCerrar"/>
+        </HBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.55">
+            <TableView fx:id="tabla">
+                <columns>
+                    <TableColumn fx:id="colNombre"   text="Proveedor" prefWidth="210"/>
+                    <TableColumn fx:id="colContacto" text="Contacto"  prefWidth="130"/>
+                    <TableColumn fx:id="colTelefono" text="Teléfono"  prefWidth="110"/>
+                    <TableColumn fx:id="colVisita"   text="Visita"    prefWidth="120"/>
+                    <TableColumn fx:id="colEstado"   text="Estado"    prefWidth="80"/>
+                </columns>
+            </TableView>
+
+            <ScrollPane fitToWidth="true">
+                <VBox styleClass="form-panel" spacing="10">
+                    <padding><Insets topRightBottomLeft="16"/></padding>
+
+                    <Label fx:id="lblTitulo" text="NUEVO PROVEEDOR" styleClass="section-title"/>
+                    <Separator/>
+
+                    <Label text="Nombre: *"/>
+                    <TextField fx:id="txtNombre" promptText="Nombre o razón social"/>
+                    <Label text="RFC (opcional):"/>
+                    <TextField fx:id="txtRfc" promptText="12 o 13 caracteres"/>
+                    <Label text="Teléfono:"/>
+                    <TextField fx:id="txtTelefono" promptText="ej: 55 1234 5678"/>
+                    <Label text="Contacto o repartidor:"/>
+                    <TextField fx:id="txtContacto" promptText="Nombre de quien visita"/>
+
+                    <Label text="Días de visita:"/>
+                    <FlowPane hgap="10" vgap="6">
+                        <CheckBox fx:id="chkLun" text="Lun"/>
+                        <CheckBox fx:id="chkMar" text="Mar"/>
+                        <CheckBox fx:id="chkMie" text="Mié"/>
+                        <CheckBox fx:id="chkJue" text="Jue"/>
+                        <CheckBox fx:id="chkVie" text="Vie"/>
+                        <CheckBox fx:id="chkSab" text="Sáb"/>
+                        <CheckBox fx:id="chkDom" text="Dom"/>
+                    </FlowPane>
+
+                    <Label text="Notas:"/>
+                    <TextArea fx:id="txtNotas" prefRowCount="3" wrapText="true"
+                              promptText="ej: pedidos antes de las 5 pm"/>
+
+                    <HBox spacing="10">
+                        <Button fx:id="btnGuardar" text="💾 Guardar" onAction="#onGuardar" styleClass="button-primary"
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Button fx:id="btnActivo" text="Desactivar" onAction="#onCambiarActivo"/>
+                    </HBox>
+                    <Label text="Un proveedor no se borra: se desactiva y deja de ofrecerse en las entradas y órdenes nuevas, pero su historial se conserva."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+            </ScrollPane>
+        </SplitPane>
+    </center>
+
+</BorderPane>

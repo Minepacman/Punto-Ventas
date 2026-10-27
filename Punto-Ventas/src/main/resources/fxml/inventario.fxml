@@ -12,6 +12,7 @@
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.InventarioController">
 
     <top>
+        <VBox>
         <HBox styleClass="section-toolbar" spacing="8">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Button text="➕ Entrada de mercancía"   onAction="#onAgregar"
@@ -22,7 +23,14 @@
             <Separator orientation="VERTICAL"/>
             <Button text="📊 Reporte de Inventario"  onAction="#onReporteInventario"/>
             <Button text="📋 Movimientos"            onAction="#onReporteMovimientos"/>
+            <Separator orientation="VERTICAL"/>
+            <Button fx:id="btnProveedores" text="🏭 Proveedores"     onAction="#onProveedores"/>
+            <Button fx:id="btnOrdenes"     text="🧾 Órdenes de compra" onAction="#onOrdenesCompra"/>
         </HBox>
+        <Label fx:id="lblVisitanHoy" text="" wrapText="true" styleClass="hint">
+            <padding><Insets top="6" right="12" bottom="0" left="12"/></padding>
+        </Label>
+        </VBox>
     </top>
 
     <center>
@@ -54,7 +62,9 @@
                 <!-- Solo en modo ENTRADA -->
                 <VBox fx:id="vboxEntrada" spacing="6">
                     <Label text="Proveedor: *"/>
-                    <TextField fx:id="txtProveedor" promptText="Nombre del proveedor"/>
+                    <ComboBox fx:id="cmbProveedor" maxWidth="Infinity" promptText="Elige el proveedor"/>
+                    <Label fx:id="lblSinProveedores" text="Aún no hay proveedores: da de alta uno en Proveedores."
+                           wrapText="true" styleClass="hint" visible="false" managed="false"/>
                     <Label text="Costo unitario de compra:"/>
                     <TextField fx:id="txtCosto" promptText="0.00"/>
                     <Label text="El costo del producto se actualiza con el de esta entrada."
