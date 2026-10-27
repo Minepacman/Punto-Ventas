@@ -16,6 +16,7 @@ import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -165,8 +166,8 @@ public class VentasPeriodoController implements Initializable {
             return;
         }
         if (!Ventanas.confirmar("Cancelar venta", String.format(
-                "¿Cancelar la venta #%d por $%.2f?\nLa mercancía regresará al inventario y la venta dejará de contar en los totales.",
-                v.getId(), v.getTotal()))) {
+                "¿Cancelar la venta #%d por %s?\nLa mercancía regresará al inventario y la venta dejará de contar en los totales.",
+                v.getId(), Moneda.formato(v.getTotal())))) {
             return;
         }
         Optional<String> motivo = Ventanas.pedirTexto("Motivo de la cancelación",
@@ -204,29 +205,29 @@ public class VentasPeriodoController implements Initializable {
                 .mapToDouble(DetalleVenta::getCantidad).sum();
         long canceladas = ventas.size() - activas.size();
         lblResumen.setText(String.format(
-                "%d venta(s)  ·  %s producto(s)  ·  Subtotal: $%.2f  ·  IVA: $%.2f  ·  Total: $%.2f%s",
-                activas.size(), formatoCantidad(piezas), total - iva, iva, total,
+                "%d venta(s)  ·  %s producto(s)  ·  Subtotal: %s  ·  IVA: %s  ·  Total: %s%s",
+                activas.size(), formatoCantidad(piezas), Moneda.formato(total - iva), Moneda.formato(iva), Moneda.formato(total),
                 canceladas > 0 ? "  ·  " + canceladas + " cancelada(s) no incluida(s)" : ""));
     }
 
     private void configurarColumnas() {
-        colFolio.setCellValueFactory(c -> new SimpleStringProperty("#" + c.getValue().getId()));
+        colFolio.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getFolioMostrado()));
         colFecha.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getFecha().format(FMT_FECHA)));
         colCajero.setCellValueFactory(c -> new SimpleStringProperty(
                 c.getValue().getCajeroNombre() != null ? c.getValue().getCajeroNombre() : "—"));
         colFormaPago.setCellValueFactory(c -> new SimpleStringProperty(formaPago(c.getValue())));
         colPiezas.setCellValueFactory(c -> new SimpleStringProperty(formatoCantidad(
                 c.getValue().getDetalles().stream().mapToDouble(DetalleVenta::getCantidad).sum())));
-        colSubtotal.setCellValueFactory(c -> new SimpleStringProperty(String.format("$%.2f", c.getValue().getSubtotalODefault())));
-        colIva.setCellValueFactory(c -> new SimpleStringProperty(String.format("$%.2f", c.getValue().getIvaODefault())));
-        colTotal.setCellValueFactory(c -> new SimpleStringProperty(String.format("$%.2f", c.getValue().getTotal())));
+        colSubtotal.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getSubtotalODefault())));
+        colIva.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getIvaODefault())));
+        colTotal.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getTotal())));
         colEstado.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().isCancelada() ? "Cancelada" : "Cobrada"));
 
         colDetCodigo.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProducto().getCodigoBarras()));
         colDetDescripcion.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProducto().getDescripcion()));
         colDetCantidad.setCellValueFactory(c -> new SimpleStringProperty(formatoCantidad(c.getValue().getCantidad())));
-        colDetPrecio.setCellValueFactory(c -> new SimpleStringProperty(String.format("$%.2f", c.getValue().getPrecioVenta())));
-        colDetDescuento.setCellValueFactory(c -> new SimpleStringProperty(String.format("$%.2f", c.getValue().getDescuento())));
+        colDetPrecio.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getPrecioVenta())));
+        colDetDescuento.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getDescuento())));
         colDetConcepto.setCellValueFactory(c -> {
             DetalleVenta d = c.getValue();
             String texto = switch (d.getTipoDescuento() != null ? d.getTipoDescuento() : DetalleVenta.TipoDescuento.NINGUNO) {
@@ -238,7 +239,7 @@ public class VentasPeriodoController implements Initializable {
             if (d.getAutorizadoPorUsuario() != null) texto += " (autorizó " + d.getAutorizadoPorUsuario() + ")";
             return new SimpleStringProperty(texto);
         });
-        colDetImporte.setCellValueFactory(c -> new SimpleStringProperty(String.format("$%.2f", c.getValue().getImporte())));
+        colDetImporte.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getImporte())));
     }
 
     private static String formaPago(Venta v) {
@@ -248,7 +249,7 @@ public class VentasPeriodoController implements Initializable {
         if (v.getPagos().size() == 1) return v.getPagos().get(0).getFormaPago().getEtiqueta();
         StringBuilder sb = new StringBuilder();
         v.getPagos().forEach(p -> sb.append(sb.length() > 0 ? " + " : "")
-                .append(p.getFormaPago().getEtiqueta()).append(String.format(" $%.2f", p.getMonto())));
+                .append(p.getFormaPago().getEtiqueta()).append(" " + Moneda.formato(p.getMonto())));
         return sb.toString();
     }
 

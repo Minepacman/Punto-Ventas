@@ -1,9 +1,11 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -11,8 +13,13 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
+import me.eliassanchezfernandez.puntodeventa.model.ClimaRegistro;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
@@ -20,23 +27,34 @@ import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
 import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
+import me.eliassanchezfernandez.puntodeventa.service.ClimaService;
+import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.PermisoRequeridoException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.RecomendacionService;
+import me.eliassanchezfernandez.puntodeventa.service.RecomendacionService.Sugerencia;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.StockInsuficienteException;
 import me.eliassanchezfernandez.puntodeventa.service.TicketPendienteService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.net.URL;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 /**
@@ -46,11 +64,17 @@ import java.util.stream.Collectors;
  *  1. Se escanea/escribe un código (o se busca por nombre) → renglón en el ticket
  *  2. Se ajustan cantidades, mayoreo o descuento manual (con permiso o
  *     autorización de administrador)
- *  3. Se captura el pago (efectivo y/o tarjeta) → cambio en vivo
+ *  3. Se captura el pago (una o varias formas de pago habilitadas en
+ *     Configuración) → cambio en vivo
  *  4. Cobrar (botón o F12) → VentaService.cobrar() guarda la venta y descuenta stock
  *
  * Al cerrar sesión el ticket sin cobrar se guarda y se restaura cuando el
  * mismo cajero vuelve a entrar. Las reglas viven en VentaService; aquí solo UI.
+ *
+ * Sugerencias: bajo el ticket hay una tira con 3–5 productos que
+ * RecomendacionService propone para el carrito actual (se compran juntos,
+ * día y hora, clima). Se calcula fuera del hilo de JavaFX con un pequeño
+ * retardo cada vez que cambia el ticket; un fallo solo deja la tira vacía.
  */
 @Component
 @Scope("prototype")
@@ -60,6 +84,16 @@ public class VentasController implements Initializable {
     @FXML private TextField  txtCodigo;
     @FXML private TextField  txtEfectivo;
     @FXML private TextField  txtTarjeta;
+    @FXML private TextField  txtTransferencia;
+    @FXML private TextField  txtVales;
+    @FXML private Region     boxEfectivo;
+    @FXML private Region     boxTarjeta;
+    @FXML private Region     boxTransferencia;
+    @FXML private Region     boxVales;
+    @FXML private Button     btnTodoEfectivo;
+    @FXML private Button     btnTodoTarjeta;
+    @FXML private Button     btnTodoTransferencia;
+    @FXML private Button     btnTodoVales;
     @FXML private TableView<DetalleVenta> tablaProductos;
     @FXML private TableColumn<DetalleVenta, String>  colCodigo;
     @FXML private TableColumn<DetalleVenta, String>  colDescripcion;
@@ -74,6 +108,10 @@ public class VentasController implements Initializable {
     @FXML private Label labelCambio;
     @FXML private Label labelNumProductos;
     @FXML private Label labelTotalPagado;
+    @FXML private VBox     boxSugerencias;
+    @FXML private Label    lblSugerenciasEstado;
+    @FXML private Button   btnOcultarSugerencias;
+    @FXML private FlowPane contenedorSugerencias;
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private VentaService           ventaService;
@@ -81,6 +119,25 @@ public class VentasController implements Initializable {
     @Autowired private SesionService          sesionService;
     @Autowired private AutorizacionService    autorizacionService;
     @Autowired private TicketPendienteService ticketPendienteService;
+    @Autowired private ConfiguracionService   configuracionService;
+    @Autowired private RecomendacionService   recomendacionService;
+    @Autowired private ClimaService           climaService;
+
+    /** Sugerencias: retardo tras el último cambio del ticket y hilo de cálculo */
+    private static final Duration RETARDO_SUGERENCIAS = Duration.millis(400);
+    private final PauseTransition esperaSugerencias = new PauseTransition(RETARDO_SUGERENCIAS);
+    private final ExecutorService hiloSugerencias = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "sugerencias-venta");
+        t.setDaemon(true);
+        return t;
+    });
+    /** Número de la última petición: los resultados viejos se descartan */
+    private final AtomicInteger generacionSugerencias = new AtomicInteger();
+    /** La tira está plegada por el botón (solo durante la sesión) */
+    private boolean sugerenciasPlegadas = false;
+
+    /** Campo de captura de cada forma de pago (en orden de pantalla) */
+    private final Map<Venta.FormaPago, TextField> camposPago = new LinkedHashMap<>();
 
     private final ObservableList<DetalleVenta> itemsTicket =
             FXCollections.observableArrayList();
@@ -91,7 +148,12 @@ public class VentasController implements Initializable {
     // ── Inicialización ────────────────────────────────────────────────────
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        camposPago.put(Venta.FormaPago.EFECTIVO, txtEfectivo);
+        camposPago.put(Venta.FormaPago.TARJETA, txtTarjeta);
+        camposPago.put(Venta.FormaPago.TRANSFERENCIA, txtTransferencia);
+        camposPago.put(Venta.FormaPago.VALES, txtVales);
         configurarColumnas();
+        aplicarConfiguracion();
         tablaProductos.setItems(itemsTicket);
         tablaProductos.setPlaceholder(new Label(
                 "Escanea un código o usa 🔍 Buscar para agregar productos."));
@@ -103,9 +165,11 @@ public class VentasController implements Initializable {
             }
         });
 
+        configurarSugerencias();
         restaurarTicketPendiente();
         actualizarTotales();
         actualizarVendidoHoy();
+        programarSugerencias();
         Platform.runLater(() -> txtCodigo.requestFocus());
     }
 
@@ -152,7 +216,7 @@ public class VentasController implements Initializable {
         cDesc.setPrefWidth(300);
         TableColumn<Producto, String> cPrecio = new TableColumn<>("Precio");
         cPrecio.setCellValueFactory(c -> new SimpleStringProperty(
-                String.format("$%.2f", c.getValue().getPrecioVenta())));
+                Moneda.formato(c.getValue().getPrecioVenta())));
         cPrecio.getStyleClass().add("align-right");
         TableColumn<Producto, String> cStock = new TableColumn<>("Existencia");
         cStock.setCellValueFactory(c -> new SimpleStringProperty(
@@ -222,7 +286,7 @@ public class VentasController implements Initializable {
 
         Dialog<double[]> dlg = new Dialog<>();
         dlg.setTitle("Descuento manual");
-        dlg.setHeaderText(d.getProducto().getDescripcion() + String.format("  —  importe actual $%.2f",
+        dlg.setHeaderText(d.getProducto().getDescripcion() + "  —  importe actual " + Moneda.formato(
                 d.getProducto().getPrecioVenta() * d.getCantidad()));
         dlg.initOwner(tablaProductos.getScene().getWindow());
         Ventanas.estilizar(dlg);
@@ -300,20 +364,17 @@ public class VentasController implements Initializable {
         actualizarCambio();
     }
 
-    @FXML
-    private void onTodoEfectivo() {
-        txtTarjeta.clear();
-        txtEfectivo.setText(String.format("%.2f", ventaService.calcularTotal(itemsTicket)));
-        actualizarCambio();
-        txtEfectivo.requestFocus();
-        txtEfectivo.selectAll();
-    }
+    @FXML private void onTodoEfectivo()      { pagarTodoCon(Venta.FormaPago.EFECTIVO); }
+    @FXML private void onTodoTarjeta()       { pagarTodoCon(Venta.FormaPago.TARJETA); }
+    @FXML private void onTodoTransferencia() { pagarTodoCon(Venta.FormaPago.TRANSFERENCIA); }
+    @FXML private void onTodoVales()         { pagarTodoCon(Venta.FormaPago.VALES); }
 
-    @FXML
-    private void onTodoTarjeta() {
-        txtEfectivo.clear();
-        txtTarjeta.setText(String.format("%.2f", ventaService.calcularTotal(itemsTicket)));
+    private void pagarTodoCon(Venta.FormaPago forma) {
+        camposPago.values().forEach(TextField::clear);
+        camposPago.get(forma).setText(String.format("%.2f", ventaService.calcularTotal(itemsTicket)));
         actualizarCambio();
+        camposPago.get(forma).requestFocus();
+        camposPago.get(forma).selectAll();
     }
 
     @FXML
@@ -325,30 +386,33 @@ public class VentasController implements Initializable {
         }
 
         double total = ventaService.calcularTotal(itemsTicket);
-        double efectivo = parsearODefault(txtEfectivo.getText(), 0);
-        double tarjeta  = parsearODefault(txtTarjeta.getText(), 0);
-        if (Double.isNaN(efectivo) || Double.isNaN(tarjeta) || efectivo < 0 || tarjeta < 0) {
+        Map<Venta.FormaPago, Double> montos = leerPagos();
+        if (montos == null) {
             alerta(Alert.AlertType.WARNING, "Pago inválido", "Escribe montos válidos (ej: 200).");
             txtEfectivo.requestFocus();
             return;
         }
-        if (efectivo + tarjeta + 0.001 < total) {
+        double pagado = montos.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (pagado + 0.001 < total) {
             alerta(Alert.AlertType.WARNING, "Pago insuficiente", String.format(
-                    "El cliente pagó $%.2f pero el total es $%.2f.", efectivo + tarjeta, total));
+                    "El cliente pagó %s pero el total es %s.", Moneda.formato(pagado), Moneda.formato(total)));
             txtEfectivo.requestFocus();
+            return;
+        }
+        if (configuracionService.isConfirmarCobro() && !Ventanas.confirmar("Confirmar cobro",
+                "¿Cobrar la venta por " + Moneda.formato(total) + "?")) {
             return;
         }
 
         List<PagoVenta> pagos = new ArrayList<>();
-        if (efectivo > 0) pagos.add(new PagoVenta(Venta.FormaPago.EFECTIVO, efectivo));
-        if (tarjeta  > 0) pagos.add(new PagoVenta(Venta.FormaPago.TARJETA,  tarjeta));
+        montos.forEach((forma, monto) -> pagos.add(new PagoVenta(forma, monto)));
 
         try {
             // El cajero y los permisos los verifica el servicio
             Venta venta = ventaService.cobrar(new ArrayList<>(itemsTicket), pagos, autorizaciones);
 
-            String msg = String.format("Venta #%d registrada.\n\nTotal:  $%.2f\nPagó:   $%.2f\nCambio: $%.2f",
-                    venta.getId(), venta.getTotal(), venta.getPagoCon(), venta.getCambio());
+            String msg = String.format("Venta #%d registrada.\n\nTotal:  %s\nPagó:   %s\nCambio: %s",
+                    venta.getId(), Moneda.formato(venta.getTotal()), Moneda.formato(venta.getPagoCon()), Moneda.formato(venta.getCambio()));
             alerta(Alert.AlertType.INFORMATION, "Venta cobrada", msg);
 
             avisarStockBajo(venta);
@@ -401,6 +465,103 @@ public class VentasController implements Initializable {
         } catch (NegocioException e) {
             // sin sesión válida no hay a quién guardárselo
         }
+    }
+
+    /** Pliega o despliega la tira de sugerencias (no se guarda; la opción persistente está en Configuración) */
+    @FXML
+    private void onOcultarSugerencias() {
+        sugerenciasPlegadas = !sugerenciasPlegadas;
+        contenedorSugerencias.setVisible(!sugerenciasPlegadas);
+        contenedorSugerencias.setManaged(!sugerenciasPlegadas);
+        btnOcultarSugerencias.setText(sugerenciasPlegadas ? "Mostrar" : "Ocultar");
+        if (!sugerenciasPlegadas) programarSugerencias();
+        txtCodigo.requestFocus();
+    }
+
+    // ── Sugerencias (RecomendacionService) ───────────────────────────────
+
+    private void configurarSugerencias() {
+        esperaSugerencias.setOnFinished(e -> actualizarSugerencias());
+        itemsTicket.addListener((ListChangeListener<DetalleVenta>) c -> programarSugerencias());
+        mostrarTiraSugerencias(configuracionService.isMostrarSugerencias());
+    }
+
+    private void mostrarTiraSugerencias(boolean mostrar) {
+        boxSugerencias.setVisible(mostrar);
+        boxSugerencias.setManaged(mostrar);
+        if (!mostrar) contenedorSugerencias.getChildren().clear();
+    }
+
+    /** Espera a que el cajero termine de capturar y luego calcula (una sola vez) */
+    private void programarSugerencias() {
+        if (!boxSugerencias.isVisible() || sugerenciasPlegadas) return;
+        esperaSugerencias.playFromStart();
+    }
+
+    /** Calcula en segundo plano y pinta en el hilo de JavaFX; nunca estorba al cobro */
+    private void actualizarSugerencias() {
+        if (!boxSugerencias.isVisible() || sugerenciasPlegadas) return;
+        final int generacion = generacionSugerencias.incrementAndGet();
+        final List<Long> carrito = itemsTicket.stream()
+                .map(d -> d.getProducto().getId()).filter(id -> id != null).toList();
+        lblSugerenciasEstado.setText("calculando…");
+        hiloSugerencias.submit(() -> {
+            List<Sugerencia> sugerencias;
+            try {
+                ClimaRegistro clima = climaService.actual().orElse(null);
+                sugerencias = recomendacionService.sugerir(carrito, LocalDateTime.now(), clima,
+                        RecomendacionService.MAX_SUGERENCIAS);
+            } catch (Exception e) {
+                sugerencias = List.of();   // sin sugerencias; la venta sigue igual
+            }
+            final List<Sugerencia> resultado = sugerencias;
+            Platform.runLater(() -> {
+                if (generacion != generacionSugerencias.get()) return;   // ya hay una petición más nueva
+                pintarSugerencias(resultado);
+            });
+        });
+    }
+
+    private void pintarSugerencias(List<Sugerencia> sugerencias) {
+        contenedorSugerencias.getChildren().clear();
+        if (sugerencias.isEmpty()) {
+            lblSugerenciasEstado.setText(itemsTicket.isEmpty() ? "" : "sin sugerencias para este ticket");
+            return;
+        }
+        lblSugerenciasEstado.setText("");
+        for (Sugerencia s : sugerencias) {
+            Label nombre = new Label(s.producto().getDescripcion());
+            nombre.getStyleClass().add("sugerencia-nombre");
+            Label motivo = new Label(s.motivo());
+            motivo.getStyleClass().add("sugerencia-motivo");
+            VBox textos = new VBox(1, nombre, motivo);
+
+            Label badge = new Label(s.nivelConfianza());
+            badge.getStyleClass().addAll("badge", switch (s.nivelConfianza()) {
+                case "Alta"  -> "badge-success";
+                case "Media" -> "badge-accent";
+                default      -> "badge-warning";
+            });
+            badge.setTooltip(new Tooltip("Confianza de la sugerencia: " + s.nivelConfianza().toLowerCase()));
+
+            Button agregar = new Button("Agregar");
+            agregar.getStyleClass().addAll("button-primary", "button-sm");
+            agregar.setFocusTraversable(false);
+            final Long id = s.producto().getId();
+            agregar.setOnAction(e -> agregarSugerencia(id));
+
+            HBox chip = new HBox(textos, badge, agregar);
+            chip.getStyleClass().add("sugerencia-chip");
+            contenedorSugerencias.getChildren().add(chip);
+        }
+    }
+
+    /** Mismo camino que escanear el código: se relee el producto y se valida existencia */
+    private void agregarSugerencia(Long productoId) {
+        productoService.buscarPorId(productoId).filter(Producto::isActivo)
+                .ifPresentOrElse(p -> agregarAlTicket(p, 1),
+                        () -> alerta(Alert.AlertType.WARNING, "Sugerencia", "El producto ya no está disponible."));
+        txtCodigo.requestFocus();
     }
 
     // ── Lógica del ticket (delegando reglas a VentaService) ───────────────
@@ -513,6 +674,7 @@ public class VentasController implements Initializable {
 
     /** Aviso en pantalla SOLO de los productos que con esta venta cruzaron su mínimo (INV-03) */
     private void avisarStockBajo(Venta venta) {
+        if (!configuracionService.isAvisoStockBajo()) return;   // opción apagada en Configuración
         List<Producto> bajos = venta.getAlertasStockBajo();
         if (bajos.isEmpty()) return;
         String lista = bajos.stream()
@@ -587,7 +749,7 @@ public class VentasController implements Initializable {
         col.setCellFactory(tc -> new TableCell<>() {
             @Override protected void updateItem(Double v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("$%.2f", v));
+                setText(empty || v == null ? null : Moneda.formato(v));
             }
         });
     }
@@ -619,7 +781,7 @@ public class VentasController implements Initializable {
     private void actualizarTotales() {
         double total = ventaService.calcularTotal(itemsTicket);
         double piezas = itemsTicket.stream().mapToDouble(DetalleVenta::getCantidad).sum();
-        labelTotal.setText(String.format("$%.2f", total));
+        labelTotal.setText(Moneda.formato(total));
         labelNumProductos.setText(itemsTicket.size() + " renglones · " + formatoCantidad(piezas)
                 + " productos en la venta actual.");
         actualizarCambio();
@@ -627,28 +789,66 @@ public class VentasController implements Initializable {
 
     private void actualizarCambio() {
         double total = ventaService.calcularTotal(itemsTicket);
-        double efectivo = parsearODefault(txtEfectivo.getText(), 0);
-        double tarjeta  = parsearODefault(txtTarjeta.getText(), 0);
-        if (Double.isNaN(efectivo) || Double.isNaN(tarjeta)) {
+        Map<Venta.FormaPago, Double> montos = leerPagos();
+        if (montos == null) {
             labelPagado.setText("—");
             labelCambio.setText("—");
             return;
         }
-        double pagado = efectivo + tarjeta;
-        labelPagado.setText(String.format("$%.2f", pagado));
+        double pagado = montos.values().stream().mapToDouble(Double::doubleValue).sum();
+        labelPagado.setText(Moneda.formato(pagado));
         if (pagado <= 0) {
-            labelCambio.setText("$0.00");
+            labelCambio.setText(Moneda.formato(0));
             return;
         }
         double cambio = pagado - total;
         labelCambio.setText(cambio < 0
-                ? String.format("Faltan $%.2f", -cambio)
-                : String.format("$%.2f", cambio));
+                ? "Faltan " + Moneda.formato(-cambio)
+                : Moneda.formato(cambio));
+    }
+
+    /** Montos capturados > 0 por forma de pago; null si algún campo no es válido */
+    private Map<Venta.FormaPago, Double> leerPagos() {
+        Map<Venta.FormaPago, Double> montos = new LinkedHashMap<>();
+        for (Map.Entry<Venta.FormaPago, TextField> e : camposPago.entrySet()) {
+            double monto = parsearODefault(e.getValue().getText(), 0);
+            if (Double.isNaN(monto)) return null;
+            if (monto > 0) montos.put(e.getKey(), monto);
+        }
+        return montos;
+    }
+
+    /**
+     * Muestra solo las formas de pago habilitadas en Configuración. Se llama
+     * al abrir la pantalla y cada vez que se vuelve a la pestaña Ventas; el
+     * servicio vuelve a validarlas al cobrar.
+     */
+    public void aplicarConfiguracion() {
+        Map<Venta.FormaPago, Region> cajas = Map.of(
+                Venta.FormaPago.EFECTIVO, boxEfectivo, Venta.FormaPago.TARJETA, boxTarjeta,
+                Venta.FormaPago.TRANSFERENCIA, boxTransferencia, Venta.FormaPago.VALES, boxVales);
+        Map<Venta.FormaPago, Button> botones = Map.of(
+                Venta.FormaPago.EFECTIVO, btnTodoEfectivo, Venta.FormaPago.TARJETA, btnTodoTarjeta,
+                Venta.FormaPago.TRANSFERENCIA, btnTodoTransferencia, Venta.FormaPago.VALES, btnTodoVales);
+        List<Venta.FormaPago> habilitadas = configuracionService.formasPagoHabilitadas();
+        for (Venta.FormaPago forma : camposPago.keySet()) {
+            boolean activa = habilitadas.contains(forma);
+            for (javafx.scene.Node nodo : List.of(cajas.get(forma), botones.get(forma))) {
+                nodo.setVisible(activa);
+                nodo.setManaged(activa);
+            }
+            if (!activa) camposPago.get(forma).clear();
+        }
+        actualizarTotales();
+        if (boxSugerencias != null) {
+            mostrarTiraSugerencias(configuracionService.isMostrarSugerencias());
+            programarSugerencias();
+        }
     }
 
     private void actualizarVendidoHoy() {
         try {
-            labelTotalPagado.setText(String.format("$%.2f", ventaService.totalVentasHoy()));
+            labelTotalPagado.setText(Moneda.formato(ventaService.totalVentasHoy()));
         } catch (Exception e) {
             labelTotalPagado.setText("$0.00");
         }
@@ -659,7 +859,7 @@ public class VentasController implements Initializable {
         autorizaciones.clear();
         txtCodigo.clear();
         txtEfectivo.clear();
-        txtTarjeta.clear();
+        camposPago.values().forEach(TextField::clear);
         labelTotal.setText("$0.00");
         labelPagado.setText("$0.00");
         labelCambio.setText("$0.00");

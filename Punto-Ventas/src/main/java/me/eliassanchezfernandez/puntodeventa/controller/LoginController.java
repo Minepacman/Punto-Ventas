@@ -4,15 +4,20 @@ import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
+import me.eliassanchezfernandez.puntodeventa.service.BaseDatosService;
 import me.eliassanchezfernandez.puntodeventa.service.CajaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
+import me.eliassanchezfernandez.puntodeventa.service.LogotipoService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.PoliticaContrasena;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -48,6 +53,7 @@ public class LoginController implements Initializable {
     @FXML private Label             lblError;
     @FXML private ProgressIndicator progressLogin;
     @FXML private Label             lblNombreTienda;
+    @FXML private ImageView         imgLogo;        // logotipo (si hay)
     @FXML private VBox              vboxForm;       // contenedor del formulario
 
     // ── FXML – Panel cambio de contraseña obligatorio ────────────────────
@@ -64,6 +70,8 @@ public class LoginController implements Initializable {
     @Autowired private SesionService        sesionService;
     @Autowired private CajaService          cajaService;
     @Autowired private ConfiguracionService configuracionService;
+    @Autowired private LogotipoService      logotipoService;
+    @Autowired private BaseDatosService     baseDatosService;
     @Autowired private ApplicationContext   springContext;
 
     // ── Estado ────────────────────────────────────────────────────────────
@@ -83,6 +91,7 @@ public class LoginController implements Initializable {
         } catch (Exception e) {
             lblNombreTienda.setText("Punto de Venta");
         }
+        mostrarLogotipo();
         lblPoliticaContrasena.setText(PoliticaContrasena.DESCRIPCION);
 
         // Ocultar error al volver a escribir
@@ -151,6 +160,17 @@ public class LoginController implements Initializable {
 
     /** Después de autenticar (y de cambiar contraseña si tocaba): fondo o principal */
     private void continuarTrasAutenticar() {
+        // Respaldo automático del día (si está activo); nunca detiene el inicio de sesión
+        // en un hilo aparte: en un disco duro lento no debe congelar la pantalla
+        Thread respaldo = new Thread(() -> {
+            try {
+                baseDatosService.respaldoAutomaticoDelDia();
+            } catch (Exception e) {
+                System.err.println("Respaldo automático del día: " + e.getMessage());
+            }
+        }, "respaldo-inicio-sesion");
+        respaldo.setDaemon(true);
+        respaldo.start();
         if (cajaService.requiereFondo(cajeroAutenticado)) {
             mostrarPanelFondoDeCaja();
         } else {
@@ -255,7 +275,7 @@ public class LoginController implements Initializable {
         try {
             Stage stage = (Stage) btnLogin.getScene().getWindow();
             String titulo = "Punto de Venta  —  " + cajero.getNombreCompleto()
-                    + "  |  Fondo: $" + String.format("%.2f", fondoCaja);
+                    + "  |  Fondo: " + Moneda.formato(fondoCaja);
             Ventanas.mostrarPrincipal(stage, springContext, titulo);
 
         } catch (Exception e) {
@@ -267,6 +287,29 @@ public class LoginController implements Initializable {
     // ─────────────────────────────────────────────────────────────────────
     //  HELPERS
     // ─────────────────────────────────────────────────────────────────────
+
+    /** Logotipo de Configuración → Logotipo, si existe y se puede leer */
+    private void mostrarLogotipo() {
+        try {
+            var logo = logotipoService.logoActual();
+            if (logo.isPresent()) {
+                Image img = new Image(logo.get().toUri().toString(), 160, 64, true, true);
+                if (!img.isError()) {
+                    imgLogo.setImage(img);
+                    mostrar(imgLogo, true);
+                    // La ventana de login es de tamaño fijo: darle el espacio del logotipo
+                    Platform.runLater(() -> {
+                        if (imgLogo.getScene() != null && imgLogo.getScene().getWindow() != null) {
+                            var ventana = imgLogo.getScene().getWindow();
+                            ventana.setHeight(ventana.getHeight() + img.getHeight() + 6);
+                        }
+                    });
+                }
+            }
+        } catch (Exception e) {
+            // sin logotipo el login se ve igual
+        }
+    }
 
     private static void mostrar(javafx.scene.Node nodo, boolean visible) {
         nodo.setVisible(visible);

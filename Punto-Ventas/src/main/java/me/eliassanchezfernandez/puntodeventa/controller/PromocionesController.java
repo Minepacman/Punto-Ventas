@@ -19,6 +19,7 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.PromocionService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -338,7 +339,7 @@ public class PromocionesController implements Initializable {
             lblPrecioResultante.setText("");
             return;
         }
-        lblPrecioActual.setText(String.format("Precio actual: $%.2f  (costo $%.2f)", p.getPrecioVenta(), p.getPrecioCosto()));
+        lblPrecioActual.setText(String.format("Precio actual: %s  (costo %s)", Moneda.formato(p.getPrecioVenta()), Moneda.formato(p.getPrecioCosto())));
         if (rbNxM.isSelected()) {
             Integer n = entero(txtN.getText()), m = entero(txtM.getText());
             lblPrecioResultante.setText(n != null && m != null && n > m && m > 0
@@ -350,7 +351,7 @@ public class PromocionesController implements Initializable {
         Promocion tmp = new Promocion();
         tmp.setTipo(rbPrecioFijo.isSelected() ? Promocion.Tipo.PRECIO_FIJO : Promocion.Tipo.PORCENTAJE);
         tmp.setValor(v);
-        lblPrecioResultante.setText(String.format("Precio con promoción: $%.2f",
+        lblPrecioResultante.setText("Precio con promoción: " + Moneda.formato(
                 tmp.precioConPromocion(p.getPrecioVenta())));
     }
 
@@ -378,7 +379,7 @@ public class PromocionesController implements Initializable {
             Promocion p = c.getValue();
             String v = switch (p.getTipo()) {
                 case PORCENTAJE  -> formatoNumero(p.getValor()) + " %";
-                case PRECIO_FIJO -> String.format("$%.2f", p.getValor());
+                case PRECIO_FIJO -> Moneda.formato(p.getValor());
                 case NXM         -> p.getCantidadN() + "x" + p.getCantidadM();
             };
             if (p.getLimitePiezas() != null) {

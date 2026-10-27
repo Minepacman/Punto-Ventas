@@ -3,6 +3,7 @@ package me.eliassanchezfernandez.puntodeventa.util;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -15,6 +16,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
@@ -85,8 +87,12 @@ public final class Ventanas {
         stage.setScene(new Scene(root));
         stage.setTitle(titulo);
         stage.setResizable(true);
+        // Maximizada (no pantalla completa): se ve la barra de tareas y los diálogos no quedan detrás.
+        // Mínimo 1000×600 (o lo que quepa): sirve para pantallas de 1024×768.
+        Rectangle2D area = Screen.getPrimary().getVisualBounds();
+        stage.setMinWidth(Math.min(ANCHO_MINIMO, area.getWidth()));
+        stage.setMinHeight(Math.min(ALTO_MINIMO, area.getHeight()));
         stage.setMaximized(true);
-        stage.setFullScreen(true);
         stage.show();
     }
 
@@ -98,6 +104,11 @@ public final class Ventanas {
                                   Window owner, double ancho, double alto) throws IOException {
         Parent root = cargar(ctx, fxml);
 
+        // Nunca más grande que el área visible de la pantalla (1024×768 con barra de tareas)
+        double[] tam = ajustarAPantalla(ancho, alto, Screen.getPrimary().getVisualBounds());
+        ancho = tam[0];
+        alto = tam[1];
+
         Stage stage = new Stage();
         stage.setTitle(titulo);
         stage.initModality(Modality.WINDOW_MODAL);
@@ -108,6 +119,19 @@ public final class Ventanas {
         stage.setMinWidth(Math.min(ancho, 640));
         stage.setMinHeight(Math.min(alto, 420));
         stage.showAndWait();
+    }
+
+    static final double ANCHO_MINIMO = 1000;
+    static final double ALTO_MINIMO = 600;
+    /** Fracción del área visible que puede ocupar una ventana modal (deja margen para el título y la barra de tareas) */
+    static final double FRACCION_MAXIMA_ANCHO = 0.96;
+    static final double FRACCION_MAXIMA_ALTO = 0.92;
+
+    /** Recorta el tamaño pedido para que quepa en el área visible; nunca lo agranda */
+    static double[] ajustarAPantalla(double ancho, double alto, Rectangle2D visible) {
+        return new double[] {
+                Math.min(ancho, Math.floor(visible.getWidth() * FRACCION_MAXIMA_ANCHO)),
+                Math.min(alto, Math.floor(visible.getHeight() * FRACCION_MAXIMA_ALTO)) };
     }
 
     // ── Diálogos ──────────────────────────────────────────────────────────

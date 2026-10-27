@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_logotipo.fxml  –  Logotipo del negocio
+    Controlador: ConfiguracionLogotipoController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionLogotipoController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <VBox styleClass="form-panel" spacing="14" alignment="TOP_CENTER">
+            <padding><Insets topRightBottomLeft="24"/></padding>
+
+            <Label text="Logotipo del negocio" styleClass="form-section-title"/>
+            <Separator/>
+
+            <StackPane styleClass="card" minHeight="150" prefHeight="150">
+                <ImageView fx:id="imgLogo" fitWidth="260" fitHeight="130" preserveRatio="true"/>
+                <Label fx:id="lblSinLogo" text="Sin logotipo" styleClass="hint"/>
+            </StackPane>
+
+            <Label text="Imagen PNG o JPG de hasta 1 MB. Se muestra en la pantalla de inicio de sesión y en la vista previa del ticket."
+                   wrapText="true" styleClass="hint"/>
+
+            <HBox spacing="12">
+                <Button text="Elegir imagen..." onAction="#onElegir" styleClass="button-primary"
+                        HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                <Button fx:id="btnQuitar" text="Quitar logotipo" onAction="#onQuitar" styleClass="button-danger"
+                        prefHeight="38"/>
+            </HBox>
+            <Button text="Cerrar" onAction="#onCerrar" maxWidth="Infinity" prefHeight="38"/>
+        </VBox>
+    </center>
+
+</BorderPane>

@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -66,7 +67,7 @@ public class MovimientosController implements Initializable {
             StringBuilder sb = new StringBuilder();
             if (m.getMotivo() != null) sb.append(m.getMotivo());
             if (m.getProveedor() != null) sb.append(sb.length() > 0 ? " · " : "").append("Proveedor: ").append(m.getProveedor());
-            if (m.getCostoUnitario() != null && m.getCostoUnitario() > 0) sb.append(String.format(" · Costo $%.2f", m.getCostoUnitario()));
+            if (m.getCostoUnitario() != null && m.getCostoUnitario() > 0) sb.append(" · Costo " + Moneda.formato(m.getCostoUnitario()));
             return new SimpleStringProperty(sb.toString());
         });
         tabla.setPlaceholder(new Label("No hay movimientos en el período."));

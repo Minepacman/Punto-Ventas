@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
@@ -117,8 +118,8 @@ public class PromocionService {
                 if (p.getValor() <= 0) throw new NegocioException("El precio promocional debe ser mayor a cero.");
                 if (p.getValor() >= p.getProducto().getPrecioVenta()) {
                     throw new NegocioException(String.format(
-                            "El precio promocional debe ser menor al precio de venta ($%.2f).",
-                            p.getProducto().getPrecioVenta()));
+                            "El precio promocional debe ser menor al precio de venta (%s).",
+                            Moneda.formato(p.getProducto().getPrecioVenta())));
                 }
                 if (p.getValor() < p.getProducto().getPrecioCosto()) {
                     // Vender bajo costo solo con permiso de precios (regla por defecto PRD-06)

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_movil.fxml  –  Acceso móvil (servidor web local para teléfonos)
+    Controlador: ConfiguracionMovilController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionMovilController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="14">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Acceso móvil" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkActivo" text="Activar el acceso desde teléfonos"/>
+                    <Label text="Con esto encendido, los teléfonos conectados a la misma red Wi-Fi pueden abrir la página y entrar con su usuario y contraseña. Apagado por defecto; el cambio se aplica de inmediato."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <Label text="Aviso de seguridad: la conexión es HTTP simple, sin cifrar. Usa el acceso móvil solo en la red Wi-Fi privada de la tienda (nunca en una red de clientes o pública): la contraseña viaja sin protección dentro de esa red. Solo se aceptan conexiones de la red local."
+                       wrapText="true" styleClass="field-error-label"/>
+
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="Puerto:"/>
+                    <TextField fx:id="txtPuerto" prefWidth="90"/>
+                    <Button text="Aplicar" onAction="#onAplicar" styleClass="button-primary" prefHeight="34"/>
+                    <Label fx:id="lblEstado"/>
+                </HBox>
+
+                <Label text="Dirección para abrir en el teléfono" styleClass="form-section-title"/>
+                <VBox fx:id="cajaUrls" spacing="6"/>
+
+                <Separator/>
+                <Label text="Sesiones móviles abiertas" styleClass="form-section-title"/>
+                <TableView fx:id="tablaSesiones" prefHeight="220">
+                    <columns>
+                        <TableColumn fx:id="colUsuario" text="Usuario" prefWidth="170"/>
+                        <TableColumn fx:id="colCreada"  text="Iniciada" prefWidth="120"/>
+                        <TableColumn fx:id="colExpira"  text="Vence" prefWidth="130"/>
+                        <TableColumn fx:id="colUso"     text="Último uso" prefWidth="120"/>
+                        <TableColumn fx:id="colIp"      text="IP" prefWidth="110"/>
+                        <TableColumn fx:id="colAccion"  text="" prefWidth="80"/>
+                    </columns>
+                </TableView>
+
+                <HBox spacing="12">
+                    <Button text="Actualizar" onAction="#onActualizar" prefHeight="38"/>
+                    <Button text="Cerrar todas" onAction="#onCerrarTodas" styleClass="button-danger" prefHeight="38"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="Cerrar ventana" onAction="#onCerrar" prefHeight="38"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

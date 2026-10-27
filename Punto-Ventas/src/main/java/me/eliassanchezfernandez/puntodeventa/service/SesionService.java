@@ -44,6 +44,7 @@ public class SesionService {
     @Autowired private CajeroRepository cajeroRepo;
     @Autowired private PasswordEncoder  passwordEncoder;
     @Autowired private AuditoriaService auditoriaService;
+    @Autowired private SesionMovilService sesionMovilService;
 
     /** Cajero que inició sesión actualmente (null = nadie autenticado) */
     private volatile Cajero cajeroActual = null;
@@ -112,6 +113,47 @@ public class SesionService {
         return cajero;
     }
 
+    /** Mensaje único de todo fallo de credenciales móviles (no revela si el usuario existe, está bloqueado, etc.) */
+    public static final String MENSAJE_CREDENCIALES_MOVIL = "Usuario o contraseña incorrectos.";
+
+    private volatile String hashFicticio;
+
+    /**
+     * Credenciales del acceso móvil. A diferencia de {@link #verificarCredenciales}:
+     *  - NUNCA cuenta intentos ni bloquea al usuario en el escritorio (el conteo de
+     *    la red móvil vive en ServidorMovilService: por usuario y por IP);
+     *  - rechaza al usuario que esté bloqueado en el escritorio, sin decirlo;
+     *  - responde siempre con el mismo mensaje y tarda igual exista o no el usuario;
+     *  - audita cada fallo con la IP del teléfono.
+     */
+    public Cajero verificarCredencialesMovil(String usuario, String contrasena, String ip)
+            throws CredencialesInvalidasException {
+        String nombre = usuario == null ? "" : usuario.trim();
+        Optional<Cajero> encontrado = nombre.isEmpty() || contrasena == null || contrasena.isEmpty()
+                ? Optional.empty() : cajeroRepo.findByUsuarioIgnoreCase(nombre);
+        String hash = encontrado.map(Cajero::getContrasenaHash).orElseGet(this::hashFicticio);
+        boolean coincide = contrasena != null && !contrasena.isEmpty() && passwordEncoder.matches(contrasena, hash);
+
+        String motivo = null;
+        if (encontrado.isEmpty()) motivo = "usuario inexistente";
+        else if (!encontrado.get().isActivo()) motivo = "usuario inactivo";
+        else if (encontrado.get().isBloqueado()) motivo = "usuario bloqueado en el escritorio";
+        else if (!coincide) motivo = "contraseña incorrecta";
+
+        if (motivo != null) {
+            auditoriaService.registrarIndependiente(nombre.length() > 60 ? nombre.substring(0, 60) : nombre,
+                    "LOGIN_MOVIL_FALLIDO", "ip " + ip + ": " + motivo);
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_MOVIL);
+        }
+        return encontrado.get();
+    }
+
+    private String hashFicticio() {
+        String h = hashFicticio;
+        if (h == null) hashFicticio = h = passwordEncoder.encode("contrasena-ficticia-sin-usuario");
+        return h;
+    }
+
     @Transactional
     protected void registrarIntentoFallido(Cajero cajero) {
         int intentos = cajero.getIntentosFallidosOCero() + 1;
@@ -165,6 +207,7 @@ public class SesionService {
         enBd.setDebeCambiarContrasena(false);
         cajeroRepo.save(enBd);
         cajeroActual = enBd;
+        sesionMovilService.revocarDeCajero(enBd.getId(), "cambio de contraseña");
         auditoriaService.registrar(enBd, "CAMBIO_CONTRASENA_PROPIA", null, (Cajero) null);
     }
 
