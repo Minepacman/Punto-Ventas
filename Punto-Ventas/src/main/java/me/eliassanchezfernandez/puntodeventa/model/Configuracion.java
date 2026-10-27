@@ -164,6 +164,27 @@ public class Configuracion {
 
     public static final int MOVIL_PUERTO_POR_DEFECTO = 8085;
 
+    /** true = el administrador fijó el puerto a mano (opciones avanzadas); null/false = automático */
+    @Column(name = "movil_puerto_manual")
+    private Boolean movilPuertoManual;
+
+    /** Puerto anterior cuando el último arranque tuvo que cambiarlo (los QR impresos quedaron viejos); null = sin cambio */
+    @Column(name = "movil_puerto_anterior")
+    private Integer movilPuertoAnterior;
+
+    /** Nombre local mDNS sin ".local" (p. ej. "mitienda"); null = sin nombre */
+    @Column(name = "movil_nombre", length = 40)
+    private String movilNombre;
+
+    /** El QR codifica el nombre .local en vez de la IP (null = IP) */
+    @Column(name = "movil_qr_local")
+    private Boolean movilQrLocal;
+
+    public boolean isMovilPuertoManual()  { return movilPuertoManual != null && movilPuertoManual; }
+    public boolean isMovilQrLocal()       { return movilQrLocal != null && movilQrLocal; }
+    /** true si ya se guardó algún puerto (distinto del valor por defecto implícito) */
+    public boolean isMovilPuertoGuardado() { return movilPuerto != null; }
+
     public boolean isMovilActivo() { return movilActivo != null && movilActivo; }
     public int getMovilPuerto()    { return movilPuerto != null ? movilPuerto : MOVIL_PUERTO_POR_DEFECTO; }
 

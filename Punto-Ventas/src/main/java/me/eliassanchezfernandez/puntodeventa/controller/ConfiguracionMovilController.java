@@ -1,6 +1,9 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import javafx.animation.PauseTransition;
 import javafx.collections.FXCollections;
+import javafx.util.Duration;
+import me.eliassanchezfernandez.puntodeventa.servidor.AnunciadorMdns;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Alert;
@@ -74,6 +77,12 @@ public class ConfiguracionMovilController implements Initializable {
     @FXML private BorderPane raiz;
     @FXML private CheckBox   chkActivo;
     @FXML private TextField  txtPuerto;
+    @FXML private CheckBox   chkPuertoManual;
+    @FXML private TextField  txtNombre;
+    @FXML private CheckBox   chkQrLocal;
+    @FXML private Label      lblNombreEstado;
+    @FXML private HBox       cajaCambio;
+    @FXML private Label      lblCambio;
     @FXML private Label      lblEstado;
     @FXML private VBox       cajaUrls;
     @FXML private VBox       cajaQr;
@@ -111,23 +120,46 @@ public class ConfiguracionMovilController implements Initializable {
         Configuracion c = accesoMovilService.obtenerConfiguracion();
         chkActivo.setSelected(accesoMovilService.servidorActivo() || c.isMovilActivo());
         txtPuerto.setText(String.valueOf(c.getMovilPuerto()));
+        chkPuertoManual.setSelected(c.isMovilPuertoManual());
+        txtNombre.setText(c.getMovilNombre() == null ? "" : c.getMovilNombre());
+        chkQrLocal.setSelected(c.isMovilQrLocal());
         refrescar();
     }
 
     @FXML
     private void onAplicar() {
-        int puerto;
-        try {
-            puerto = Integer.parseInt(txtPuerto.getText().trim());
-        } catch (NumberFormatException e) {
-            Ventanas.alerta(Alert.AlertType.ERROR, "Puerto inválido", "El puerto debe ser un número entero.");
-            return;
+        boolean manual = chkPuertoManual.isSelected();
+        int puerto = 0;
+        if (manual) {
+            try {
+                puerto = Integer.parseInt(txtPuerto.getText().trim());
+            } catch (NumberFormatException e) {
+                Ventanas.alerta(Alert.AlertType.ERROR, "Puerto inválido", "El puerto debe ser un número entero.");
+                return;
+            }
         }
         try {
-            accesoMovilService.configurar(chkActivo.isSelected(), puerto);
+            accesoMovilService.guardarOpciones(manual, txtNombre.getText(), chkQrLocal.isSelected());
+            if (manual) accesoMovilService.configurar(chkActivo.isSelected(), puerto);
+            else accesoMovilService.configurarAutomatico(chkActivo.isSelected());
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "Acceso móvil", e.getMessage());
             chkActivo.setSelected(accesoMovilService.servidorActivo());
+        }
+        refrescar();
+    }
+
+    @FXML
+    private void onSugerirNombre() {
+        txtNombre.setText(accesoMovilService.nombreLocalSugerido());
+    }
+
+    @FXML
+    private void onEntendidoCambio() {
+        try {
+            accesoMovilService.confirmarCambioDireccion();
+        } catch (NegocioException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Acceso móvil", e.getMessage());
         }
         refrescar();
     }
@@ -159,9 +191,20 @@ public class ConfiguracionMovilController implements Initializable {
         ((Stage) raiz.getScene().getWindow()).close();
     }
 
+    private int intentosNombre;
+
     private void refrescar() {
+        Configuracion cfg = accesoMovilService.obtenerConfiguracion();
+        Integer anterior = cfg.getMovilPuertoAnterior();
+        boolean hayCambio = anterior != null;
+        cajaCambio.setVisible(hayCambio);
+        cajaCambio.setManaged(hayCambio);
+        if (hayCambio) {
+            lblCambio.setText("La dirección cambió: antes era el puerto " + anterior + " y ahora es el "
+                    + cfg.getMovilPuerto() + ". Los códigos QR impresos con la dirección anterior ya no sirven: imprime uno nuevo.");
+        }
         boolean activo = accesoMovilService.servidorActivo();
-        int puerto = activo ? accesoMovilService.puertoEnUso() : puertoCapturado();
+        int puerto = activo ? accesoMovilService.puertoEnUso() : cfg.getMovilPuerto();
         lblEstado.setText(activo ? "Servidor ENCENDIDO en el puerto " + puerto : "Servidor apagado");
         lblEstado.getStyleClass().removeAll("badge", "badge-success", "hint");
         if (activo) lblEstado.getStyleClass().addAll("badge", "badge-success");
@@ -187,7 +230,34 @@ public class ConfiguracionMovilController implements Initializable {
                 cajaUrls.getChildren().add(new HBox(8, campo, copiar));
             }
         }
-        pintarQr(activo, urls);
+        List<String> urlsQr = urls;
+        AccesoMovilService.NombreLocalInfo nombre = accesoMovilService.nombreLocal();
+        String nombreCfg = cfg.getMovilNombre();
+        if (activo && nombreCfg != null) {
+            switch (nombre.estado()) {
+                case ACTIVO -> {
+                    String local = nombre.host() + ":" + puerto;
+                    lblNombreEstado.setText("También puedes escribir: " + local);
+                    cajaUrls.getChildren().add(hint("También puedes escribir: " + local
+                            + " (si tu teléfono lo reconoce; la dirección con números siempre funciona)"));
+                    if (cfg.isMovilQrLocal()) urlsQr = List.of("http://" + local + "/");
+                }
+                case CONFLICTO -> lblNombreEstado.setText("Ya hay otro equipo en la red con el nombre \"" + nombreCfg
+                        + ".local\"; se usó \"" + nombre.host() + "\". Elige otro nombre.");
+                case NO_DISPONIBLE -> lblNombreEstado.setText("Nombre local no disponible en esta red. La dirección con números sigue funcionando.");
+                default -> lblNombreEstado.setText("Publicando el nombre local...");
+            }
+            if (nombre.estado() == AnunciadorMdns.Estado.INICIANDO && intentosNombre++ < 10) {
+                PauseTransition espera = new PauseTransition(Duration.seconds(1.5));
+                espera.setOnFinished(e -> { if (raiz.getScene() != null) refrescar(); });
+                espera.play();
+            } else if (nombre.estado() != AnunciadorMdns.Estado.INICIANDO) {
+                intentosNombre = 0;
+            }
+        } else {
+            lblNombreEstado.setText(nombreCfg != null ? "El nombre local se publica cuando el servidor está encendido." : "");
+        }
+        pintarQr(activo, urlsQr);
         try {
             tablaSesiones.setItems(FXCollections.observableArrayList(accesoMovilService.sesionesActivas()));
         } catch (NegocioException e) {
@@ -320,14 +390,6 @@ public class ConfiguracionMovilController implements Initializable {
             CodigoQr.guardarPng(url, Math.max(1, 1000 / CodigoQr.matriz(url).length), destino);
         } catch (IOException | RuntimeException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "Guardar imagen", "No se pudo guardar la imagen: " + e.getMessage());
-        }
-    }
-
-    private int puertoCapturado() {
-        try {
-            return Integer.parseInt(txtPuerto.getText().trim());
-        } catch (NumberFormatException e) {
-            return Configuracion.MOVIL_PUERTO_POR_DEFECTO;
         }
     }
 

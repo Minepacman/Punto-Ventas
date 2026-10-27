@@ -30,11 +30,42 @@
                        wrapText="true" styleClass="field-error-label"/>
 
                 <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Label text="Puerto:"/>
-                    <TextField fx:id="txtPuerto" prefWidth="90"/>
                     <Button text="Aplicar" onAction="#onAplicar" styleClass="button-primary" prefHeight="34"/>
                     <Label fx:id="lblEstado"/>
                 </HBox>
+                <Label text="El puerto se elige solo: se usa el último que funcionó y, si está ocupado, otro libre."
+                       wrapText="true" styleClass="hint"/>
+
+                <HBox fx:id="cajaCambio" spacing="10" alignment="CENTER_LEFT" visible="false" managed="false">
+                    <Label fx:id="lblCambio" wrapText="true" styleClass="field-error-label" HBox.hgrow="ALWAYS"/>
+                    <Button text="Entendido" onAction="#onEntendidoCambio"/>
+                </HBox>
+
+                <Label text="Nombre fácil de recordar (opcional)" styleClass="form-section-title"/>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <TextField fx:id="txtNombre" promptText="mitienda" prefWidth="200"/>
+                    <Label text=".local"/>
+                    <Button text="Sugerir" onAction="#onSugerirNombre"/>
+                </HBox>
+                <Label text="Solo letras minúsculas sin acento, números y guiones (1 a 40 caracteres). Los teléfonos podrán abrir http://nombre.local:puerto/ además de la dirección con números."
+                       wrapText="true" styleClass="hint"/>
+                <Label text="Compatibilidad: iPhone, iPad y Mac lo reconocen siempre; Windows 10 y 11 también; Linux necesita avahi (la mayoría de los escritorios lo incluye). En Android depende de la versión: en Android 12 o más reciente con Chrome suele funcionar, en versiones anteriores puede no abrir. Por eso el código QR usa la dirección con números, que funciona en todos."
+                       wrapText="true" styleClass="hint"/>
+                <CheckBox fx:id="chkQrLocal" text="Usar el nombre en el código QR (algunos Android no lo abrirán)"/>
+                <Label fx:id="lblNombreEstado" wrapText="true" styleClass="hint"/>
+
+                <TitledPane text="Opciones avanzadas" expanded="false" animated="false">
+                    <VBox spacing="8">
+                        <padding><Insets topRightBottomLeft="10"/></padding>
+                        <CheckBox fx:id="chkPuertoManual" text="Usar un puerto fijo en lugar del automático"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Puerto:"/>
+                            <TextField fx:id="txtPuerto" prefWidth="90"/>
+                        </HBox>
+                        <Label text="Solo para casos especiales (por ejemplo, una regla del firewall para un puerto concreto). Si ese puerto está ocupado el acceso móvil no encenderá. Pulsa Aplicar para guardar."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
+                </TitledPane>
 
                 <Label text="Dirección para abrir en el teléfono" styleClass="form-section-title"/>
                 <VBox fx:id="cajaUrls" spacing="6"/>

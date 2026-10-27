@@ -138,6 +138,21 @@ public class ServidorMovilService {
     @Autowired private EstadisticasService  estadisticasService;
     @Autowired private VentaService         ventaService;
     @Autowired private ProductoService      productoService;
+    @Autowired private AnunciadorMdns       anunciador;
+
+    /** Puertos de respaldo (después del preferido) cuando el elegido está ocupado; 0 = lo asigna el sistema */
+    static final List<Integer> PUERTOS_RESPALDO = candidatosRespaldo();
+
+    private static List<Integer> candidatosRespaldo() {
+        List<Integer> l = new ArrayList<>();
+        for (int p = 8085; p <= 8095; p++) l.add(p);
+        l.add(18085);
+        l.add(0);
+        return List.copyOf(l);
+    }
+
+    /** Nombre local configurado (sin ".local"); su Host se acepta aunque mDNS no esté disponible */
+    private volatile String nombreLocal;
 
     /** Pruebas: poner en false para que no arranque solo aunque la BD diga "activo" */
     @Value("${app.movil.autoarranque:true}")
@@ -162,7 +177,11 @@ public class ServidorMovilService {
         if (!autoarranque) return;
         try {
             Configuracion c = configuracionService.obtener();
-            if (c.isMovilActivo()) iniciar(c.getMovilPuerto());
+            if (c.isMovilActivo()) {
+                if (c.isMovilPuertoManual()) iniciar(c.getMovilPuerto());
+                else iniciarAutomatico(c.getMovilPuerto());
+                configuracionService.registrarPuertoMovilEnlazado(getPuerto());
+            }
         } catch (Exception e) {
             System.err.println("⚠ No se pudo iniciar el acceso móvil: " + e.getMessage());
         }
@@ -180,14 +199,45 @@ public class ServidorMovilService {
      */
     public synchronized void iniciar(int puerto) {
         if (servidor != null) return;
-        HttpServer nuevo;
+        arrancar(abrir(puerto));
+    }
+
+    /**
+     * Arranque automático: prueba el puerto preferido (el último que funcionó o el 8085), luego
+     * 8085-8095 y 18085, y por último uno que asigne el sistema. Devuelve el puerto realmente usado.
+     */
+    public synchronized int iniciarAutomatico(int preferido) {
+        List<Integer> candidatos = new ArrayList<>();
+        candidatos.add(preferido);
+        candidatos.addAll(PUERTOS_RESPALDO);
+        return iniciarConCandidatos(candidatos);
+    }
+
+    /** Prueba los puertos en orden y se queda con el primero libre */
+    synchronized int iniciarConCandidatos(List<Integer> candidatos) {
+        if (servidor != null) return getPuerto();
+        for (int puerto : new java.util.LinkedHashSet<>(candidatos)) {
+            try {
+                arrancar(abrir(puerto));
+                return getPuerto();
+            } catch (NegocioException ocupado) {
+                // siguiente candidato
+            }
+        }
+        throw new NegocioException("No se pudo abrir ningún puerto para el acceso móvil. Revisa el antivirus o el firewall.");
+    }
+
+    private static HttpServer abrir(int puerto) {
         try {
-            nuevo = HttpServer.create(new InetSocketAddress(puerto), 0);
+            return HttpServer.create(new InetSocketAddress(puerto), 0);
         } catch (BindException e) {
             throw new NegocioException("El puerto " + puerto + " ya está en uso por otro programa. Elige otro puerto.");
         } catch (IOException | RuntimeException e) {
             throw new NegocioException("No se pudo abrir el puerto " + puerto + ": " + e.getMessage());
         }
+    }
+
+    private void arrancar(HttpServer nuevo) {
         ExecutorService pool = crearPool();
         limitador = new LimitadorIntentos(reloj, MAX_FALLOS_POR_IP, VENTANA_FALLOS);
         limitadorUsuarios = new LimitadorIntentos(reloj, MAX_FALLOS_POR_USUARIO, VENTANA_FALLOS_USUARIO);
@@ -197,6 +247,7 @@ public class ServidorMovilService {
         servidor = nuevo;
         hilos = pool;
         System.out.println("📱 Acceso móvil activo en el puerto " + nuevo.getAddress().getPort());
+        aplicarNombreLocal();
     }
 
     /** 2–4 hilos y cola de 32: con la cola llena se rechaza (el servidor cierra la conexión) en vez de crecer sin límite */
@@ -214,6 +265,7 @@ public class ServidorMovilService {
         HttpServer s = servidor;
         if (s == null) return;
         servidor = null;
+        anunciador.detener();
         s.stop(0);
         if (hilos != null) hilos.shutdownNow();
         hilos = null;
@@ -230,22 +282,51 @@ public class ServidorMovilService {
         return s == null ? 0 : s.getAddress().getPort();
     }
 
-    /** Direcciones para abrir desde el teléfono: IPv4 privadas no loopback de las interfaces activas */
-    public List<String> urlsLan(int puerto) {
-        List<String> urls = new ArrayList<>();
+    /** IPv4 privadas no loopback de las interfaces activas */
+    public static List<Inet4Address> ipsLan() {
+        List<Inet4Address> ips = new ArrayList<>();
         try {
             Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
-            if (ifaces == null) return urls;
+            if (ifaces == null) return ips;
             for (NetworkInterface ni : Collections.list(ifaces)) {
                 if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) continue;
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
-                    if (a instanceof Inet4Address && !a.isLoopbackAddress() && a.isSiteLocalAddress()) {
-                        urls.add("http://" + a.getHostAddress() + ":" + puerto + "/");
-                    }
+                    if (a instanceof Inet4Address v4 && !a.isLoopbackAddress() && a.isSiteLocalAddress()) ips.add(v4);
                 }
             }
         } catch (IOException ignorada) { /* sin red: lista vacía */ }
+        return ips;
+    }
+
+    /** Direcciones para abrir desde el teléfono */
+    public List<String> urlsLan(int puerto) {
+        List<String> urls = new ArrayList<>();
+        for (Inet4Address a : ipsLan()) urls.add("http://" + a.getHostAddress() + ":" + puerto + "/");
         return urls;
+    }
+
+    // ── Nombre local (mDNS) ───────────────────────────────────────────────
+
+    /** Fija el nombre local aceptado en la cabecera Host (sin publicarlo) */
+    void fijarNombreLocal(String nombre) {
+        this.nombreLocal = nombre == null || nombre.isBlank() ? null : nombre.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Relee el nombre local de la configuración y (re)publica mDNS en segundo plano si el servidor
+     * está encendido. Nunca lanza: si falla, el acceso por IP sigue igual.
+     */
+    public void aplicarNombreLocal() {
+        try {
+            fijarNombreLocal(configuracionService.obtener().getMovilNombre());
+            if (servidor == null || nombreLocal == null) {
+                anunciador.detener();
+                return;
+            }
+            anunciador.iniciar(nombreLocal, getPuerto(), new ArrayList<>(ipsLan()));
+        } catch (RuntimeException e) {
+            System.err.println("⚠ Nombre local no disponible: " + e.getMessage());
+        }
     }
 
     // ── Enrutado ──────────────────────────────────────────────────────────
@@ -276,6 +357,8 @@ public class ServidorMovilService {
             h = h.substring(0, dos);
         }
         if (h.equals("localhost") || IPV4.matcher(h).matches()) return true;
+        String local = nombreLocal;
+        if (local != null && h.equals(local + ".local")) return true;
         String equipo = nombreDeEquipo();
         return !equipo.isEmpty() && (h.equals(equipo) || h.equals(equipo + ".local"));
     }

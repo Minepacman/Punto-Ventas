@@ -424,10 +424,85 @@ public class ConfiguracionService {
         validarPuertoMovil(puerto);
         Configuracion c = obtenerParaEditar();
         String antes = String.format("activo=%s, puerto=%d", c.isMovilActivo(), c.getMovilPuerto());
+        marcarCambioDePuerto(c, puerto);
         c.setMovilActivo(activo);
         c.setMovilPuerto(puerto);
         Configuracion g = guardarConfig(c);
         auditar("Acceso móvil", antes, String.format("activo=%s, puerto=%d", g.isMovilActivo(), g.getMovilPuerto()));
+        return g;
+    }
+
+    /** Si ya había un puerto guardado y es otro, recuerda el anterior para avisar que los QR impresos cambiaron */
+    private static void marcarCambioDePuerto(Configuracion c, int nuevo) {
+        if (c.isMovilPuertoGuardado() && c.getMovilPuerto() != nuevo) c.setMovilPuertoAnterior(c.getMovilPuerto());
+    }
+
+    /**
+     * El servidor se enlazó a este puerto (arranque automático, sin usuario en sesión).
+     * Lo guarda para reutilizarlo la próxima vez y deja constancia en la bitácora si cambió.
+     */
+    @Transactional
+    public Configuracion registrarPuertoMovilEnlazado(int puerto) {
+        Configuracion c = obtenerParaEditar();
+        if (c.isMovilPuertoGuardado() && c.getMovilPuerto() == puerto) return c;
+        String antes = c.isMovilPuertoGuardado() ? String.valueOf(c.getMovilPuerto()) : "(ninguno)";
+        marcarCambioDePuerto(c, puerto);
+        c.setMovilPuerto(puerto);
+        Configuracion g = guardarConfig(c);
+        auditoriaService.registrarSistema("CONFIGURACION_MODIFICADA",
+                "[Acceso móvil] puerto automático antes: " + antes + " | después: " + puerto);
+        return g;
+    }
+
+    /** El administrador ya vio el aviso de "La dirección cambió" */
+    @Transactional
+    public Configuracion confirmarCambioDireccionMovil() {
+        sesionService.verificarAdmin();
+        Configuracion c = obtenerParaEditar();
+        c.setMovilPuertoAnterior(null);
+        return guardarConfig(c);
+    }
+
+    /** Nombre local: minúsculas a-z, 0-9 y guion; 1-40 caracteres; sin guion al inicio ni al final */
+    public static final int NOMBRE_LOCAL_MAXIMO = 40;
+    private static final java.util.regex.Pattern NOMBRE_LOCAL = java.util.regex.Pattern.compile("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$");
+
+    /** Normaliza (recorta y pasa a minúsculas) y valida. Vacío = sin nombre (null). */
+    public static String validarNombreLocal(String nombre) {
+        if (nombre == null || nombre.isBlank()) return null;
+        String n = nombre.trim().toLowerCase(java.util.Locale.ROOT);
+        if (n.endsWith(".local")) n = n.substring(0, n.length() - 6);
+        if (n.length() > NOMBRE_LOCAL_MAXIMO || !NOMBRE_LOCAL.matcher(n).matches()) {
+            throw new NegocioException("El nombre local solo puede llevar letras sin acento (a-z), números y guiones, "
+                    + "de 1 a " + NOMBRE_LOCAL_MAXIMO + " caracteres, sin guion al inicio ni al final.");
+        }
+        return n;
+    }
+
+    /** Nombre sugerido a partir del nombre de la tienda: sin acentos, minúsculas, espacios a guiones */
+    public static String sugerirNombreLocal(String nombreTienda) {
+        String base = java.text.Normalizer.normalize(nombreTienda == null ? "" : nombreTienda, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        if (base.length() > NOMBRE_LOCAL_MAXIMO) base = base.substring(0, NOMBRE_LOCAL_MAXIMO).replaceAll("-+$", "");
+        return base.isEmpty() ? "tienda" : base;
+    }
+
+    /** Guarda las opciones del acceso móvil: puerto fijo a mano, nombre local y si el QR usa ese nombre (ADMIN, auditado) */
+    @Transactional
+    public Configuracion guardarOpcionesMovil(boolean puertoManual, String nombreLocal, boolean qrLocal) {
+        sesionService.verificarAdmin();
+        String nombre = validarNombreLocal(nombreLocal);
+        Configuracion c = obtenerParaEditar();
+        String antes = String.format("puertoManual=%s, nombre=%s, qrLocal=%s", c.isMovilPuertoManual(), c.getMovilNombre(), c.isMovilQrLocal());
+        c.setMovilPuertoManual(puertoManual);
+        c.setMovilNombre(nombre);
+        c.setMovilQrLocal(qrLocal && nombre != null);
+        Configuracion g = guardarConfig(c);
+        auditar("Acceso móvil", antes, String.format("puertoManual=%s, nombre=%s, qrLocal=%s",
+                g.isMovilPuertoManual(), g.getMovilNombre(), g.isMovilQrLocal()));
         return g;
     }
 

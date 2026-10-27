@@ -44,6 +44,9 @@ dependencies {
     runtimeOnly 'org.xerial:sqlite-jdbc:3.45.3.0'
     implementation 'org.hibernate.orm:hibernate-community-dialects:6.4.4.Final'
 
+    // mDNS (Bonjour/Zeroconf): nombre local "mitienda.local" para el acceso móvil. Apache-2.0, Java puro
+    implementation 'org.jmdns:jmdns:3.5.9'
+
     // JavaFX dependencies
     implementation 'io.github.mkpaz:atlantafx-base:2.0.1'
 
