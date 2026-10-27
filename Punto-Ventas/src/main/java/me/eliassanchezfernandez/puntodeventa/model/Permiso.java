@@ -25,7 +25,9 @@ public enum Permiso {
     VENDER_SIN_STOCK   ("Vender sin existencia"),
     CANCELAR_VENTA     ("Cancelar ventas cobradas"),
     ABRIR_CAJON        ("Abrir el cajón de dinero"),
-    GESTIONAR_PROVEEDORES ("Gestionar proveedores y órdenes de compra");
+    GESTIONAR_PROVEEDORES ("Gestionar proveedores y órdenes de compra"),
+    FACTURAR           ("Emitir facturas (CFDI)"),
+    CANCELAR_FACTURA   ("Cancelar facturas (CFDI)");
 
     private final String descripcion;
 
@@ -44,13 +46,14 @@ public enum Permiso {
      * CAMBIAR_PRECIOS se incluye como parte de editar productos (pendiente de
      * confirmar). ABRIR_CAJON y GESTIONAR_PROVEEDORES también son del gerente
      * por defecto (el administrador puede quitárselos o dárselos a un cajero). Todo lo demás se lo concede el administrador por usuario.
+     * FACTURAR también es del gerente; CANCELAR_FACTURA solo del administrador.
      * CAJERO: ninguno (todo lo de la lista es de administrador, USR-13).
      */
     public static Set<Permiso> porDefecto(Cajero.Rol rol) {
         if (rol == null) return Collections.emptySet();
         return switch (rol) {
             case ADMIN   -> EnumSet.allOf(Permiso.class);
-            case GERENTE -> EnumSet.of(EDITAR_PRODUCTOS, CAMBIAR_PRECIOS, ABRIR_CAJON, GESTIONAR_PROVEEDORES);
+            case GERENTE -> EnumSet.of(EDITAR_PRODUCTOS, CAMBIAR_PRECIOS, ABRIR_CAJON, GESTIONAR_PROVEEDORES, FACTURAR);
             case CAJERO  -> EnumSet.noneOf(Permiso.class);
         };
     }

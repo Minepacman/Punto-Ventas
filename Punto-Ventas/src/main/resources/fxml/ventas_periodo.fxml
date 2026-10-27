@@ -32,6 +32,8 @@
             <Button fx:id="btnCancelarVenta" text="⛔ Cancelar venta" onAction="#onCancelarVenta"
                     styleClass="button-danger"/>
             <Button fx:id="btnReimprimir" text="🖨 Reimprimir ticket" onAction="#onReimprimir"/>
+            <Button fx:id="btnFacturar" text="🧾 Facturar" onAction="#onFacturar"/>
+            <Button fx:id="btnFacturas" text="📄 Facturas…" onAction="#onFacturas"/>
             <Button text="📤 Exportar…" onAction="#onExportar"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
@@ -54,6 +56,7 @@
                     <TableColumn fx:id="colIva"       text="IVA"           prefWidth="80"  styleClass="align-right"/>
                     <TableColumn fx:id="colTotal"     text="Total"         prefWidth="100" styleClass="align-right"/>
                     <TableColumn fx:id="colEstado"    text="Estado"        prefWidth="90"/>
+                    <TableColumn fx:id="colFactura"   text="Factura"       prefWidth="110"/>
                 </columns>
             </TableView>
 

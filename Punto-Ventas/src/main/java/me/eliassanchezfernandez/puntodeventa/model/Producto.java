@@ -57,6 +57,22 @@ public class Producto {
     @Column(name = "activo")
     private Boolean activo;
 
+    // ── Datos fiscales (CFDI 4.0) ─────────────────────────────────────────
+    // Todos opcionales: si están vacíos, al facturar se usa la clave por defecto
+    // del departamento (c_ClaveProdServ) y la de la unidad de medida (c_ClaveUnidad).
+
+    /** Clave de producto o servicio del SAT (c_ClaveProdServ, 8 dígitos) */
+    @Column(name = "clave_prod_serv", length = 8)
+    private String claveProdServ;
+
+    /** Clave de unidad del SAT (c_ClaveUnidad, ej. H87, KGM) */
+    @Column(name = "clave_unidad", length = 3)
+    private String claveUnidad;
+
+    /** Objeto de impuesto (c_ObjetoImp): 01 no objeto, 02 sí objeto (por defecto), 03 sí objeto sin desglose */
+    @Column(name = "objeto_imp", length = 2)
+    private String objetoImp;
+
     // ── Inventario ───────────────────────────────────────────────────────
 
     @Column(name = "usa_inventario")

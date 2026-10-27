@@ -63,6 +63,7 @@ public class VentaService {
     @Autowired private DispositivosService       dispositivosService;
     @Autowired private IdentidadCaja             identidadCaja;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FacturaRepository facturaRepo;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -538,6 +539,14 @@ public class VentaService {
         if (v.isCancelada()) {
             throw new NegocioException("La venta #" + v.getId() + " ya estaba cancelada.");
         }
+        // Una venta facturada no se cancela mientras su CFDI siga vigente (o pendiente de confirmar)
+        facturaRepo.findDeVentaEnEstados(v.getId(), FacturacionService.ESTADOS_QUE_BLOQUEAN).stream().findFirst()
+                .ifPresent(f -> {
+                    throw new NegocioException(String.format(
+                            "La venta #%d está en la factura %s%s (%s). Cancela o sustituye primero esa factura en "
+                            + "Ventas por período → Facturas y después cancela la venta.",
+                            v.getId(), f.getSerieFolio(), f.esGlobal() ? " (global)" : "", f.getEstadoEnum().getEtiqueta()));
+                });
         LocalDateTime limite = v.getLimiteCancelacion();
         if (LocalDateTime.now().isAfter(limite)) {
             throw new NegocioException(String.format(

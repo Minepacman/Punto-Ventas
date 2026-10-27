@@ -132,6 +132,7 @@ public class VentasController implements Initializable {
     @Autowired private BasculaService         basculaService;
     @Autowired private DispositivosService    dispositivosService;
     @Autowired private DispositivosDialogos   dispositivosDialogos;
+    @Autowired private FacturacionDialogos    facturacionDialogos;
 
     /** Sugerencias: retardo tras el último cambio del ticket y hilo de cálculo */
     private static final Duration RETARDO_SUGERENCIAS = Duration.millis(400);
@@ -443,7 +444,7 @@ public class VentasController implements Initializable {
 
             String msg = String.format("Venta #%d registrada.\n\nTotal:  %s\nPagó:   %s\nCambio: %s",
                     venta.getId(), Moneda.formato(venta.getTotal()), Moneda.formato(venta.getPagoCon()), Moneda.formato(venta.getCambio()));
-            alerta(Alert.AlertType.INFORMATION, "Venta cobrada", msg);
+            avisarVentaCobrada(venta, msg);
 
             avisarStockBajo(venta);
             limpiarTicket();
@@ -463,6 +464,27 @@ public class VentasController implements Initializable {
             alerta(Alert.AlertType.ERROR, "No se pudo cobrar", e.getMessage());
         }
         txtCodigo.requestFocus();
+    }
+
+    /**
+     * Aviso de venta cobrada; si la facturación está configurada y el usuario
+     * puede facturar, ofrece el botón "Facturar" (el cliente pidió factura).
+     */
+    private void avisarVentaCobrada(Venta venta, String msg) {
+        if (!facturacionDialogos.puedeFacturar()) {
+            alerta(Alert.AlertType.INFORMATION, "Venta cobrada", msg);
+            return;
+        }
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle("Venta cobrada");
+        a.setHeaderText(null);
+        a.setContentText(msg);
+        ButtonType facturar = new ButtonType("Facturar", javafx.scene.control.ButtonBar.ButtonData.OTHER);
+        a.getButtonTypes().setAll(ButtonType.OK, facturar);
+        Ventanas.estilizar(a);
+        if (a.showAndWait().filter(b -> b == facturar).isPresent()) {
+            facturacionDialogos.facturarVenta(tablaProductos.getScene().getWindow(), venta);
+        }
     }
 
     /**

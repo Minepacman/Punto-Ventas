@@ -47,7 +47,7 @@ import java.util.ResourceBundle;
  * lo demás es solo ADMIN y además lo verifica cada servicio. Las pantallas
  * grandes tienen su propio FXML/controlador; las chicas (formas de pago,
  * moneda, folios, respaldo automático, licencia, actualizaciones) son diálogos
- * armados aquí. Los dispositivos (impresora, báscula, lector, cajón y terminal bancaria) son solo ADMIN; Facturación avisa que es de una etapa posterior.
+ * armados aquí. Los dispositivos (impresora, báscula, lector, cajón y terminal bancaria) y Facturación son solo ADMIN.
  */
 @Component
 @Scope("prototype")
@@ -251,9 +251,8 @@ public class ConfiguracionController implements Initializable {
         }
     }
 
-    // ── Etapa posterior ───────────────────────────────────────────────────
-
-    @FXML void onFacturacion()    { proximamente("Facturación"); }
+    /** Emisor, credenciales del PAC y claves SAT por defecto (solo ADMIN) */
+    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml", "Facturación electrónica (CFDI 4.0)", 760, 720); }
 
     // ── Dispositivos (solo ADMIN; cada servicio lo vuelve a verificar y audita) ──
 
@@ -262,11 +261,6 @@ public class ConfiguracionController implements Initializable {
     @FXML void onLector()    { if (soloAdmin()) dispositivosDialogos.lector(raiz.getScene().getWindow()); }
     @FXML void onCajon()     { if (soloAdmin()) dispositivosDialogos.cajon(raiz.getScene().getWindow()); }
     @FXML void onTerminalBancaria() { if (soloAdmin()) dispositivosDialogos.terminalBancaria(raiz.getScene().getWindow()); }
-
-    private void proximamente(String opcion) {
-        alerta(Alert.AlertType.INFORMATION, opcion,
-                "\"" + opcion + "\" está planeada para una etapa posterior del proyecto.");
-    }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 

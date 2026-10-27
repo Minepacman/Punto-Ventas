@@ -22,7 +22,7 @@ class PermisosYAutorizacionTest extends BaseServicioTest {
         assertThat(Permiso.porDefecto(Cajero.Rol.ADMIN)).containsExactlyInAnyOrder(Permiso.values());
         assertThat(Permiso.porDefecto(Cajero.Rol.GERENTE))
                 .containsExactlyInAnyOrder(Permiso.EDITAR_PRODUCTOS, Permiso.CAMBIAR_PRECIOS,
-                        Permiso.ABRIR_CAJON, Permiso.GESTIONAR_PROVEEDORES);
+                        Permiso.ABRIR_CAJON, Permiso.GESTIONAR_PROVEEDORES, Permiso.FACTURAR);
         assertThat(Permiso.porDefecto(Cajero.Rol.CAJERO)).isEmpty();
     }
 
@@ -39,7 +39,7 @@ class PermisosYAutorizacionTest extends BaseServicioTest {
         assertThat(gerente.tienePermiso(Permiso.CAMBIAR_PRECIOS)).isFalse();
         // Lo que el rol trae por defecto y no se concedió queda revocado
         assertThat(gerente.getPermisosRevocados()).containsExactlyInAnyOrder(Permiso.CAMBIAR_PRECIOS,
-                Permiso.ABRIR_CAJON, Permiso.GESTIONAR_PROVEEDORES);
+                Permiso.ABRIR_CAJON, Permiso.GESTIONAR_PROVEEDORES, Permiso.FACTURAR);
 
         // Cambio posterior: ahora la cajera también puede aplicar mayoreo y ya no ver historial
         cajeroService.actualizar(cajera.getId(), "cajera", "Cajera", Cajero.Rol.CAJERO, true, null,

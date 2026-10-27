@@ -471,6 +471,17 @@ public class ProductoService {
         if (p.getTipoVenta() == null) {
             p.setTipoVenta(Producto.TipoVenta.UNIDAD);
         }
+        // Claves SAT (opcionales): solo se revisa el formato; el PAC las valida contra el catálogo al facturar
+        try {
+            p.setClaveProdServ(me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.normalizarProdServ(p.getClaveProdServ()));
+            p.setClaveUnidad(me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.normalizarUnidad(p.getClaveUnidad()));
+        } catch (IllegalArgumentException e) {
+            throw new NegocioException(e.getMessage());
+        }
+        if (p.getObjetoImp() != null && p.getObjetoImp().isBlank()) p.setObjetoImp(null);
+        if (p.getObjetoImp() != null && !me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.esObjetoImp(p.getObjetoImp())) {
+            throw new NegocioException("El objeto de impuesto debe ser 01, 02 o 03.");
+        }
         // La unidad de medida manda sobre el tipo de venta: decimales = a granel
         if (p.getUnidad() != null) {
             Unidad u = unidadRepo.findById(p.getUnidad().getId())

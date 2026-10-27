@@ -38,6 +38,7 @@ public class ConfiguracionUnidadesController implements Initializable {
     @FXML private TextField txtNombre;
     @FXML private TextField txtAbreviatura;
     @FXML private CheckBox  chkDecimales;
+    @FXML private TextField txtClaveSat;
 
     @Autowired private UnidadService unidadService;
 
@@ -62,6 +63,7 @@ public class ConfiguracionUnidadesController implements Initializable {
         u.setNombre(txtNombre.getText());
         u.setAbreviatura(txtAbreviatura.getText());
         u.setPermiteDecimales(chkDecimales.isSelected());
+        u.setClaveUnidad(txtClaveSat.getText());
         try {
             unidadService.guardar(u);
             recargar();
@@ -78,6 +80,7 @@ public class ConfiguracionUnidadesController implements Initializable {
         lblTitulo.setText("Nueva unidad");
         txtNombre.clear();
         txtAbreviatura.clear();
+        txtClaveSat.clear();
         chkDecimales.setSelected(false);
     }
 
@@ -108,6 +111,8 @@ public class ConfiguracionUnidadesController implements Initializable {
         lblTitulo.setText("Modificar unidad");
         txtNombre.setText(u.getNombre());
         txtAbreviatura.setText(u.getAbreviatura());
+        txtClaveSat.setText(u.getClaveUnidad() != null ? u.getClaveUnidad()
+                : me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.claveUnidadPorNombre(u.getNombre()).orElse(""));
         chkDecimales.setSelected(u.isPermiteDecimales());
     }
 
