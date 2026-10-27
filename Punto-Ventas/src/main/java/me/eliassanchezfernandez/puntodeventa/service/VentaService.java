@@ -61,6 +61,7 @@ public class VentaService {
     @Autowired private SesionService             sesionService;
     @Autowired private AuditoriaService          auditoriaService;
     @Autowired private DispositivosService       dispositivosService;
+    @Autowired private IdentidadCaja             identidadCaja;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -387,6 +388,7 @@ public class VentaService {
         venta.setPlazoCancelacionHoras(config.getPlazoCancelacionHoras());
         venta.setCajero(cajeroRepo.findById(cajeroSesion.getId()).orElse(null));
         venta.setCajeroNombre(cajeroSesion.getNombreCompleto());
+        venta.setCaja(identidadCaja.numero());
         venta.setAutorizadaPorNombre(autorizadores.isEmpty() ? null : String.join(", ", autorizadores));
 
         for (PagoVenta pago : pagosValidos) {
@@ -421,8 +423,9 @@ public class VentaService {
             }
         }
 
-        // 6) El ticket pendiente del cajero ya se cobró
-        ticketPendienteRepo.deleteByCajeroId(cajeroSesion.getId());
+        // 6) El ticket pendiente del cajero en ESTA caja ya se cobró (el de otra caja sigue ahí)
+        ticketPendienteRepo.findConLineasByCajeroIdYCaja(cajeroSesion.getId(), identidadCaja.numero())
+                .ifPresent(ticketPendienteRepo::delete);
 
         if (!autorizadores.isEmpty() || ventaSinStock) {
             auditoriaService.registrar(cajeroSesion, "VENTA_AUTORIZADA",
@@ -603,18 +606,18 @@ public class VentaService {
 
     // ── Corte del día ─────────────────────────────────────────────────────
 
-    /** Total vendido hoy sin contar canceladas */
+    /** Total vendido hoy en ESTA caja sin contar canceladas */
     public double totalVentasHoy() {
         LocalDateTime inicio = LocalDate.now().atStartOfDay();
         LocalDateTime fin    = inicio.plusDays(1);
-        Double total = ventaRepo.sumTotalEntre(inicio, fin);
+        Double total = ventaRepo.sumTotalEntre(inicio, fin, identidadCaja.numero());
         return total != null ? total : 0.0;
     }
 
     /**
-     * Resumen de las ventas de hoy para la pantalla de Corte (excluye
-     * canceladas). Requiere HACER_CORTE o VER_GANANCIAS; la ganancia solo
-     * se incluye si el usuario tiene VER_GANANCIAS.
+     * Resumen de las ventas de hoy de ESTA caja para la pantalla de Corte
+     * (excluye canceladas). Requiere HACER_CORTE o VER_GANANCIAS; la ganancia
+     * solo se incluye si el usuario tiene VER_GANANCIAS.
      */
     @Transactional(readOnly = true)
     public ResumenCorte resumenDelDia() {
@@ -623,10 +626,16 @@ public class VentaService {
 
     @Transactional(readOnly = true)
     public ResumenCorte resumenDe(LocalDate dia) {
+        return resumenDe(dia, identidadCaja.numero());
+    }
+
+    /** Resumen de un día de una caja ({@code caja} null = todas las cajas), con los permisos de corte */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenDe(LocalDate dia, Integer caja) {
         if (!sesionService.tienePermiso(Permiso.HACER_CORTE)) {
             sesionService.verificarPermiso(Permiso.VER_GANANCIAS);
         }
-        ResumenCorte r = resumenCompletoDe(dia);
+        ResumenCorte r = resumenCompletoDe(dia, caja);
         if (!sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
             r.ganancia = 0;
             r.gananciaVisible = false;
@@ -634,44 +643,59 @@ public class VentaService {
         return r;
     }
 
+    /** Resumen de TODAS las cajas (corte general): solo ADMIN */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenGeneralDe(LocalDate dia) {
+        sesionService.verificarAdmin();
+        return resumenCompletoDe(dia, null);
+    }
+
+    /** Compatibilidad: resumen completo de esta caja */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenCompletoDe(LocalDate dia) {
+        return resumenCompletoDe(dia, identidadCaja.numero());
+    }
+
     /**
      * Resumen sin filtro de permisos (uso interno: CajaService.hacerCorte).
      * Todo se suma en SQL: el corte no carga los tickets ni sus renglones
      * (en una tienda con cientos de ventas al día eso es lo caro en un disco lento).
+     * @param caja número de caja, o null para sumar todas las cajas
      */
     @Transactional(readOnly = true)
-    public ResumenCorte resumenCompletoDe(LocalDate dia) {
+    public ResumenCorte resumenCompletoDe(LocalDate dia, Integer caja) {
         LocalDateTime inicio = dia.atStartOfDay();
         LocalDateTime fin = inicio.plusDays(1);
         ResumenCorte r = new ResumenCorte();
+        r.caja = caja;
 
-        Object[] activas = ventaRepo.resumenActivas(inicio, fin).get(0);
+        Object[] activas = ventaRepo.resumenActivas(inicio, fin, caja).get(0);
         r.numVentas     = ((Number) activas[0]).intValue();
         r.ventasTotales = ((Number) activas[1]).doubleValue();
         r.subtotal      = ((Number) activas[2]).doubleValue();
         r.iva           = ((Number) activas[3]).doubleValue();
 
-        Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin).get(0);
+        Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin, caja).get(0);
         r.numCanceladas   = ((Number) canceladas[0]).intValue();
         r.totalCanceladas = ((Number) canceladas[1]).doubleValue();
 
         // El cambio sale del efectivo; las ventas anteriores al pago dividido van todas a su forma de pago
-        for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO)) {
+        for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO, caja)) {
             sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
         }
-        for (Object[] f : ventaRepo.ventasSinPagosPorForma(inicio, fin)) {
+        for (Object[] f : ventaRepo.ventasSinPagosPorForma(inicio, fin, caja)) {
             sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
         }
-        for (Object[] f : ventaRepo.tarjetaPorTerminal(inicio, fin, Venta.FormaPago.TARJETA)) {
+        for (Object[] f : ventaRepo.tarjetaPorTerminal(inicio, fin, Venta.FormaPago.TARJETA, caja)) {
             String terminal = f[0] != null ? (String) f[0] : "Sin datos de terminal";
             r.tarjetaPorTerminal.add(new TarjetaTerminal(terminal, ((Number) f[1]).intValue(),
                     redondear(((Number) f[2]).doubleValue())));
         }
-        for (PagoVenta p : ventaRepo.vouchersTarjeta(inicio, fin, Venta.FormaPago.TARJETA)) {
+        for (PagoVenta p : ventaRepo.vouchersTarjeta(inicio, fin, Venta.FormaPago.TARJETA, caja)) {
             r.vouchers.add(new VoucherTarjeta(p.getVenta().getFecha(), p.getVenta().getFolioMostrado(),
                     p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion(), p.getMonto()));
         }
-        for (Object[] f : ventaRepo.importesPorDepartamento(inicio, fin)) {
+        for (Object[] f : ventaRepo.importesPorDepartamento(inicio, fin, caja)) {
             String nombre = f[0] != null ? (String) f[0] : "Sin departamento";
             double importe = ((Number) f[1]).doubleValue();
             r.porDepartamento.merge(nombre, importe, Double::sum);
@@ -688,6 +712,12 @@ public class VentaService {
         r.ganancia        = redondear(r.ganancia);
         r.totalCanceladas = redondear(r.totalCanceladas);
         r.productosBajos.addAll(productoService.productosConStockBajo());
+        if (caja == null) {
+            for (Object[] f : ventaRepo.ventasPorCaja(inicio, fin)) {
+                r.porCaja.add(new VentasCaja(((Number) f[0]).intValue(), ((Number) f[1]).intValue(),
+                        redondear(((Number) f[2]).doubleValue())));
+            }
+        }
         return r;
     }
 
@@ -704,6 +734,8 @@ public class VentaService {
 
     /** Totales del día agrupados; es un simple contenedor de datos */
     public static class ResumenCorte {
+        /** Caja a la que corresponde el resumen; null = todas las cajas (corte general) */
+        public Integer caja;
         public double ventasTotales;
         public double subtotal;
         public double iva;
@@ -724,7 +756,14 @@ public class VentaService {
         public final List<TarjetaTerminal> tarjetaPorTerminal = new ArrayList<>();
         /** Cada cobro con tarjeta del día, para cuadrar contra el voucher */
         public final List<VoucherTarjeta> vouchers = new ArrayList<>();
+        /** Solo en el resumen general: ventas activas de cada caja */
+        public final List<VentasCaja> porCaja = new ArrayList<>();
+
+        public boolean esGeneral() { return caja == null; }
     }
+
+    /** Ventas activas de una caja en el día (resumen general) */
+    public record VentasCaja(int caja, int ventas, double total) { }
 
     /** Cobros con tarjeta de una terminal: cuántos y cuánto */
     public record TarjetaTerminal(String terminal, int pagos, double monto) { }

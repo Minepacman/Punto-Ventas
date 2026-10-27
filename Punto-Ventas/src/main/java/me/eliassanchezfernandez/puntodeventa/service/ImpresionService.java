@@ -202,7 +202,7 @@ public class ImpresionService {
         Configuracion cfg = configuracionService.obtener();
         VentaService.ResumenCorte r = ventaService.resumenDe(LocalDate.now());
         double fondo = cajaService.fondoVigenteDelDia(LocalDate.now());
-        Corte ultimo = cajaService.cortesDeHoy().stream().findFirst().orElse(null);
+        Corte ultimo = cajaService.cortesDeHoyDeEstaCaja().stream().findFirst().orElse(null);
         return ticketService.documentoCorte(r, fondo, ultimo, cfg, sesionService.getNombreCajero());
     }
 

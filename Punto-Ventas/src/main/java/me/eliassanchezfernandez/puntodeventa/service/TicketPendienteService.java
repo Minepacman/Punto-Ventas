@@ -14,14 +14,16 @@ import java.util.Optional;
 
 /**
  * Ticket sin cobrar que se conserva al cerrar sesión y se restaura cuando
- * el MISMO cajero vuelve a entrar (USR-15). Los renglones restaurados no
- * traen precios: el controlador los recalcula con VentaService.
+ * el MISMO cajero vuelve a entrar en la MISMA caja (USR-15): la mercancía se
+ * quedó en esa caja. Los renglones restaurados no traen precios: el
+ * controlador los recalcula con VentaService.
  */
 @Service
 public class TicketPendienteService {
 
     @Autowired private TicketPendienteRepository ticketRepo;
     @Autowired private SesionService             sesionService;
+    @Autowired private IdentidadCaja             identidadCaja;
 
     /** Guarda (reemplazando el anterior) el ticket del cajero en sesión */
     @Transactional
@@ -32,6 +34,7 @@ public class TicketPendienteService {
 
         TicketPendiente t = new TicketPendiente();
         t.setCajero(cajero);
+        t.setCaja(identidadCaja.numero());
         for (DetalleVenta d : detalles) {
             if (d.getProducto() == null || d.getProducto().getId() == null) continue;
             TicketPendiente.Linea l = new TicketPendiente.Linea();
@@ -54,7 +57,7 @@ public class TicketPendienteService {
     public List<DetalleVenta> recuperar() {
         Cajero cajero = sesionService.getCajeroActual();
         if (cajero == null) return List.of();
-        Optional<TicketPendiente> t = ticketRepo.findConLineasByCajeroId(cajero.getId());
+        Optional<TicketPendiente> t = ticketRepo.findConLineasByCajeroIdYCaja(cajero.getId(), identidadCaja.numero());
         List<DetalleVenta> detalles = new ArrayList<>();
         t.ifPresent(ticket -> ticket.getLineas().forEach(l -> {
             if (!l.getProducto().isActivo()) return;   // producto descontinuado mientras tanto
@@ -71,12 +74,14 @@ public class TicketPendienteService {
 
     public boolean hayPendiente() {
         Cajero cajero = sesionService.getCajeroActual();
-        return cajero != null && ticketRepo.findConLineasByCajeroId(cajero.getId()).isPresent();
+        return cajero != null && ticketRepo.findConLineasByCajeroIdYCaja(cajero.getId(), identidadCaja.numero()).isPresent();
     }
 
+    /** Descarta el ticket pendiente del cajero en ESTA caja (el de otras cajas se conserva) */
     @Transactional
     public void descartar(Long cajeroId) {
-        if (cajeroId != null) ticketRepo.deleteByCajeroId(cajeroId);
+        if (cajeroId == null) return;
+        ticketRepo.findConLineasByCajeroIdYCaja(cajeroId, identidadCaja.numero()).ifPresent(ticketRepo::delete);
     }
 
     @Transactional

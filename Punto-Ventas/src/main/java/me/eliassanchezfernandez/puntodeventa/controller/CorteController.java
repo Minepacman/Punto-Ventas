@@ -47,6 +47,7 @@ public class CorteController implements Initializable {
     @Autowired private CajaService   cajaService;
     @Autowired private SesionService sesionService;
     @Autowired private ImpresionService impresionService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.IdentidadCaja identidadCaja;
 
     // Entradas de efectivo
     @FXML private Label lblEntradaCambio;
@@ -76,6 +77,8 @@ public class CorteController implements Initializable {
     @FXML private Label lblUltimoCorte;
     @FXML private Button btnHacerCorte;
     @FXML private Button btnCorregirFondo;
+    @FXML private Button btnCorteGeneral;
+    @FXML private Label  lblCaja;
 
     @FXML private TableView<Map.Entry<String, Double>>           tablaDepartamentos;
     @FXML private TableColumn<Map.Entry<String, Double>, String> colDepto;
@@ -135,6 +138,12 @@ public class CorteController implements Initializable {
         boolean admin = sesionService.esAdmin();
         btnCorregirFondo.setVisible(admin);
         btnCorregirFondo.setManaged(admin);
+        // El corte general suma todas las cajas: solo tiene sentido con varias cajas y solo lo hace el ADMIN
+        boolean general = admin && identidadCaja.esMultiCaja();
+        btnCorteGeneral.setVisible(general);
+        btnCorteGeneral.setManaged(general);
+        lblCaja.setText(identidadCaja.nombre() + (identidadCaja.esMultiCaja() ? " (caja " + identidadCaja.numero() + ")" : ""));
+        btnHacerCorte.setText(identidadCaja.esMultiCaja() ? "✂ Hacer corte de esta caja" : "✂ Hacer Corte de Hoy");
 
         // main.fxml incluye esta vista para todos; sin permiso no hay nada que calcular
         // (MainController quita la pestaña) y no debe aparecer ningún aviso.
@@ -230,6 +239,72 @@ public class CorteController implements Initializable {
         }
     }
 
+    /** Corte general del día (solo ADMIN, varias cajas): suma las ventas y los fondos de todas las cajas */
+    @FXML
+    void onCorteGeneral() {
+        VentaService.ResumenCorte r;
+        double fondoTotal;
+        try {
+            r = ventaService.resumenGeneralDe(LocalDate.now());
+            fondoTotal = cajaService.fondoTotalDelDia(LocalDate.now());
+        } catch (NegocioException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Corte general", e.getMessage());
+            return;
+        }
+        StringBuilder detalle = new StringBuilder();
+        for (VentaService.VentasCaja vc : r.porCaja) {
+            detalle.append("Caja ").append(vc.caja()).append(": ").append(vc.ventas()).append(" venta(s), ")
+                   .append(moneda(vc.total())).append('\n');
+        }
+        cajaService.fondosPorCaja(LocalDate.now()).forEach((caja, fondo) ->
+                detalle.append("Fondo caja ").append(caja).append(": ").append(moneda(fondo)).append('\n'));
+
+        Dialog<String[]> dlg = new Dialog<>();
+        dlg.setTitle("Corte general (todas las cajas)");
+        dlg.setHeaderText("Ventas de todas las cajas: " + moneda(r.ventasTotales) + " (" + r.numVentas + " ventas)\n"
+                + "Efectivo esperado en todas las cajas: " + moneda(fondoTotal + r.efectivo)
+                + "\n\nCuenta el efectivo de TODAS las cajas y captura el total.");
+        Ventanas.estilizar(dlg);
+        TextField txtContado = new TextField();
+        txtContado.setPromptText("0.00");
+        TextArea txtObs = new TextArea();
+        txtObs.setPromptText("Observaciones (opcional)");
+        txtObs.setPrefRowCount(2);
+        Label lblDetalle = new Label(detalle.length() == 0 ? "Hoy no hay ventas ni fondos registrados." : detalle.toString().trim());
+        lblDetalle.getStyleClass().add("hint");
+        GridPane grid = new GridPane();
+        grid.setHgap(10); grid.setVgap(8); grid.setPadding(new Insets(10));
+        grid.add(lblDetalle, 0, 0, 2, 1);
+        grid.addRow(1, new Label("Efectivo contado (todas): $"), txtContado);
+        grid.add(txtObs, 0, 2, 2, 1);
+        dlg.getDialogPane().setContent(grid);
+        dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dlg.setResultConverter(b -> b == ButtonType.OK ? new String[] { txtContado.getText(), txtObs.getText() } : null);
+        Platform.runLater(txtContado::requestFocus);
+
+        Optional<String[]> res = dlg.showAndWait();
+        if (res.isEmpty()) return;
+        double contado;
+        try {
+            contado = Double.parseDouble(res.get()[0].trim().replace("$", "").replace(",", ""));
+        } catch (NumberFormatException e) {
+            Ventanas.alerta(Alert.AlertType.WARNING, "Monto inválido", "Escribe el efectivo contado como número (ej: 1250.50).");
+            return;
+        }
+        try {
+            Corte c = cajaService.hacerCorteGeneral(contado, res.get()[1]);
+            recargar();
+            String dif = c.hayFaltante() ? "FALTANTE de " + Moneda.formato(-c.getDiferencia())
+                       : c.haySobrante() ? "SOBRANTE de " + Moneda.formato(c.getDiferencia())
+                       : "sin diferencia";
+            Ventanas.alerta(Alert.AlertType.INFORMATION, "Corte general guardado", String.format(
+                    "Corte general #%d registrado por %s.\n\nEsperado: %s\nContado:  %s\nResultado: %s",
+                    c.getId(), c.getCajeroNombre(), Moneda.formato(c.getEfectivoEsperado()), Moneda.formato(c.getEfectivoContado()), dif));
+        } catch (NegocioException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo guardar el corte general", e.getMessage());
+        }
+    }
+
     /** Imprime el reporte del corte de hoy en la impresora de tickets (fuera del hilo de JavaFX) */
     @FXML
     void onImprimirCorte() {
@@ -292,11 +367,11 @@ public class CorteController implements Initializable {
                     .map(t -> t.terminal() + ": " + t.pagos() + " cobro(s), " + moneda(t.monto()))
                     .collect(java.util.stream.Collectors.joining("   ·   ")));
 
-        lblUltimoCorte.setText(cajaService.cortesDeHoy().stream().findFirst()
-                .map(c -> String.format("Último corte hoy: %s por %s — esperado %s, contado %s, diferencia %s",
-                        c.getRealizadoEn().format(FMT), c.getCajeroNombre(), moneda(c.getEfectivoEsperado()),
+        lblUltimoCorte.setText(cajaService.cortesDeHoyDeEstaCaja().stream().findFirst()
+                .map(c -> String.format("Último corte hoy (%s): %s por %s — esperado %s, contado %s, diferencia %s",
+                        c.getEtiquetaCaja(), c.getRealizadoEn().format(FMT), c.getCajeroNombre(), moneda(c.getEfectivoEsperado()),
                         moneda(c.getEfectivoContado()), moneda(c.getDiferencia())))
-                .orElse("Hoy no se ha hecho ningún corte."));
+                .orElse("Hoy no se ha hecho ningún corte en esta caja."));
     }
 
     private static void mostrarFila(Label titulo, Label valor, double monto) {

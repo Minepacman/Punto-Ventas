@@ -351,6 +351,11 @@ public class EstadisticasService {
     /** Ventas de un cajero en el periodo (sin las canceladas) */
     public record VentasCajero(String cajero, int ventas, double total, double ticketPromedio, double porcentaje) { }
 
+    /** Ventas de una caja en el periodo (sin las canceladas) */
+    public record VentasPorCaja(int caja, int ventas, double total, double ticketPromedio, double porcentaje) {
+        public String etiqueta() { return "Caja " + caja; }
+    }
+
     /** Ventas que cayeron en una hora del día (0–23) en el periodo (sin las canceladas) */
     public record VentasHora(int hora, int ventas, double total, double porcentaje) {
         /** "14:00 - 14:59" */
@@ -363,8 +368,14 @@ public class EstadisticasService {
      */
     @Transactional(readOnly = true)
     public List<VentasCajero> ventasPorCajero(Periodo p) {
+        return ventasPorCajero(p, null);
+    }
+
+    /** Igual, de una sola caja ({@code caja} null = todas) */
+    @Transactional(readOnly = true)
+    public List<VentasCajero> ventasPorCajero(Periodo p, Integer caja) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
-        List<Object[]> filas = ventaRepository.ventasPorCajero(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
+        List<Object[]> filas = ventaRepository.ventasPorCajero(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay(), caja);
         double granTotal = filas.stream().mapToDouble(f -> ((Number) f[2]).doubleValue()).sum();
         List<VentasCajero> r = new ArrayList<>();
         for (Object[] f : filas) {
@@ -383,10 +394,16 @@ public class EstadisticasService {
      */
     @Transactional(readOnly = true)
     public List<VentasHora> ventasPorHora(Periodo p) {
+        return ventasPorHora(p, null);
+    }
+
+    /** Igual, de una sola caja ({@code caja} null = todas) */
+    @Transactional(readOnly = true)
+    public List<VentasHora> ventasPorHora(Periodo p, Integer caja) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
         double[] total = new double[24];
         int[] ventas = new int[24];
-        for (Object[] f : ventaRepository.fechasYTotalesActivas(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay())) {
+        for (Object[] f : ventaRepository.fechasYTotalesActivas(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay(), caja)) {
             LocalDateTime fecha = (LocalDateTime) f[0];
             total[fecha.getHour()] += ((Number) f[1]).doubleValue();
             ventas[fecha.getHour()]++;
@@ -400,5 +417,31 @@ public class EstadisticasService {
                     granTotal <= 0 ? 0 : total[h] / granTotal * 100.0));
         }
         return r;
+    }
+
+    /**
+     * Total, número de ventas y ticket promedio de cada caja del periodo (varias
+     * cajas contra un servidor). Las ventas canceladas no cuentan. VER_HISTORIAL.
+     */
+    @Transactional(readOnly = true)
+    public List<VentasPorCaja> ventasPorCaja(Periodo p) {
+        sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
+        List<Object[]> filas = ventaRepository.ventasPorCaja(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
+        double granTotal = filas.stream().mapToDouble(f -> ((Number) f[2]).doubleValue()).sum();
+        List<VentasPorCaja> r = new ArrayList<>();
+        for (Object[] f : filas) {
+            int ventas = ((Number) f[1]).intValue();
+            double total = ResumenDiario.VentaRedondeo.centavos(((Number) f[2]).doubleValue());
+            r.add(new VentasPorCaja(((Number) f[0]).intValue(), ventas, total,
+                    ventas == 0 ? 0 : ResumenDiario.VentaRedondeo.centavos(total / ventas),
+                    granTotal <= 0 ? 0 : total / granTotal * 100.0));
+        }
+        return r;
+    }
+
+    /** Números de caja que han vendido alguna vez (para el filtro de la pantalla) */
+    @Transactional(readOnly = true)
+    public List<Integer> cajasConVentas() {
+        return ventaRepository.cajasConVentas();
     }
 }

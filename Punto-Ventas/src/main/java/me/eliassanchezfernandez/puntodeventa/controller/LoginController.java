@@ -73,6 +73,7 @@ public class LoginController implements Initializable {
     @Autowired private LogotipoService      logotipoService;
     @Autowired private BaseDatosService     baseDatosService;
     @Autowired private ApplicationContext   springContext;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.ConexionService conexionService;
 
     // ── Estado ────────────────────────────────────────────────────────────
     /** Cajero autenticado — se guarda para usarlo al abrir main.fxml */
@@ -127,6 +128,8 @@ public class LoginController implements Initializable {
         new Thread(() -> {
             try {
                 Cajero cajero = sesionService.autenticar(usuario, contrasena);
+                // Para la pantalla "sin conexión con el servidor" (pide la clave del admin sin base de datos)
+                conexionService.recordarAdministrador(cajero);
 
                 Platform.runLater(() -> {
                     cajeroAutenticado = cajero;
@@ -274,7 +277,7 @@ public class LoginController implements Initializable {
     private void abrirVentanaPrincipal(Cajero cajero, double fondoCaja) {
         try {
             Stage stage = (Stage) btnLogin.getScene().getWindow();
-            String titulo = "Punto de Venta  —  " + cajero.getNombreCompleto()
+            String titulo = "Punto de Venta  —  " + conexionService.identidad().nombre() + "  —  " + cajero.getNombreCompleto()
                     + "  |  Fondo: " + Moneda.formato(fondoCaja);
             Ventanas.mostrarPrincipal(stage, springContext, titulo);
 

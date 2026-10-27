@@ -53,6 +53,7 @@ public class ProductoService {
     @Autowired private ConfiguracionService           configuracionService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProveedorRepository proveedorRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.OrdenCompraRepository ordenCompraRepo;
+    @Autowired private IdentidadCaja                  identidadCaja;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -366,6 +367,7 @@ public class ProductoService {
         m.setProveedor(proveedor);
         m.setCostoUnitario(costoUnitario);
         m.setVentaId(ventaId);
+        m.setCaja(identidadCaja.numero());
         return movimientoRepo.save(m);
     }
 

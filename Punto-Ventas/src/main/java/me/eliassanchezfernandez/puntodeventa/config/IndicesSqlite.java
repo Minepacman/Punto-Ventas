@@ -41,7 +41,11 @@ public class IndicesSqlite {
             "CREATE INDEX IF NOT EXISTS idx_tickets_pendientes_cajero ON tickets_pendientes (cajero_id)",
             "CREATE INDEX IF NOT EXISTS idx_tickets_pendientes_lineas_ticket ON tickets_pendientes_lineas (ticket_id)",
             "CREATE INDEX IF NOT EXISTS idx_productos_activo_descripcion ON productos (activo, descripcion)",
-            "CREATE INDEX IF NOT EXISTS idx_ventas_cajero_fecha ON ventas (cajero_id, fecha)");
+            "CREATE INDEX IF NOT EXISTS idx_ventas_cajero_fecha ON ventas (cajero_id, fecha)",
+            // Varias cajas: el corte y el fondo se consultan por caja y día
+            "CREATE INDEX IF NOT EXISTS idx_ventas_caja_fecha ON ventas (caja, fecha)",
+            "CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes (fecha)",
+            "CREATE INDEX IF NOT EXISTS idx_fondos_caja_fecha ON fondos_caja (fecha)");
 
     @Autowired private DataSource dataSource;
 
