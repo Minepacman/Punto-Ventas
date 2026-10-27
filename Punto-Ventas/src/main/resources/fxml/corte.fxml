@@ -70,6 +70,10 @@
                         <Label fx:id="lblSubtotal"        text="\$0.00" GridPane.rowIndex="2" GridPane.columnIndex="1" styleClass="corte-value"/>
                         <Label text="IVA incluido:"       GridPane.rowIndex="3" GridPane.columnIndex="0"/>
                         <Label fx:id="lblIva"             text="\$0.00" GridPane.rowIndex="3" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <Label fx:id="lblTransferenciaTitulo" text="Transferencia:" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+                        <Label fx:id="lblTransferencia"   text="\$0.00" GridPane.rowIndex="5" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <Label fx:id="lblValesTitulo"     text="Vales:" GridPane.rowIndex="6" GridPane.columnIndex="0"/>
+                        <Label fx:id="lblVales"           text="\$0.00" GridPane.rowIndex="6" GridPane.columnIndex="1" styleClass="corte-value"/>
                         <Label text="Ventas canceladas:"  GridPane.rowIndex="4" GridPane.columnIndex="0"/>
                         <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="4" GridPane.columnIndex="1" styleClass="corte-value"/>
                     </GridPane>

@@ -14,3 +14,15 @@ datos.db.respaldo-*
 
 # Documento de seguridad interno (el repositorio es público)
 reglas-seguridad.txt
+
+# Datos locales de la aplicación (logotipo) y copias de seguridad de la BD
+/Punto-Ventas/datos/
+/Punto-Ventas/datos.db.restaurar
+/Punto-Ventas/datos.db.antes-de-restaurar-*
+
+# Volcados de fallo de la JVM (contienen rutas y variables de entorno)
+hs_err_pid*.log
+
+# Archivos auxiliares de SQLite en modo WAL
+datos.db-wal
+datos.db-shm

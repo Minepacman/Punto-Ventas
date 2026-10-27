@@ -13,6 +13,9 @@
             stylesheets="@../css/app.css">
 
     <top>
+        <!-- La barra de herramientas se desplaza horizontalmente si la ventana es angosta (1024×768) -->
+        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
+                    style="-fx-background-color: transparent; -fx-padding: 0;">
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Label text="Desde:"/>
@@ -24,6 +27,7 @@
             <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
+        </ScrollPane>
     </top>
 
     <center>

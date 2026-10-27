@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *  - cada campo @FXML del controlador tiene su fx:id en el FXML
  *    (o es el controlador anidado de un fx:include);
  *  - ningún valor de atributo empieza con "%" sin escapar: FXMLLoader lo
- *    toma como clave de ResourceBundle y falla con "No resources specified".
+ *    toma como clave de ResourceBundle y falla con "No resources specified";
+ *  - ningún text/promptText empieza con "$" o "@" sin escapar ("\$").
  * Un desajuste aquí solo se descubriría al abrir la pantalla en producción.
  */
 class FxmlConsistenciaTest {
@@ -37,6 +38,8 @@ class FxmlConsistenciaTest {
     private static final Pattern METODO      = Pattern.compile("void\\s+(\\w+)\\s*\\(");
     private static final Pattern CAMPO_FXML  = Pattern.compile("@FXML\\s+(?:private|protected|public)?\\s*[\\w<>?,.\\s\\[\\]]+?\\s+(\\w+)\\s*;");
     private static final Pattern CLAVE_RECURSO = Pattern.compile("\\w+=\"%[^\\\\]");
+    // En text/promptText, "$" es una variable y "@" una ruta: "$48.00" falla con "Invalid path".
+    private static final Pattern TEXTO_VARIABLE = Pattern.compile("\\b(?:text|promptText)=\"[$@][^\"]*\"");
 
     @Test
     void todosLosFxmlCoincidenConSuControlador() throws IOException {
@@ -51,6 +54,11 @@ class FxmlConsistenciaTest {
                 Matcher m = CLAVE_RECURSO.matcher(xml);
                 while (m.find()) {
                     problemas.add(nombre + ": valor que empieza con '%' (clave de ResourceBundle): " + m.group());
+                }
+
+                Matcher mv = TEXTO_VARIABLE.matcher(xml);
+                while (mv.find()) {
+                    problemas.add(nombre + ": texto que empieza con '$' o '@' sin escapar: " + mv.group());
                 }
 
                 Matcher mc = CONTROLADOR.matcher(xml);

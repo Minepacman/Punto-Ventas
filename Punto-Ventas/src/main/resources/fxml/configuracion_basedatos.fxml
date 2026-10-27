@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_basedatos.fxml  –  Información, respaldo y restauración de la BD
+    Controlador: ConfiguracionBaseDatosController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionBaseDatosController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="12">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Base de datos" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="4">
+                    <Label text="Archivo" styleClass="field-label"/>
+                    <Label fx:id="lblRuta" wrapText="true"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="Tamaño" styleClass="field-label"/>
+                    <Label fx:id="lblTamano"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="Registros" styleClass="field-label"/>
+                    <GridPane fx:id="gridRegistros" hgap="24" vgap="4"/>
+                </VBox>
+
+                <Separator/>
+                <Label text="Respaldo" styleClass="form-section-title"/>
+                <Label text="Crea una copia completa de la base de datos en el lugar que elijas."
+                       wrapText="true" styleClass="hint"/>
+                <Button text="Respaldar ahora" onAction="#onRespaldar" styleClass="button-primary"
+                        maxWidth="Infinity" prefHeight="38"/>
+
+                <Separator/>
+                <Label text="Restaurar" styleClass="form-section-title"/>
+                <Label text="Reemplaza los datos actuales por los de un respaldo. Antes se guarda una copia de seguridad de la base actual y se pide la contraseña del administrador. Los cambios se aplican al reiniciar el programa."
+                       wrapText="true" styleClass="hint"/>
+                <Label fx:id="lblPendiente" wrapText="true" styleClass="callout, callout-warning"
+                       text="Hay una restauración pendiente: reinicia el programa para aplicarla."
+                       managed="false" visible="false"/>
+                <Button text="Restaurar respaldo..." onAction="#onRestaurar" styleClass="button-danger"
+                        maxWidth="Infinity" prefHeight="38"/>
+
+                <Region minHeight="8"/>
+                <Button text="Cerrar" onAction="#onCerrar" maxWidth="Infinity" prefHeight="38"/>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

@@ -15,9 +15,12 @@ import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.service.UnidadService;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -94,6 +97,7 @@ public class ProductosController implements Initializable {
     @FXML private TextField   txtPrecioMayoreo;
     @FXML private Label       lblErrorPrecio;
     @FXML private ComboBox<Departamento> comboDepartamento;
+    @FXML private ComboBox<Unidad> comboUnidad;
     @FXML private CheckBox    chkUsaInventario;
     @FXML private GridPane    gridInventario;
     @FXML private TextField   txtCantidadActual;
@@ -105,6 +109,7 @@ public class ProductosController implements Initializable {
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private ProductoService    productoService;
     @Autowired private SesionService      sesionService;
+    @Autowired private UnidadService      unidadService;
     @Autowired private ApplicationContext springContext;
 
     // ── Estado interno ────────────────────────────────────────────────────
@@ -127,6 +132,7 @@ public class ProductosController implements Initializable {
         configurarColumnas();
         configurarColumnasDepartamentos();
         configurarComboDepartamento();
+        configurarComboUnidad();
         cargarProductos();
         cargarDepartamentos();
 
@@ -155,6 +161,7 @@ public class ProductosController implements Initializable {
 
     /** Recarga catálogos desde la BD (lo llama MainController al entrar a la pestaña) */
     public void recargar() {
+        cargarUnidades();
         cargarProductos();
         cargarDepartamentos();
         onBuscar();
@@ -494,6 +501,7 @@ public class ProductosController implements Initializable {
             p.setPrecioVenta(precioVenta);
             p.setPrecioMayoreo(precioMayoreo);
             p.setDepartamento(comboDepartamento.getValue());
+            p.setUnidad(comboUnidad.getValue());
             p.setUsaInventario(chkUsaInventario.isSelected());
             p.setCantidadActual(cantActual);
             p.setCantidadMinima(cantMinima);
@@ -602,7 +610,7 @@ public class ProductosController implements Initializable {
         col.setCellFactory(tc -> new TableCell<>() {
             @Override protected void updateItem(Double v, boolean empty) {
                 super.updateItem(v, empty);
-                setText(empty || v == null ? null : String.format("$%.2f", v));
+                setText(empty || v == null ? null : Moneda.formato(v));
             }
         });
     }
@@ -632,6 +640,31 @@ public class ProductosController implements Initializable {
         });
     }
 
+    /** Unidades de medida del catálogo; elegir una ajusta "Se vende" a su regla de decimales */
+    private void configurarComboUnidad() {
+        comboUnidad.setConverter(new StringConverter<>() {
+            @Override public String toString(Unidad u) {
+                return u == null ? "— Sin unidad —" : u.getNombre() + (u.isPermiteDecimales() ? " (decimales)" : "");
+            }
+            @Override public Unidad fromString(String s) { return null; }
+        });
+        comboUnidad.valueProperty().addListener((o, antes, u) -> {
+            if (u == null) return;
+            if (u.isPermiteDecimales()) rbGranel.setSelected(true);
+            else if (rbGranel.isSelected()) rbUnidad.setSelected(true);
+        });
+        cargarUnidades();
+    }
+
+    private void cargarUnidades() {
+        Unidad seleccionada = comboUnidad.getValue();
+        comboUnidad.setItems(FXCollections.observableArrayList(unidadService.listar()));
+        if (seleccionada != null) {
+            comboUnidad.getItems().stream().filter(u -> u.getId().equals(seleccionada.getId()))
+                    .findFirst().ifPresent(comboUnidad::setValue);
+        }
+    }
+
     private void cargarProductoEnFormulario(Producto p) {
         limpiarFormulario();
         txtCodigoBarras.setText(p.getCodigoBarras());
@@ -645,6 +678,10 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.setText(String.valueOf(p.getPrecioVenta()));
         txtPrecioMayoreo.setText(String.valueOf(p.getPrecioMayoreo()));
         if (p.getDepartamento() != null) comboDepartamento.setValue(p.getDepartamento());
+        if (p.getUnidad() != null) {
+            comboUnidad.getItems().stream().filter(u -> u.getId().equals(p.getUnidad().getId()))
+                    .findFirst().ifPresent(comboUnidad::setValue);
+        }
         chkUsaInventario.setSelected(p.isUsaInventario());
         gridInventario.setDisable(!p.isUsaInventario());
         txtCantidadActual.setText(String.valueOf(p.getCantidadActual()));
@@ -665,6 +702,7 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.clear();
         txtPrecioMayoreo.clear();
         comboDepartamento.setValue(null);
+        comboUnidad.setValue(null);
         chkUsaInventario.setSelected(true);
         gridInventario.setDisable(false);
         txtCantidadActual.clear();
@@ -694,6 +732,7 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.setDisable(bloquear);
         txtPrecioMayoreo.setDisable(bloquear);
         comboDepartamento.setDisable(bloquear);
+        comboUnidad.setDisable(bloquear);
         chkUsaInventario.setDisable(bloquear);
         gridInventario.setDisable(bloquear);
         btnGuardar.setDisable(bloquear);

@@ -68,4 +68,40 @@ class ConfiguracionIvaTest extends BaseServicioTest {
                 .isInstanceOf(NegocioException.class);
         assertThat(configuracionService.getNombreTienda()).isEqualTo("Abarrotes La Esquina");
     }
+
+    @Test
+    void losTextosDeConfiguracionTienenLargoMaximoYSinCaracteresDeControl() throws Exception {
+        iniciarComoAdmin();
+        assertThatThrownBy(() -> configuracionService.guardar("x".repeat(151), null, 16, 48))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("150");
+        assertThatThrownBy(() -> configuracionService.guardar("Tienda", "d".repeat(251), 16, 48))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("250");
+        assertThatThrownBy(() -> configuracionService.guardar("Tien\u0000da", null, 16, 48))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("no permitidos");
+        assertThatThrownBy(() -> configuracionService.guardar("Tienda\nDos", null, 16, 48))
+                .isInstanceOf(NegocioException.class);
+        assertThatThrownBy(() -> configuracionService.guardarMoneda("$\u0007$", "MXN"))
+                .isInstanceOf(NegocioException.class);
+        assertThatThrownBy(() -> configuracionService.guardarRespaldoAutomatico(false, "r".repeat(501), 5))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("500");
+        // En el ticket sí se permiten saltos de línea, pero no otros caracteres de control
+        configuracionService.guardarTicket("Línea 1\nLínea 2", null, null, null, null, 80);
+        assertThatThrownBy(() -> configuracionService.guardarTicket("a\u001Bb", null, null, null, null, 80))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("no permitidos");
+        configuracionService.guardar("Mi Tienda", "Calle 1", 16, 48);
+    }
+
+    @Test
+    void laConfiguracionSeLeeDeMemoriaYGuardarLaInvalida() throws Exception {
+        iniciarComoAdmin();
+        Configuracion a = configuracionService.obtener();
+        assertThat(configuracionService.obtener()).as("segunda lectura: misma copia, sin consulta").isSameAs(a);
+
+        configuracionService.guardar("Tienda nueva", "Calle 9", 8, 24);
+
+        Configuracion b = configuracionService.obtener();
+        assertThat(b.getNombreTienda()).isEqualTo("Tienda nueva");
+        assertThat(b.getTasaIva()).isEqualTo(0.08);
+        assertThat(configuracionService.getPlazoCancelacionHoras()).isEqualTo(24);
+    }
 }

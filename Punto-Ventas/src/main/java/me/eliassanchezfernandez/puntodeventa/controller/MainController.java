@@ -5,6 +5,8 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
 import javafx.fxml.Initializable;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -25,16 +27,18 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.ResourceBundle;
 
 /**
  * Controlador de la ventana principal.
  *
  * Responsabilidades:
- *  - Actualizar el reloj de la barra de estado
+ *  - Actualizar el reloj de la cabecera (hora y fecha)
  *  - Controlar accesos por rol/permiso (pestañas Configuración y Corte)
  *  - Escuchar atajos de teclado F1–F4 y F12
  *  - Cerrar sesión / salir conservando el ticket sin cobrar (USR-15)
@@ -50,15 +54,18 @@ public class MainController implements Initializable {
     @FXML private Tab     tabInventario;
     @FXML private Tab     tabConfig;
     @FXML private Tab     tabCorte;
+    @FXML private Tab     tabEstadisticas;
     @FXML private Label   labelUsuario;
+    @FXML private Label   labelHora;
     @FXML private Label   labelFecha;
     @FXML private Label   labelVersion;
 
-    // Controladores de las vistas incluidas (fx:id del include + "Controller")
+    // Ventas se incluye en main.fxml (fx:id del include + "Controller"); el resto se carga la primera vez que se abre su pestaña
     @FXML private VentasController     ventasViewController;
-    @FXML private ProductosController  productosViewController;
-    @FXML private InventarioController inventarioViewController;
-    @FXML private CorteController      corteViewController;
+    private ProductosController  productosViewController;
+    private InventarioController inventarioViewController;
+    private CorteController      corteViewController;
+    private EstadisticasController estadisticasViewController;
 
     @Autowired private SesionService      sesionService;
     @Autowired private ApplicationContext springContext;
@@ -68,8 +75,11 @@ public class MainController implements Initializable {
 
     private Timeline reloj;
 
-    private static final DateTimeFormatter FMT =
-            DateTimeFormatter.ofPattern("dd/MM/yyyy  HH:mm");
+    private static final Locale ES_MX = new Locale("es", "MX");
+    private static final DateTimeFormatter FMT_HORA =
+            DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter FMT_FECHA =
+            DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", ES_MX);
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
@@ -161,15 +171,25 @@ public class MainController implements Initializable {
                 && !sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
             tabPane.getTabs().remove(tabCorte);
         }
+        if (!sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
+            tabPane.getTabs().remove(tabEstadisticas);
+        }
     }
 
     private void actualizarReloj() {
-        labelFecha.setText(LocalDateTime.now().format(FMT));
-        // Actualizar cada minuto
-        reloj = new Timeline(new KeyFrame(Duration.minutes(1),
-                e -> labelFecha.setText(LocalDateTime.now().format(FMT))));
+        refrescarReloj();
+        // Tick cada segundo: la hora mostrada nunca se queda atrasada
+        reloj = new Timeline(new KeyFrame(Duration.seconds(1), e -> refrescarReloj()));
         reloj.setCycleCount(Animation.INDEFINITE);
         reloj.play();
+    }
+
+    /** Hora (HH:mm) y fecha en español con el día de la semana en mayúscula inicial */
+    private void refrescarReloj() {
+        LocalDateTime ahora = LocalDateTime.now();
+        labelHora.setText(ahora.format(FMT_HORA));
+        String fecha = ahora.format(FMT_FECHA);
+        labelFecha.setText(Character.toUpperCase(fecha.charAt(0)) + fecha.substring(1));
     }
 
     /** F1–F4 cambian de pestaña; F12 cobra el ticket si estamos en Ventas */
@@ -189,6 +209,11 @@ public class MainController implements Initializable {
                 () -> tabPane.getSelectionModel().select(tabProductos));
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F4),
                 () -> tabPane.getSelectionModel().select(tabInventario));
+        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F5), () -> {
+            if (tabPane.getTabs().contains(tabEstadisticas)) {
+                tabPane.getSelectionModel().select(tabEstadisticas);
+            }
+        });
         scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F12), () -> {
             if (tabPane.getSelectionModel().getSelectedItem() == tabVentas
                     && ventasViewController != null) {
@@ -200,14 +225,52 @@ public class MainController implements Initializable {
     /**
      * Al cambiar de pestaña se recargan los datos de la vista destino,
      * porque una venta modifica existencias que Productos/Inventario/Corte
-     * ya tenían cargadas.
+     * ya tenían cargadas. Ventas relee las formas de pago habilitadas.
      */
     private void configurarRefrescoDePestanas() {
         tabPane.getSelectionModel().selectedItemProperty().addListener((obs, old, tab) -> {
             if (tab == null) return;
+            // Primera vez: se construye la pantalla (que ya carga sus datos al iniciar), sin recargar dos veces
+            boolean recienCargada = cargarPestanaPerezosa(tab);
+            if (tab == tabVentas     && ventasViewController     != null) ventasViewController.aplicarConfiguracion();
+            if (recienCargada) return;
             if (tab == tabProductos  && productosViewController  != null) productosViewController.recargar();
             if (tab == tabInventario && inventarioViewController != null) inventarioViewController.recargar();
             if (tab == tabCorte      && corteViewController      != null) corteViewController.recargar();
+            if (tab == tabEstadisticas && estadisticasViewController != null) estadisticasViewController.recargar();
         });
+    }
+
+    /** FXML de cada pestaña que se carga al abrirla por primera vez */
+    private String fxmlDe(Tab tab) {
+        if (tab == tabClientes)     return "/fxml/clientes.fxml";
+        if (tab == tabProductos)    return "/fxml/productos.fxml";
+        if (tab == tabInventario)   return "/fxml/inventario.fxml";
+        if (tab == tabConfig)       return "/fxml/configuracion.fxml";
+        if (tab == tabCorte)        return "/fxml/corte.fxml";
+        if (tab == tabEstadisticas) return "/fxml/estadisticas.fxml";
+        return null;
+    }
+
+    /** @return true si la pestaña acaba de construirse en esta llamada */
+    private boolean cargarPestanaPerezosa(Tab tab) {
+        String fxml = fxmlDe(tab);
+        if (fxml == null || tab.getContent() != null) return false;
+        try {
+            FXMLLoader loader = new FXMLLoader(MainController.class.getResource(fxml));
+            loader.setControllerFactory(springContext::getBean);
+            Parent contenido = loader.load();
+            Object controlador = loader.getController();
+            if (controlador instanceof ProductosController c)    productosViewController = c;
+            if (controlador instanceof InventarioController c)   inventarioViewController = c;
+            if (controlador instanceof CorteController c)        corteViewController = c;
+            if (controlador instanceof EstadisticasController c) estadisticasViewController = c;
+            tab.setContent(contenido);
+            return true;
+        } catch (IOException | RuntimeException e) {
+            e.printStackTrace();
+            Ventanas.alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la pantalla: " + e.getMessage());
+            return false;
+        }
     }
 }

@@ -29,20 +29,36 @@
         </HBox>
     </top>
 
-    <!-- ── TABLA DE PRODUCTOS EN TICKET ──────────── -->
+    <!-- ── TABLA DE PRODUCTOS EN TICKET + SUGERENCIAS ── -->
     <center>
-        <TableView fx:id="tablaProductos" styleClass="ticket-table">
-            <columns>
-                <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="120"/>
-                <TableColumn fx:id="colDescripcion"   text="Descripción" prefWidth="260"/>
-                <TableColumn fx:id="colPrecio"        text="Precio"      prefWidth="85"  styleClass="align-right"/>
-                <TableColumn fx:id="colCantidad"      text="Cant."       prefWidth="70"  styleClass="align-right"/>
-                <TableColumn fx:id="colDescuento"     text="Descuento"   prefWidth="85"  styleClass="align-right"/>
-                <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="150"/>
-                <TableColumn fx:id="colImporte"       text="Importe"     prefWidth="90"  styleClass="align-right"/>
-                <TableColumn fx:id="colExistencia"    text="Existencia"  prefWidth="85"  styleClass="align-right"/>
-            </columns>
-        </TableView>
+        <VBox spacing="0">
+            <TableView fx:id="tablaProductos" styleClass="ticket-table" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="120"/>
+                    <TableColumn fx:id="colDescripcion"   text="Descripción" prefWidth="260"/>
+                    <TableColumn fx:id="colPrecio"        text="Precio"      prefWidth="85"  styleClass="align-right"/>
+                    <TableColumn fx:id="colCantidad"      text="Cant."       prefWidth="70"  styleClass="align-right"/>
+                    <TableColumn fx:id="colDescuento"     text="Descuento"   prefWidth="85"  styleClass="align-right"/>
+                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="150"/>
+                    <TableColumn fx:id="colImporte"       text="Importe"     prefWidth="90"  styleClass="align-right"/>
+                    <TableColumn fx:id="colExistencia"    text="Existencia"  prefWidth="85"  styleClass="align-right"/>
+                </columns>
+            </TableView>
+
+            <!-- Tira compacta de sugerencias (RecomendacionService). Se oculta con la
+                 opción "Mostrar sugerencias en venta" de Configuración; el botón solo
+                 la pliega durante la sesión. Nunca bloquea el cobro. -->
+            <VBox fx:id="boxSugerencias" styleClass="sugerencias-panel" spacing="6">
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="Sugerencias"/>
+                    <Label fx:id="lblSugerenciasEstado" text="" styleClass="hint"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="btnOcultarSugerencias" text="Ocultar" onAction="#onOcultarSugerencias"
+                            styleClass="button-ghost, button-sm"/>
+                </HBox>
+                <FlowPane fx:id="contenedorSugerencias" hgap="8" vgap="6"/>
+            </VBox>
+        </VBox>
     </center>
 
     <!-- ── PANEL DERECHO: totales y cobro ────────── -->
@@ -55,20 +71,41 @@
 
             <Separator/>
 
-            <Label text="Efectivo recibido:"/>
-            <TextField fx:id="txtEfectivo" promptText="\$0.00"
-                       onKeyReleased="#onPagoChanged"
-                       onAction="#onCobrar"/>
+            <!-- Solo se muestran las formas de pago habilitadas en Configuración -->
+            <VBox fx:id="boxEfectivo" spacing="4">
+                <Label text="Efectivo recibido:"/>
+                <TextField fx:id="txtEfectivo" promptText="0.00"
+                           onKeyReleased="#onPagoChanged"
+                           onAction="#onCobrar"/>
+            </VBox>
 
-            <Label text="Tarjeta:"/>
-            <TextField fx:id="txtTarjeta" promptText="\$0.00"
-                       onKeyReleased="#onPagoChanged"
-                       onAction="#onCobrar"/>
+            <VBox fx:id="boxTarjeta" spacing="4">
+                <Label text="Tarjeta:"/>
+                <TextField fx:id="txtTarjeta" promptText="0.00"
+                           onKeyReleased="#onPagoChanged"
+                           onAction="#onCobrar"/>
+            </VBox>
 
-            <HBox spacing="6">
-                <Button text="Todo efectivo" onAction="#onTodoEfectivo" styleClass="button-ghost" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
-                <Button text="Todo tarjeta"  onAction="#onTodoTarjeta"  styleClass="button-ghost" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
-            </HBox>
+            <VBox fx:id="boxTransferencia" spacing="4">
+                <Label text="Transferencia:"/>
+                <TextField fx:id="txtTransferencia" promptText="0.00"
+                           onKeyReleased="#onPagoChanged"
+                           onAction="#onCobrar"/>
+            </VBox>
+
+            <VBox fx:id="boxVales" spacing="4">
+                <Label text="Vales:"/>
+                <TextField fx:id="txtVales" promptText="0.00"
+                           onKeyReleased="#onPagoChanged"
+                           onAction="#onCobrar"/>
+            </VBox>
+
+            <FlowPane hgap="6" vgap="6">
+                <Button fx:id="btnTodoEfectivo"      text="Todo efectivo"       onAction="#onTodoEfectivo"      styleClass="button-ghost"/>
+                <Button fx:id="btnTodoTarjeta"       text="Todo tarjeta"        onAction="#onTodoTarjeta"       styleClass="button-ghost"/>
+                <Button fx:id="btnTodoTransferencia" text="Todo transferencia"  onAction="#onTodoTransferencia" styleClass="button-ghost"/>
+                <Button fx:id="btnTodoVales"         text="Todo vales"          onAction="#onTodoVales"         styleClass="button-ghost"/>
+            </FlowPane>
 
             <HBox spacing="8" alignment="CENTER_LEFT">
                 <Label text="Pagado:"/>

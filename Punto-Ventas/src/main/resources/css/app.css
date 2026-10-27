@@ -755,6 +755,18 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-muted;
 }
 
+/* ── RELOJ (cabecera, junto al usuario) ───────────────────────────── */
+.main-toolbar .reloj-hora {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.main-toolbar .reloj-fecha {
+    -fx-font-size: 11px;
+    -fx-text-fill: -pos-text-subtle;
+}
+
 
 /* ======================================================================
    8. SECTION TOOLBARS & FORMS (productos, clientes, inventario, corte...)
@@ -1143,3 +1155,62 @@ TilePane > .button:armed,
 .estado-ok      { -fx-text-fill: -color-success-fg; -fx-font-weight: bold; }
 .estado-bajo    { -fx-text-fill: -color-warning-fg; -fx-font-weight: bold; }
 .estado-agotado { -fx-text-fill: -color-danger-fg;  -fx-font-weight: bold; }
+
+/* ======================================================================
+   Estadísticas
+   ====================================================================== */
+
+/* Celda del mapa de calor (día × franja) y su leyenda */
+.heat-cell {
+    -fx-background-radius: 4;
+    -fx-min-width: 56;
+    -fx-min-height: 30;
+    -fx-alignment: center;
+    -fx-font-size: 11px;
+    -fx-padding: 4 6 4 6;
+    -fx-background-color: -pos-surface-inset;
+}
+
+.heat-0 { -fx-background-color: -pos-surface-inset; }
+.heat-1 { -fx-background-color: -pos-accent-subtle; }
+.heat-2 { -fx-background-color: -pos-accent-muted; }
+.heat-3 { -fx-background-color: -pos-accent-hover; }
+
+/* ── Estadísticas: texto claro sobre la celda más intensa del mapa de calor ── */
+.heat-cell.heat-texto-claro {
+    -fx-text-fill: -pos-text-on-accent;
+}
+
+/* ── Ventas: panel de sugerencias (tira compacta bajo el ticket) ─────── */
+.sugerencias-panel {
+    -fx-background-color:  -pos-border, -pos-surface-alt;
+    -fx-background-insets: 0, 1 0 0 0;
+    -fx-padding: 6 12 6 12;
+}
+
+.sugerencias-panel > .label {
+    -fx-text-fill: -pos-text-muted;
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+}
+
+/* Cada sugerencia: nombre + motivo + insignia + botón Agregar */
+.sugerencia-chip {
+    -fx-background-color:  -pos-border, -pos-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 6, 5;
+    -fx-padding: 4 8 4 10;
+    -fx-spacing: 8;
+    -fx-alignment: center-left;
+}
+
+.sugerencia-chip .sugerencia-nombre {
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+    -fx-font-size: 12px;
+}
+
+.sugerencia-chip .sugerencia-motivo {
+    -fx-text-fill: -pos-text-subtle;
+    -fx-font-size: 11px;
+}

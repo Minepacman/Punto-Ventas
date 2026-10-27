@@ -140,6 +140,12 @@
                                      toggleGroup="$toggleTipoVenta"/>
                     </VBox>
 
+                    <!-- ── UNIDAD DE MEDIDA (catálogo de Configuración) ── -->
+                    <VBox spacing="4">
+                        <Label text="Unidad de medida" styleClass="field-label"/>
+                        <ComboBox fx:id="comboUnidad" maxWidth="Infinity"/>
+                    </VBox>
+
                     <Separator/>
 
                     <!-- ── PRECIOS ─────────────────────────────── -->

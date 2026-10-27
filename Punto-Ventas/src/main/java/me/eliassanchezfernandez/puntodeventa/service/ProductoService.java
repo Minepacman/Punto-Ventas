@@ -6,12 +6,14 @@ import me.eliassanchezfernandez.puntodeventa.model.HistorialPrecio;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.repository.DepartamentoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.DetalleVentaRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.HistorialPrecioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.MovimientoInventarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.PromocionRepository;
+import me.eliassanchezfernandez.puntodeventa.repository.UnidadRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,8 @@ public class ProductoService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.TicketPendienteRepository ticketPendienteRepo;
     @Autowired private SesionService                  sesionService;
     @Autowired private AuditoriaService               auditoriaService;
+    @Autowired private UnidadRepository               unidadRepo;
+    @Autowired private ConfiguracionService           configuracionService;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -425,6 +429,26 @@ public class ProductoService {
         }
         if (p.getTipoVenta() == null) {
             p.setTipoVenta(Producto.TipoVenta.UNIDAD);
+        }
+        // La unidad de medida manda sobre el tipo de venta: decimales = a granel
+        if (p.getUnidad() != null) {
+            Unidad u = unidadRepo.findById(p.getUnidad().getId())
+                    .orElseThrow(() -> new NegocioException("La unidad de medida ya no existe."));
+            p.setUnidad(u);
+            if (u.isPermiteDecimales()) {
+                p.setTipoVenta(Producto.TipoVenta.GRANEL);
+            } else if (p.getTipoVenta() == Producto.TipoVenta.GRANEL) {
+                p.setTipoVenta(Producto.TipoVenta.UNIDAD);
+            }
+        }
+        // Con la venta a granel apagada no se pueden crear productos a granel nuevos
+        // (los que ya lo eran se pueden seguir editando)
+        if (p.permiteDecimales() && !configuracionService.isPermitirGranel()) {
+            boolean yaEraGranel = p.getId() != null
+                    && productoRepo.findById(p.getId()).map(Producto::permiteDecimales).orElse(false);
+            if (!yaEraGranel) {
+                throw new NegocioException("La venta a granel está deshabilitada en Configuración → Opciones habilitadas.");
+            }
         }
         if (p.isUsaInventario()) {
             validarDecimales(p, p.getCantidadActual());

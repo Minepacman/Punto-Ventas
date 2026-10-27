@@ -24,8 +24,10 @@ repositories {
 }
 
 javafx {
-    // CAMBIO: Sincronizado con Java 17 para máxima estabilidad en Windows 7
-    version = '17.0.10' 
+    // Java 17 + JavaFX 17: la línea 17 es la última con soporte de Windows 10/11 de 32 bits en JavaFX.
+    // OJO: OpenJFX publicó el artefacto win-x86 SOLO hasta 17.0.2 y en 17.0.6-17.0.8; de 17.0.9 en
+    // adelante no existe. Para el instalador de 32 bits: -PjavafxVersion=17.0.8 y Gradle con un JDK 17 de 32 bits.
+    version = project.findProperty('javafxVersion') ?: '17.0.10'
     modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
 }
 
@@ -49,9 +51,11 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // Additional dependencies
-    implementation 'org.apache.commons:commons-lang3:3.14.0'
-    implementation 'net.sf.jasperreports:jasperreports:6.21.3' 
+    // (Se quitaron commons-lang3 y jasperreports: no se usan en el código y jasperreports arrastraba
+    //  unos 30 jars / 80 MB al instalador. Si algún día se imprime con Jasper, volver a agregarlo.)
+
+    // JSON del servicio de clima (Open-Meteo); versión administrada por el BOM de Spring Boot
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     // Testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -60,10 +64,29 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-application {
-    mainClass = 'me.eliassanchezfernandez.puntodeventa.Launcher'
+// El código fuente y las pruebas están en UTF-8 (acentos, ñ, emojis). Sin esto, compilar en Windows
+// (Java 17 usa cp1252 por defecto) corrompe los textos.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }
 
+// Opciones de la JVM pensadas para PCs de 2-4 GB de RAM y disco duro (también las usa jpackage)
+def jvmOpciones = [
+        '-Xms64m', '-Xmx384m',
+        '-XX:+UseSerialGC',
+        '-XX:TieredStopAtLevel=1',
+        '-XX:MaxMetaspaceSize=128m',
+        '-Dfile.encoding=UTF-8',
+        // límites del servidor web local (acceso móvil)
+        '-Dsun.net.httpserver.maxReqTime=10',
+        '-Dsun.net.httpserver.maxRspTime=30',
+        '-Dsun.net.httpserver.maxConnections=64'
+]
+
+application {
+    mainClass = 'me.eliassanchezfernandez.puntodeventa.Launcher'
+    applicationDefaultJvmArgs = jvmOpciones
+}
 
 springBoot {
     mainClass = 'me.eliassanchezfernandez.puntodeventa.Launcher'
@@ -71,19 +94,52 @@ springBoot {
 
 tasks.named('test') {
     useJUnitPlatform()
+    defaultCharacterEncoding = 'UTF-8'
 }
 
-// Tarea para empaquetar el instalador nativo
-tasks.register('jpackageTask', Exec) {
-    dependsOn 'bootJar' 
-    
-    commandLine 'jpackage',
-            '--input',           'build/libs',
-            '--name',            'PuntoDeVenta',
-            '--main-jar',        "${project.name}-${project.version}.jar",
-            '--main-class',      'org.springframework.boot.loader.launch.JarLauncher',
-            '--type',            'dmg', 
-            '--app-version',     '1.0.0',
-            '--vendor',          'Elias Sanchez',
-            '--dest',            'build/installer'
+// ── Instalador nativo (jpackage) ─────────────────────────────────────────────────────────────
+// Se empaquetan los jars SUELTOS (build/install/<proyecto>/lib) con Launcher como clase principal,
+// no el jar "gordo" de Spring Boot: arranca más rápido y los natives de JavaFX/SQLite quedan accesibles.
+//   macOS:    ./gradlew jpackageTask            -> build/installer/PuntoDeVenta-1.0.0.dmg
+//   Windows:  gradlew.bat jpackageTask          -> build/installer/PuntoDeVenta-1.0.0.exe
+//             gradlew.bat jpackageTask -PwinType=msi
+// jpackage SOLO construye para el sistema donde corre; en Windows hace falta WiX Toolset 3.x en el PATH.
+tasks.register('jpackageTask') {
+    group = 'distribution'
+    description = 'Crea el instalador nativo del sistema actual con jpackage (dmg / exe / msi)'
+    dependsOn 'installDist'
+
+    doLast {
+        def os = System.getProperty('os.name').toLowerCase()
+        def esWindows = os.contains('win')
+        def esMac = os.contains('mac')
+        def lib = layout.buildDirectory.dir("install/${project.name}/lib").get().asFile
+        def destino = layout.buildDirectory.dir('installer').get().asFile
+        destino.deleteDir()
+
+        def jdk17 = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }.get()
+        def jpackage = jdk17.metadata.installationPath.file("bin/jpackage" + (esWindows ? '.exe' : '')).asFile.absolutePath
+
+        def args = [jpackage,
+                '--input', lib.absolutePath,
+                '--dest', destino.absolutePath,
+                '--name', 'PuntoDeVenta',
+                '--main-jar', tasks.jar.archiveFileName.get(),
+                '--main-class', 'me.eliassanchezfernandez.puntodeventa.Launcher',
+                '--app-version', '1.0.0',
+                '--vendor', 'Elias Sanchez',
+                '--description', 'Punto de venta para abarrotes']
+        jvmOpciones.each { args += ['--java-options', it] }
+        if (esMac) {
+            args += ['--type', 'dmg']
+        } else if (esWindows) {
+            args += ['--type', (project.findProperty('winType') ?: 'exe'),
+                     '--win-menu', '--win-shortcut', '--win-per-user-install', '--win-dir-chooser']
+        } else {
+            args += ['--type', 'app-image']
+        }
+        logger.lifecycle("jpackage: " + args.join(' '))
+        def proceso = new ProcessBuilder(args).inheritIO().start()
+        if (proceso.waitFor() != 0) throw new GradleException('jpackage falló (en Windows revisa que WiX 3.x esté en el PATH)')
+    }
 }

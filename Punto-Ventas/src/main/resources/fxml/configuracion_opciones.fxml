@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_opciones.fxml  –  Opciones habilitadas
+    Controlador: ConfiguracionOpcionesController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionOpcionesController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="14">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Opciones habilitadas" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkFondoCaja" text="Pedir el fondo de caja al iniciar el día"/>
+                    <Label text="Al primer inicio de sesión del día se captura el dinero inicial en caja. Apagada, el fondo del día cuenta como 0."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkStockBajo" text="Mostrar aviso de stock bajo"/>
+                    <Label text="Después de cobrar, avisa de los productos que quedaron en su existencia mínima."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkGranel" text="Permitir venta a granel"/>
+                    <Label text="Permite productos con cantidades decimales (kilos, litros). Apagada, no se crean productos a granel nuevos ni se venden los existentes."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkConfirmarCobro" text="Confirmar antes de cobrar"/>
+                    <Label text="Pide una confirmación con el total antes de registrar cada venta."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkSugerencias" text="Mostrar sugerencias en venta"/>
+                    <Label text="Bajo el ticket aparece una tira con productos sugeridos (se compran juntos, día y hora, clima). No muestra importes ni ganancias."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <Region minHeight="8"/>
+
+                <HBox spacing="12">
+                    <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

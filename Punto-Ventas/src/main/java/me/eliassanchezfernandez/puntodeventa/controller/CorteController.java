@@ -16,6 +16,7 @@ import me.eliassanchezfernandez.puntodeventa.service.CajaService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -56,6 +57,10 @@ public class CorteController implements Initializable {
     // Pagos de contado
     @FXML private Label lblEfectivo;
     @FXML private Label lblTarjeta;
+    @FXML private Label lblTransferenciaTitulo;
+    @FXML private Label lblTransferencia;
+    @FXML private Label lblValesTitulo;
+    @FXML private Label lblVales;
     // IVA y canceladas
     @FXML private Label lblSubtotal;
     @FXML private Label lblIva;
@@ -147,7 +152,7 @@ public class CorteController implements Initializable {
             cajaService.corregirFondo(monto, res.get()[1]);
             recargar();
             Ventanas.alerta(Alert.AlertType.INFORMATION, "Fondo corregido",
-                    String.format("El fondo de hoy ahora es $%.2f.", monto));
+                    "El fondo de hoy ahora es " + Moneda.formato(monto) + ".");
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo corregir", e.getMessage());
         }
@@ -188,12 +193,12 @@ public class CorteController implements Initializable {
         try {
             Corte c = cajaService.hacerCorte(contado, res.get()[1]);
             recargar();
-            String dif = c.hayFaltante() ? String.format("FALTANTE de $%.2f", -c.getDiferencia())
-                       : c.haySobrante() ? String.format("SOBRANTE de $%.2f", c.getDiferencia())
+            String dif = c.hayFaltante() ? "FALTANTE de " + Moneda.formato(-c.getDiferencia())
+                       : c.haySobrante() ? "SOBRANTE de " + Moneda.formato(c.getDiferencia())
                        : "sin diferencia";
             Ventanas.alerta(Alert.AlertType.INFORMATION, "Corte guardado", String.format(
-                    "Corte #%d registrado por %s.\n\nEsperado: $%.2f\nContado:  $%.2f\nResultado: %s",
-                    c.getId(), c.getCajeroNombre(), c.getEfectivoEsperado(), c.getEfectivoContado(), dif));
+                    "Corte #%d registrado por %s.\n\nEsperado: %s\nContado:  %s\nResultado: %s",
+                    c.getId(), c.getCajeroNombre(), Moneda.formato(c.getEfectivoEsperado()), Moneda.formato(c.getEfectivoContado()), dif));
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo guardar el corte", e.getMessage());
         }
@@ -234,6 +239,9 @@ public class CorteController implements Initializable {
 
         lblEfectivo.setText(moneda(r.efectivo));
         lblTarjeta.setText(moneda(r.tarjeta));
+        // Transferencia y vales solo aparecen si hubo ventas con ellos
+        mostrarFila(lblTransferenciaTitulo, lblTransferencia, r.transferencia);
+        mostrarFila(lblValesTitulo, lblVales, r.vales);
         lblSubtotal.setText(moneda(r.subtotal));
         lblIva.setText(moneda(r.iva));
         lblCanceladas.setText(r.numCanceladas + " (" + moneda(r.totalCanceladas) + ")");
@@ -251,8 +259,15 @@ public class CorteController implements Initializable {
                 .orElse("Hoy no se ha hecho ningún corte."));
     }
 
+    private static void mostrarFila(Label titulo, Label valor, double monto) {
+        boolean ver = monto > 0;
+        titulo.setVisible(ver); titulo.setManaged(ver);
+        valor.setVisible(ver);  valor.setManaged(ver);
+        valor.setText(Moneda.formato(monto));
+    }
+
     private static String moneda(double v) {
-        return String.format("$%.2f", v);
+        return Moneda.formato(v);
     }
 
     private static String cantidad(double v) {

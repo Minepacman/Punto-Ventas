@@ -7,6 +7,7 @@
 <?import javafx.scene.control.ProgressIndicator?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Pane?>
 <?import javafx.scene.layout.StackPane?>
@@ -20,6 +21,7 @@
 
         <VBox alignment="CENTER" spacing="6" styleClass="login-header">
             <padding><Insets bottom="24" left="32" right="32" top="32" /></padding>
+            <ImageView fx:id="imgLogo" managed="false" preserveRatio="true" visible="false" />
             <Label styleClass="login-brand-title" text="Punto de Venta" />
             <Label fx:id="lblNombreTienda" styleClass="login-brand-subtitle" text="Mi Tienda" />
         </VBox>

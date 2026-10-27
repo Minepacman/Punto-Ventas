@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_unidades.fxml  –  Catálogo de unidades de medida
+    Controlador: ConfiguracionUnidadesController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionUnidadesController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <VBox spacing="10">
+            <padding><Insets topRightBottomLeft="20"/></padding>
+            <Label text="Unidades de medida" styleClass="form-section-title"/>
+            <TableView fx:id="tabla" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="colNombre"   text="Unidad"        prefWidth="180"/>
+                    <TableColumn fx:id="colAbrev"    text="Abreviatura"   prefWidth="100"/>
+                    <TableColumn fx:id="colDecimales" text="Permite decimales" prefWidth="140"/>
+                </columns>
+            </TableView>
+            <Label text="Una unidad con decimales hace que sus productos se vendan a granel. No se puede cambiar ni borrar una unidad que ya usan productos."
+                   wrapText="true" styleClass="hint"/>
+        </VBox>
+    </center>
+
+    <right>
+        <VBox styleClass="form-panel" spacing="12" prefWidth="260">
+            <padding><Insets topRightBottomLeft="20"/></padding>
+            <Label fx:id="lblTitulo" text="Nueva unidad" styleClass="form-section-title"/>
+            <VBox spacing="4">
+                <Label text="Nombre *" styleClass="field-label"/>
+                <TextField fx:id="txtNombre" promptText="ej: Docena"/>
+            </VBox>
+            <VBox spacing="4">
+                <Label text="Abreviatura" styleClass="field-label"/>
+                <TextField fx:id="txtAbreviatura" promptText="ej: doc"/>
+            </VBox>
+            <CheckBox fx:id="chkDecimales" text="Permite decimales"/>
+            <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary" maxWidth="Infinity" prefHeight="36"/>
+            <Button text="Nueva" onAction="#onNueva" maxWidth="Infinity" prefHeight="36"/>
+            <Button text="Eliminar" onAction="#onEliminar" styleClass="button-danger" maxWidth="Infinity" prefHeight="36"/>
+            <Region VBox.vgrow="ALWAYS"/>
+            <Button text="Cerrar" onAction="#onCerrar" maxWidth="Infinity" prefHeight="36"/>
+        </VBox>
+    </right>
+
+</BorderPane>
