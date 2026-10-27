@@ -1,0 +1,16 @@
+[
+  {
+    "Id": "6ac7d6a0b7a84d4a9d2b2d5c9f3e1a11",
+    "CfdiType": "I",
+    "Type": "issued",
+    "Serie": "A",
+    "Folio": "7",
+    "Date": "2026-10-26T15:04:33",
+    "RfcIssuer": "EKU9003173C9",
+    "RfcReceiver": "GODE561231GR8",
+    "TaxName": "JUAN PEREZ",
+    "Total": 116.0,
+    "Status": "active",
+    "OrderNumber": "V-42"
+  }
+]

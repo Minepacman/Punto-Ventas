@@ -67,6 +67,7 @@
                        wrapText="true" styleClass="hint"/>
                 <HBox spacing="12">
                     <Button text="💾 Guardar credenciales" onAction="#onGuardarCredenciales" styleClass="button-primary" prefHeight="36"/>
+                    <Button fx:id="btnProbar" text="Probar conexión" onAction="#onProbarConexion" prefHeight="36"/>
                     <Button text="Borrar credenciales" onAction="#onBorrarCredenciales" styleClass="button-danger" prefHeight="36"/>
                 </HBox>
 

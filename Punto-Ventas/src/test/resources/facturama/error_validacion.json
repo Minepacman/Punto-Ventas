@@ -1,0 +1,7 @@
+{
+  "Message": "The request is invalid.",
+  "ModelState": {
+    "Receiver.Name": ["El nombre del receptor no coincide con el registrado en el SAT (CFDI40115)."],
+    "Items[0].ProductCode": ["La clave 99999999 no existe en el catálogo c_ClaveProdServ."]
+  }
+}

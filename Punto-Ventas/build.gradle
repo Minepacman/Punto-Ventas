@@ -107,7 +107,22 @@ springBoot {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'sandbox'     // pruebas contra el sandbox real de Facturama: solo con sandboxTest
+    }
+    defaultCharacterEncoding = 'UTF-8'
+}
+
+// Prueba opcional contra apisandbox.facturama.mx. Requiere las variables de entorno
+// FACTURAMA_SANDBOX_USER y FACTURAMA_SANDBOX_PASS (nunca se guardan credenciales en el código).
+tasks.register('sandboxTest', Test) {
+    group = 'verification'
+    description = 'Prueba de timbrado, descarga y cancelación contra el sandbox de Facturama (requiere credenciales en el entorno)'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'sandbox'
+    }
     defaultCharacterEncoding = 'UTF-8'
 }
 

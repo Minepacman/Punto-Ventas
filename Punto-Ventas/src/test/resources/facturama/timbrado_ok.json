@@ -1,0 +1,31 @@
+{
+  "Id": "6ac7d6a0b7a84d4a9d2b2d5c9f3e1a11",
+  "CfdiType": "I",
+  "Type": "issued",
+  "Serie": "A",
+  "Folio": "7",
+  "Date": "2026-10-26T15:04:33",
+  "CertNumber": "30001000000500003416",
+  "PaymentMethod": "PUE",
+  "PaymentTerms": "01",
+  "ExpeditionPlace": "78240",
+  "Currency": "MXN",
+  "Subtotal": 100.0,
+  "Discount": 0.0,
+  "Total": 116.0,
+  "Status": "active",
+  "OrderNumber": "V-42",
+  "Issuer": { "FiscalRegime": "626", "Rfc": "EKU9003173C9", "TaxName": "ESCUELA KEMPER URGATE" },
+  "Receiver": { "Rfc": "GODE561231GR8", "Name": "JUAN PEREZ", "CfdiUse": "G03", "FiscalRegime": "612", "TaxZipCode": "78240" },
+  "Items": [],
+  "Complement": {
+    "TaxStamp": {
+      "Uuid": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "Date": "2026-10-26T15:04:35",
+      "CfdiSign": "abc==",
+      "SatCertNumber": "30001000000500003456",
+      "SatSign": "def==",
+      "RfcProvCertif": "SPR190613I52"
+    }
+  }
+}

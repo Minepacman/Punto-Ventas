@@ -2,7 +2,11 @@ package me.eliassanchezfernandez.puntodeventa.service;
 
 import me.eliassanchezfernandez.puntodeventa.facturacion.BovedaCredenciales;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat;
+import me.eliassanchezfernandez.puntodeventa.facturacion.ClavesSat;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CredencialesPac;
+import me.eliassanchezfernandez.puntodeventa.facturacion.FacturamaProveedor;
+import me.eliassanchezfernandez.puntodeventa.facturacion.PacException;
+import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi;
 import me.eliassanchezfernandez.puntodeventa.facturacion.Rfc;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.ConfiguracionFiscal;
@@ -17,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -37,6 +42,9 @@ public class ConfiguracionFiscalService {
     @Autowired private RutasApp rutas;
 
     private volatile BovedaCredenciales boveda;
+
+    /** Cómo se construye el PAC a partir de las credenciales (las pruebas lo sustituyen por uno sin red) */
+    private volatile Function<CredencialesPac, ProveedorCfdi> fabricaProveedor = FacturamaProveedor::new;
 
     /** Configuración vigente (la crea si no existe). Es una lectura sin permiso: la pantalla de ventas la consulta. */
     public ConfiguracionFiscal obtener() {
@@ -200,23 +208,43 @@ public class ConfiguracionFiscalService {
     }
 
     /** Clave de producto/servicio a facturar: la del producto, o la del departamento, o la genérica de abarrotes */
-    public static String claveProdServDe(Producto p) {
-        if (p.getClaveProdServ() != null && !p.getClaveProdServ().isBlank()) return p.getClaveProdServ();
-        Departamento d = p.getDepartamento();
-        if (d != null && d.getClaveProdServ() != null && !d.getClaveProdServ().isBlank()) return d.getClaveProdServ();
-        return CatalogoSat.PROD_SERV_ABARROTES;
-    }
+    public static String claveProdServDe(Producto p) { return ClavesSat.claveProdServDe(p); }
 
     /** Clave de unidad a facturar: la del producto, o la de su unidad de medida (o deducida), o Pieza */
-    public static String claveUnidadDe(Producto p) {
-        if (p.getClaveUnidad() != null && !p.getClaveUnidad().isBlank()) return p.getClaveUnidad();
-        if (p.getUnidad() != null) return CatalogoSat.claveUnidadPara(p.getUnidad());
-        return p.getTipoVenta() == Producto.TipoVenta.GRANEL ? "KGM" : CatalogoSat.UNIDAD_PIEZA;
-    }
+    public static String claveUnidadDe(Producto p) { return ClavesSat.claveUnidadDe(p); }
 
     /** Objeto de impuesto: el del producto o "02 Sí objeto" */
-    public static String objetoImpDe(Producto p) {
-        return p.getObjetoImp() != null && !p.getObjetoImp().isBlank() ? p.getObjetoImp() : CatalogoSat.OBJETO_IMP_SI;
+    public static String objetoImpDe(Producto p) { return ClavesSat.objetoImpDe(p); }
+
+    // ── PAC ──────────────────────────────────────────────────────────────
+
+    /** Cliente del PAC con las credenciales guardadas (NegocioException si faltan) */
+    public ProveedorCfdi proveedor() {
+        return fabricaProveedor.apply(credenciales());
+    }
+
+    /** Sustituye el PAC (pruebas sin red). Null = volver a Facturama. */
+    void usarFabricaProveedor(Function<CredencialesPac, ProveedorCfdi> fabrica) {
+        this.fabricaProveedor = fabrica != null ? fabrica : FacturamaProveedor::new;
+    }
+
+    /**
+     * Prueba las credenciales guardadas contra el PAC (solo ADMIN). Hace red:
+     * llamar fuera del hilo de JavaFX. Lanza NegocioException con el motivo.
+     */
+    public void probarConexion() {
+        sesionService.verificarAdmin();
+        ConfiguracionFiscal c = obtener();
+        try {
+            proveedor().probarConexion();
+        } catch (PacException e) {
+            auditoriaService.registrar(sesionService.getCajeroActual(), "FACTURACION_PRUEBA_CONEXION",
+                    "Falló (" + (c.isPacSandbox() ? "sandbox" : "producción") + "): " + e.getMessage(), (Cajero) null);
+            throw new NegocioException(e.getMessage());
+        }
+        auditoriaService.registrar(sesionService.getCajeroActual(), "FACTURACION_PRUEBA_CONEXION",
+                "Correcta (" + (c.isPacSandbox() ? "sandbox" : "producción") + ", usuario "
+                        + BovedaCredenciales.enmascarar(usuarioEnClaro(c)) + ")", (Cajero) null);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

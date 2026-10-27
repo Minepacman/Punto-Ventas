@@ -56,6 +56,7 @@ public class ConfiguracionFacturacionController implements Initializable {
     @FXML private CheckBox chkSandbox;
     @FXML private Label lblEstadoCredenciales;
     @FXML private Label lblModo;
+    @FXML private Button btnProbar;
 
     @FXML private GridPane gridDepartamentos;
     @FXML private Button btnGuardarClaves;
@@ -138,6 +139,41 @@ public class ConfiguracionFacturacionController implements Initializable {
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo guardar", e.getMessage());
         }
+    }
+
+    /** Verifica usuario y contraseña contra Facturama en otro hilo; el resultado se muestra al terminar */
+    @FXML
+    private void onProbarConexion() {
+        if (!fiscalService.obtener().tieneCredenciales()) {
+            Ventanas.alerta(Alert.AlertType.WARNING, "Probar conexión", "Guarda primero las credenciales.");
+            return;
+        }
+        btnProbar.setDisable(true);
+        btnProbar.setText("Probando…");
+        Thread t = new Thread(() -> {
+            String error = null;
+            try {
+                fiscalService.probarConexion();
+            } catch (NegocioException e) {
+                error = e.getMessage();
+            } catch (RuntimeException e) {
+                error = "No se pudo probar la conexión: " + e.getMessage();
+            }
+            final String fallo = error;
+            javafx.application.Platform.runLater(() -> {
+                btnProbar.setDisable(false);
+                btnProbar.setText("Probar conexión");
+                if (fallo == null) {
+                    Ventanas.alerta(Alert.AlertType.INFORMATION, "Probar conexión",
+                            "Conexión correcta: Facturama aceptó las credenciales"
+                                    + (chkSandbox.isSelected() ? " (modo pruebas)." : " (producción)."));
+                } else {
+                    Ventanas.alerta(Alert.AlertType.ERROR, "Probar conexión", fallo);
+                }
+            });
+        }, "facturama-probar");
+        t.setDaemon(true);
+        t.start();
     }
 
     @FXML
