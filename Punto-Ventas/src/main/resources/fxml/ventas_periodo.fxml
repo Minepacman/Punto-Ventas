@@ -32,6 +32,7 @@
             <Button fx:id="btnCancelarVenta" text="⛔ Cancelar venta" onAction="#onCancelarVenta"
                     styleClass="button-danger"/>
             <Button fx:id="btnReimprimir" text="🖨 Reimprimir ticket" onAction="#onReimprimir"/>
+            <Button text="📤 Exportar…" onAction="#onExportar"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>

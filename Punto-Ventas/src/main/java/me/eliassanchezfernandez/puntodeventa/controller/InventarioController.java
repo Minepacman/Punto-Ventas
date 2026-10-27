@@ -142,6 +142,11 @@ public class InventarioController implements Initializable {
 
     // ── Toolbar ───────────────────────────────────────────────────────────
 
+    /** Exporta la tabla de inventario visible a CSV, Excel o PDF */
+    @FXML void onExportar() {
+        me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas.exportar(tablaInventario, "inventario", "Inventario");
+    }
+
     @FXML void onProveedores() {
         abrirModal("/fxml/proveedores.fxml", "Proveedores", 980, 620);
         recargarProveedores();

@@ -88,10 +88,9 @@ public final class ExportarPdf {
                 n++;
             }
             documento.add(tabla);
+            documento.close();      // escribe el final del PDF; debe ir antes de cerrar el archivo
         } catch (DocumentException e) {
             throw new IOException("No se pudo armar el PDF: " + e.getMessage(), e);
-        } finally {
-            if (documento.isOpen()) documento.close();
         }
     }
 

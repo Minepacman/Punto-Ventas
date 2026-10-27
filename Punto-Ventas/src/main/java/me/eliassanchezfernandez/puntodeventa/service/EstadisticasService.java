@@ -345,4 +345,60 @@ public class EstadisticasService {
         r.sort(Comparator.comparingDouble(VentasClima::importe).reversed());
         return r;
     }
+
+    // ── Ventas por cajero y por hora ─────────────────────────────────────
+
+    /** Ventas de un cajero en el periodo (sin las canceladas) */
+    public record VentasCajero(String cajero, int ventas, double total, double ticketPromedio, double porcentaje) { }
+
+    /** Ventas que cayeron en una hora del día (0–23) en el periodo (sin las canceladas) */
+    public record VentasHora(int hora, int ventas, double total, double porcentaje) {
+        /** "14:00 - 14:59" */
+        public String rango() { return String.format("%02d:00 - %02d:59", hora, hora); }
+    }
+
+    /**
+     * Total, número de ventas y ticket promedio de cada cajero del periodo, de mayor a menor.
+     * Lee directo de las ventas (incluye hoy). Las ventas canceladas no cuentan. VER_HISTORIAL.
+     */
+    @Transactional(readOnly = true)
+    public List<VentasCajero> ventasPorCajero(Periodo p) {
+        sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
+        List<Object[]> filas = ventaRepository.ventasPorCajero(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
+        double granTotal = filas.stream().mapToDouble(f -> ((Number) f[2]).doubleValue()).sum();
+        List<VentasCajero> r = new ArrayList<>();
+        for (Object[] f : filas) {
+            int ventas = ((Number) f[1]).intValue();
+            double total = ResumenDiario.VentaRedondeo.centavos(((Number) f[2]).doubleValue());
+            r.add(new VentasCajero(f[0] != null ? (String) f[0] : "Sin cajero", ventas, total,
+                    ventas == 0 ? 0 : ResumenDiario.VentaRedondeo.centavos(total / ventas),
+                    granTotal <= 0 ? 0 : total / granTotal * 100.0));
+        }
+        return r;
+    }
+
+    /**
+     * Ventas del periodo agrupadas por la hora en que se hicieron (solo las horas con ventas,
+     * de la más temprana a la más tarde). Las canceladas no cuentan. VER_HISTORIAL.
+     */
+    @Transactional(readOnly = true)
+    public List<VentasHora> ventasPorHora(Periodo p) {
+        sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
+        double[] total = new double[24];
+        int[] ventas = new int[24];
+        for (Object[] f : ventaRepository.fechasYTotalesActivas(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay())) {
+            LocalDateTime fecha = (LocalDateTime) f[0];
+            total[fecha.getHour()] += ((Number) f[1]).doubleValue();
+            ventas[fecha.getHour()]++;
+        }
+        double granTotal = 0;
+        for (double t : total) granTotal += t;
+        List<VentasHora> r = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            if (ventas[h] == 0) continue;
+            r.add(new VentasHora(h, ventas[h], ResumenDiario.VentaRedondeo.centavos(total[h]),
+                    granTotal <= 0 ? 0 : total[h] / granTotal * 100.0));
+        }
+        return r;
+    }
 }

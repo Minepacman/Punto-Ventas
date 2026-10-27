@@ -216,6 +216,12 @@ public class VentasPeriodoController implements Initializable {
         }
     }
 
+    /** Exporta las ventas del período (lo que se ve en la tabla) a CSV, Excel o PDF */
+    @FXML private void onExportar() {
+        me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas.exportar(tablaVentas, "ventas",
+                "Ventas del " + dpDesde.getValue() + " al " + dpHasta.getValue());
+    }
+
     @FXML private void onCerrar() {
         ((Stage) raiz.getScene().getWindow()).close();
     }

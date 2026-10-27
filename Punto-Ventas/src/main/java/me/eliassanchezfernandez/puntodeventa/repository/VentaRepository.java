@@ -127,4 +127,17 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
            "AND p.formaPago = :tarjeta ORDER BY v.fecha ASC")
     List<me.eliassanchezfernandez.puntodeventa.model.PagoVenta> vouchersTarjeta(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta);
+
+    // ── Reportes de Estadísticas: por cajero y por hora (ventas activas, leídas de la tabla de ventas) ──
+
+    /** [nombre del cajero (null = sin dato), nº de ventas, total] de las ventas ACTIVAS del rango */
+    @Query("SELECT v.cajeroNombre, COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
+           "GROUP BY v.cajeroNombre ORDER BY SUM(v.total) DESC")
+    List<Object[]> ventasPorCajero(LocalDateTime inicio, LocalDateTime fin);
+
+    /** [fecha, total] de cada venta ACTIVA del rango (solo dos columnas: ligero para agrupar por hora) */
+    @Query("SELECT v.fecha, v.total FROM Venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)")
+    List<Object[]> fechasYTotalesActivas(LocalDateTime inicio, LocalDateTime fin);
 }

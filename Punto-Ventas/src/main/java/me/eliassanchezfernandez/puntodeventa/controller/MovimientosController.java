@@ -88,6 +88,12 @@ public class MovimientosController implements Initializable {
         }
     }
 
+    /** Exporta la bitácora visible a CSV, Excel o PDF */
+    @FXML private void onExportar() {
+        me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas.exportar(tabla, "movimientos-inventario",
+                "Movimientos de inventario " + dpDesde.getValue() + " a " + dpHasta.getValue());
+    }
+
     @FXML private void onCerrar() {
         ((Stage) raiz.getScene().getWindow()).close();
     }

@@ -23,6 +23,7 @@
             <Separator orientation="VERTICAL"/>
             <Button text="📊 Reporte de Inventario"  onAction="#onReporteInventario"/>
             <Button text="📋 Movimientos"            onAction="#onReporteMovimientos"/>
+            <Button text="📤 Exportar…"              onAction="#onExportar"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="btnProveedores" text="🏭 Proveedores"     onAction="#onProveedores"/>
             <Button fx:id="btnOrdenes"     text="🧾 Órdenes de compra" onAction="#onOrdenesCompra"/>
