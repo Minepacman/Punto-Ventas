@@ -129,6 +129,9 @@ public class PuntoDeVentaApp extends Application {
 
     /** Arranca Spring fuera del hilo de JavaFX (puede tardar) y luego muestra el login o el error */
     private void arrancarEnSegundoPlano(Stage stage) {
+        // Mientras Spring arranca puede no haber ninguna ventana visible (p. ej. al cerrar la
+        // pregunta de la primera vez): sin esto JavaFX daría la aplicación por terminada.
+        Platform.setImplicitExit(false);
         Thread t = new Thread(() -> {
             arrancarSpring();
             Platform.runLater(() -> {
@@ -138,6 +141,8 @@ public class PuntoDeVentaApp extends Application {
                     e.printStackTrace();
                     Ventanas.alerta(javafx.scene.control.Alert.AlertType.ERROR, "Error",
                             "No se pudo abrir la pantalla de inicio de sesión: " + e.getMessage());
+                } finally {
+                    Platform.setImplicitExit(true);
                 }
             });
         }, "arranque-spring");
