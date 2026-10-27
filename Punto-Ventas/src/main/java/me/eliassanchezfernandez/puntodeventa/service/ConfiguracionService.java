@@ -66,6 +66,22 @@ public class ConfiguracionService {
         return c.valor();
     }
 
+    /**
+     * Al arrancar se asegura de que exista la fila única. Con varias cajas contra
+     * un servidor, dos ventas simultáneas en una base recién creada intentarían
+     * crearla a la vez y una fallaría por la llave primaria; creándola en el
+     * arranque (como el administrador por defecto) eso no pasa.
+     */
+    @org.springframework.context.event.EventListener(org.springframework.context.event.ContextRefreshedEvent.class)
+    public void crearFilaSiNoExiste() {
+        try {
+            obtenerParaEditar();
+        } catch (RuntimeException e) {
+            // Otra caja la creó en el mismo instante o la base no respondió: se vuelve a intentar al usarla
+            System.err.println("No se pudo preparar la configuración al arrancar: " + e.getMessage());
+        }
+    }
+
     /** Fila viva de la base de datos (la crea si no existe), para modificarla dentro de una transacción */
     @Transactional
     public Configuracion obtenerParaEditar() {

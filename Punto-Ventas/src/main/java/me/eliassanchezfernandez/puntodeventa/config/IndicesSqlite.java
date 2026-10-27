@@ -18,11 +18,14 @@ import java.util.List;
  * EXISTS, que es idempotente y seguro con la aplicación recién arrancada.
  * Corre después de ddl-auto=update (ContextRefreshedEvent), igual que las
  * siembras de SesionService y UnidadService.
+ *
+ * El nombre es histórico: la misma sentencia vale en PostgreSQL, así que los
+ * índices se crean en los dos motores (en el servidor también hacen falta).
  */
 @Component
 public class IndicesSqlite {
 
-    static final List<String> INDICES = List.of(
+    public static final List<String> INDICES = List.of(
             "CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas (fecha)",
             "CREATE INDEX IF NOT EXISTS idx_ventas_fecha_cancelacion ON ventas (fecha_cancelacion)",
             "CREATE INDEX IF NOT EXISTS idx_detalle_ventas_venta ON detalle_ventas (venta_id)",
@@ -38,7 +41,11 @@ public class IndicesSqlite {
             "CREATE INDEX IF NOT EXISTS idx_tickets_pendientes_cajero ON tickets_pendientes (cajero_id)",
             "CREATE INDEX IF NOT EXISTS idx_tickets_pendientes_lineas_ticket ON tickets_pendientes_lineas (ticket_id)",
             "CREATE INDEX IF NOT EXISTS idx_productos_activo_descripcion ON productos (activo, descripcion)",
-            "CREATE INDEX IF NOT EXISTS idx_ventas_cajero_fecha ON ventas (cajero_id, fecha)");
+            "CREATE INDEX IF NOT EXISTS idx_ventas_cajero_fecha ON ventas (cajero_id, fecha)",
+            // Varias cajas: el corte y el fondo se consultan por caja y día
+            "CREATE INDEX IF NOT EXISTS idx_ventas_caja_fecha ON ventas (caja, fecha)",
+            "CREATE INDEX IF NOT EXISTS idx_cortes_fecha ON cortes (fecha)",
+            "CREATE INDEX IF NOT EXISTS idx_fondos_caja_fecha ON fondos_caja (fecha)");
 
     @Autowired private DataSource dataSource;
 
@@ -54,10 +61,24 @@ public class IndicesSqlite {
 
     /** Punto de entrada reutilizable (también desde las pruebas) */
     public static void crear(DataSource dataSource) throws SQLException {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
-            String producto = c.getMetaData().getDatabaseProductName();
-            if (producto == null || !producto.toLowerCase().contains("sqlite")) return;
-            for (String sql : INDICES) st.execute(sql);
+        try (Connection c = dataSource.getConnection()) {
+            crear(c);
+        }
+    }
+
+    /** Igual, sobre una conexión abierta (la migración al servidor los crea en la base nueva) */
+    public static void crear(Connection c) throws SQLException {
+        try (Statement st = c.createStatement()) {
+            SQLException primero = null;
+            for (String sql : INDICES) {
+                try {
+                    st.execute(sql);
+                } catch (SQLException e) {
+                    // Un índice que falle (p. ej. una tabla aún sin esa columna) no debe impedir los demás
+                    if (primero == null) primero = e;
+                }
+            }
+            if (primero != null) throw primero;
         }
     }
 }

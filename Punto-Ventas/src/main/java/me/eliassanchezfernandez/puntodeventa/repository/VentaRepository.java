@@ -51,8 +51,8 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     boolean existsByCajeroId(Long cajeroId);
 
     @Query("SELECT SUM(v.total) FROM Venta v WHERE v.fecha >= :inicio AND v.fecha < :fin " +
-           "AND (v.cancelada IS NULL OR v.cancelada = false)")
-    Double sumTotalEntre(LocalDateTime inicio, LocalDateTime fin);
+           "AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
+    Double sumTotalEntre(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     // ── Estadísticas (agregados) ─────────────────────────────────────────
 
@@ -82,62 +82,75 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     List<LocalDateTime> findFechasAfectadasDesde(LocalDateTime desde);
 
     // ── Corte del día: totales calculados en SQL (sin cargar tickets ni renglones) ──
+    // Todas aceptan una caja (null = todas las cajas); las ventas anteriores a "varias cajas" (caja null) son de la caja 1.
+
+    String FILTRO_CAJA = " AND (:caja IS NULL OR COALESCE(v.caja, 1) = :caja)";
 
     /** [n, total, subtotal, iva] de las ventas ACTIVAS del rango (una sola fila) */
     @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0), COALESCE(SUM(COALESCE(v.subtotal, v.total)), 0), " +
            "COALESCE(SUM(COALESCE(v.iva, 0)), 0) FROM Venta v " +
-           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)")
-    List<Object[]> resumenActivas(LocalDateTime inicio, LocalDateTime fin);
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
+    List<Object[]> resumenActivas(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     /** [n, total] de las ventas CANCELADAS del rango (una sola fila) */
     @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
-           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND v.cancelada = true")
-    List<Object[]> resumenCanceladas(LocalDateTime inicio, LocalDateTime fin);
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND v.cancelada = true" + FILTRO_CAJA)
+    List<Object[]> resumenCanceladas(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     /** [formaPago, monto] de los pagos de ventas activas; del efectivo se descuenta el cambio */
     @Query("SELECT p.formaPago, SUM(p.monto - CASE WHEN p.formaPago = :efectivo THEN v.cambio ELSE 0.0 END) " +
            "FROM Venta v JOIN v.pagos p " +
-           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
-           "GROUP BY p.formaPago")
-    List<Object[]> pagosPorForma(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago efectivo);
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA +
+           " GROUP BY p.formaPago")
+    List<Object[]> pagosPorForma(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago efectivo, Integer caja);
 
     /** [formaPago, total] de ventas activas anteriores al pago dividido (sin filas de pago) */
     @Query("SELECT v.formaPago, SUM(v.total) FROM Venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
-           "AND NOT EXISTS (SELECT p.id FROM PagoVenta p WHERE p.venta = v) " +
-           "GROUP BY v.formaPago")
-    List<Object[]> ventasSinPagosPorForma(LocalDateTime inicio, LocalDateTime fin);
+           "AND NOT EXISTS (SELECT p.id FROM PagoVenta p WHERE p.venta = v)" + FILTRO_CAJA +
+           " GROUP BY v.formaPago")
+    List<Object[]> ventasSinPagosPorForma(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     /** [departamento (null = sin departamento), importe, costo] de los renglones de ventas activas */
     @Query("SELECT dep.nombre, SUM(d.precioVenta * d.cantidad - d.descuento), " +
            "SUM(COALESCE(d.costoUnitario, p.precioCosto) * d.cantidad) " +
            "FROM DetalleVenta d JOIN d.venta v JOIN d.producto p LEFT JOIN p.departamento dep " +
-           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
-           "GROUP BY dep.nombre ORDER BY SUM(d.precioVenta * d.cantidad - d.descuento) DESC")
-    List<Object[]> importesPorDepartamento(LocalDateTime inicio, LocalDateTime fin);
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA +
+           " GROUP BY dep.nombre ORDER BY SUM(d.precioVenta * d.cantidad - d.descuento) DESC")
+    List<Object[]> importesPorDepartamento(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     /** [terminal (null = sin datos), nº de pagos, monto] de los cobros con tarjeta de ventas activas */
     @Query("SELECT p.terminalNombre, COUNT(p), SUM(p.monto) FROM Venta v JOIN v.pagos p " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
-           "AND p.formaPago = :tarjeta GROUP BY p.terminalNombre ORDER BY SUM(p.monto) DESC")
-    List<Object[]> tarjetaPorTerminal(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta);
+           "AND p.formaPago = :tarjeta" + FILTRO_CAJA + " GROUP BY p.terminalNombre ORDER BY SUM(p.monto) DESC")
+    List<Object[]> tarjetaPorTerminal(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta, Integer caja);
 
     /** Cobros con tarjeta de ventas activas del rango, con su venta, del más antiguo al más reciente */
     @Query("SELECT p FROM PagoVenta p JOIN FETCH p.venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
-           "AND p.formaPago = :tarjeta ORDER BY v.fecha ASC")
-    List<me.eliassanchezfernandez.puntodeventa.model.PagoVenta> vouchersTarjeta(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta);
+           "AND p.formaPago = :tarjeta" + FILTRO_CAJA + " ORDER BY v.fecha ASC")
+    List<me.eliassanchezfernandez.puntodeventa.model.PagoVenta> vouchersTarjeta(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta, Integer caja);
 
     // ── Reportes de Estadísticas: por cajero y por hora (ventas activas, leídas de la tabla de ventas) ──
 
     /** [nombre del cajero (null = sin dato), nº de ventas, total] de las ventas ACTIVAS del rango */
     @Query("SELECT v.cajeroNombre, COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
-           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
-           "GROUP BY v.cajeroNombre ORDER BY SUM(v.total) DESC")
-    List<Object[]> ventasPorCajero(LocalDateTime inicio, LocalDateTime fin);
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA +
+           " GROUP BY v.cajeroNombre ORDER BY SUM(v.total) DESC")
+    List<Object[]> ventasPorCajero(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     /** [fecha, total] de cada venta ACTIVA del rango (solo dos columnas: ligero para agrupar por hora) */
     @Query("SELECT v.fecha, v.total FROM Venta v " +
-           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)")
-    List<Object[]> fechasYTotalesActivas(LocalDateTime inicio, LocalDateTime fin);
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
+    List<Object[]> fechasYTotalesActivas(LocalDateTime inicio, LocalDateTime fin, Integer caja);
+
+    /** [caja, nº de ventas, total] de las ventas ACTIVAS del rango, por caja (las sin caja cuentan como caja 1) */
+    @Query("SELECT COALESCE(v.caja, 1), COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
+           "GROUP BY COALESCE(v.caja, 1) ORDER BY COALESCE(v.caja, 1)")
+    List<Object[]> ventasPorCaja(LocalDateTime inicio, LocalDateTime fin);
+
+    /** Números de caja que han registrado ventas alguna vez (para los filtros de pantallas) */
+    @Query("SELECT DISTINCT COALESCE(v.caja, 1) FROM Venta v ORDER BY COALESCE(v.caja, 1)")
+    List<Integer> cajasConVentas();
 }

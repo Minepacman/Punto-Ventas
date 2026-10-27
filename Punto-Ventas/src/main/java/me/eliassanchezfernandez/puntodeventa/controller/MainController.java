@@ -59,6 +59,7 @@ public class MainController implements Initializable {
     @FXML private Label   labelHora;
     @FXML private Label   labelFecha;
     @FXML private Label   labelVersion;
+    @FXML private Label   labelCaja;
 
     // Ventas se incluye en main.fxml (fx:id del include + "Controller"); el resto se carga la primera vez que se abre su pestaña
     @FXML private VentasController     ventasViewController;
@@ -69,6 +70,7 @@ public class MainController implements Initializable {
 
     @Autowired private SesionService      sesionService;
     @Autowired private ApplicationContext springContext;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.IdentidadCaja identidadCaja;
 
     @Value("${app.version:1.0.0}")
     private String version;
@@ -90,6 +92,14 @@ public class MainController implements Initializable {
                 ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol().getEtiqueta() + ")"
                 : "Usuario: —");
         labelVersion.setText("v" + version);
+        // Qué caja es esta instalación (con varias cajas, además el número si el nombre no lo dice)
+        String caja = identidadCaja.nombre();
+        if (identidadCaja.esMultiCaja() && !caja.contains(String.valueOf(identidadCaja.numero()))) {
+            caja += " (" + identidadCaja.numero() + ")";
+        }
+        labelCaja.setText(caja);
+        labelCaja.setTooltip(new javafx.scene.control.Tooltip(identidadCaja.esMultiCaja()
+                ? "Caja " + identidadCaja.numero() + " conectada al servidor" : "Una sola caja (base de datos local)"));
 
         aplicarPermisos();
         configurarAtajosTeclado();

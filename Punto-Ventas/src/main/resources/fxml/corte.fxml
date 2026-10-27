@@ -18,6 +18,8 @@
                     styleClass="button-primary"/>
             <Button text="🖨 Imprimir Corte"     onAction="#onImprimirCorte"/>
             <Button fx:id="btnCorregirFondo" text="✏ Corregir fondo" onAction="#onCorregirFondo"/>
+            <Button fx:id="btnCorteGeneral" text="Σ Corte general (todas las cajas)" onAction="#onCorteGeneral"/>
+            <Label fx:id="lblCaja" text="Caja 1" styleClass="badge"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="lblUltimoCorte" text="Hoy no se ha hecho ningún corte." wrapText="true"
                    style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>

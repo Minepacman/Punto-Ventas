@@ -77,6 +77,17 @@ public class MovimientoInventario {
     @Column(name = "venta_id")
     private Long ventaId;
 
+    /**
+     * Número de caja (instalación) que registró la fila. Null en las filas
+     * anteriores a "varias cajas", que cuentan como caja 1.
+     */
+    @Column(name = "caja")
+    private Integer caja;
+
+    public int getCajaONumero() {
+        return caja == null || caja <= 0 ? 1 : caja;
+    }
+
     public enum Tipo {
         ENTRADA("Entrada"), AJUSTE("Ajuste"), VENTA("Venta"),
         CANCELACION("Cancelación"), ALTA_INICIAL("Alta inicial");

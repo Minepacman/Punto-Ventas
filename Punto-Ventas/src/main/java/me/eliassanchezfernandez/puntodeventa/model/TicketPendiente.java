@@ -33,6 +33,17 @@ public class TicketPendiente {
     @Column(name = "guardado_en", nullable = false)
     private LocalDateTime guardadoEn = LocalDateTime.now();
 
+    /**
+     * Número de caja (instalación) que registró la fila. Null en las filas
+     * anteriores a "varias cajas", que cuentan como caja 1.
+     */
+    @Column(name = "caja")
+    private Integer caja;
+
+    public int getCajaONumero() {
+        return caja == null || caja <= 0 ? 1 : caja;
+    }
+
     @OneToMany(mappedBy = "ticket", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Linea> lineas = new ArrayList<>();
 

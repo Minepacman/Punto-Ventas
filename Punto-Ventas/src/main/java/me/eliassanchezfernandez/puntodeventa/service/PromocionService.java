@@ -29,6 +29,7 @@ public class PromocionService {
     @Autowired private PromocionRepository promocionRepo;
     @Autowired private SesionService       sesionService;
     @Autowired private AuditoriaService    auditoriaService;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -84,14 +85,31 @@ public class PromocionService {
         });
     }
 
-    /** Suma piezas vendidas con la promoción ("hasta agotar"). Lo llama VentaService al cobrar. */
+    /**
+     * Suma piezas vendidas con la promoción ("hasta agotar"); negativo las
+     * devuelve (cancelación). Lo llama VentaService al cobrar. Se hace con un
+     * UPDATE condicionado en la base de datos: si otra caja agotó el cupo un
+     * instante antes, la venta se rechaza (y se revierte completa) en lugar de
+     * rebasar el límite.
+     */
     @Transactional
     public void registrarUso(Long promocionId, double piezas) {
         if (promocionId == null || piezas == 0) return;
-        promocionRepo.findById(promocionId).ifPresent(p -> {
-            p.setPiezasUsadas(Math.max(0, p.getPiezasUsadasOCero() + piezas));
-            promocionRepo.save(p);
-        });
+        Optional<Promocion> promo = promocionRepo.findById(promocionId);
+        if (promo.isEmpty()) return;
+        if (piezas > 0) {
+            if (promocionRepo.consumirCupo(promocionId, piezas) == 0) {
+                em.refresh(promo.get());
+                throw new NegocioException("La promoción \"" + promo.get().getNombre()
+                        + "\" se agotó mientras se cobraba (otra caja vendió las últimas piezas). "
+                        + "Quita y vuelve a agregar el producto para recalcular el ticket.");
+            }
+        } else {
+            promocionRepo.devolverCupo(promocionId, -piezas);
+        }
+        // La fila ya cambió en la base; la copia en memoria se vuelve a leer para que
+        // las siguientes consultas de la misma transacción vean el cupo real
+        em.refresh(promo.get());
     }
 
     // ── Validación ────────────────────────────────────────────────────────

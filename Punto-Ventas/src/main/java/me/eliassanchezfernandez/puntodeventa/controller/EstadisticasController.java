@@ -11,6 +11,7 @@ import javafx.scene.chart.LineChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
@@ -130,7 +131,12 @@ public class EstadisticasController implements Initializable {
     @FXML private Button btnExportarProductos;
     @FXML private TableView<FilaProducto> tablaProductos;
 
-    // Cajeros y horas
+    // Cajas (varias cajas contra un servidor), cajeros y horas
+    @FXML private HBox   boxCajas;
+    @FXML private ComboBox<Integer> cmbCaja;
+    @FXML private VBox   cardCajas;
+    @FXML private Button btnExportarCajas;
+    @FXML private TableView<EstadisticasService.VentasPorCaja> tablaCajas;
     @FXML private Button btnExportarCajeros;
     @FXML private TableView<EstadisticasService.VentasCajero> tablaCajeros;
     @FXML private Button btnExportarHoras;
@@ -241,6 +247,34 @@ public class EstadisticasController implements Initializable {
     @FXML private void onExportarCorrelacion() { exportar(tablaCorrelacion, "correlacion-clima", "Correlación producto por clima"); }
     @FXML private void onExportarClima()       { exportar(tablaClima, "ventas-por-clima", "Ventas por condición climática"); }
     @FXML private void onExportarCajeros()     { exportar(tablaCajeros, "ventas-por-cajero", "Ventas por cajero — " + lblPeriodo.getText()); }
+    @FXML private void onExportarCajas()       { exportar(tablaCajas, "ventas-por-caja", "Ventas por caja — " + lblPeriodo.getText()); }
+
+    /** Cambio de caja en el filtro: se vuelven a leer solo las tablas por cajero y por hora */
+    @FXML private void onCambiarCaja() { cargarPeriodo(); }
+
+    /** Caja elegida en el filtro (null = todas); 0 representa "Todas las cajas" en el ComboBox */
+    private Integer cajaFiltro() {
+        Integer c = cmbCaja == null ? null : cmbCaja.getValue();
+        return c == null || c <= 0 ? null : c;
+    }
+
+    /** Llena el filtro de cajas con las que han vendido; el filtro y la tabla por caja solo aparecen si hay más de una */
+    private void pintarCajas(List<Integer> cajas) {
+        if (cajas == null) return;
+        boolean varias = cajas.size() > 1;
+        boxCajas.setVisible(varias);
+        boxCajas.setManaged(varias);
+        cardCajas.setVisible(varias);
+        cardCajas.setManaged(varias);
+        Integer seleccion = cmbCaja.getValue();
+        List<Integer> items = new ArrayList<>();
+        items.add(0);
+        items.addAll(cajas);
+        if (!cmbCaja.getItems().equals(items)) {
+            cmbCaja.getItems().setAll(items);
+            cmbCaja.setValue(seleccion != null && items.contains(seleccion) ? seleccion : 0);
+        }
+    }
     @FXML private void onExportarHoras()       { exportar(tablaHoras, "ventas-por-hora", "Ventas por hora — " + lblPeriodo.getText()); }
 
     // ── Carga ─────────────────────────────────────────────────────────────
@@ -252,7 +286,8 @@ public class EstadisticasController implements Initializable {
     private record DatosPeriodo(Totales totales, List<Comparacion> comparaciones, Map<LocalDate, Double> serie,
                                 double[] porDia, Map<Franja, Totales> porFranja, double[][] mapa,
                                 List<EstadisticasService.ProductoTop> top, List<EstadisticasService.VentasClima> porClima,
-                                List<EstadisticasService.VentasCajero> porCajero, List<EstadisticasService.VentasHora> porHora) { }
+                                List<EstadisticasService.VentasCajero> porCajero, List<EstadisticasService.VentasHora> porHora,
+                                List<EstadisticasService.VentasPorCaja> porCaja, List<Integer> cajas) { }
 
     /** Lo que se lee para las recomendaciones, el nivel y el clima de ahora */
     private record DatosGenerales(NivelDatos nivel, Optional<LocalDateTime> ultimaActualizacion, Optional<ClimaRegistro> clima,
@@ -268,12 +303,13 @@ public class EstadisticasController implements Initializable {
         if (!sesionService.tienePermiso(Permiso.VER_HISTORIAL)) return;
         final int gen = ++generacionCarga;
         final Periodo p = periodoActual();
+        final Integer caja = cajaFiltro();
         lblActualizado.setText("Cargando…");
         Thread t = new Thread(() -> {
             DatosGenerales g = null;
             DatosPeriodo d = null;
             try { g = leerGenerales(); } catch (RuntimeException e) { e.printStackTrace(); }
-            try { d = leerPeriodo(p); } catch (RuntimeException e) { e.printStackTrace(); }
+            try { d = leerPeriodo(p, caja); } catch (RuntimeException e) { e.printStackTrace(); }
             final DatosGenerales gf = g;
             final DatosPeriodo df = d;
             Platform.runLater(() -> {
@@ -299,12 +335,13 @@ public class EstadisticasController implements Initializable {
         return new DatosGenerales(nivel, ultima, clima, cfg, pares, momento, correlacion);
     }
 
-    private DatosPeriodo leerPeriodo(Periodo p) {
+    private DatosPeriodo leerPeriodo(Periodo p, Integer caja) {
         return new DatosPeriodo(estadisticasService.totales(p), estadisticasService.comparaciones(),
                 estadisticasService.serieDiaria(p), estadisticasService.porDiaSemana(p),
                 estadisticasService.porFranja(p), estadisticasService.mapaCalor(p),
                 estadisticasService.topProductos(p, TOP_PRODUCTOS), estadisticasService.ventasPorClima(p),
-                estadisticasService.ventasPorCajero(p), estadisticasService.ventasPorHora(p));
+                estadisticasService.ventasPorCajero(p, caja), estadisticasService.ventasPorHora(p, caja),
+                estadisticasService.ventasPorCaja(p), estadisticasService.cajasConVentas());
     }
 
     private void pintarNivel(DatosGenerales g) {
@@ -336,12 +373,13 @@ public class EstadisticasController implements Initializable {
         if (!sesionService.tienePermiso(Permiso.VER_HISTORIAL)) return;
         final int gen = ++generacionCarga;
         final Periodo p = periodoActual();
+        final Integer caja = cajaFiltro();
         lblPeriodo.setText(etiquetaDe(p));
         Thread t = new Thread(() -> {
             DatosPeriodo d = null;
             String error = null;
             try {
-                d = leerPeriodo(p);
+                d = leerPeriodo(p, caja);
             } catch (RuntimeException e) {
                 e.printStackTrace();
                 error = e.getMessage();
@@ -388,6 +426,8 @@ public class EstadisticasController implements Initializable {
         mostrarVentasPorClima(d.porClima());
         tablaCajeros.getItems().setAll(d.porCajero());
         tablaHoras.getItems().setAll(d.porHora());
+        tablaCajas.getItems().setAll(d.porCaja());
+        pintarCajas(d.cajas());
     }
 
     private void mostrarComparaciones(List<Comparacion> comparaciones) {
@@ -639,6 +679,20 @@ public class EstadisticasController implements Initializable {
                 columna("Ventas",    100, true,  f -> String.valueOf(f.ventas())),
                 columna("Importe",   140, true,  f -> Moneda.formato(f.importe())));
         tablaClima.setPlaceholder(new Label("Sin ventas en el periodo."));
+
+        cmbCaja.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(Integer c) { return c == null || c <= 0 ? "Todas las cajas" : "Caja " + c; }
+            @Override public Integer fromString(String s) { return null; }
+        });
+        cmbCaja.getItems().setAll(0);
+        cmbCaja.setValue(0);
+        tablaCajas.getColumns().setAll(
+                columna("Caja",            120, false, EstadisticasService.VentasPorCaja::etiqueta),
+                columna("Ventas",          80,  true,  f -> String.valueOf(f.ventas())),
+                columna("Total",           130, true,  f -> Moneda.formato(f.total())),
+                columna("Ticket promedio", 130, true,  f -> Moneda.formato(f.ticketPromedio())),
+                columna("% del total",     90,  true,  f -> String.format("%.1f %%", f.porcentaje())));
+        tablaCajas.setPlaceholder(new Label("Sin ventas en el periodo."));
 
         tablaCajeros.getColumns().setAll(
                 columna("Cajero",          220, false, EstadisticasService.VentasCajero::cajero),

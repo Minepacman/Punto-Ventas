@@ -20,6 +20,10 @@
 
             <Separator orientation="VERTICAL"/>
 
+            <Label fx:id="labelCaja" text="Caja 1" styleClass="badge"/>
+
+            <Separator orientation="VERTICAL"/>
+
             <Label fx:id="labelUsuario" text="Usuario: —"/>
 
             <Separator orientation="VERTICAL"/>

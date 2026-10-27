@@ -53,6 +53,8 @@ public class ProductoService {
     @Autowired private ConfiguracionService           configuracionService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProveedorRepository proveedorRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.OrdenCompraRepository ordenCompraRepo;
+    @Autowired private IdentidadCaja                  identidadCaja;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -282,14 +284,16 @@ public class ProductoService {
 
         Producto p = obtenerConInventario(productoId);
         validarDecimales(p, cantidad);
-        double antes = p.getCantidadActual();
-        p.setCantidadActual(antes + cantidad);
-
         if (costoUnitario > 0 && Math.abs(costoUnitario - p.getPrecioCosto()) > 0.0001) {
             registrarCambioPrecio(p, "COSTO", p.getPrecioCosto(), costoUnitario);
             p.setPrecioCosto(costoUnitario);
         }
-        Producto guardado = productoRepo.save(p);
+        productoRepo.save(p);
+        // La existencia se suma EN la base (atómico): una venta simultánea en otra caja no se pierde
+        productoRepo.sumar(p.getId(), cantidad);
+        em.refresh(p);
+        double antes = VentaService.redondearCantidad(p.getCantidadActual() - cantidad);
+        Producto guardado = p;
 
         Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         MovimientoInventario m = registrarMovimiento(guardado, MovimientoInventario.Tipo.ENTRADA, cantidad, antes,
@@ -366,6 +370,7 @@ public class ProductoService {
         m.setProveedor(proveedor);
         m.setCostoUnitario(costoUnitario);
         m.setVentaId(ventaId);
+        m.setCaja(identidadCaja.numero());
         return movimientoRepo.save(m);
     }
 

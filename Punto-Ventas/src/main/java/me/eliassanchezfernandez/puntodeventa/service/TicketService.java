@@ -26,6 +26,14 @@ import java.util.List;
 @Service
 public class TicketService {
 
+    /** Con varias cajas el ticket y el corte dicen de qué caja son; en una sola caja no hace falta */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private IdentidadCaja identidadCaja;
+
+    private boolean multiCaja() {
+        return identidadCaja != null && identidadCaja.esMultiCaja();
+    }
+
     /** Columnas de texto según el ancho del papel */
     public static int columnas(int anchoMm) {
         return anchoMm == 58 ? 32 : 48;
@@ -86,6 +94,7 @@ public class TicketService {
         d.linea(dosColumnas("Folio: " + v.getFolioMostrado(),
                 v.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
         d.linea("Cajero: " + (v.getCajeroNombre() != null ? v.getCajeroNombre() : "—"));
+        if (multiCaja() || (v.getCaja() != null && v.getCaja() > 1)) d.linea(IdentidadCaja.etiqueta(v.getCaja()));
         if (reimpresion) d.agregar("*** REIMPRESION ***", DocumentoImpresion.Alineacion.CENTRO, true, false);
         if (v.isCancelada()) d.agregar("*** VENTA CANCELADA ***", DocumentoImpresion.Alineacion.CENTRO, true, false);
         d.linea(raya);
@@ -135,7 +144,9 @@ public class TicketService {
         String raya = "-".repeat(cols);
         DocumentoImpresion d = new DocumentoImpresion();
         d.titulo(c.getNombreTienda());
-        d.agregar("CORTE DE CAJA", DocumentoImpresion.Alineacion.CENTRO, true, false);
+        String titulo = r.esGeneral() ? "CORTE GENERAL (TODAS LAS CAJAS)"
+                : multiCaja() ? "CORTE DE " + IdentidadCaja.etiqueta(r.caja).toUpperCase() : "CORTE DE CAJA";
+        d.agregar(titulo, DocumentoImpresion.Alineacion.CENTRO, true, false);
         d.linea(raya);
         d.linea(dosColumnas("Fecha", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
         d.linea("Impreso por: " + (impresoPor != null ? impresoPor : "—"));
@@ -159,6 +170,13 @@ public class TicketService {
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
         d.linea(dosColumnas("Canceladas (" + r.numCanceladas + ")", Moneda.formato(r.totalCanceladas), cols));
         if (r.gananciaVisible) d.linea(dosColumnas("Ganancia", Moneda.formato(r.ganancia), cols));
+        if (!r.porCaja.isEmpty()) {
+            d.linea(raya);
+            d.negrita("Por caja");
+            for (VentaService.VentasCaja vc : r.porCaja) {
+                d.linea(dosColumnas("Caja " + vc.caja() + " (" + vc.ventas() + ")", Moneda.formato(vc.total()), cols));
+            }
+        }
         if (!r.porDepartamento.isEmpty()) {
             d.linea(raya);
             d.negrita("Por departamento");

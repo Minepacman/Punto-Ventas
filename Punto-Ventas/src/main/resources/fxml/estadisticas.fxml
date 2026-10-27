@@ -149,6 +149,24 @@
                     <VBox spacing="16">
                         <padding><Insets topRightBottomLeft="16"/></padding>
 
+                        <HBox fx:id="boxCajas" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
+                            <Label text="Caja:" styleClass="text-muted"/>
+                            <ComboBox fx:id="cmbCaja" prefWidth="180" onAction="#onCambiarCaja"/>
+                            <Label text="Aplica a las tablas por cajero y por hora. Los demás reportes son de toda la tienda."
+                                   styleClass="hint" wrapText="true"/>
+                        </HBox>
+
+                        <VBox fx:id="cardCajas" styleClass="card" spacing="8" visible="false" managed="false">
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Ventas por caja" styleClass="card-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="btnExportarCajas" text="Exportar…" onAction="#onExportarCajas"/>
+                            </HBox>
+                            <Label text="Total y número de ventas de cada caja en el periodo. Las ventas canceladas no se cuentan."
+                                   styleClass="subtitle" wrapText="true"/>
+                            <TableView fx:id="tablaCajas" prefHeight="160"/>
+                        </VBox>
+
                         <VBox styleClass="card" spacing="8">
                             <HBox spacing="8" alignment="CENTER_LEFT">
                                 <Label text="Ventas por cajero" styleClass="card-title"/>

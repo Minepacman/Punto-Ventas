@@ -2,6 +2,7 @@ package me.eliassanchezfernandez.puntodeventa.repository;
 
 import me.eliassanchezfernandez.puntodeventa.model.Promocion;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -29,4 +30,19 @@ public interface PromocionRepository extends JpaRepository<Promocion, Long> {
     List<Promocion> findAllByOrderByActivaDescIdDesc();
 
     void deleteByProductoId(Long productoId);
+
+    /**
+     * Consume piezas del "hasta agotar" solo si todavía caben (atómico: dos cajas
+     * no pueden rebasar el límite entre las dos). @return 1 si se consumieron, 0 si ya no cabían
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Promocion p SET p.piezasUsadas = COALESCE(p.piezasUsadas, 0) + :piezas " +
+           "WHERE p.id = :id AND (p.limitePiezas IS NULL OR COALESCE(p.piezasUsadas, 0) + :piezas <= p.limitePiezas + 0.000001)")
+    int consumirCupo(Long id, double piezas);
+
+    /** Devuelve piezas al cupo (cancelación); nunca queda negativo */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Promocion p SET p.piezasUsadas = CASE WHEN COALESCE(p.piezasUsadas, 0) - :piezas < 0 THEN 0 " +
+           "ELSE COALESCE(p.piezasUsadas, 0) - :piezas END WHERE p.id = :id")
+    int devolverCupo(Long id, double piezas);
 }
