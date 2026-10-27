@@ -26,6 +26,8 @@
             <Separator orientation="VERTICAL"/>
             <Button text="📄 PDF / XML / correo" onAction="#onAcciones"/>
             <Button text="🌐 Factura global…" onAction="#onGlobal"/>
+            <Button text="⛔ Cancelar factura" onAction="#onCancelarFactura" styleClass="button-danger"/>
+            <Button text="Resolver pendiente" onAction="#onResolverPendiente"/>
             <Button text="👥 Clientes fiscales" onAction="#onClientes"/>
             <Button text="📤 Exportar…" onAction="#onExportar"/>
             <Region HBox.hgrow="ALWAYS"/>

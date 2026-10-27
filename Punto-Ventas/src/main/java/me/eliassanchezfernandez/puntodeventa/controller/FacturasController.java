@@ -110,6 +110,18 @@ public class FacturasController implements Initializable {
         dialogos.accionesFactura(raiz.getScene().getWindow(), f, detalle(f));
     }
 
+    @FXML private void onCancelarFactura() {
+        Factura f = seleccionada();
+        if (f == null) return;
+        dialogos.cancelarFactura(raiz.getScene().getWindow(), f).ifPresent(x -> onBuscar());
+    }
+
+    @FXML private void onResolverPendiente() {
+        Factura f = seleccionada();
+        if (f == null) return;
+        dialogos.resolverPendiente(raiz.getScene().getWindow(), f, this::onBuscar);
+    }
+
     @FXML private void onGlobal() {
         dialogos.facturaGlobal(raiz.getScene().getWindow()).ifPresent(f -> onBuscar());
     }

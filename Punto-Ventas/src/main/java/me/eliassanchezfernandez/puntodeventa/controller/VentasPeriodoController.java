@@ -206,6 +206,13 @@ public class VentasPeriodoController implements Initializable {
             alerta(Alert.AlertType.INFORMATION, "Venta cancelada", "La venta #" + v.getId() + " ya está cancelada.");
             return;
         }
+        var factura = facturaPorVenta.get(v.getId());
+        if (factura != null) {
+            alerta(Alert.AlertType.WARNING, "Venta facturada", String.format(
+                    "La venta #%d está en la factura %s%s (%s).\nPrimero cancela o sustituye esa factura en \"Facturas…\" y después cancela la venta.",
+                    v.getId(), factura.getSerieFolio(), factura.esGlobal() ? " (global)" : "", factura.getEstadoEnum().getEtiqueta()));
+            return;
+        }
         if (java.time.LocalDateTime.now().isAfter(v.getLimiteCancelacion())) {
             alerta(Alert.AlertType.WARNING, "Fuera de plazo", String.format(
                     "La venta #%d ya no se puede cancelar: el plazo de %d horas venció el %s.",

@@ -7,6 +7,7 @@ import me.eliassanchezfernandez.puntodeventa.facturacion.ConstructorCfdi;
 import me.eliassanchezfernandez.puntodeventa.facturacion.PacException;
 import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi;
 import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi.Formato;
+import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi.MotivoCancelacion;
 import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi.Timbrado;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.ClienteFiscal;
@@ -429,6 +430,97 @@ public class FacturacionService {
             }
         }
         return almacen().resolver(ruta);
+    }
+
+    // ── Cancelación ──────────────────────────────────────────────────────
+
+    private static final java.util.regex.Pattern UUID_SAT = java.util.regex.Pattern.compile(
+            "^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$");
+
+    /**
+     * Solicita al PAC la cancelación de la factura (hace red). Requiere
+     * CANCELAR_FACTURA o autorización de administrador. Con motivo 01 hay que
+     * indicar el UUID de la factura que la sustituye. Si el receptor debe
+     * aceptar la cancelación queda "en proceso"; mientras tanto la venta sigue
+     * bloqueada.
+     */
+    public Factura cancelarFactura(Long facturaId, MotivoCancelacion motivo, String uuidSustitucion,
+                                   Collection<Autorizacion> autorizaciones) {
+        sesionService.verificarPermiso(Permiso.CANCELAR_FACTURA, autorizaciones);
+        Cajero quien = sesionService.requerirSesion();
+        Factura f = facturaRepo.findConVentasById(facturaId).orElseThrow(() -> new NegocioException("La factura ya no existe."));
+        if (motivo == null) throw new NegocioException("Indica el motivo de la cancelación (01 a 04).");
+        if (f.isCancelada()) throw new NegocioException("La factura " + f.getSerieFolio() + " ya está cancelada.");
+        if (f.isPendiente() || f.getIdExterno() == null) {
+            throw new NegocioException("La factura " + f.getSerieFolio() + " no está confirmada como timbrada; usa \"Resolver pendiente\".");
+        }
+        String sustitucion = uuidSustitucion == null ? null : uuidSustitucion.trim().toUpperCase();
+        if (sustitucion != null && sustitucion.isEmpty()) sustitucion = null;
+        if (motivo.requiereSustitucion() && sustitucion == null) {
+            throw new NegocioException("Con el motivo 01 indica el UUID (folio fiscal) de la factura que sustituye a esta.");
+        }
+        if (sustitucion != null) {
+            if (!UUID_SAT.matcher(sustitucion).matches()) throw new NegocioException("El UUID de sustitución no tiene el formato del SAT.");
+            if (sustitucion.equals(f.getUuid())) throw new NegocioException("La factura no puede sustituirse a sí misma.");
+        }
+        if (!motivo.requiereSustitucion()) sustitucion = null;
+
+        ProveedorCfdi.Cancelacion r;
+        try {
+            r = fiscalService.proveedor().cancelar(f.getIdExterno(), motivo, sustitucion);
+        } catch (PacException e) {
+            throw new NegocioException("No se pudo cancelar la factura: " + e.getMessage());
+        }
+        if (!r.aceptada() && !r.enEspera()) {
+            throw new NegocioException("El PAC no aceptó la cancelación" + (r.mensaje() != null ? ": " + r.mensaje() : "."));
+        }
+        Autorizacion aut = sesionService.autorizacionUsada(Permiso.CANCELAR_FACTURA, autorizaciones);
+        final String sust = sustitucion;
+        Factura g = new TransactionTemplate(txManager).execute(st -> {
+            Factura x = facturaRepo.findById(facturaId).orElseThrow(() -> new NegocioException("La factura ya no existe."));
+            x.setEstadoEnum(r.enEspera() ? Factura.Estado.CANCELACION_EN_PROCESO : Factura.Estado.CANCELADA);
+            x.setFechaCancelacion(LocalDateTime.now());
+            x.setMotivoCancelacion(motivo.getClave());
+            x.setUuidSustitucion(sust);
+            x.setCanceladaPorId(quien.getId());
+            x.setCanceladaPorNombre(quien.getNombreCompleto() + (aut != null ? " (autorizó " + aut.nombreAdministrador() + ")" : ""));
+            x.setUltimoError(r.enEspera() ? (r.mensaje() != null ? r.mensaje() : "En espera de que el receptor acepte la cancelación.") : null);
+            Factura guardada = facturaRepo.save(x);
+            auditoriaService.registrar(quien, r.enEspera() ? "FACTURA_CANCELACION_SOLICITADA" : "FACTURA_CANCELADA",
+                    descripcion(guardada) + " — motivo " + motivo.getClave() + (sust != null ? " sustituida por " + sust : ""), aut);
+            return guardada;
+        });
+        if (aut != null) aut.consumir();
+        return g;
+    }
+
+    /**
+     * Resuelve una factura PENDIENTE sin volver a timbrar: pregunta al PAC por
+     * su referencia; si existe queda VIGENTE, si no se elimina (nunca se
+     * timbró). Hace red. Requiere FACTURAR.
+     */
+    public Optional<Factura> resolverPendiente(Long facturaId) {
+        Contexto ctx = iniciar();
+        Factura f = facturaRepo.findConVentasById(facturaId).orElseThrow(() -> new NegocioException("La factura ya no existe."));
+        if (!f.isPendiente()) throw new NegocioException("La factura " + f.getSerieFolio() + " no está pendiente.");
+        Optional<Timbrado> previo;
+        try {
+            previo = ctx.pac().buscarPorNumeroOrden(f.getNumeroOrden());
+        } catch (PacException e) {
+            throw new NegocioException("No se pudo consultar al PAC: " + e.getMessage());
+        }
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+        if (previo.isEmpty()) {
+            tx.executeWithoutResult(st -> facturaRepo.findById(facturaId).ifPresent(x -> {
+                auditoriaService.registrar(ctx.quien(), "FACTURA_PENDIENTE_DESCARTADA",
+                        "Folio " + x.getSerieFolio() + " (" + x.getNumeroOrden() + "): el PAC no la tiene", (Cajero) null);
+                facturaRepo.delete(x);
+            }));
+            return Optional.empty();
+        }
+        Factura vigente = tx.execute(st -> confirmar(facturaId, previo.get(), ctx.quien()));
+        descargarArchivos(vigente, ctx.pac());
+        return facturaRepo.findConVentasById(vigente.getId());
     }
 
     // ── Correo ───────────────────────────────────────────────────────────

@@ -21,7 +21,9 @@ import java.util.List;
  * Tipo y estado se guardan como texto (sin CHECK) para poder agregar valores.
  */
 @Entity
-@Table(name = "facturas")
+@Table(name = "facturas", indexes = {
+        @Index(name = "idx_facturas_fecha", columnList = "fecha"),
+        @Index(name = "idx_facturas_estado", columnList = "estado")})
 @Getter
 @Setter
 @NoArgsConstructor

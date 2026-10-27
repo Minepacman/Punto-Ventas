@@ -24,6 +24,9 @@ import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.Entrada;
 import me.eliassanchezfernandez.puntodeventa.facturacion.ConstructorCfdi;
 import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi.Formato;
+import me.eliassanchezfernandez.puntodeventa.facturacion.ProveedorCfdi.MotivoCancelacion;
+import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
+import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.facturacion.Rfc;
 import me.eliassanchezfernandez.puntodeventa.model.ClienteFiscal;
 import me.eliassanchezfernandez.puntodeventa.model.Factura;
@@ -61,6 +64,7 @@ public class FacturacionDialogos {
     @Autowired private ClienteFiscalService clienteFiscalService;
     @Autowired private ConfiguracionFiscalService fiscalService;
     @Autowired private SesionService sesionService;
+    @Autowired private AutorizacionService autorizacionService;
 
     /** ¿Mostrar el botón Facturar? (configuración lista y permiso del usuario) */
     public boolean puedeFacturar() {
@@ -314,6 +318,112 @@ public class FacturacionDialogos {
         accionesFactura(owner, f, "Factura global " + f.getSerieFolio() + " emitida" + (f.isSandbox() ? " (PRUEBAS)" : "")
                 + " con " + f.getVentas().size() + " venta(s)\nUUID: " + f.getUuid() + "\nTotal: " + Moneda.formato(f.getTotal()));
         return Optional.of(f);
+    }
+
+    // ── Cancelar una factura ─────────────────────────────────────────────
+
+    /** Motivo (01-04) y UUID de sustitución; pide autorización de administrador si hace falta */
+    public Optional<Factura> cancelarFactura(Window owner, Factura f) {
+        if (f.isCancelada()) {
+            Ventanas.alerta(Alert.AlertType.INFORMATION, "Cancelar factura", "La factura " + f.getSerieFolio() + " ya está cancelada.");
+            return Optional.empty();
+        }
+        if (f.isPendiente()) {
+            Ventanas.alerta(Alert.AlertType.INFORMATION, "Cancelar factura",
+                    "La factura " + f.getSerieFolio() + " está pendiente de confirmar. Usa \"Resolver pendiente\".");
+            return Optional.empty();
+        }
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle("Cancelar factura " + f.getSerieFolio());
+        dlg.setHeaderText("Cancelar ante el SAT la factura " + f.getSerieFolio() + " (UUID " + f.getUuid() + ")\n"
+                + "La cancelación no se puede deshacer. Si el receptor debe aceptarla, quedará \"en proceso\".");
+        if (owner != null) dlg.initOwner(owner);
+        ComboBox<MotivoCancelacion> cmbMotivo = new ComboBox<>(FXCollections.observableArrayList(MotivoCancelacion.values()));
+        cmbMotivo.setMaxWidth(Double.MAX_VALUE);
+        cmbMotivo.setValue(MotivoCancelacion.ERRORES_SIN_RELACION);
+        TextField txtUuid = new TextField();
+        txtUuid.setPromptText("UUID de la factura que la sustituye (solo motivo 01)");
+        txtUuid.setDisable(true);
+        cmbMotivo.valueProperty().addListener((o, a, m) -> txtUuid.setDisable(m == null || !m.requiereSustitucion()));
+        Label error = new Label();
+        error.setWrapText(true);
+        error.getStyleClass().add("field-error-label");
+        error.setVisible(false);
+        error.setManaged(false);
+        Label progreso = new Label("Solicitando la cancelación al PAC…");
+        progreso.setVisible(false);
+        progreso.setManaged(false);
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.addRow(0, new Label("Motivo:"), cmbMotivo);
+        grid.addRow(1, new Label("Sustituida por:"), txtUuid);
+        GridPane.setHgrow(cmbMotivo, Priority.ALWAYS);
+        GridPane.setHgrow(txtUuid, Priority.ALWAYS);
+        txtUuid.setPrefWidth(380);
+        VBox caja = new VBox(10, grid, error, progreso);
+        caja.setPadding(new Insets(10));
+        dlg.getDialogPane().setContent(caja);
+        ButtonType cancelar = new ButtonType("Cancelar factura", ButtonBar.ButtonData.OK_DONE);
+        dlg.getDialogPane().getButtonTypes().addAll(cancelar, ButtonType.CANCEL);
+        Button btn = (Button) dlg.getDialogPane().lookupButton(cancelar);
+        btn.getStyleClass().add("button-danger");
+        Ventanas.estilizar(dlg);
+
+        final Factura[] resultado = {null};
+        btn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            ev.consume();
+            MotivoCancelacion motivo = cmbMotivo.getValue();
+            if (motivo == null) { mostrarError(error, "Elige el motivo."); return; }
+            if (motivo.requiereSustitucion() && txtUuid.getText().isBlank()) { mostrarError(error, "Indica el UUID de la factura que sustituye."); return; }
+            List<Autorizacion> auts = List.of();
+            if (!sesionService.tienePermiso(Permiso.CANCELAR_FACTURA)) {
+                Optional<Autorizacion> aut = Ventanas.pedirAutorizacion(autorizacionService, Permiso.CANCELAR_FACTURA);
+                if (aut.isEmpty()) return;
+                auts = List.of(aut.get());
+            }
+            final List<Autorizacion> autorizaciones = auts;
+            String uuid = txtUuid.getText();
+            error.setVisible(false);
+            error.setManaged(false);
+            progreso.setVisible(true);
+            progreso.setManaged(true);
+            dlg.getDialogPane().setDisable(true);
+            enSegundoPlano(() -> facturacionService.cancelarFactura(f.getId(), motivo, uuid, autorizaciones), g -> {
+                resultado[0] = g;
+                dlg.setResult(cancelar);
+                dlg.close();
+            }, msg -> {
+                dlg.getDialogPane().setDisable(false);
+                progreso.setVisible(false);
+                progreso.setManaged(false);
+                mostrarError(error, msg);
+            });
+        });
+        dlg.showAndWait();
+        if (resultado[0] != null) {
+            Factura g = resultado[0];
+            Ventanas.alerta(Alert.AlertType.INFORMATION, "Factura " + g.getSerieFolio(), g.isCancelada()
+                    ? "La factura quedó cancelada ante el SAT. La venta ya se puede cancelar o volver a facturar."
+                    : "La solicitud de cancelación se envió; el receptor debe aceptarla (plazo del SAT). Hasta entonces la venta sigue facturada.");
+        }
+        return Optional.ofNullable(resultado[0]);
+    }
+
+    /** Factura pendiente: pregunta al PAC y la confirma o la descarta */
+    public void resolverPendiente(Window owner, Factura f, Runnable alTerminar) {
+        if (!f.isPendiente()) {
+            Ventanas.alerta(Alert.AlertType.INFORMATION, "Resolver pendiente", "La factura " + f.getSerieFolio() + " no está pendiente.");
+            return;
+        }
+        if (!Ventanas.confirmar("Resolver pendiente", "Se consultará al PAC si la factura " + f.getSerieFolio()
+                + " llegó a timbrarse. Si sí, quedará vigente; si no, se eliminará el registro y la venta volverá a estar disponible. ¿Continuar?")) return;
+        enSegundoPlano(() -> facturacionService.resolverPendiente(f.getId()), r -> {
+            Ventanas.alerta(Alert.AlertType.INFORMATION, "Resolver pendiente", r.isPresent()
+                    ? "La factura " + r.get().getSerieFolio() + " sí estaba timbrada: queda vigente con UUID " + r.get().getUuid() + "."
+                    : "El PAC no tenía la factura: se eliminó el registro pendiente. Puedes volver a facturar.");
+            alTerminar.run();
+        }, msg -> Ventanas.alerta(Alert.AlertType.ERROR, "Resolver pendiente", msg));
     }
 
     // ── Acciones sobre una factura ───────────────────────────────────────
