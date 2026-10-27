@@ -43,6 +43,14 @@ public class Producto {
     private Departamento departamento;
 
     /**
+     * Unidad de medida del catálogo (Configuración). Nullable: los productos
+     * anteriores no tienen unidad y siguen guiándose por tipoVenta.
+     */
+    @ManyToOne
+    @JoinColumn(name = "unidad_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    private Unidad unidad;
+
+    /**
      * Producto descontinuado = inactivo: no aparece en Ventas (PRD-09).
      * Nullable para las filas anteriores a este campo (null = activo).
      */
@@ -66,9 +74,12 @@ public class Producto {
         return activo == null || activo;
     }
 
-    /** Los productos a granel se venden con cantidades decimales (PRD-08) */
+    /**
+     * Cantidades decimales (PRD-08): las dicta la unidad de medida si tiene;
+     * si no, el tipo de venta (los productos a granel).
+     */
     public boolean permiteDecimales() {
-        return tipoVenta == TipoVenta.GRANEL;
+        return unidad != null ? unidad.isPermiteDecimales() : tipoVenta == TipoVenta.GRANEL;
     }
 
     // ── Enum interno ─────────────────────────────────────────────────────

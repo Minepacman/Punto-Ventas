@@ -6,6 +6,7 @@ import me.eliassanchezfernandez.puntodeventa.model.FondoCaja;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.repository.CorteRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.FondoCajaRepository;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,8 @@ import java.util.Optional;
 /**
  * Fondo de caja y cortes (CRT-02, CRT-06).
  *
+ *  - Si la opción "pedir fondo de caja" está apagada en Configuración, el login
+ *    no lo solicita (el fondo del día cuenta como 0).
  *  - Hay UN fondo de caja por día (regla "solo al iniciar el día"): lo
  *    captura quien hace el primer inicio de sesión del día y queda en la BD;
  *    nadie más lo vuelve a capturar ni se pierde al reiniciar. Solo un ADMIN
@@ -33,6 +36,7 @@ public class CajaService {
     @Autowired private SesionService       sesionService;
     @Autowired private VentaService        ventaService;
     @Autowired private AuditoriaService    auditoriaService;
+    @Autowired private ConfiguracionService configuracionService;
 
     // ── Fondo de caja ─────────────────────────────────────────────────────
 
@@ -43,6 +47,7 @@ public class CajaService {
 
     /** ¿Todavía nadie ha capturado el fondo de hoy? (se pide una vez al día) */
     public boolean requiereFondo(Cajero cajero) {
+        if (!configuracionService.isPedirFondoCaja()) return false;   // opción deshabilitada
         return fondoDelDia(LocalDate.now()).isEmpty();
     }
 
@@ -63,11 +68,11 @@ public class CajaService {
         Optional<FondoCaja> existente = fondoDelDia(LocalDate.now());
         if (existente.isPresent()) {
             throw new NegocioException(String.format(
-                    "El fondo de caja de hoy ya fue registrado ($%.2f por %s). Solo un administrador puede corregirlo.",
-                    existente.get().getMonto(), existente.get().getCajeroNombre()));
+                    "El fondo de caja de hoy ya fue registrado (%s por %s). Solo un administrador puede corregirlo.",
+                    Moneda.formato(existente.get().getMonto()), existente.get().getCajeroNombre()));
         }
         FondoCaja guardado = fondoRepo.save(nuevoFondo(cajero, monto));
-        auditoriaService.registrar(cajero, "FONDO_REGISTRADO", String.format("$%.2f", monto), (Cajero) null);
+        auditoriaService.registrar(cajero, "FONDO_REGISTRADO", Moneda.formato(monto), (Cajero) null);
         return guardado;
     }
 
@@ -83,7 +88,7 @@ public class CajaService {
         double anterior = fondoVigenteDelDia(LocalDate.now());
         FondoCaja guardado = fondoRepo.save(nuevoFondo(admin, montoNuevo));
         auditoriaService.registrar(admin, "FONDO_CORREGIDO", String.format(
-                "$%.2f → $%.2f (%s)", anterior, montoNuevo, motivo.trim()), (Cajero) null);
+                "%s → %s (%s)", Moneda.formato(anterior), Moneda.formato(montoNuevo), motivo.trim()), (Cajero) null);
         return guardado;
     }
 
@@ -145,8 +150,9 @@ public class CajaService {
         Corte guardado = corteRepo.save(c);
 
         auditoriaService.registrar(cajero, "CORTE_REALIZADO", String.format(
-                "esperado $%.2f, contado $%.2f, diferencia $%.2f",
-                c.getEfectivoEsperado(), c.getEfectivoContado(), c.getDiferencia()), (Cajero) null);
+                "esperado %s, contado %s, diferencia %s",
+                Moneda.formato(c.getEfectivoEsperado()), Moneda.formato(c.getEfectivoContado()),
+                Moneda.formato(c.getDiferencia())), (Cajero) null);
         return guardado;
     }
 }

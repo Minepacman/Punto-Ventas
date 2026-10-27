@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2F6CAD">
+<meta name="color-scheme" content="light dark">
+<title>Punto de Venta Móvil</title>
+<!--
+  ============================================================================
+  Punto de Venta - Interfaz web MÓVIL (archivo único: HTML + CSS + JS)
+  ----------------------------------------------------------------------------
+  - Lo sirve el programa de escritorio (ServidorMovilService) en la red local.
+  - Sin dependencias externas ni CDNs: funciona sin internet, solo en la LAN.
+  - LOGIN y SESIÓN son reales (api.login / api.sesion / api.logout / api.recordar
+    llaman al servidor). Los DATOS (ventas, inventario, estadísticas, ticket)
+    son SIMULADOS en la sección "2. DATOS DE DEMOSTRACIÓN" y se leen/escriben
+    solo a través del objeto `api` (sección 3). Para pasar a datos reales basta
+    con reescribir esos métodos con fetch() (ver comentarios "TODO real:").
+  - Seguridad: todo texto dinámico se inserta con textContent/createTextNode
+    (función h()), nunca con innerHTML.
+  ============================================================================
+-->
+<style>
+/* ===== Paleta (misma que el escritorio: css/app.css) ===== */
+:root {
+  --bg: #F3F5F8;  --surface: #FFFFFF;  --surface-alt: #F7F8FA;  --inset: #ECEFF3;
+  --border: #D3D9E0;  --border-subtle: #E4E8ED;
+  --text: #1E2631;  --muted: #5A6472;  --subtle: #8A939F;
+  --accent: #2F6CAD;  --accent-hover: #285E98;  --accent-text: #285E98;
+  --accent-subtle: #EAF1F9;  --on-accent: #FFFFFF;  --ring: rgba(47,108,173,.35);
+  --danger: #B23A43;  --danger-text: #A1343C;  --danger-subtle: #FBF0F1;
+  --success: #2E7A55; --success-text: #276A49; --success-subtle: #EDF6F1;
+  --warning: #B0731C; --warning-text: #8A5A14; --warning-subtle: #FCF5E9;
+  --shadow: 0 1px 2px rgba(20,30,45,.06), 0 4px 14px rgba(20,30,45,.06);
+  --radius: 16px;
+  --fs: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    --bg: #11161D; --surface: #1A212B; --surface-alt: #202833; --inset: #252E3A;
+    --border: #334050; --border-subtle: #2A3541;
+    --text: #E8EDF3; --muted: #A5B0BD; --subtle: #7F8B99;
+    --accent: #5B9BDB; --accent-hover: #74AAE2; --accent-text: #8DBAE8;
+    --accent-subtle: #1F3248; --on-accent: #0E1620; --ring: rgba(91,155,219,.45);
+    --danger: #E0666F; --danger-text: #F08C94; --danger-subtle: #3A2327;
+    --success: #4DB383; --success-text: #75CBA2; --success-subtle: #1F3329;
+    --warning: #D9A24C; --warning-text: #E8BC78; --warning-subtle: #382E1C;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+  }
+}
+:root[data-tema="oscuro"] {
+  --bg: #11161D; --surface: #1A212B; --surface-alt: #202833; --inset: #252E3A;
+  --border: #334050; --border-subtle: #2A3541;
+  --text: #E8EDF3; --muted: #A5B0BD; --subtle: #7F8B99;
+  --accent: #5B9BDB; --accent-hover: #74AAE2; --accent-text: #8DBAE8;
+  --accent-subtle: #1F3248; --on-accent: #0E1620; --ring: rgba(91,155,219,.45);
+  --danger: #E0666F; --danger-text: #F08C94; --danger-subtle: #3A2327;
+  --success: #4DB383; --success-text: #75CBA2; --success-subtle: #1F3329;
+  --warning: #D9A24C; --warning-text: #E8BC78; --warning-subtle: #382E1C;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
+}
+:root[data-texto="grande"] { --fs: 18px; }
+
+/* ===== Base ===== */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { font-size: var(--fs); }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.4; -webkit-text-size-adjust: 100%;
+  min-height: 100vh; min-height: 100dvh;
+}
+button, input, select { font: inherit; color: inherit; }
+h1, h2, h3, p { margin: 0; }
+.oculto { display: none !important; }
+:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* ===== Botones y campos (objetivos táctiles grandes, >= 48px) ===== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 52px; padding: 0 1.25rem; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); font-weight: 600;
+  transition: transform .06s ease, background .15s ease;
+}
+.btn:active { transform: scale(.98); }
+.btn[disabled] { opacity: .55; pointer-events: none; }
+.btn-primario { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn-primario:hover { background: var(--accent-hover); }
+.btn-peligro { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-suave { background: var(--accent-subtle); border-color: transparent; color: var(--accent-text); }
+.btn-block { width: 100%; }
+.campo { display: grid; gap: .35rem; }
+.campo > label { font-size: .85rem; font-weight: 600; color: var(--muted); }
+.entrada {
+  width: 100%; min-height: 52px; padding: 0 1rem; border-radius: 14px;
+  border: 1px solid var(--border); background: var(--surface); font-size: 1rem;
+}
+.entrada:focus { outline: 3px solid var(--ring); border-color: var(--accent); }
+.con-boton { display: flex; gap: .5rem; }
+.con-boton .entrada { flex: 1; }
+.icono-btn { min-width: 52px; padding: 0; }
+
+/* ===== Estructura de la app ===== */
+#app { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.cabecera {
+  position: sticky; top: 0; z-index: 5; background: var(--surface);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: calc(env(safe-area-inset-top) + .6rem) 1rem .6rem;
+  display: flex; align-items: center; gap: .75rem;
+}
+.cabecera h1 { font-size: 1.15rem; flex: 1; }
+.pastilla {
+  font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  padding: .2rem .55rem; border-radius: 999px; background: var(--warning-subtle); color: var(--warning-text);
+}
+.vista { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 1rem 1rem calc(96px + env(safe-area-inset-bottom)); }
+.vista > * + * { margin-top: 1rem; }
+.nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface);
+  border-top: 1px solid var(--border-subtle); display: flex; justify-content: center;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-int { display: flex; width: 100%; max-width: 760px; }
+.nav button {
+  flex: 1; min-height: 64px; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; align-content: center; gap: 2px;
+  font-size: .72rem; font-weight: 600; color: var(--muted);
+}
+.nav button .ico { font-size: 1.4rem; line-height: 1; }
+.nav button[aria-current="page"] { color: var(--accent-text); }
+.nav button[aria-current="page"] .ico { transform: translateY(-1px); }
+
+/* ===== Tarjetas, listas, etiquetas ===== */
+.tarjeta { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
+.titulo { font-size: 1.35rem; font-weight: 700; }
+.sub { color: var(--muted); font-size: .9rem; }
+.seccion-t { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: .6rem; }
+.rejilla { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.kpi { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: .9rem 1rem; box-shadow: var(--shadow); }
+.kpi .e { font-size: .78rem; font-weight: 600; color: var(--muted); }
+.kpi .v { font-size: 1.45rem; font-weight: 750; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+.kpi.grande { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.kpi.grande .e { color: inherit; opacity: .85; }
+.kpi.grande .v { font-size: 2rem; }
+.var { font-size: .8rem; font-weight: 700; margin-top: .15rem; }
+.var.sube { color: var(--success-text); } .var.baja { color: var(--danger-text); }
+.kpi.grande .var { color: inherit; opacity: .95; }
+.segmentos { display: flex; background: var(--inset); border-radius: 14px; padding: 4px; gap: 4px; }
+.segmentos button { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: none; font-weight: 650; color: var(--muted); cursor: pointer; }
+.segmentos button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.fila { display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 14px; width: 100%; text-align: left; cursor: pointer; }
+.fila + .fila { margin-top: .5rem; }
+.fila .cuerpo { flex: 1; min-width: 0; }
+.fila .t { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fila .d { font-size: .82rem; color: var(--muted); }
+.fila .der { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.insignia { display: inline-block; font-size: .7rem; font-weight: 700; padding: .15rem .55rem; border-radius: 999px; background: var(--inset); color: var(--muted); }
+.insignia.ok { background: var(--success-subtle); color: var(--success-text); }
+.insignia.aviso { background: var(--warning-subtle); color: var(--warning-text); }
+.insignia.mal { background: var(--danger-subtle); color: var(--danger-text); }
+.barra { height: 10px; border-radius: 999px; background: var(--inset); overflow: hidden; margin-top: .35rem; }
+.barra > i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+.top-item + .top-item { margin-top: .9rem; }
+.top-item .l { display: flex; justify-content: space-between; gap: .5rem; font-size: .95rem; font-weight: 600; }
+.top-item .l span:last-child { font-variant-numeric: tabular-nums; }
+.horas { display: flex; align-items: flex-end; gap: 3px; height: 130px; }
+.horas .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; }
+.horas .col i { width: 100%; min-height: 3px; border-radius: 5px 5px 2px 2px; background: var(--accent); opacity: .45; }
+.horas .col.pico i { opacity: 1; }
+.horas-et { display: flex; gap: 3px; margin-top: .3rem; }
+.horas-et span { flex: 1; text-align: center; font-size: .62rem; color: var(--subtle); }
+.vacio { text-align: center; color: var(--muted); padding: 2rem 1rem; }
+.cargando { display: grid; place-items: center; padding: 3rem 1rem; color: var(--muted); gap: .75rem; }
+.rueda { width: 34px; height: 34px; border-radius: 50%; border: 4px solid var(--inset); border-top-color: var(--accent); animation: gira .8s linear infinite; }
+@keyframes gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rueda { animation-duration: 2.4s; } .barra > i { transition: none; } }
+.aviso-err { background: var(--danger-subtle); color: var(--danger-text); border-radius: 12px; padding: .75rem 1rem; font-size: .92rem; font-weight: 600; }
+.aviso-ok { background: var(--success-subtle); color: var(--success-text); border-radius: 12px; padding: .75rem 1rem; font-weight: 600; }
+
+/* ===== Login ===== */
+.login { flex: 1; display: grid; place-items: center; padding: 1.5rem 1rem; }
+.login-caja { width: 100%; max-width: 420px; display: grid; gap: 1.1rem; }
+.logo { width: 72px; height: 72px; border-radius: 22px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 2.2rem; margin: 0 auto; box-shadow: var(--shadow); }
+.login h1 { text-align: center; font-size: 1.6rem; }
+.login .sub { text-align: center; }
+
+/* ===== Hoja inferior (modal) ===== */
+.velo { position: fixed; inset: 0; z-index: 20; background: rgba(10,16,24,.55); display: flex; align-items: flex-end; justify-content: center; }
+.hoja {
+  width: 100%; max-width: 560px; max-height: 92dvh; overflow: auto; background: var(--surface);
+  border-radius: 24px 24px 0 0; padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  display: grid; gap: 1rem; animation: sube .22s ease;
+}
+@keyframes sube { from { transform: translateY(30px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hoja { animation: none; } }
+.hoja h2 { font-size: 1.25rem; }
+.acciones { display: grid; gap: .6rem; }
+.acciones.dos { grid-template-columns: 1fr 1fr; }
+.linea { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--border-subtle); font-variant-numeric: tabular-nums; }
+.linea:last-child { border-bottom: 0; }
+.linea .n { min-width: 0; }
+.linea .s { font-size: .8rem; color: var(--muted); }
+.total-fila { display: flex; justify-content: space-between; font-size: 1.2rem; font-weight: 800; padding-top: .6rem; }
+
+/* ===== Interruptor ===== */
+.fila-conf { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid var(--border-subtle); }
+.fila-conf:last-child { border-bottom: 0; }
+.fila-conf .t { font-weight: 650; } .fila-conf .d { font-size: .82rem; color: var(--muted); }
+.interruptor { position: relative; width: 56px; height: 32px; border-radius: 999px; border: 0; background: var(--border); cursor: pointer; flex: none; transition: background .15s; }
+.interruptor::after { content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.interruptor[aria-checked="true"] { background: var(--accent); }
+.interruptor[aria-checked="true"]::after { transform: translateX(24px); }
+
+/* ===== Escaneo de ticket ===== */
+.tomar { display: grid; place-items: center; gap: .6rem; text-align: center; padding: 2rem 1rem; border: 2px dashed var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.tomar .grande { font-size: 2.6rem; }
+.previa { width: 100%; max-height: 340px; object-fit: contain; border-radius: 14px; background: var(--inset); }
+.entrada-oculta { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.paso { display: flex; align-items: center; gap: .6rem; color: var(--muted); font-weight: 600; }
+
+/* ===== Aviso emergente ===== */
+.toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30; max-width: 92vw;
+  background: #222B36; color: #fff; padding: .75rem 1.1rem; border-radius: 14px; font-weight: 600; box-shadow: var(--shadow); }
+</style>
+</head>
+<body>
+<div id="app" aria-live="polite"></div>
+
+<noscript><p style="padding:1rem">Esta página necesita JavaScript.</p></noscript>
+
+<script>
+'use strict';
+(() => {
+
+/* ============================================================================
+   0. PREFERENCIAS GUARDADAS EN EL TELÉFONO (tema, tamaño de texto)
+   ============================================================================ */
+const memoria = {};
+const almacen = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return memoria[k] ?? null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { memoria[k] = v; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { delete memoria[k]; } },
+};
+function aplicarPreferencias() {
+  const r = document.documentElement;
+  const tema = almacen.get('pv.tema');
+  if (tema === 'claro' || tema === 'oscuro') r.setAttribute('data-tema', tema); else r.removeAttribute('data-tema');
+  if (almacen.get('pv.texto') === 'grande') r.setAttribute('data-texto', 'grande'); else r.removeAttribute('data-texto');
+}
+aplicarPreferencias();
+
+/* ============================================================================
+   1. UTILIDADES (h() construye DOM de forma segura: solo textContent)
+   ============================================================================ */
+function h(tag, attrs, ...hijos) {
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (k === 'value') el.value = v;
+    else el.setAttribute(k, v === true ? '' : String(v));
+  }
+  anexar(el, hijos);
+  return el;
+}
+function anexar(el, hijos) {
+  for (const x of hijos.flat(Infinity)) {
+    if (x == null || x === false) continue;
+    el.append(x instanceof Node ? x : document.createTextNode(String(x)));   // texto => nodo de texto
+  }
+  return el;
+}
+function vaciar(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+
+const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+const dinero = n => MXN.format(n || 0);
+const num = n => new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(n);
+const pad = n => String(n).padStart(2, '0');
+const claveDia = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());   // AAAA-MM-DD local
+const inicioDia = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const sumarDias = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const hora = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
+const fechaLarga = d => d.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' });
+const fechaHora = d => d.toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const espera = ms => new Promise(r => setTimeout(r, ms));
+const vibrar = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* no disponible */ } };
+
+function avisar(texto) {
+  const t = h('div', { class: 'toast', role: 'status' }, texto);
+  document.body.append(t);
+  setTimeout(() => t.remove(), 2600);
+}
+
+function cargando(texto) {
+  return h('div', { class: 'cargando' }, h('div', { class: 'rueda' }), texto || 'Cargando…');
+}
+
+/** Hoja inferior modal. cerrable=false obliga a elegir una opción. */
+function hoja(contenido, { cerrable = true } = {}) {
+  const previo = document.activeElement;
+  const velo = h('div', { class: 'velo' });
+  const panel = h('div', { class: 'hoja', role: 'dialog', 'aria-modal': 'true' }, contenido);
+  velo.append(panel);
+  const cerrar = () => { velo.remove(); document.removeEventListener('keydown', alTecla); if (previo && previo.focus) previo.focus(); };
+  const alTecla = e => { if (e.key === 'Escape' && cerrable) cerrar(); };
+  if (cerrable) velo.addEventListener('click', e => { if (e.target === velo) cerrar(); });
+  document.addEventListener('keydown', alTecla);
+  document.body.append(velo);
+  const primero = panel.querySelector('input, select, button');
+  if (primero) primero.focus();
+  return { cerrar, panel };
+}
+
+/** Pide la contraseña otra vez en una hoja; devuelve el texto o null si se cancela */
+function pedirClave() {
+  return new Promise(resolver => {
+    const msg = h('div', { class: 'oculto', role: 'alert' });
+    const campo = h('input', { class: 'entrada', type: 'password', autocomplete: 'current-password', 'aria-label': 'Contraseña' });
+    let listo = false;
+    const terminar = valor => { if (listo) return; listo = true; q.cerrar(); resolver(valor); };
+    const ok = h('button', { class: 'btn btn-primario', type: 'button', onclick: () => {
+      if (!campo.value) { msg.className = 'aviso-err'; msg.textContent = 'Escribe tu contraseña.'; return; }
+      terminar(campo.value);
+    } }, 'Confirmar');
+    const no = h('button', { class: 'btn', type: 'button', onclick: () => terminar(null) }, 'Cancelar');
+    const q = hoja([h('h2', null, 'Confirma tu contraseña'),
+      h('p', { class: 'sub' }, 'Para mantener la sesión siempre abierta escribe tu contraseña otra vez.'),
+      campo, msg, h('div', { class: 'acciones dos' }, no, ok)], { cerrable: false });
+    campo.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); });
+  });
+}
+
+function interruptor(activo, alCambiar, etiqueta) {
+  const b = h('button', { class: 'interruptor', type: 'button', role: 'switch', 'aria-checked': String(!!activo), 'aria-label': etiqueta });
+  b.addEventListener('click', async () => {
+    const nuevo = b.getAttribute('aria-checked') !== 'true';
+    b.setAttribute('aria-checked', String(nuevo));
+    try { await alCambiar(nuevo); } catch (e) { b.setAttribute('aria-checked', String(!nuevo)); }
+  });
+  return b;
+}
+
+/* ============================================================================
+   2. DATOS DE DEMOSTRACIÓN (SIMULADOS - no vienen del programa de escritorio)
+      Se generan una vez al abrir la página con un generador pseudoaleatorio
+      fijo, así que los números son estables entre visitas.
+   ============================================================================ */
+function semilla(s) {   // mulberry32
+  return () => {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+const DEMO = (() => {
+  const azar = semilla(20260607);
+  const p = (id, nombre, depto, precio, costo, stock, minimo, unidad = 'pza') =>
+    ({ id, codigo: '75010' + String(55300000 + id * 137), nombre, depto, precio, costo, stock, minimo, unidad });
+  const productos = [
+    p(1, 'Coca-Cola 600 ml', 'Bebidas', 18, 12.5, 48, 12),
+    p(2, 'Agua natural 1 L', 'Bebidas', 12, 7, 6, 12),
+    p(3, 'Jugo del Valle 413 ml', 'Bebidas', 16, 10.5, 30, 10),
+    p(4, 'Sabritas Original 45 g', 'Botanas', 19, 13, 25, 10),
+    p(5, 'Doritos Nacho 62 g', 'Botanas', 21, 14.5, 4, 8),
+    p(6, 'Galletas Marías 170 g', 'Galletas', 14, 9, 36, 10),
+    p(7, 'Pan blanco grande', 'Panadería', 42, 31, 14, 6),
+    p(8, 'Leche entera 1 L', 'Lácteos', 27, 21, 22, 12),
+    p(9, 'Huevo (kg)', 'Abarrotes', 52, 42, 18.5, 8, 'kg'),
+    p(10, 'Frijol negro (kg)', 'Abarrotes', 38, 28, 12.25, 6, 'kg'),
+    p(11, 'Arroz 1 kg', 'Abarrotes', 29, 21, 40, 10),
+    p(12, 'Aceite vegetal 900 ml', 'Abarrotes', 48, 37, 0, 6),
+    p(13, 'Azúcar 1 kg', 'Abarrotes', 31, 24, 20, 8),
+    p(14, 'Atún en agua 140 g', 'Enlatados', 24, 17, 33, 10),
+    p(15, 'Sopa instantánea', 'Enlatados', 15, 9.5, 52, 15),
+    p(16, 'Papel higiénico 4 rollos', 'Limpieza', 36, 26, 17, 6),
+    p(17, 'Detergente 1 kg', 'Limpieza', 44, 33, 9, 5),
+    p(18, 'Jabón de tocador', 'Limpieza', 17, 11, 28, 8),
+    p(19, 'Cerveza clara 355 ml', 'Cervezas', 24, 18, 60, 24),
+    p(20, 'Cigarros 20 pzas', 'Tabaco', 78, 70, 15, 10),
+  ];
+  const cajeros = ['María López', 'Luis Hernández'];
+  const pagos = ['Efectivo', 'Efectivo', 'Efectivo', 'Tarjeta', 'Transferencia'];
+  const pesoHora = { 7: 1, 8: 3, 9: 3, 10: 2, 11: 2, 12: 3, 13: 5, 14: 5, 15: 3, 16: 2, 17: 3, 18: 5, 19: 5, 20: 3, 21: 1 };
+  const horasPonderadas = Object.entries(pesoHora).flatMap(([hh, w]) => Array(w).fill(+hh));
+
+  const ahora = new Date();
+  const ventas = [];
+  for (let d = 34; d >= 0; d--) {
+    const dia = sumarDias(inicioDia(ahora), -d);
+    const n = 9 + Math.floor(azar() * 14) + ([0, 6].includes(dia.getDay()) ? 4 : 0);
+    for (let i = 0; i < n; i++) {
+      const hh = horasPonderadas[Math.floor(azar() * horasPonderadas.length)];
+      const f = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), hh, Math.floor(azar() * 60), Math.floor(azar() * 60));
+      if (f > ahora) continue;
+      const nLin = 1 + Math.floor(azar() * 4), lineas = [];
+      for (let k = 0; k < nLin; k++) {
+        const pr = productos[Math.floor(azar() * productos.length)];
+        if (lineas.some(l => l.pid === pr.id)) continue;
+        const cant = pr.unidad === 'kg' ? 0.25 * (1 + Math.floor(azar() * 6)) : 1 + Math.floor(azar() * 3);
+        lineas.push({ pid: pr.id, nombre: pr.nombre, unidad: pr.unidad, cantidad: cant, precio: pr.precio, costo: pr.costo });
+      }
+      ventas.push({
+        fecha: f, cajero: cajeros[Math.floor(azar() * cajeros.length)],
+        pago: pagos[Math.floor(azar() * pagos.length)], lineas,
+        total: lineas.reduce((s, l) => s + l.cantidad * l.precio, 0),
+      });
+    }
+  }
+  ventas.sort((a, b) => a.fecha - b.fecha);
+  ventas.forEach((v, i) => { v.id = i + 1; v.folio = 'A-' + (1000 + i); });
+  return { productos, ventas, azar };
+})();
+
+/* ============================================================================
+   3. CAPA `api`  (ÚNICO punto de acceso a datos)
+      - Autenticación: llamadas REALES al servidor.
+      - Datos de negocio: hoy devuelven DEMO; mañana se cambian por fetch().
+   ============================================================================ */
+class ErrorApi extends Error {
+  constructor(estado, codigo, mensaje) { super(mensaje); this.estado = estado; this.codigo = codigo; }
+}
+
+const sesionLocal = {   // lo único que se guarda en el teléfono: el token y su caducidad (informativa)
+  leer() { try { return JSON.parse(almacen.get('pv.sesion')); } catch (e) { return null; } },
+  guardar(token, expira, permanente) { almacen.set('pv.sesion', JSON.stringify({ token, expira, permanente })); },
+  borrar() { almacen.del('pv.sesion'); },
+};
+
+async function peticion(metodo, ruta, cuerpo, { conToken = true } = {}) {
+  const cab = { 'Accept': 'application/json' };
+  if (cuerpo !== undefined) cab['Content-Type'] = 'application/json';
+  const s = sesionLocal.leer();
+  if (conToken && s && s.token) cab['Authorization'] = 'Bearer ' + s.token;
+  let r;
+  try {
+    r = await fetch(ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo), cache: 'no-store' });
+  } catch (e) {
+    throw new ErrorApi(0, 'SIN_CONEXION', 'No hay conexión con el servidor. Revisa que estés en la misma red Wi-Fi.');
+  }
+  let datos = null;
+  try { datos = await r.json(); } catch (e) { /* sin cuerpo JSON */ }
+  if (!r.ok) {
+    const err = new ErrorApi(r.status, datos && datos.codigo, (datos && datos.error) || 'Error ' + r.status);
+    if (r.status === 401 && err.codigo === 'SESION_INVALIDA') document.dispatchEvent(new CustomEvent('sesion-terminada'));
+    throw err;
+  }
+  return datos;
+}
+
+const api = {
+  /* ---------- Autenticación (REAL) ---------- */
+  login: (usuario, contrasena, recordar = false) =>
+    peticion('POST', '/api/login', { usuario, contrasena, recordar }, { conToken: false }),
+  sesion: () => peticion('GET', '/api/sesion'),
+  recordar: (recordar, contrasena) => peticion('POST', '/api/sesion/recordar', { recordar, contrasena }),
+  logout: () => peticion('POST', '/api/logout', {}),
+
+  /* ---------- Datos de negocio (SIMULADOS) ----------
+     TODO real: sustituir el cuerpo de cada método por un fetch() a un endpoint
+     nuevo que use los servicios del escritorio (ver informe de la integración):
+       estadisticas -> GET  /api/estadisticas?periodo=dia|semana|mes
+       ventas       -> GET  /api/ventas?desde=AAAA-MM-DD&hasta=AAAA-MM-DD
+       inventario   -> GET  /api/inventario
+       ajustarStock -> POST /api/inventario/ajuste {id, tipo, cantidad, motivo}
+       procesarTicket / aplicarTicket -> POST /api/tickets (ver `ocr` más abajo) */
+
+  async estadisticas(periodo) {
+    await espera(250);
+    const hoy = inicioDia(new Date());
+    let desde;
+    if (periodo === 'semana') desde = sumarDias(hoy, -((hoy.getDay() + 6) % 7));   // lunes
+    else if (periodo === 'mes') desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    else desde = hoy;
+    const hasta = sumarDias(hoy, 1);
+    const largo = hasta - desde;
+    const previoDesde = new Date(desde.getTime() - largo), previoHasta = desde;
+    const enRango = (v, a, b) => v.fecha >= a && v.fecha < b;
+    const actuales = DEMO.ventas.filter(v => enRango(v, desde, hasta));
+    const previas = DEMO.ventas.filter(v => enRango(v, previoDesde, previoHasta));
+    const suma = (arr, f) => arr.reduce((s, v) => s + f(v), 0);
+    const total = suma(actuales, v => v.total), totalPrevio = suma(previas, v => v.total);
+    const ganancia = suma(actuales, v => v.lineas.reduce((s, l) => s + l.cantidad * (l.precio - l.costo), 0));
+    const porProducto = new Map();
+    for (const v of actuales) for (const l of v.lineas) {
+      const a = porProducto.get(l.pid) || { nombre: l.nombre, unidad: l.unidad, cantidad: 0, importe: 0 };
+      a.cantidad += l.cantidad; a.importe += l.cantidad * l.precio; porProducto.set(l.pid, a);
+    }
+    const horas = [];
+    for (let hh = 7; hh <= 21; hh++) horas.push({ hora: hh, total: 0, tickets: 0 });
+    for (const v of actuales) { const x = horas[v.fecha.getHours() - 7]; if (x) { x.total += v.total; x.tickets++; } }
+    return {
+      periodo, desde, hasta: sumarDias(hasta, -1),
+      total, tickets: actuales.length, promedio: actuales.length ? total / actuales.length : 0,
+      ganancia, variacion: totalPrevio ? (total - totalPrevio) / totalPrevio : null,
+      top: [...porProducto.values()].sort((a, b) => b.importe - a.importe).slice(0, 5),
+      horas,
+    };
+  },
+
+  async ventas({ desde, hasta }) {   // desde/hasta: 'AAAA-MM-DD' (inclusive)
+    await espera(250);
+    return DEMO.ventas
+      .filter(v => { const c = claveDia(v.fecha); return c >= desde && c <= hasta; })
+      .sort((a, b) => b.fecha - a.fecha);
+  },
+
+  async inventario() {
+    await espera(200);
+    return DEMO.productos.map(p => ({ ...p }));
+  },
+
+  /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
+  async ajustarStock({ id, tipo, cantidad, motivo }) {
+    await espera(300);
+    const p = DEMO.productos.find(x => x.id === id);
+    if (!p) throw new ErrorApi(404, 'NO_ENCONTRADO', 'El producto no existe.');
+    if (!(cantidad >= 0) || !isFinite(cantidad)) throw new ErrorApi(400, 'NEGOCIO', 'Captura una cantidad válida.');
+    let nuevo = tipo === 'ENTRADA' ? p.stock + cantidad : tipo === 'SALIDA' ? p.stock - cantidad : cantidad;
+    if (nuevo < 0) throw new ErrorApi(400, 'NEGOCIO', 'La existencia no puede quedar en negativo.');
+    p.stock = Math.round(nuevo * 1000) / 1000;
+    return { ...p };
+  },
+
+  /** Recibe las líneas ya leídas del ticket y las suma al inventario simulado. */
+  async aplicarTicket(lineas) {
+    await espera(400);
+    for (const l of lineas) { const p = DEMO.productos.find(x => x.id === l.pid); if (p) p.stock += l.cantidad; }
+    return { aplicadas: lineas.length };
+  },
+};
+
+/* ----------------------------------------------------------------------------
+   GANCHO DE OCR (aquí se conectará la lectura real del ticket del proveedor)
+   ----------------------------------------------------------------------------
+   Contrato: extraerLineas(archivoImagen: File) -> Promise<Array<{
+       pid, nombre, cantidad, costo }>>
+   HOY: ignora la imagen y devuelve líneas de ejemplo (simulación).
+   MAÑANA: enviar la foto al servidor y devolver sus líneas, p. ej.
+       const fd = new FormData(); fd.append('foto', archivoImagen);
+       const r = await fetch('/api/tickets/ocr', { method: 'POST', body: fd,
+                   headers: { Authorization: 'Bearer ' + token } });
+       return (await r.json()).lineas;           // el servidor hace el OCR y
+                                                 // empareja con productos
+   (Ese endpoint y el OCR no existen todavía; ver el informe.) */
+const ocr = {
+  async extraerLineas(archivoImagen) {
+    await espera(1400);   // simula el tiempo de lectura
+    const ejemplo = [[1, 24, 12.1], [19, 48, 17.6], [4, 20, 12.8], [8, 12, 20.5]];
+    return ejemplo.map(([pid, cantidad, costo]) => {
+      const p = DEMO.productos.find(x => x.id === pid);
+      return { pid, nombre: p.nombre, cantidad, costo };
+    });
+  },
+};
+
+/* ============================================================================
+   4. ESTADO DE SESIÓN Y ARRANQUE
+   ============================================================================ */
+const raiz = document.getElementById('app');
+const E = { sesion: null, vista: 'estadisticas', desfase: 0, temporizador: null, periodo: 'dia' };
+
+function reciente(s) {   // guarda en el teléfono lo que dice el SERVIDOR
+  E.sesion = s;
+  E.desfase = (s.ahora || Date.now()) - Date.now();
+  const actual = sesionLocal.leer() || {};
+  sesionLocal.guardar(s.token || actual.token, s.expira, s.permanente);
+}
+
+function cerrarLocal(mensaje) {
+  sesionLocal.borrar();
+  E.sesion = null;
+  clearInterval(E.temporizador);
+  document.querySelectorAll('.velo').forEach(v => v.remove());
+  pantallaLogin(mensaje);
+}
+
+document.addEventListener('sesion-terminada', () => {
+  if (E.sesion || sesionLocal.leer()) cerrarLocal('Tu sesión terminó. Inicia sesión de nuevo.');
+});
+
+async function arrancar() {
+  const s = sesionLocal.leer();
+  if (!s || !s.token) return pantallaLogin();
+  // Comprobación local rápida; la decisión real la toma el servidor.
+  if (s.expira && s.expira <= Date.now() + E.desfase) return cerrarLocal('Tu sesión terminó. Inicia sesión de nuevo.');
+  raiz.replaceChildren(cargando('Verificando sesión…'));
+  try {
+    reciente(await api.sesion());
+    entrarAlSistema();
+  } catch (e) {
+    if (e.estado === 401) return;                      // ya manejado por 'sesion-terminada'
+    raiz.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'login-caja' },
+      h('div', { class: 'aviso-err', role: 'alert' }, e.message),
+      h('button', { class: 'btn btn-primario btn-block', onclick: arrancar }, 'Reintentar'))));
+  }
+}
+
+/** Revalida contra el servidor (permisos al día, caducidad). Devuelve false si ya no hay sesión. */
+async function revalidar() {
+  try { reciente(await api.sesion()); return true; }
+  catch (e) { return e.estado !== 401; }   // sin red o error del servidor: no se cierra la sesión; 401 ya mostró el login
+}
+
+/* ============================================================================
+   5. PANTALLA DE LOGIN
+   ============================================================================ */
+function pantallaLogin(mensaje) {
+  const error = h('div', { class: mensaje ? 'aviso-err' : 'oculto', role: 'alert' }, mensaje || '');
+  const usuario = h('input', { class: 'entrada', id: 'usuario', type: 'text', autocomplete: 'username',
+    autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', required: true });
+  const clave = h('input', { class: 'entrada', id: 'clave', type: 'password', autocomplete: 'current-password', required: true });
+  const ver = h('button', { class: 'btn icono-btn', type: 'button', 'aria-label': 'Mostrar contraseña' }, '👁');
+  ver.addEventListener('click', () => {
+    clave.type = clave.type === 'password' ? 'text' : 'password';
+    ver.setAttribute('aria-label', clave.type === 'password' ? 'Mostrar contraseña' : 'Ocultar contraseña');
+  });
+  const entrar = h('button', { class: 'btn btn-primario btn-block', type: 'submit' }, 'Entrar');
+  const form = h('form', { class: 'login-caja', novalidate: true },
+    h('div', { class: 'logo', 'aria-hidden': 'true' }, '🛒'),
+    h('div', null, h('h1', null, 'Punto de Venta'), h('p', { class: 'sub' }, 'Acceso móvil · inicia sesión con tu usuario')),
+    error,
+    h('div', { class: 'campo' }, h('label', { for: 'usuario' }, 'Usuario'), usuario),
+    h('div', { class: 'campo' }, h('label', { for: 'clave' }, 'Contraseña'), h('div', { class: 'con-boton' }, clave, ver)),
+    entrar);
+  form.addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const u = usuario.value.trim();
+    if (!u || !clave.value) { mostrar('Escribe tu usuario y contraseña.'); return; }
+    entrar.disabled = true; entrar.textContent = 'Entrando…';
+    try {
+      const claveUsada = clave.value;   // solo en memoria, para confirmar «mantener abierta»; se descarta al terminar
+      const s = await api.login(u, claveUsada, false);
+      clave.value = '';
+      reciente(s);
+      await preguntarMantener(claveUsada);
+      entrarAlSistema();
+    } catch (e) {
+      mostrar(e.message);
+      entrar.disabled = false; entrar.textContent = 'Entrar';
+    }
+  });
+  function mostrar(t) { error.className = 'aviso-err'; error.textContent = t; }
+  raiz.replaceChildren(h('div', { class: 'login' }, form));
+  usuario.focus();
+}
+
+/** Pregunta obligatoria tras entrar: Sí = sin caducidad, No = 48 horas */
+function preguntarMantener(claveUsada) {
+  return new Promise(resolver => {
+    const msg = h('div', { class: 'oculto', role: 'alert' });
+    const elegir = async permanente => {
+      si.disabled = no.disabled = true;
+      try {
+        if (permanente) reciente(await api.recordar(true, claveUsada));   // por defecto el servidor ya la dejó en 48 h
+        h1.cerrar(); resolver();
+      } catch (e) {
+        msg.className = 'aviso-err'; msg.textContent = e.message; si.disabled = no.disabled = false;
+        if (e.estado === 401) { h1.cerrar(); resolver(); }
+      }
+    };
+    const si = h('button', { class: 'btn btn-primario', type: 'button', onclick: () => elegir(true) }, 'Sí, mantenerla abierta');
+    const no = h('button', { class: 'btn', type: 'button', onclick: () => elegir(false) }, 'No, que dure 48 horas');
+    const h1 = hoja([
+      h('h2', null, '¿Mantener la sesión siempre abierta?'),
+      h('p', { class: 'sub' }, 'Si eliges Sí, este teléfono no volverá a pedir tu contraseña mientras lo uses al menos una vez cada 60 días o hasta que cierres sesión. Si eliges No, la sesión se cerrará sola a las 48 horas.'),
+      msg, h('div', { class: 'acciones' }, si, no),
+    ], { cerrable: false });
+  });
+}
+
+/* ============================================================================
+   6. ESTRUCTURA PRINCIPAL (cabecera + vistas + menú inferior)
+   ============================================================================ */
+const SECCIONES = [   // `permiso` = clave de `secciones` que devuelve el servidor
+  { id: 'estadisticas', etiqueta: 'Inicio',     icono: '📊', permiso: 'estadisticas', vista: vistaEstadisticas },
+  { id: 'historial',    etiqueta: 'Ventas',     icono: '🧾', permiso: 'historial',    vista: vistaHistorial },
+  { id: 'inventario',   etiqueta: 'Inventario', icono: '📦', permiso: 'inventario',   vista: vistaInventario },
+  { id: 'escanear',     etiqueta: 'Escanear',   icono: '📷', permiso: 'escanearTicket', vista: vistaEscanear },
+  { id: 'config',       etiqueta: 'Ajustes',    icono: '⚙️', permiso: 'configuracion', vista: vistaConfig },
+];
+const permitidas = () => SECCIONES.filter(s => E.sesion && E.sesion.secciones && E.sesion.secciones[s.permiso]);
+
+let contVista, contNav, tituloCab;
+
+function entrarAlSistema() {
+  tituloCab = h('h1');
+  contVista = h('main', { class: 'vista', id: 'vista', tabindex: '-1' });
+  contNav = h('div', { class: 'nav-int' });
+  raiz.replaceChildren(
+    h('header', { class: 'cabecera' }, tituloCab, h('span', { class: 'pastilla' }, 'Datos demo')),
+    contVista,
+    h('nav', { class: 'nav', 'aria-label': 'Secciones' }, contNav));
+  const ok = permitidas();
+  if (!ok.length) { cerrarLocal('Tu usuario no tiene secciones disponibles.'); return; }
+  const inicial = location.hash.replace('#/', '');
+  irA(ok.some(s => s.id === inicial) ? inicial : ok[0].id);
+  clearInterval(E.temporizador);
+  E.temporizador = setInterval(vigilar, 60000);   // revalida cada minuto
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && E.sesion) vigilar(); });
+window.addEventListener('hashchange', () => {
+  const id = location.hash.replace('#/', '');
+  if (E.sesion && id !== E.vista && permitidas().some(s => s.id === id)) irA(id);
+});
+
+async function vigilar() {
+  if (!E.sesion) return;
+  if (E.sesion.expira && E.sesion.expira <= Date.now() + E.desfase) return cerrarLocal('Tu sesión terminó. Inicia sesión de nuevo.');
+  await revalidar();   // si el servidor dice 401, 'sesion-terminada' cierra todo
+  if (E.sesion) {
+    pintarNav();
+    if (!permitidas().some(s => s.id === E.vista)) irA(permitidas()[0].id);   // le quitaron un permiso
+  }
+}
+
+function pintarNav() {
+  vaciar(contNav);
+  for (const s of permitidas()) {
+    contNav.append(h('button', { type: 'button', 'aria-current': s.id === E.vista ? 'page' : null, onclick: () => irA(s.id) },
+      h('span', { class: 'ico', 'aria-hidden': 'true' }, s.icono), s.etiqueta));
+  }
+}
+
+/** Cada cambio de sección vuelve a validar la sesión EN EL SERVIDOR (guardia de ruta). */
+async function irA(id) {
+  contVista.replaceChildren(cargando());
+  if (!(await revalidar())) return;            // 401 => ya se mostró el login
+  const s = permitidas().find(x => x.id === id);
+  if (!s) {
+    contVista.replaceChildren(h('div', { class: 'vacio' }, 'No tienes permiso para ver esta sección.'));
+    return;
+  }
+  E.vista = id;
+  history.replaceState(null, '', '#/' + id);
+  tituloCab.textContent = s.etiqueta === 'Inicio' ? 'Estadísticas' : s.etiqueta === 'Ventas' ? 'Historial de ventas' : s.etiqueta === 'Ajustes' ? 'Configuración' : s.etiqueta === 'Escanear' ? 'Escanear ticket' : s.etiqueta;
+  pintarNav();
+  try {
+    contVista.replaceChildren(await s.vista());
+  } catch (e) {
+    if (e.estado === 401) return;
+    contVista.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message));
+  }
+  window.scrollTo(0, 0);
+}
+
+/* ============================================================================
+   7. VISTA: ESTADÍSTICAS  (requiere VER_HISTORIAL)
+   ============================================================================ */
+async function vistaEstadisticas() {
+  const caja = h('div');
+  const nombres = { dia: 'Hoy', semana: 'Esta semana', mes: 'Este mes' };
+  const seg = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Periodo' });
+  const cuerpo = h('div', { class: 'vista-int', style: 'display:grid;gap:1rem' });
+  caja.append(seg, h('div', { style: 'height:1rem' }), cuerpo);
+
+  const pintarSeg = () => {
+    vaciar(seg);
+    for (const [k, t] of Object.entries(nombres)) {
+      seg.append(h('button', { type: 'button', 'aria-pressed': String(E.periodo === k),
+        onclick: () => { E.periodo = k; pintarSeg(); cargar(); } }, t));
+    }
+  };
+  async function cargar() {
+    cuerpo.replaceChildren(cargando());
+    try {
+      const d = await api.estadisticas(E.periodo);
+      const verGanancia = E.sesion.permisos.includes('VER_GANANCIAS');
+      const maxTop = Math.max(...d.top.map(t => t.importe), 1);
+      const maxHora = Math.max(...d.horas.map(x => x.total), 1);
+      const pico = d.horas.reduce((a, b) => b.total > a.total ? b : a, d.horas[0]);
+      const variacion = d.variacion == null ? null :
+        h('div', { class: 'var ' + (d.variacion >= 0 ? 'sube' : 'baja') },
+          (d.variacion >= 0 ? '▲ ' : '▼ ') + Math.abs(d.variacion * 100).toFixed(0) + '% vs. periodo anterior');
+      cuerpo.replaceChildren(
+        h('div', { class: 'rejilla' },
+          h('div', { class: 'kpi grande' }, h('div', { class: 'e' }, 'Ventas · ' + nombres[E.periodo]), h('div', { class: 'v' }, dinero(d.total)), variacion),
+          h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Tickets'), h('div', { class: 'v' }, String(d.tickets))),
+          h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Ticket promedio'), h('div', { class: 'v' }, dinero(d.promedio))),
+          verGanancia ? h('div', { class: 'kpi', style: 'grid-column:1/-1' }, h('div', { class: 'e' }, 'Ganancia estimada'), h('div', { class: 'v' }, dinero(d.ganancia))) : null),
+        h('section', { class: 'tarjeta' },
+          h('div', { class: 'seccion-t' }, 'Productos más vendidos'),
+          d.top.length ? d.top.map((t, i) => h('div', { class: 'top-item' },
+            h('div', { class: 'l' }, h('span', null, (i + 1) + '. ' + t.nombre), h('span', null, dinero(t.importe))),
+            h('div', { class: 'barra', role: 'img', 'aria-label': t.nombre + ': ' + num(t.cantidad) + ' ' + t.unidad },
+              (() => { const b = h('i'); b.style.width = (t.importe / maxTop * 100) + '%'; return b; })()),
+            h('div', { class: 'sub' }, num(t.cantidad) + ' ' + t.unidad + ' vendidas')))
+            : h('p', { class: 'vacio' }, 'Aún no hay ventas en este periodo.')),
+        h('section', { class: 'tarjeta' },
+          h('div', { class: 'seccion-t' }, 'Horas pico'),
+          d.total ? [
+            h('div', { class: 'horas', role: 'img', 'aria-label': 'Ventas por hora' },
+              d.horas.map(x => { const i = h('i', { title: pad(x.hora) + ':00 · ' + dinero(x.total) });
+                i.style.height = Math.max(3, x.total / maxHora * 100) + '%';
+                return h('div', { class: 'col' + (x === pico ? ' pico' : '') }, i); })),
+            h('div', { class: 'horas-et' }, d.horas.map(x => h('span', null, x.hora % 2 ? '' : String(x.hora)))),
+            h('p', { class: 'sub', style: 'margin-top:.7rem' }, 'Hora más fuerte: ' + pad(pico.hora) + ':00 a ' + pad(pico.hora + 1) + ':00 (' + pico.tickets + ' tickets)'),
+          ] : h('p', { class: 'vacio' }, 'Aún no hay ventas en este periodo.')));
+    } catch (e) { cuerpo.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message)); }
+  }
+  pintarSeg(); cargar();
+  return caja;
+}
+
+/* ============================================================================
+   8. VISTA: HISTORIAL DE VENTAS  (requiere VER_HISTORIAL)
+   ============================================================================ */
+async function vistaHistorial() {
+  const hoy = claveDia(new Date());
+  const desde = h('input', { class: 'entrada', type: 'date', id: 'desde', value: hoy, max: hoy });
+  const hasta = h('input', { class: 'entrada', type: 'date', id: 'hasta', value: hoy, max: hoy });
+  const lista = h('div');
+  const resumen = h('p', { class: 'sub' });
+
+  const atajo = (t, f) => h('button', { class: 'btn btn-suave', type: 'button', onclick: () => { f(); cargar(); } }, t);
+  const ayer = () => claveDia(sumarDias(new Date(), -1));
+  const filtros = h('section', { class: 'tarjeta', style: 'display:grid;gap:.8rem' },
+    h('div', { class: 'rejilla' },
+      h('div', { class: 'campo' }, h('label', { for: 'desde' }, 'Desde'), desde),
+      h('div', { class: 'campo' }, h('label', { for: 'hasta' }, 'Hasta'), hasta)),
+    h('div', { class: 'rejilla' },
+      atajo('Hoy', () => { desde.value = hasta.value = hoy; }),
+      atajo('Ayer', () => { desde.value = hasta.value = ayer(); }),
+      atajo('Últimos 7 días', () => { desde.value = claveDia(sumarDias(new Date(), -6)); hasta.value = hoy; }),
+      atajo('Este mes', () => { const n = new Date(); desde.value = claveDia(new Date(n.getFullYear(), n.getMonth(), 1)); hasta.value = hoy; })));
+  desde.addEventListener('change', cargar); hasta.addEventListener('change', cargar);
+
+  async function cargar() {
+    if (!desde.value || !hasta.value) return;
+    if (desde.value > hasta.value) { lista.replaceChildren(h('div', { class: 'aviso-err' }, 'La fecha inicial no puede ser posterior a la final.')); return; }
+    lista.replaceChildren(cargando());
+    try {
+      const ventas = await api.ventas({ desde: desde.value, hasta: hasta.value });
+      const total = ventas.reduce((s, v) => s + v.total, 0);
+      resumen.textContent = ventas.length + ' venta(s) · ' + dinero(total);
+      if (!ventas.length) { lista.replaceChildren(h('div', { class: 'vacio' }, 'No hay ventas en ese rango.')); return; }
+      const tope = 80;
+      lista.replaceChildren(...ventas.slice(0, tope).map(v =>
+        h('button', { class: 'fila', type: 'button', onclick: () => detalleVenta(v) },
+          h('div', { class: 'cuerpo' },
+            h('div', { class: 't' }, 'Folio ' + v.folio),
+            h('div', { class: 'd' }, fechaHora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero)),
+          h('div', { class: 'der' }, dinero(v.total)))),
+        ventas.length > tope ? h('p', { class: 'sub', style: 'text-align:center;margin-top:.8rem' }, 'Se muestran las ' + tope + ' más recientes. Acota las fechas para ver el resto.') : null);
+    } catch (e) { lista.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message)); }
+  }
+  cargar();
+  return h('div', { style: 'display:grid;gap:1rem' }, filtros, resumen, lista);
+}
+
+function detalleVenta(v) {
+  const h2 = hoja([
+    h('h2', null, 'Venta ' + v.folio),
+    h('p', { class: 'sub' }, fechaLarga(v.fecha) + ' ' + hora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero),
+    h('div', null, v.lineas.map(l => h('div', { class: 'linea' },
+      h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio))),
+      h('div', null, dinero(l.cantidad * l.precio))))),
+    h('div', { class: 'total-fila' }, h('span', null, 'Total'), h('span', null, dinero(v.total))),
+    h('button', { class: 'btn btn-block', type: 'button', onclick: () => h2.cerrar() }, 'Cerrar'),
+  ]);
+}
+
+/* ============================================================================
+   9. VISTA: INVENTARIO  (ver: todos · ajustar: AJUSTAR_INVENTARIO)
+   ============================================================================ */
+async function vistaInventario() {
+  const productos = await api.inventario();
+  let filtro = 'todos', texto = '';
+  const lista = h('div');
+  const busca = h('input', { class: 'entrada', type: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off' });
+  const chips = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Filtrar' });
+  const estado = p => p.stock <= 0 ? ['Agotado', 'mal'] : p.stock <= p.minimo ? ['Stock bajo', 'aviso'] : ['En existencia', 'ok'];
+
+  function pintar() {
+    vaciar(chips);
+    for (const [k, t] of [['todos', 'Todos'], ['bajo', 'Stock bajo'], ['agotado', 'Agotados']]) {
+      chips.append(h('button', { type: 'button', 'aria-pressed': String(filtro === k), onclick: () => { filtro = k; pintar(); } }, t));
+    }
+    const q = texto.trim().toLowerCase();
+    const vis = productos.filter(p =>
+      (!q || p.nombre.toLowerCase().includes(q) || p.codigo.includes(q) || p.depto.toLowerCase().includes(q)) &&
+      (filtro === 'todos' || (filtro === 'agotado' ? p.stock <= 0 : p.stock <= p.minimo)));
+    vaciar(lista);
+    if (!vis.length) { lista.append(h('div', { class: 'vacio' }, 'No hay productos con ese filtro.')); return; }
+    for (const p of vis) {
+      const [et, clase] = estado(p);
+      lista.append(h('button', { class: 'fila', type: 'button', onclick: () => hojaAjuste(p, pintar) },
+        h('div', { class: 'cuerpo' }, h('div', { class: 't' }, p.nombre), h('div', { class: 'd' }, p.depto + ' · mín. ' + num(p.minimo))),
+        h('div', { class: 'der' }, num(p.stock) + ' ' + p.unidad, h('div', null, h('span', { class: 'insignia ' + clase }, et)))));
+    }
+  }
+  busca.addEventListener('input', () => { texto = busca.value; pintar(); });
+  pintar();
+  return h('div', { style: 'display:grid;gap:1rem' }, busca, chips, lista);
+}
+
+function hojaAjuste(producto, alGuardar) {
+  const puede = E.sesion.secciones.inventarioAjustar;
+  const [tit] = [producto.nombre];
+  const info = [
+    h('h2', null, tit),
+    h('p', { class: 'sub' }, producto.depto + ' · código ' + producto.codigo),
+    h('div', { class: 'rejilla' },
+      h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Existencia'), h('div', { class: 'v' }, num(producto.stock) + ' ' + producto.unidad)),
+      h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Precio'), h('div', { class: 'v' }, dinero(producto.precio)))),
+  ];
+  if (!puede) {
+    const s = hoja([...info, h('p', { class: 'sub' }, 'Tu usuario no tiene permiso para ajustar el inventario.'),
+      h('button', { class: 'btn btn-block', type: 'button', onclick: () => s.cerrar() }, 'Cerrar')]);
+    return;
+  }
+  let tipo = 'ENTRADA';
+  const tipos = [['ENTRADA', 'Entrada (+)'], ['SALIDA', 'Merma (−)'], ['CONTEO', 'Conteo']];
+  const seg = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Tipo de ajuste' });
+  const cant = h('input', { class: 'entrada', id: 'cant', type: 'text', inputmode: 'decimal', autocomplete: 'off', placeholder: '0' });
+  const etCant = h('label', { for: 'cant' });
+  const err = h('div', { class: 'oculto', role: 'alert' });
+  const guardar = h('button', { class: 'btn btn-primario', type: 'button' }, 'Guardar ajuste');
+  const pintarSeg = () => {
+    vaciar(seg);
+    for (const [k, t] of tipos) seg.append(h('button', { type: 'button', 'aria-pressed': String(tipo === k), onclick: () => { tipo = k; pintarSeg(); } }, t));
+    etCant.textContent = tipo === 'CONTEO' ? 'Existencia contada (' + producto.unidad + ')' : 'Cantidad (' + producto.unidad + ')';
+  };
+  pintarSeg();
+  const v = hoja([...info, seg, h('div', { class: 'campo' }, etCant, cant), err,
+    h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => v.cerrar() }, 'Cancelar'), guardar)]);
+  guardar.addEventListener('click', async () => {
+    const n = parseFloat(cant.value.replace(',', '.'));
+    if (!isFinite(n) || n < 0 || cant.value.trim() === '') { err.className = 'aviso-err'; err.textContent = 'Captura una cantidad válida.'; return; }
+    guardar.disabled = true;
+    try {
+      const nuevo = await api.ajustarStock({ id: producto.id, tipo, cantidad: n, motivo: tipo });
+      producto.stock = nuevo.stock;
+      v.cerrar(); vibrar(30); avisar('Inventario actualizado: ' + num(nuevo.stock) + ' ' + producto.unidad);
+      alGuardar();
+    } catch (e) { err.className = 'aviso-err'; err.textContent = e.message; guardar.disabled = false; }
+  });
+}
+
+/* ============================================================================
+   10. VISTA: ESCANEAR TICKET DE PROVEEDOR (MAQUETA)
+       - <input type="file" accept="image/*" capture="environment"> abre la
+         cámara trasera del teléfono.
+       - "Procesar" simula la lectura (ocr.extraerLineas) y actualiza solo el
+         inventario simulado (api.aplicarTicket).
+   ============================================================================ */
+async function vistaEscanear() {
+  const caja = h('div', { style: 'display:grid;gap:1rem' });
+  let urlPrevia = null;
+  const liberar = () => { if (urlPrevia) { URL.revokeObjectURL(urlPrevia); urlPrevia = null; } };
+
+  function inicio() {
+    liberar();
+    const entrada = h('input', { class: 'entrada-oculta', id: 'foto', type: 'file', accept: 'image/*', capture: 'environment' });
+    entrada.addEventListener('change', () => { if (entrada.files && entrada.files[0]) vistaPrevia(entrada.files[0]); });
+    caja.replaceChildren(
+      h('p', { class: 'sub' }, 'Toma una foto del ticket o factura del proveedor para dar entrada a la mercancía en el inventario.'),
+      h('label', { class: 'tomar', for: 'foto' },
+        h('div', { class: 'grande', 'aria-hidden': 'true' }, '📷'),
+        h('div', { class: 'titulo' }, 'Tomar foto del ticket'),
+        h('div', { class: 'sub' }, 'Se abrirá la cámara del teléfono')),
+      entrada,
+      h('div', { class: 'aviso-ok', style: 'background:var(--warning-subtle);color:var(--warning-text)' },
+        'Maqueta: por ahora la lectura es simulada y solo cambia el inventario de demostración.'));
+  }
+
+  function vistaPrevia(archivo) {
+    liberar();
+    urlPrevia = URL.createObjectURL(archivo);
+    const procesar = h('button', { class: 'btn btn-primario btn-block', type: 'button' }, 'Procesar ticket');
+    procesar.addEventListener('click', () => procesarTicket(archivo));
+    caja.replaceChildren(
+      h('img', { class: 'previa', src: urlPrevia, alt: 'Foto del ticket' }),
+      procesar,
+      h('button', { class: 'btn btn-block', type: 'button', onclick: inicio }, 'Tomar otra foto'));
+  }
+
+  async function procesarTicket(archivo) {
+    const paso = h('span', null, 'Leyendo el ticket…');
+    caja.replaceChildren(h('div', { class: 'tarjeta cargando' }, h('div', { class: 'rueda' }), h('div', { class: 'paso' }, paso)));
+    try {
+      const lineas = await ocr.extraerLineas(archivo);     // <-- AQUÍ entra el OCR real
+      paso.textContent = 'Actualizando el inventario…';
+      await api.aplicarTicket(lineas);
+      liberar();
+      const total = lineas.reduce((s, l) => s + l.cantidad * l.costo, 0);
+      caja.replaceChildren(
+        h('div', { class: 'aviso-ok', role: 'status' }, '✅ Ticket procesado. Inventario actualizado'),
+        h('section', { class: 'tarjeta' },
+          h('div', { class: 'seccion-t' }, 'Líneas detectadas (ejemplo)'),
+          lineas.map(l => h('div', { class: 'linea' },
+            h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, '+' + num(l.cantidad) + ' pzas × ' + dinero(l.costo))),
+            h('div', null, dinero(l.cantidad * l.costo)))),
+          h('div', { class: 'total-fila' }, h('span', null, 'Total del ticket'), h('span', null, dinero(total)))),
+        h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: inicio }, 'Escanear otro ticket'));
+      vibrar(40);
+    } catch (e) {
+      caja.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message),
+        h('button', { class: 'btn btn-block', type: 'button', onclick: inicio }, 'Intentar de nuevo'));
+    }
+  }
+  inicio();
+  return caja;
+}
+
+/* ============================================================================
+   11. VISTA: CONFIGURACIÓN (preferencias + cerrar sesión)
+   ============================================================================ */
+async function vistaConfig() {
+  const s = E.sesion;
+  const vence = h('div', { class: 'd' });
+  const pintarVence = () => {
+    const a = E.sesion;
+    vence.textContent = a.permanente ? 'Sesión permanente en este teléfono (se cierra tras 60 días sin usarla).'
+      : 'Se cerrará el ' + new Date(a.expira).toLocaleString('es-MX', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) + ' (48 horas).';
+  };
+  pintarVence();
+  const segTema = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Tema' });
+  const pintarTema = () => {
+    vaciar(segTema);
+    const actual = almacen.get('pv.tema') || 'auto';
+    for (const [k, t] of [['auto', 'Automático'], ['claro', 'Claro'], ['oscuro', 'Oscuro']]) {
+      segTema.append(h('button', { type: 'button', 'aria-pressed': String(actual === k), onclick: () => {
+        if (k === 'auto') almacen.del('pv.tema'); else almacen.set('pv.tema', k);
+        aplicarPreferencias(); pintarTema();
+      } }, t));
+    }
+  };
+  pintarTema();
+
+  const cerrar = h('button', { class: 'btn btn-peligro btn-block', type: 'button' }, 'Cerrar sesión');
+  cerrar.addEventListener('click', () => {
+    const q = hoja([h('h2', null, '¿Cerrar sesión?'), h('p', { class: 'sub' }, 'Tendrás que escribir tu usuario y contraseña para volver a entrar.'),
+      h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => q.cerrar() }, 'Cancelar'),
+        h('button', { class: 'btn btn-peligro', type: 'button', onclick: async () => {
+          try { await api.logout(); } catch (e) { /* aun sin red, se cierra aquí */ }
+          q.cerrar(); cerrarLocal();
+        } }, 'Cerrar sesión'))]);
+  });
+
+  return h('div', { style: 'display:grid;gap:1rem' },
+    h('section', { class: 'tarjeta' },
+      h('div', { class: 'titulo' }, s.nombre),
+      h('div', { class: 'sub' }, s.rolEtiqueta + ' · usuario ' + s.usuario)),
+    h('section', { class: 'tarjeta' },
+      h('div', { class: 'seccion-t' }, 'Sesión'),
+      h('div', { class: 'fila-conf' },
+        h('div', null, h('div', { class: 't' }, 'Mantener la sesión siempre abierta'), vence),
+        interruptor(s.permanente, async v => {
+          const clave = v && !E.sesion.permanente ? await pedirClave() : null;   // subir a permanente exige la contraseña
+          if (v && !E.sesion.permanente && clave === null) throw new Error('cancelado');
+          reciente(await api.recordar(v, clave)); pintarVence();
+        }, 'Mantener la sesión siempre abierta'))),
+    h('section', { class: 'tarjeta' },
+      h('div', { class: 'seccion-t' }, 'Preferencias'),
+      h('div', { class: 'fila-conf', style: 'display:grid' }, h('div', { class: 't' }, 'Tema'), segTema),
+      h('div', { class: 'fila-conf' },
+        h('div', null, h('div', { class: 't' }, 'Texto grande'), h('div', { class: 'd' }, 'Aumenta el tamaño de letra de toda la página.')),
+        interruptor(almacen.get('pv.texto') === 'grande', v => { if (v) almacen.set('pv.texto', 'grande'); else almacen.del('pv.texto'); aplicarPreferencias(); }, 'Texto grande'))),
+    h('section', { class: 'tarjeta' },
+      h('div', { class: 'seccion-t' }, 'Acerca de'),
+      h('p', { class: 'sub' }, 'Interfaz móvil del Punto de Venta. Las ventas, el inventario y las estadísticas mostradas son datos de demostración; el inicio de sesión sí es real.')),
+    cerrar);
+}
+
+arrancar();
+})();
+</script>
+</body>
+</html>

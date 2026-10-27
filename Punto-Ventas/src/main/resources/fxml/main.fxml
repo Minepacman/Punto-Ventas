@@ -13,6 +13,13 @@
             <Label text="Punto de Venta" styleClass="brand-label"/>
             <Region HBox.hgrow="ALWAYS"/>
 
+            <VBox alignment="CENTER_RIGHT" styleClass="reloj-box">
+                <Label fx:id="labelHora" text="--:--" styleClass="reloj-hora"/>
+                <Label fx:id="labelFecha" text="—" styleClass="reloj-fecha"/>
+            </VBox>
+
+            <Separator orientation="VERTICAL"/>
+
             <Label fx:id="labelUsuario" text="Usuario: —"/>
 
             <Separator orientation="VERTICAL"/>
@@ -30,6 +37,8 @@
         <TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE"
                  styleClass="main-tabs">
 
+            <!-- Las pestañas distintas de Ventas se cargan al seleccionarlas por primera vez (MainController.cargarPestanaPerezosa):
+                 en PCs lentas evita construir 6 pantallas y consultar la base de datos al iniciar sesión. -->
             <!-- F1 – Ventas -->
             <Tab fx:id="tabVentas" text="F1 · Ventas">
                 <fx:include source="ventas.fxml"
@@ -37,34 +46,22 @@
             </Tab>
 
             <!-- F2 – Clientes -->
-            <Tab fx:id="tabClientes" text="F2 · Clientes">
-                <fx:include source="clientes.fxml"
-                            fx:id="clientesView"/>
-            </Tab>
+            <Tab fx:id="tabClientes" text="F2 · Clientes"/>
 
             <!-- F3 – Productos -->
-            <Tab fx:id="tabProductos" text="F3 · Productos">
-                <fx:include source="productos.fxml"
-                            fx:id="productosView"/>
-            </Tab>
+            <Tab fx:id="tabProductos" text="F3 · Productos"/>
 
             <!-- F4 – Inventario -->
-            <Tab fx:id="tabInventario" text="F4 · Inventario">
-                <fx:include source="inventario.fxml"
-                            fx:id="inventarioView"/>
-            </Tab>
+            <Tab fx:id="tabInventario" text="F4 · Inventario"/>
 
             <!-- Configuración (solo ADMIN; MainController la quita para cajeros) -->
-            <Tab fx:id="tabConfig" text="⚙ Configuración">
-                <fx:include source="configuracion.fxml"
-                            fx:id="configuracionView"/>
-            </Tab>
+            <Tab fx:id="tabConfig" text="⚙ Configuración"/>
 
             <!-- Corte (solo ADMIN) -->
-            <Tab fx:id="tabCorte" text="✂ Corte">
-                <fx:include source="corte.fxml"
-                            fx:id="corteView"/>
-            </Tab>
+            <Tab fx:id="tabCorte" text="✂ Corte"/>
+
+            <!-- Estadísticas (solo quien tiene VER_HISTORIAL; MainController la quita para los demás) -->
+            <Tab fx:id="tabEstadisticas" text="📊 Estadísticas"/>
 
         </TabPane>
     </center>
@@ -73,9 +70,8 @@
     <bottom>
         <HBox styleClass="status-bar" spacing="12">
             <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
-            <Label fx:id="labelFecha" text="—"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Label text="F1 Ventas · F2 Clientes · F3 Productos · F4 Inventario · F12 Cobrar"/>
+            <Label text="F1 Ventas · F2 Clientes · F3 Productos · F4 Inventario · F5 Estadísticas · F12 Cobrar"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="labelVersion" text="v1.0.0"/>
         </HBox>

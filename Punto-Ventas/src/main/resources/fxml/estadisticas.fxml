@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.chart.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    estadisticas.fxml  –  Estadísticas y recomendaciones (CRT-10)
+    Controlador: EstadisticasController.java
+    Los datos salen de los agregados precalculados (AgregadosService); el
+    periodo elegido arriba aplica a todas las pestañas. Los gráficos, tablas,
+    tarjetas de comparación y el mapa de calor se llenan en el controlador.
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.EstadisticasController">
+
+    <top>
+        <VBox spacing="0">
+            <fx:define>
+                <ToggleGroup fx:id="grupoPeriodo"/>
+            </fx:define>
+
+            <HBox styleClass="section-toolbar" spacing="10" alignment="CENTER_LEFT">
+                <Label text="Estadísticas" styleClass="title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="lblActualizado" text="Agregados: —" styleClass="hint"/>
+                <Button fx:id="btnRecalcular" text="Recalcular" onAction="#onRecalcular"/>
+                <Separator orientation="VERTICAL"/>
+                <Label text="Nivel de datos:" styleClass="text-muted"/>
+                <Label fx:id="lblNivel" text="—" styleClass="badge"/>
+            </HBox>
+
+            <VBox spacing="8">
+                <padding><Insets top="12" right="16" bottom="0" left="16"/></padding>
+                <HBox styleClass="callout" alignment="CENTER_LEFT">
+                    <Label fx:id="lblNivelMensaje" text="Calculando el nivel de datos…"
+                           wrapText="true" HBox.hgrow="ALWAYS"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="Periodo:" styleClass="text-muted"/>
+                    <ToggleButton fx:id="tgHoy"          text="Hoy"          toggleGroup="$grupoPeriodo" selected="true" onAction="#onPeriodo"/>
+                    <ToggleButton fx:id="tgSemana"       text="Semana"       toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                    <ToggleButton fx:id="tgMes"          text="Mes"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                    <ToggleButton fx:id="tgAnio"         text="Año"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                    <ToggleButton fx:id="tgPersonalizado" text="Personalizado" toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                    <HBox fx:id="boxPersonalizado" spacing="6" alignment="CENTER_LEFT" visible="false" managed="false">
+                        <DatePicker fx:id="dpDesde" promptText="Desde" prefWidth="130"/>
+                        <DatePicker fx:id="dpHasta" promptText="Hasta" prefWidth="130"/>
+                        <Button fx:id="btnAplicar" text="Aplicar" onAction="#onAplicarPersonalizado" styleClass="button-primary"/>
+                    </HBox>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="lblPeriodo" text="" styleClass="hint"/>
+                </HBox>
+            </VBox>
+        </VBox>
+    </top>
+
+    <center>
+        <TabPane tabClosingPolicy="UNAVAILABLE">
+
+            <!-- ── Resumen ─────────────────────────────── -->
+            <Tab text="Resumen">
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="16">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
+
+                        <HBox spacing="12">
+                            <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <Label text="Venta total" styleClass="metric-label"/>
+                                <Label fx:id="lblTotal" text="—" styleClass="metric-value"/>
+                            </VBox>
+                            <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <Label text="Transacciones" styleClass="metric-label"/>
+                                <Label fx:id="lblTransacciones" text="—" styleClass="metric-value"/>
+                            </VBox>
+                            <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <Label text="Ticket promedio" styleClass="metric-label"/>
+                                <Label fx:id="lblTicketPromedio" text="—" styleClass="metric-value"/>
+                            </VBox>
+                            <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <Label text="Piezas vendidas" styleClass="metric-label"/>
+                                <Label fx:id="lblPiezas" text="—" styleClass="metric-value"/>
+                            </VBox>
+                        </HBox>
+
+                        <Label text="Comparativos (siempre a la fecha de hoy)" styleClass="card-title"/>
+                        <!-- Cuatro tarjetas: hoy, semana, mes y año; se arman en el controlador -->
+                        <HBox fx:id="boxComparaciones" spacing="12"/>
+
+                        <HBox spacing="12">
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <Label fx:id="lblTituloSerie" text="Ventas por día" styleClass="card-title"/>
+                                <LineChart fx:id="chartVentasDia" legendVisible="false" createSymbols="true" prefHeight="280" animated="false">
+                                    <xAxis><CategoryAxis label="Día"/></xAxis>
+                                    <yAxis><NumberAxis label="Ventas"/></yAxis>
+                                </LineChart>
+                            </VBox>
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <Label text="Ventas por día de la semana" styleClass="card-title"/>
+                                <Label fx:id="lblDiaPico" text="" styleClass="subtitle"/>
+                                <BarChart fx:id="chartDiaSemana" legendVisible="false" prefHeight="260" animated="false">
+                                    <xAxis><CategoryAxis label="Día de la semana"/></xAxis>
+                                    <yAxis><NumberAxis label="Ventas"/></yAxis>
+                                </BarChart>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+                </ScrollPane>
+            </Tab>
+
+            <!-- ── Horarios pico ───────────────────────── -->
+            <Tab text="Horarios pico">
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="16">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
+
+                        <VBox styleClass="card" spacing="8">
+                            <Label text="Ventas por franja horaria" styleClass="card-title"/>
+                            <Label fx:id="lblFranjaPico" text="" styleClass="subtitle"/>
+                            <BarChart fx:id="chartFranjas" legendVisible="false" prefHeight="260" animated="false">
+                                <xAxis><CategoryAxis label="Franja"/></xAxis>
+                                <yAxis><NumberAxis label="Ventas"/></yAxis>
+                            </BarChart>
+                        </VBox>
+
+                        <VBox styleClass="card" spacing="8">
+                            <Label text="Mapa de calor: día de la semana × franja" styleClass="card-title"/>
+                            <Label text="Más intensidad = más ventas en esa franja. El número es el total vendido." styleClass="subtitle"/>
+                            <!-- Filas y celdas se generan en EstadisticasController -->
+                            <GridPane fx:id="gridCalor" hgap="6" vgap="6"/>
+                            <HBox spacing="6" alignment="CENTER_LEFT">
+                                <Label text="Menos" styleClass="hint"/>
+                                <Label styleClass="heat-cell heat-0" minWidth="22" minHeight="16" prefWidth="22" prefHeight="16"/>
+                                <Label styleClass="heat-cell heat-1" minWidth="22" minHeight="16" prefWidth="22" prefHeight="16"/>
+                                <Label styleClass="heat-cell heat-2" minWidth="22" minHeight="16" prefWidth="22" prefHeight="16"/>
+                                <Label styleClass="heat-cell heat-3" minWidth="22" minHeight="16" prefWidth="22" prefHeight="16"/>
+                                <Label text="Más" styleClass="hint"/>
+                            </HBox>
+                        </VBox>
+                    </VBox>
+                </ScrollPane>
+            </Tab>
+
+            <!-- ── Productos más vendidos ──────────────── -->
+            <Tab text="Productos más vendidos">
+                <VBox spacing="16">
+                    <padding><Insets topRightBottomLeft="16"/></padding>
+
+                    <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <Label fx:id="lblProductosTitulo" text="Ranking por importe" styleClass="card-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button fx:id="btnExportarProductos" text="Exportar CSV" onAction="#onExportarProductos"/>
+                        </HBox>
+                        <TableView fx:id="tablaProductos" VBox.vgrow="ALWAYS" prefHeight="360"/>
+                    </VBox>
+                </VBox>
+            </Tab>
+
+            <!-- ── Recomendaciones ─────────────────────── -->
+            <Tab text="Recomendaciones">
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="12">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
+
+                        <HBox spacing="12">
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <HBox spacing="8" alignment="CENTER_LEFT">
+                                    <Label text="Se compran juntos" styleClass="card-title"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="lblNivelJuntos" text="—" styleClass="badge"/>
+                                </HBox>
+                                <Label text="Pares que más se repiten en el mismo ticket (últimas 4 semanas)." styleClass="subtitle" wrapText="true"/>
+                                <ListView fx:id="listaJuntos" prefHeight="240"/>
+                            </VBox>
+
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <HBox spacing="8" alignment="CENTER_LEFT">
+                                    <Label text="Para este momento" styleClass="card-title"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="lblNivelDiaHora" text="—" styleClass="badge"/>
+                                </HBox>
+                                <Label fx:id="lblMomento" text="Lo que el motor sugeriría ahora con el ticket vacío." styleClass="subtitle" wrapText="true"/>
+                                <ListView fx:id="listaDiaHora" prefHeight="240"/>
+                            </VBox>
+
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
+                                <HBox spacing="8" alignment="CENTER_LEFT">
+                                    <Label text="Según el clima" styleClass="card-title"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="lblNivelClima" text="—" styleClass="badge"/>
+                                </HBox>
+                                <Label fx:id="lblClimaMotivo" text="Productos que se venden más con el clima de ahora." styleClass="subtitle" wrapText="true"/>
+                                <ListView fx:id="listaClima" prefHeight="240"/>
+                            </VBox>
+                        </HBox>
+
+                        <VBox styleClass="card" spacing="8">
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Correlación producto × clima" styleClass="card-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="btnExportarCorrelacion" text="Exportar CSV" onAction="#onExportarCorrelacion"/>
+                            </HBox>
+                            <Label text="Índice 1.0 = igual que siempre; 2.0 = el producto pesa el doble en las ventas con ese clima."
+                                   styleClass="subtitle" wrapText="true"/>
+                            <TableView fx:id="tablaCorrelacion" prefHeight="260"/>
+                        </VBox>
+                    </VBox>
+                </ScrollPane>
+            </Tab>
+
+            <!-- ── Clima ───────────────────────────────── -->
+            <Tab text="Clima">
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="16">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
+
+                        <VBox styleClass="card" spacing="8">
+                            <Label text="Condiciones actuales" styleClass="card-title"/>
+                            <HBox spacing="16" alignment="CENTER_LEFT">
+                                <Label fx:id="lblClimaIcono" text="☁" style="-fx-font-size: 36px;" styleClass="text-subtle"/>
+                                <VBox spacing="2">
+                                    <Label fx:id="lblClimaTemperatura" text="—" styleClass="metric-value"/>
+                                    <Label fx:id="lblClimaCondicion" text="Sin datos de clima" styleClass="text-muted"/>
+                                    <Label fx:id="lblClimaCiudad" text="Ciudad: —" styleClass="hint"/>
+                                    <Label fx:id="lblClimaActualizado" text="" styleClass="hint"/>
+                                </VBox>
+                            </HBox>
+                            <Label fx:id="lblClimaAviso"
+                                   text="El clima se consulta cada hora con las coordenadas del negocio (Configuración → Ubicación y clima). Solo se envían las coordenadas; ningún dato de ventas sale del equipo."
+                                   styleClass="hint" wrapText="true"/>
+                        </VBox>
+
+                        <VBox styleClass="card" spacing="8">
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Ventas por condición climática" styleClass="card-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="btnExportarClima" text="Exportar CSV" onAction="#onExportarClima"/>
+                            </HBox>
+                            <TableView fx:id="tablaClima" prefHeight="220"/>
+                        </VBox>
+                    </VBox>
+                </ScrollPane>
+            </Tab>
+
+        </TabPane>
+    </center>
+
+</BorderPane>

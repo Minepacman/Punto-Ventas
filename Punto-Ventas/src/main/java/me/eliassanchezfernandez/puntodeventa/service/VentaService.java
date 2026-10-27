@@ -2,6 +2,7 @@ package me.eliassanchezfernandez.puntodeventa.service;
 
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
+import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
@@ -230,6 +231,10 @@ public class VentaService {
         if (cantidad > 100000) {
             throw new NegocioException("La cantidad es demasiado grande.");
         }
+        if (producto.permiteDecimales() && !configuracionService.isPermitirGranel()) {
+            throw new NegocioException("La venta a granel está deshabilitada en Configuración: \""
+                    + producto.getDescripcion() + "\" no se puede vender.");
+        }
         ProductoService.validarDecimales(producto, cantidad);
     }
 
@@ -329,8 +334,8 @@ public class VentaService {
                 } catch (PermisoRequeridoException e) {
                     // Se relanza como permiso requerido para que la UI ofrezca la autorización
                     throw new PermisoRequeridoException(Permiso.CAMBIAR_PRECIOS, String.format(
-                            "\"%s\" quedaría por debajo de su costo ($%.2f por unidad). %s",
-                            p.getDescripcion(), p.getPrecioCosto(), e.getMessage()));
+                            "\"%s\" quedaría por debajo de su costo (%s por unidad). %s",
+                            p.getDescripcion(), Moneda.formato(p.getPrecioCosto()), e.getMessage()));
                 }
                 marcarAutorizador(d, autorizadores, sesionService.autorizacionUsada(Permiso.CAMBIAR_PRECIOS, autorizaciones));
             }
@@ -361,7 +366,7 @@ public class VentaService {
 
         // 3) Total y pagos con los importes ya recalculados
         double total = calcularTotal(detalles);
-        List<PagoVenta> pagosValidos = validarPagos(pagos, total);
+        List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
         double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
         Venta.FormaPago formaPrincipal = pagosValidos.stream()
                 .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
@@ -391,6 +396,7 @@ public class VentaService {
             venta.getDetalles().add(d);
         }
         Venta guardada = ventaRepo.save(venta);
+        guardada.setFolio(config.folioDe(guardada.getId()));
 
         // 5) Descontar inventario con bitácora y consumir cupo de promociones
         for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
@@ -427,8 +433,8 @@ public class VentaService {
         return guardada;
     }
 
-    /** Pagos: montos válidos, sin crédito, suma ≥ total y no-efectivo ≤ total */
-    private List<PagoVenta> validarPagos(List<PagoVenta> pagos, double total) {
+    /** Pagos: montos válidos, formas habilitadas (sin crédito), suma ≥ total y no-efectivo ≤ total */
+    private List<PagoVenta> validarPagos(List<PagoVenta> pagos, double total, Configuracion config) {
         if (pagos == null || pagos.isEmpty()) {
             throw new NegocioException("Indica cómo pagó el cliente.");
         }
@@ -443,6 +449,10 @@ public class VentaService {
             if (p.getFormaPago() == Venta.FormaPago.CREDITO) {
                 throw new NegocioException("La venta a crédito no está disponible hasta contar con el módulo de clientes.");
             }
+            if (!config.permiteFormaPago(p.getFormaPago())) {
+                throw new NegocioException("La forma de pago \"" + p.getFormaPago().getEtiqueta()
+                        + "\" no está habilitada en Configuración.");
+            }
             if (p.getFormaPago() != Venta.FormaPago.EFECTIVO) noEfectivo += p.getMonto();
             validos.add(new PagoVenta(p.getFormaPago(), redondear(p.getMonto())));
         }
@@ -452,11 +462,12 @@ public class VentaService {
         double suma = validos.stream().mapToDouble(PagoVenta::getMonto).sum();
         if (noEfectivo > total + 0.001) {
             throw new NegocioException(String.format(
-                    "El pago con tarjeta ($%.2f) no puede ser mayor que el total ($%.2f).", noEfectivo, total));
+                    "El pago con tarjeta u otro medio distinto de efectivo (%s) no puede ser mayor que el total (%s).",
+                    Moneda.formato(noEfectivo), Moneda.formato(total)));
         }
         if (suma + 0.001 < total) {
             throw new NegocioException(String.format(
-                    "El pago ($%.2f) es menor que el total ($%.2f).", suma, total));
+                    "El pago (%s) es menor que el total (%s).", Moneda.formato(suma), Moneda.formato(total)));
         }
         return validos;
     }
@@ -600,38 +611,39 @@ public class VentaService {
         return r;
     }
 
-    /** Resumen sin filtro de permisos (uso interno: CajaService.hacerCorte) */
+    /**
+     * Resumen sin filtro de permisos (uso interno: CajaService.hacerCorte).
+     * Todo se suma en SQL: el corte no carga los tickets ni sus renglones
+     * (en una tienda con cientos de ventas al día eso es lo caro en un disco lento).
+     */
     @Transactional(readOnly = true)
     public ResumenCorte resumenCompletoDe(LocalDate dia) {
+        LocalDateTime inicio = dia.atStartOfDay();
+        LocalDateTime fin = inicio.plusDays(1);
         ResumenCorte r = new ResumenCorte();
-        for (Venta v : ventasEntreInterno(dia, dia)) {
-            if (v.isCancelada()) {
-                r.numCanceladas++;
-                r.totalCanceladas += v.getTotal();
-                continue;
-            }
-            r.numVentas++;
-            r.ventasTotales += v.getTotal();
-            r.subtotal += v.getSubtotalODefault();
-            r.iva      += v.getIvaODefault();
-            if (v.getPagos().isEmpty()) {
-                // ventas anteriores al pago dividido: todo a su forma de pago
-                sumarPago(r, v.getFormaPago(), v.getTotal());
-            } else {
-                double cambio = v.getCambio();
-                for (PagoVenta p : v.getPagos()) {
-                    double monto = p.getMonto();
-                    if (p.getFormaPago() == Venta.FormaPago.EFECTIVO) monto -= cambio; // el cambio sale del efectivo
-                    sumarPago(r, p.getFormaPago(), monto);
-                }
-            }
-            for (DetalleVenta d : v.getDetalles()) {
-                Producto p = d.getProducto();
-                r.ganancia += d.getImporte() - d.getCostoUnitarioODefault() * d.getCantidad();
-                Departamento dep = p.getDepartamento();
-                String nombre = dep != null ? dep.getNombre() : "Sin departamento";
-                r.porDepartamento.merge(nombre, d.getImporte(), Double::sum);
-            }
+
+        Object[] activas = ventaRepo.resumenActivas(inicio, fin).get(0);
+        r.numVentas     = ((Number) activas[0]).intValue();
+        r.ventasTotales = ((Number) activas[1]).doubleValue();
+        r.subtotal      = ((Number) activas[2]).doubleValue();
+        r.iva           = ((Number) activas[3]).doubleValue();
+
+        Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin).get(0);
+        r.numCanceladas   = ((Number) canceladas[0]).intValue();
+        r.totalCanceladas = ((Number) canceladas[1]).doubleValue();
+
+        // El cambio sale del efectivo; las ventas anteriores al pago dividido van todas a su forma de pago
+        for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO)) {
+            sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
+        }
+        for (Object[] f : ventaRepo.ventasSinPagosPorForma(inicio, fin)) {
+            sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
+        }
+        for (Object[] f : ventaRepo.importesPorDepartamento(inicio, fin)) {
+            String nombre = f[0] != null ? (String) f[0] : "Sin departamento";
+            double importe = ((Number) f[1]).doubleValue();
+            r.porDepartamento.merge(nombre, importe, Double::sum);
+            r.ganancia += importe - ((Number) f[2]).doubleValue();
         }
         r.ventasTotales   = redondear(r.ventasTotales);
         r.subtotal        = redondear(r.subtotal);
@@ -639,6 +651,8 @@ public class VentaService {
         r.efectivo        = redondear(r.efectivo);
         r.tarjeta         = redondear(r.tarjeta);
         r.credito         = redondear(r.credito);
+        r.transferencia   = redondear(r.transferencia);
+        r.vales           = redondear(r.vales);
         r.ganancia        = redondear(r.ganancia);
         r.totalCanceladas = redondear(r.totalCanceladas);
         r.productosBajos.addAll(productoService.productosConStockBajo());
@@ -651,6 +665,8 @@ public class VentaService {
             case EFECTIVO -> r.efectivo += monto;
             case TARJETA  -> r.tarjeta  += monto;
             case CREDITO  -> r.credito  += monto;
+            case TRANSFERENCIA -> r.transferencia += monto;
+            case VALES    -> r.vales    += monto;
         }
     }
 
@@ -662,6 +678,8 @@ public class VentaService {
         public double efectivo;
         public double tarjeta;
         public double credito;
+        public double transferencia;
+        public double vales;
         public double ganancia;
         public int    numVentas;
         public int    numCanceladas;

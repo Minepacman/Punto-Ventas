@@ -31,6 +31,10 @@
                             prefWidth="110" prefHeight="80"/>
                     <Button text="🔢 Modificar&#10;Folios"        onAction="#onFolios"
                             prefWidth="110" prefHeight="80"/>
+                    <Button text="🌦 Ubicación&#10;y Clima"        onAction="#onClima"
+                            prefWidth="110" prefHeight="80"/>
+                    <Button text="📱 Acceso&#10;móvil"             onAction="#onAccesoMovil"
+                            prefWidth="110" prefHeight="80"/>
                 </TilePane>
 
                 <Separator/>

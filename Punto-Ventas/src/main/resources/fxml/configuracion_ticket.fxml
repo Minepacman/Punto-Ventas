@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_ticket.fxml  –  Datos del ticket y vista previa (no imprime)
+    Controlador: ConfiguracionTicketController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionTicketController"
+            stylesheets="@../css/app.css">
+
+    <left>
+        <ScrollPane fitToWidth="true" prefWidth="380" hbarPolicy="NEVER">
+            <VBox styleClass="form-panel" spacing="12">
+                <padding><Insets topRightBottomLeft="20"/></padding>
+
+                <Label text="Datos del ticket" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="4">
+                    <Label text="Encabezado" styleClass="field-label"/>
+                    <TextArea fx:id="txtEncabezado" prefRowCount="2" wrapText="true"
+                              promptText="ej: Sucursal Centro"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="RFC" styleClass="field-label"/>
+                    <TextField fx:id="txtRfc" promptText="12 o 13 caracteres"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="Teléfono" styleClass="field-label"/>
+                    <TextField fx:id="txtTelefono" promptText="ej: 55 1234 5678"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="Pie de ticket" styleClass="field-label"/>
+                    <TextArea fx:id="txtPie" prefRowCount="2" wrapText="true"
+                              promptText="ej: No se aceptan devoluciones sin ticket"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="Mensaje de agradecimiento" styleClass="field-label"/>
+                    <TextField fx:id="txtAgradecimiento" promptText="¡Gracias por su compra!"/>
+                </VBox>
+                <VBox spacing="4">
+                    <Label text="Ancho del papel" styleClass="field-label"/>
+                    <HBox spacing="16">
+                        <RadioButton fx:id="rb58" text="58 mm">
+                            <toggleGroup><ToggleGroup fx:id="grupoAncho"/></toggleGroup>
+                        </RadioButton>
+                        <RadioButton fx:id="rb80" text="80 mm" toggleGroup="$grupoAncho"/>
+                    </HBox>
+                </VBox>
+                <Label text="El nombre y la dirección del negocio se editan en Impuestos. Aquí solo se guardan los datos; la impresión llega en una etapa posterior."
+                       wrapText="true" styleClass="hint"/>
+
+                <HBox spacing="12">
+                    <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </left>
+
+    <center>
+        <VBox spacing="8" alignment="TOP_CENTER">
+            <padding><Insets topRightBottomLeft="20"/></padding>
+            <Label text="Vista previa" styleClass="form-section-title"/>
+            <VBox fx:id="hojaTicket" styleClass="card" alignment="TOP_CENTER" spacing="6" maxWidth="-Infinity">
+                <padding><Insets topRightBottomLeft="12"/></padding>
+                <ImageView fx:id="imgLogo" fitHeight="60" preserveRatio="true" managed="false" visible="false"/>
+                <Label fx:id="lblVistaPrevia" wrapText="false"
+                       style="-fx-font-family:'Monospaced';-fx-font-size:11"/>
+            </VBox>
+        </VBox>
+    </center>
+
+</BorderPane>

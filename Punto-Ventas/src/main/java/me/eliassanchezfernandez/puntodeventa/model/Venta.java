@@ -43,6 +43,14 @@ public class Venta {
     @Column(name = "forma_pago")
     private FormaPago formaPago = FormaPago.EFECTIVO;
 
+    /**
+     * Folio mostrado (prefijo + número) tal como se asignó al cobrar. Es solo
+     * presentación: el id sigue siendo la llave. Null en ventas anteriores
+     * (se muestra el id).
+     */
+    @Column(name = "folio", length = 30)
+    private String folio;
+
     private double total;
     private double pagoCon;
     private double cambio;
@@ -142,6 +150,11 @@ public class Venta {
                 .sum();
     }
 
+    /** Folio para pantallas e impresiones (el id si la venta es anterior a los folios) */
+    public String getFolioMostrado() {
+        return folio != null && !folio.isBlank() ? folio : String.valueOf(id);
+    }
+
     public double getSubtotalODefault() {
         return subtotal != null ? subtotal : total;
     }
@@ -151,7 +164,8 @@ public class Venta {
     }
 
     public enum FormaPago {
-        EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("Crédito");
+        EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("Crédito"),
+        TRANSFERENCIA("Transferencia"), VALES("Vales");
 
         private final String etiqueta;
 

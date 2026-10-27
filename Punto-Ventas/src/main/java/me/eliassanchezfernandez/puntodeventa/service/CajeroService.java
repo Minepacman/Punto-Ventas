@@ -41,6 +41,7 @@ public class CajeroService {
     @Autowired private PasswordEncoder  passwordEncoder;
     @Autowired private SesionService    sesionService;
     @Autowired private AuditoriaService auditoriaService;
+    @Autowired private SesionMovilService sesionMovilService;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -151,6 +152,9 @@ public class CajeroService {
             cambios += ", permisos " + c.getPermisosEfectivos();
         }
         Cajero guardado = cajeroRepo.save(c);
+        if (!activo || cambiaContrasena) {
+            sesionMovilService.revocarDeCajero(guardado.getId(), !activo ? "usuario desactivado" : "contraseña restablecida");
+        }
 
         auditoriaService.registrar(sesionService.getCajeroActual(), "USUARIO_MODIFICADO",
                 guardado.getUsuario() + ": " + cambios, (Cajero) null);
@@ -167,6 +171,7 @@ public class CajeroService {
         c.setContrasenaHash(passwordEncoder.encode(nuevaContrasena));
         c.setDebeCambiarContrasena(true);
         cajeroRepo.save(c);
+        sesionMovilService.revocarDeCajero(c.getId(), "contraseña restablecida");
         auditoriaService.registrar(sesionService.getCajeroActual(), "CONTRASENA_RESTABLECIDA",
                 c.getUsuario(), (Cajero) null);
     }
@@ -201,6 +206,7 @@ public class CajeroService {
             c.setIntentosFallidos(0);
         }
         Cajero guardado = cajeroRepo.save(c);
+        if (!activo) sesionMovilService.revocarDeCajero(c.getId(), "usuario desactivado");
         auditoriaService.registrar(sesionService.getCajeroActual(),
                 activo ? "USUARIO_ACTIVADO" : "USUARIO_DESACTIVADO", c.getUsuario(), (Cajero) null);
         return guardado;
@@ -234,6 +240,7 @@ public class CajeroService {
                     + "\" porque tiene ventas, cortes, fondos o movimientos registrados. Desactívalo en su lugar.");
         }
         cajeroRepo.delete(c);
+        sesionMovilService.revocarDeCajero(c.getId(), "usuario eliminado");
         auditoriaService.registrar(sesionService.getCajeroActual(), "USUARIO_ELIMINADO", c.getUsuario(), (Cajero) null);
     }
 
