@@ -83,7 +83,7 @@ public class ConexionService {
     }
 
     /** Mensaje en español para los fallos más comunes de conexión */
-    static String explicar(SQLException e, ConexionLocal c) {
+    public static String explicar(SQLException e, ConexionLocal c) {
         String estado = e.getSQLState() == null ? "" : e.getSQLState();
         String msg = e.getMessage() == null ? "" : e.getMessage();
         if (estado.equals("28P01") || estado.equals("28000")) {
