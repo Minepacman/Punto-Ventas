@@ -28,10 +28,23 @@ public class Unidad {
     @Column(name = "permite_decimales", nullable = false)
     private boolean permiteDecimales;
 
+    /**
+     * Clave de unidad del SAT (c_ClaveUnidad) que se usa al facturar los
+     * productos con esta unidad, salvo que el producto tenga la suya. Nullable:
+     * si falta, CatalogoSat la deduce del nombre (Pieza → H87, Kilogramo → KGM...).
+     */
+    @Column(name = "clave_unidad", length = 3)
+    private String claveUnidad;
+
     public Unidad(String nombre, String abreviatura, boolean permiteDecimales) {
         this.nombre = nombre;
         this.abreviatura = abreviatura;
         this.permiteDecimales = permiteDecimales;
+    }
+
+    public Unidad(String nombre, String abreviatura, boolean permiteDecimales, String claveUnidad) {
+        this(nombre, abreviatura, permiteDecimales);
+        this.claveUnidad = claveUnidad;
     }
 
     @Override

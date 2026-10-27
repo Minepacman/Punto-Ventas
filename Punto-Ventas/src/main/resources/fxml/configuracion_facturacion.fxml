@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_facturacion.fxml  –  Facturación electrónica (CFDI 4.0 con Facturama)
+    Controlador: ConfiguracionFacturacionController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionFacturacionController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="14">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Datos del emisor (como en la Constancia de Situación Fiscal)" styleClass="form-section-title"/>
+                <Separator/>
+
+                <GridPane hgap="12" vgap="8">
+                    <Label text="RFC *" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                    <TextField fx:id="txtRfc" promptText="ej: GODE561231GR8" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                    <Label text="Razón social / nombre *" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                    <TextField fx:id="txtNombre" promptText="Sin régimen societario (sin S.A. DE C.V.)" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                    <Label text="Régimen fiscal *" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                    <HBox spacing="6" GridPane.columnIndex="1" GridPane.rowIndex="2">
+                        <ComboBox fx:id="cmbRegimen" maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                        <Button text="Lista" onAction="#onBuscarRegimen"/>
+                    </HBox>
+                    <Label text="Código postal (lugar de expedición) *" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="3"/>
+                    <TextField fx:id="txtCodigoPostal" promptText="5 dígitos" prefWidth="120" maxWidth="140" GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+                    <Label text="Serie de las facturas" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="4"/>
+                    <TextField fx:id="txtSerie" promptText="A" prefWidth="120" maxWidth="140" GridPane.columnIndex="1" GridPane.rowIndex="4"/>
+                    <columnConstraints>
+                        <ColumnConstraints prefWidth="240" minWidth="200"/>
+                        <ColumnConstraints hgrow="ALWAYS"/>
+                    </columnConstraints>
+                </GridPane>
+                <Label fx:id="lblFolio" styleClass="hint"/>
+                <Label text="La serie debe existir también en tu cuenta de Facturama (Configuración → Series). El folio lo lleva este programa y se envía al timbrar."
+                       wrapText="true" styleClass="hint"/>
+                <HBox spacing="12">
+                    <Button text="✅ Guardar emisor" onAction="#onGuardarEmisor" styleClass="button-success" prefHeight="36"/>
+                </HBox>
+
+                <Separator/>
+                <Label text="Cuenta de Facturama (PAC)" styleClass="form-section-title"/>
+                <Separator/>
+
+                <Label fx:id="lblEstadoCredenciales" wrapText="true" styleClass="hint"/>
+                <GridPane hgap="12" vgap="8">
+                    <Label text="Usuario de la API" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                    <TextField fx:id="txtUsuario" promptText="Usuario de la API de Facturama" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                    <Label text="Contraseña de la API" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                    <PasswordField fx:id="txtContrasena" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                    <columnConstraints>
+                        <ColumnConstraints prefWidth="240" minWidth="200"/>
+                        <ColumnConstraints hgrow="ALWAYS"/>
+                    </columnConstraints>
+                </GridPane>
+                <CheckBox fx:id="chkSandbox" text="Modo de pruebas (sandbox)" selected="true" onAction="#onCambioModo"/>
+                <Label fx:id="lblModo" wrapText="true" styleClass="callout"/>
+                <Label text="Las credenciales se guardan cifradas con una llave propia de esta computadora (datos/facturacion.key) y nunca se escriben en la bitácora. Quien tenga acceso a la carpeta de datos podría leerlas: protege esa carpeta."
+                       wrapText="true" styleClass="hint"/>
+                <HBox spacing="12">
+                    <Button text="💾 Guardar credenciales" onAction="#onGuardarCredenciales" styleClass="button-primary" prefHeight="36"/>
+                    <Button text="Borrar credenciales" onAction="#onBorrarCredenciales" styleClass="button-danger" prefHeight="36"/>
+                </HBox>
+
+                <Separator/>
+                <Label text="Clave SAT por defecto de cada departamento (c_ClaveProdServ)" styleClass="form-section-title"/>
+                <Separator/>
+                <Label text="Se usa al facturar los productos del departamento que no tengan su propia clave. Vacío = 50000000 (Alimentos, bebidas y tabaco)."
+                       wrapText="true" styleClass="hint"/>
+                <GridPane fx:id="gridDepartamentos" hgap="10" vgap="6"/>
+                <HBox spacing="12">
+                    <Button fx:id="btnGuardarClaves" text="Guardar claves" onAction="#onGuardarClaves" styleClass="button-primary" prefHeight="36"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="36"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

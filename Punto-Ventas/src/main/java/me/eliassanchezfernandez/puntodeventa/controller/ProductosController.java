@@ -98,6 +98,10 @@ public class ProductosController implements Initializable {
     @FXML private Label       lblErrorPrecio;
     @FXML private ComboBox<Departamento> comboDepartamento;
     @FXML private ComboBox<Unidad> comboUnidad;
+    @FXML private TextField   txtClaveProdServ;
+    @FXML private TextField   txtClaveUnidad;
+    @FXML private ComboBox<me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.Entrada> comboObjetoImp;
+    @FXML private Label       lblClavesDefecto;
     @FXML private CheckBox    chkUsaInventario;
     @FXML private GridPane    gridInventario;
     @FXML private TextField   txtCantidadActual;
@@ -502,6 +506,9 @@ public class ProductosController implements Initializable {
             p.setPrecioMayoreo(precioMayoreo);
             p.setDepartamento(comboDepartamento.getValue());
             p.setUnidad(comboUnidad.getValue());
+            p.setClaveProdServ(txtClaveProdServ.getText());
+            p.setClaveUnidad(txtClaveUnidad.getText());
+            p.setObjetoImp(comboObjetoImp.getValue() != null ? comboObjetoImp.getValue().clave() : null);
             p.setUsaInventario(chkUsaInventario.isSelected());
             p.setCantidadActual(cantActual);
             p.setCantidadMinima(cantMinima);
@@ -654,6 +661,33 @@ public class ProductosController implements Initializable {
             else if (rbGranel.isSelected()) rbUnidad.setSelected(true);
         });
         cargarUnidades();
+        comboObjetoImp.setItems(FXCollections.observableArrayList(
+                me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.OBJETOS_IMP));
+        comboObjetoImp.setPromptText("02 Sí objeto (por defecto)");
+        comboDepartamento.valueProperty().addListener((o, a, b) -> actualizarClavesPorDefecto());
+        comboUnidad.valueProperty().addListener((o, a, b) -> actualizarClavesPorDefecto());
+        actualizarClavesPorDefecto();
+    }
+
+    /** Pie de ayuda: qué claves SAT se usarán si el producto no tiene las suyas */
+    private void actualizarClavesPorDefecto() {
+        if (lblClavesDefecto == null) return;
+        String prodServ = comboDepartamento.getValue() != null && comboDepartamento.getValue().getClaveProdServ() != null
+                ? comboDepartamento.getValue().getClaveProdServ() + " (departamento)"
+                : me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.PROD_SERV_ABARROTES + " (genérica de abarrotes)";
+        String unidad = me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.claveUnidadPara(comboUnidad.getValue());
+        lblClavesDefecto.setText("Si se dejan vacías, al facturar se usa producto/servicio " + prodServ
+                + " y unidad " + unidad + ".");
+    }
+
+    @FXML
+    private void onBuscarClaveProdServ() {
+        CatalogoSatDialogo.elegirProdServ(txtClaveProdServ.getText()).ifPresent(e -> txtClaveProdServ.setText(e.clave()));
+    }
+
+    @FXML
+    private void onBuscarClaveUnidad() {
+        CatalogoSatDialogo.elegirUnidad(txtClaveUnidad.getText()).ifPresent(e -> txtClaveUnidad.setText(e.clave()));
     }
 
     private void cargarUnidades() {
@@ -682,6 +716,10 @@ public class ProductosController implements Initializable {
             comboUnidad.getItems().stream().filter(u -> u.getId().equals(p.getUnidad().getId()))
                     .findFirst().ifPresent(comboUnidad::setValue);
         }
+        txtClaveProdServ.setText(p.getClaveProdServ() != null ? p.getClaveProdServ() : "");
+        txtClaveUnidad.setText(p.getClaveUnidad() != null ? p.getClaveUnidad() : "");
+        comboObjetoImp.setValue(comboObjetoImp.getItems().stream()
+                .filter(e -> e.clave().equals(p.getObjetoImp())).findFirst().orElse(null));
         chkUsaInventario.setSelected(p.isUsaInventario());
         gridInventario.setDisable(!p.isUsaInventario());
         txtCantidadActual.setText(String.valueOf(p.getCantidadActual()));
@@ -703,6 +741,9 @@ public class ProductosController implements Initializable {
         txtPrecioMayoreo.clear();
         comboDepartamento.setValue(null);
         comboUnidad.setValue(null);
+        txtClaveProdServ.clear();
+        txtClaveUnidad.clear();
+        comboObjetoImp.setValue(null);
         chkUsaInventario.setSelected(true);
         gridInventario.setDisable(false);
         txtCantidadActual.clear();

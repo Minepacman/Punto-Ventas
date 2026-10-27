@@ -196,6 +196,34 @@
 
                     <Separator/>
 
+                    <!-- ── DATOS FISCALES (CFDI 4.0; opcionales) ── -->
+                    <Label text="Facturación (claves del SAT, opcionales)" styleClass="form-subsection-title"/>
+                    <GridPane hgap="16" vgap="10">
+                        <Label text="Clave producto/servicio"
+                               GridPane.columnIndex="0" GridPane.rowIndex="0" styleClass="field-label"/>
+                        <HBox spacing="6" GridPane.columnIndex="1" GridPane.rowIndex="0">
+                            <TextField fx:id="txtClaveProdServ" promptText="8 dígitos, ej. 50000000" HBox.hgrow="ALWAYS"/>
+                            <Button text="Buscar…" onAction="#onBuscarClaveProdServ"/>
+                        </HBox>
+                        <Label text="Clave de unidad"
+                               GridPane.columnIndex="0" GridPane.rowIndex="1" styleClass="field-label"/>
+                        <HBox spacing="6" GridPane.columnIndex="1" GridPane.rowIndex="1">
+                            <TextField fx:id="txtClaveUnidad" promptText="ej. H87, KGM, LTR" HBox.hgrow="ALWAYS"/>
+                            <Button text="Buscar…" onAction="#onBuscarClaveUnidad"/>
+                        </HBox>
+                        <Label text="Objeto de impuesto"
+                               GridPane.columnIndex="0" GridPane.rowIndex="2" styleClass="field-label"/>
+                        <ComboBox fx:id="comboObjetoImp" maxWidth="Infinity"
+                                  GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+                        <columnConstraints>
+                            <ColumnConstraints prefWidth="160" minWidth="140"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                        </columnConstraints>
+                    </GridPane>
+                    <Label fx:id="lblClavesDefecto" wrapText="true" styleClass="hint"/>
+
+                    <Separator/>
+
                     <!-- ── INVENTARIO ──────────────────────────── -->
                     <Label text="Inventario" styleClass="form-subsection-title"/>
 
