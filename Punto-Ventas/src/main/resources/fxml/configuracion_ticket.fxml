@@ -52,7 +52,7 @@
                         <RadioButton fx:id="rb80" text="80 mm" toggleGroup="$grupoAncho"/>
                     </HBox>
                 </VBox>
-                <Label text="El nombre y la dirección del negocio se editan en Impuestos. Aquí solo se guardan los datos; la impresión llega en una etapa posterior."
+                <Label text="El nombre y la dirección del negocio se editan en Impuestos. Aquí se guardan los datos y el ancho; la impresora se elige en Dispositivos → Impresora de tickets."
                        wrapText="true" styleClass="hint"/>
 
                 <HBox spacing="12">

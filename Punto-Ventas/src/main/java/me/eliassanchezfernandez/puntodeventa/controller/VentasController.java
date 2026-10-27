@@ -19,6 +19,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import me.eliassanchezfernandez.puntodeventa.bascula.BasculaService;
 import me.eliassanchezfernandez.puntodeventa.model.ClimaRegistro;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
@@ -29,6 +30,8 @@ import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
 import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.ClimaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
+import me.eliassanchezfernandez.puntodeventa.service.DispositivosService;
+import me.eliassanchezfernandez.puntodeventa.service.ImpresionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.PermisoRequeridoException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
@@ -38,6 +41,7 @@ import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.StockInsuficienteException;
 import me.eliassanchezfernandez.puntodeventa.service.TicketPendienteService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
+import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -94,6 +98,8 @@ public class VentasController implements Initializable {
     @FXML private Button     btnTodoTarjeta;
     @FXML private Button     btnTodoTransferencia;
     @FXML private Button     btnTodoVales;
+    @FXML private Button     btnLeerPeso;
+    @FXML private Button     btnAbrirCajon;
     @FXML private TableView<DetalleVenta> tablaProductos;
     @FXML private TableColumn<DetalleVenta, String>  colCodigo;
     @FXML private TableColumn<DetalleVenta, String>  colDescripcion;
@@ -122,6 +128,10 @@ public class VentasController implements Initializable {
     @Autowired private ConfiguracionService   configuracionService;
     @Autowired private RecomendacionService   recomendacionService;
     @Autowired private ClimaService           climaService;
+    @Autowired private ImpresionService       impresionService;
+    @Autowired private BasculaService         basculaService;
+    @Autowired private DispositivosService    dispositivosService;
+    @Autowired private DispositivosDialogos   dispositivosDialogos;
 
     /** Sugerencias: retardo tras el último cambio del ticket y hilo de cálculo */
     private static final Duration RETARDO_SUGERENCIAS = Duration.millis(400);
@@ -141,6 +151,9 @@ public class VentasController implements Initializable {
 
     private final ObservableList<DetalleVenta> itemsTicket =
             FXCollections.observableArrayList();
+
+    /** Últimos datos de voucher capturados para este ticket (si el cobro se repite no se vuelven a teclear) */
+    private DatosTarjeta tarjetaCapturada;
 
     /** Autorizaciones de administrador obtenidas para ESTE ticket (se agotan al cobrar) */
     private final List<Autorizacion> autorizaciones = new ArrayList<>();
@@ -404,12 +417,29 @@ public class VentasController implements Initializable {
             return;
         }
 
+        // Cobro con tarjeta: terminal, últimos 4 dígitos y autorización del voucher (captura manual)
+        DatosTarjeta tarjeta = null;
+        if (montos.containsKey(Venta.FormaPago.TARJETA)) {
+            Optional<DatosTarjeta> capturada = dispositivosDialogos.capturarTarjeta(
+                    tablaProductos.getScene().getWindow(), montos.get(Venta.FormaPago.TARJETA), tarjetaCapturada);
+            if (capturada.isEmpty()) return;          // cobro cancelado: no se guarda nada
+            tarjeta = capturada.get();
+            tarjetaCapturada = tarjeta;
+        }
         List<PagoVenta> pagos = new ArrayList<>();
-        montos.forEach((forma, monto) -> pagos.add(new PagoVenta(forma, monto)));
+        for (Map.Entry<Venta.FormaPago, Double> e : montos.entrySet()) {
+            if (e.getKey() == Venta.FormaPago.TARJETA && tarjeta != null) {
+                pagos.add(new PagoVenta(e.getKey(), e.getValue(), tarjeta.terminal(), tarjeta.ultimos4(), tarjeta.autorizacion()));
+            } else {
+                pagos.add(new PagoVenta(e.getKey(), e.getValue()));
+            }
+        }
 
         try {
             // El cajero y los permisos los verifica el servicio
             Venta venta = ventaService.cobrar(new ArrayList<>(itemsTicket), pagos, autorizaciones);
+
+            imprimirTicketSinBloquear(venta);
 
             String msg = String.format("Venta #%d registrada.\n\nTotal:  %s\nPagó:   %s\nCambio: %s",
                     venta.getId(), Moneda.formato(venta.getTotal()), Moneda.formato(venta.getPagoCon()), Moneda.formato(venta.getCambio()));
@@ -432,6 +462,66 @@ public class VentasController implements Initializable {
             refrescarTicket();
             alerta(Alert.AlertType.ERROR, "No se pudo cobrar", e.getMessage());
         }
+        txtCodigo.requestFocus();
+    }
+
+    /**
+     * Imprime el ticket (y abre el cajón) en otro hilo. La venta ya está guardada:
+     * si la impresora falla solo se muestra un aviso, nunca se deshace ni se frena nada.
+     */
+    private void imprimirTicketSinBloquear(Venta venta) {
+        try {
+            impresionService.despuesDeCobrarAsync(venta.getId()).whenComplete((res, error) -> {
+                String aviso = error != null ? "No se pudo imprimir el ticket: " + error.getMessage()
+                        : res != null && res.esFallo() ? res.mensaje() : null;
+                if (aviso != null) {
+                    Platform.runLater(() -> alerta(Alert.AlertType.WARNING, "Impresión", aviso));
+                }
+            });
+        } catch (RuntimeException e) {
+            alerta(Alert.AlertType.WARNING, "Impresión", "La venta se guardó, pero no se pudo imprimir el ticket: " + e.getMessage());
+        }
+    }
+
+    /** Lee el peso de la báscula y lo pone como cantidad del renglón a granel seleccionado */
+    @FXML
+    private void onLeerPeso() {
+        DetalleVenta d = seleccionado("Selecciona el renglón a granel del ticket y pulsa Leer peso.");
+        if (d == null) return;
+        if (!d.getProducto().permiteDecimales()) {
+            alerta(Alert.AlertType.INFORMATION, "Leer peso",
+                    "\"" + d.getProducto().getDescripcion() + "\" se vende por pieza. Leer peso es para productos a granel.");
+            return;
+        }
+        btnLeerPeso.setDisable(true);
+        Thread t = new Thread(() -> {
+            double peso = 0;
+            String error = null;
+            try {
+                peso = basculaService.leerPeso();
+            } catch (RuntimeException e) {
+                error = e.getMessage() != null ? e.getMessage() : "No se pudo leer la báscula.";
+            }
+            final double pesoLeido = peso;
+            final String fallo = error;
+            Platform.runLater(() -> {
+                btnLeerPeso.setDisable(false);
+                if (fallo != null) {
+                    alerta(Alert.AlertType.WARNING, "Báscula", fallo + "\nPuedes teclear la cantidad con el botón Cantidad.");
+                } else if (itemsTicket.contains(d)) {
+                    cambiarCantidad(d, pesoLeido);
+                }
+                txtCodigo.requestFocus();
+            });
+        }, "bascula-leer");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Pulso al cajón de dinero (ABRIR_CAJON o autorización de administrador; queda en la bitácora) */
+    @FXML
+    private void onAbrirCajon() {
+        dispositivosDialogos.abrirCajon(tablaProductos.getScene().getWindow());
         txtCodigo.requestFocus();
     }
 
@@ -840,10 +930,28 @@ public class VentasController implements Initializable {
             if (!activa) camposPago.get(forma).clear();
         }
         actualizarTotales();
+        actualizarDispositivos();
         if (boxSugerencias != null) {
             mostrarTiraSugerencias(configuracionService.isMostrarSugerencias());
             programarSugerencias();
         }
+    }
+
+    /** "Leer peso" solo con báscula activa; "Abrir cajón" solo con impresora ESC/POS */
+    private void actualizarDispositivos() {
+        if (btnLeerPeso == null) return;
+        boolean bascula = false, cajon = false;
+        try {
+            bascula = basculaService.disponible();
+            cajon = dispositivosService.obtener().getModoImpresora()
+                    == me.eliassanchezfernandez.puntodeventa.model.ConfiguracionDispositivos.ModoImpresora.TERMICA;
+        } catch (RuntimeException e) {
+            // sin dispositivos configurables: los botones quedan ocultos
+        }
+        btnLeerPeso.setVisible(bascula);
+        btnLeerPeso.setManaged(bascula);
+        btnAbrirCajon.setVisible(cajon);
+        btnAbrirCajon.setManaged(cajon);
     }
 
     private void actualizarVendidoHoy() {
@@ -857,6 +965,7 @@ public class VentasController implements Initializable {
     private void limpiarTicket() {
         itemsTicket.clear();
         autorizaciones.clear();
+        tarjetaCapturada = null;
         txtCodigo.clear();
         txtEfectivo.clear();
         camposPago.values().forEach(TextField::clear);

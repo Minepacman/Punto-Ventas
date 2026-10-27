@@ -24,8 +24,12 @@
             <Button fx:id="btnDescuento" text="Descuento manual"    onAction="#onDescuentoManual"/>
             <Separator orientation="VERTICAL"/>
             <Button fx:id="btnCantidad"  text="Cantidad…"      onAction="#onCambiarCantidad"/>
+            <Button fx:id="btnLeerPeso"  text="⚖ Leer peso"    onAction="#onLeerPeso"
+                    visible="false" managed="false"/>
             <Button fx:id="btnQuitar"    text="🗑 Quitar"       onAction="#onQuitarLinea"
                     styleClass="button-danger"/>
+            <Button fx:id="btnAbrirCajon" text="💰 Abrir cajón"  onAction="#onAbrirCajon"
+                    visible="false" managed="false"/>
         </HBox>
     </top>
 

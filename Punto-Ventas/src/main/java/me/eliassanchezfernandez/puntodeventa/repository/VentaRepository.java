@@ -115,4 +115,16 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
            "GROUP BY dep.nombre ORDER BY SUM(d.precioVenta * d.cantidad - d.descuento) DESC")
     List<Object[]> importesPorDepartamento(LocalDateTime inicio, LocalDateTime fin);
+
+    /** [terminal (null = sin datos), nº de pagos, monto] de los cobros con tarjeta de ventas activas */
+    @Query("SELECT p.terminalNombre, COUNT(p), SUM(p.monto) FROM Venta v JOIN v.pagos p " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
+           "AND p.formaPago = :tarjeta GROUP BY p.terminalNombre ORDER BY SUM(p.monto) DESC")
+    List<Object[]> tarjetaPorTerminal(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta);
+
+    /** Cobros con tarjeta de ventas activas del rango, con su venta, del más antiguo al más reciente */
+    @Query("SELECT p FROM PagoVenta p JOIN FETCH p.venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
+           "AND p.formaPago = :tarjeta ORDER BY v.fecha ASC")
+    List<me.eliassanchezfernandez.puntodeventa.model.PagoVenta> vouchersTarjeta(LocalDateTime inicio, LocalDateTime fin, Venta.FormaPago tarjeta);
 }

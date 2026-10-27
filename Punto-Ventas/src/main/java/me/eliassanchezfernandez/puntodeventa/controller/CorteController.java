@@ -13,6 +13,7 @@ import me.eliassanchezfernandez.puntodeventa.model.Corte;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.service.CajaService;
+import me.eliassanchezfernandez.puntodeventa.service.ImpresionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
@@ -40,10 +41,12 @@ import java.util.ResourceBundle;
 public class CorteController implements Initializable {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+    private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
 
     @Autowired private VentaService  ventaService;
     @Autowired private CajaService   cajaService;
     @Autowired private SesionService sesionService;
+    @Autowired private ImpresionService impresionService;
 
     // Entradas de efectivo
     @FXML private Label lblEntradaCambio;
@@ -78,6 +81,16 @@ public class CorteController implements Initializable {
     @FXML private TableColumn<Map.Entry<String, Double>, String> colDepto;
     @FXML private TableColumn<Map.Entry<String, Double>, String> colMonto;
 
+    // Cobros con tarjeta (voucher capturado en Ventas)
+    @FXML private Label lblTarjetaTerminales;
+    @FXML private TableView<VentaService.VoucherTarjeta>           tablaVouchers;
+    @FXML private TableColumn<VentaService.VoucherTarjeta, String> colVHora;
+    @FXML private TableColumn<VentaService.VoucherTarjeta, String> colVFolio;
+    @FXML private TableColumn<VentaService.VoucherTarjeta, String> colVTerminal;
+    @FXML private TableColumn<VentaService.VoucherTarjeta, String> colVTarjeta;
+    @FXML private TableColumn<VentaService.VoucherTarjeta, String> colVAut;
+    @FXML private TableColumn<VentaService.VoucherTarjeta, String> colVMonto;
+
     @FXML private TableView<Producto>           tablaBajos;
     @FXML private TableColumn<Producto, String> colBajoDescripcion;
     @FXML private TableColumn<Producto, String> colBajoActual;
@@ -86,6 +99,7 @@ public class CorteController implements Initializable {
     private final ObservableList<Map.Entry<String, Double>> porDepartamento =
             FXCollections.observableArrayList();
     private final ObservableList<Producto> bajos = FXCollections.observableArrayList();
+    private final ObservableList<VentaService.VoucherTarjeta> vouchers = FXCollections.observableArrayList();
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
@@ -99,6 +113,18 @@ public class CorteController implements Initializable {
         colBajoMinimo.setCellValueFactory(c -> new SimpleStringProperty(cantidad(c.getValue().getCantidadMinima())));
         tablaBajos.setItems(bajos);
         tablaBajos.setPlaceholder(new Label("Ningún producto por debajo de su mínimo."));
+
+        colVHora.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().fecha().format(HORA)));
+        colVFolio.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().folio()));
+        colVTerminal.setCellValueFactory(c -> new SimpleStringProperty(
+                c.getValue().terminal() != null ? c.getValue().terminal() : "—"));
+        colVTarjeta.setCellValueFactory(c -> new SimpleStringProperty(
+                c.getValue().ultimos4() != null ? "****" + c.getValue().ultimos4() : "—"));
+        colVAut.setCellValueFactory(c -> new SimpleStringProperty(
+                c.getValue().autorizacion() != null ? c.getValue().autorizacion() : "—"));
+        colVMonto.setCellValueFactory(c -> new SimpleStringProperty(moneda(c.getValue().monto())));
+        tablaVouchers.setItems(vouchers);
+        tablaVouchers.setPlaceholder(new Label("Hoy no hay cobros con tarjeta."));
 
         boolean veGanancia = sesionService.tienePermiso(Permiso.VER_GANANCIAS);
         lblGanancia.setVisible(veGanancia);
@@ -204,10 +230,19 @@ public class CorteController implements Initializable {
         }
     }
 
+    /** Imprime el reporte del corte de hoy en la impresora de tickets (fuera del hilo de JavaFX) */
     @FXML
     void onImprimirCorte() {
-        Ventanas.alerta(Alert.AlertType.INFORMATION, "Imprimir corte",
-                "La impresión del corte no está disponible en esta versión.");
+        try {
+            impresionService.imprimirCorteAsync().whenComplete((res, error) -> Platform.runLater(() -> {
+                if (error != null || res == null || res.esFallo()) {
+                    Ventanas.alerta(Alert.AlertType.WARNING, "Imprimir corte",
+                            res != null ? res.mensaje() : "No se pudo imprimir el corte.");
+                }
+            }));
+        } catch (NegocioException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Imprimir corte", e.getMessage());
+        }
     }
 
     /** Recalcula el resumen (lo llama MainController al entrar a la pestaña) */
@@ -251,6 +286,11 @@ public class CorteController implements Initializable {
 
         porDepartamento.setAll(r.porDepartamento.entrySet());
         bajos.setAll(r.productosBajos);
+        vouchers.setAll(r.vouchers);
+        lblTarjetaTerminales.setText(r.tarjetaPorTerminal.isEmpty() ? "Sin cobros con tarjeta."
+                : r.tarjetaPorTerminal.stream()
+                    .map(t -> t.terminal() + ": " + t.pagos() + " cobro(s), " + moneda(t.monto()))
+                    .collect(java.util.stream.Collectors.joining("   ·   ")));
 
         lblUltimoCorte.setText(cajaService.cortesDeHoy().stream().findFirst()
                 .map(c -> String.format("Último corte hoy: %s por %s — esperado %s, contado %s, diferencia %s",

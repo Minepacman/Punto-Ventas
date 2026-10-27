@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -9,10 +10,12 @@ import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
+import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
 import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
+import me.eliassanchezfernandez.puntodeventa.service.ImpresionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
@@ -49,6 +52,7 @@ public class VentasPeriodoController implements Initializable {
     @FXML private DatePicker dpDesde;
     @FXML private DatePicker dpHasta;
     @FXML private Button     btnCancelarVenta;
+    @FXML private Button     btnReimprimir;
 
     // ── Tabla de ventas ──────────────────────────────────────────────────
     @FXML private TableView<Venta>           tablaVentas;
@@ -78,6 +82,7 @@ public class VentasPeriodoController implements Initializable {
     @Autowired private VentaService        ventaService;
     @Autowired private SesionService       sesionService;
     @Autowired private AutorizacionService autorizacionService;
+    @Autowired private ImpresionService    impresionService;
 
     private final ObservableList<Venta>        ventas   = FXCollections.observableArrayList();
     private final ObservableList<DetalleVenta> detalles = FXCollections.observableArrayList();
@@ -190,6 +195,27 @@ public class VentasPeriodoController implements Initializable {
         }
     }
 
+    /** Reimprime el ticket de la venta seleccionada en la impresora de tickets (fuera del hilo de JavaFX) */
+    @FXML private void onReimprimir() {
+        Venta v = tablaVentas.getSelectionModel().getSelectedItem();
+        if (v == null) {
+            alerta(Alert.AlertType.WARNING, "Selecciona una venta", "Haz clic en una venta de la tabla para reimprimir su ticket.");
+            return;
+        }
+        btnReimprimir.setDisable(true);
+        try {
+            impresionService.reimprimirVentaAsync(v.getId()).whenComplete((res, error) -> Platform.runLater(() -> {
+                btnReimprimir.setDisable(false);
+                if (error != null || res == null || res.esFallo()) {
+                    alerta(Alert.AlertType.WARNING, "Reimprimir", res != null ? res.mensaje() : "No se pudo imprimir el ticket.");
+                }
+            }));
+        } catch (NegocioException e) {
+            btnReimprimir.setDisable(false);
+            alerta(Alert.AlertType.ERROR, "Reimprimir", e.getMessage());
+        }
+    }
+
     @FXML private void onCerrar() {
         ((Stage) raiz.getScene().getWindow()).close();
     }
@@ -246,10 +272,14 @@ public class VentasPeriodoController implements Initializable {
         if (v.getPagos() == null || v.getPagos().isEmpty()) {
             return v.getFormaPago() != null ? v.getFormaPago().getEtiqueta() : "—";
         }
-        if (v.getPagos().size() == 1) return v.getPagos().get(0).getFormaPago().getEtiqueta();
+        if (v.getPagos().size() == 1) {
+            PagoVenta unico = v.getPagos().get(0);
+            return unico.getFormaPago().getEtiqueta() + (unico.tieneDatosTarjeta() ? " (" + unico.resumenTarjeta() + ")" : "");
+        }
         StringBuilder sb = new StringBuilder();
         v.getPagos().forEach(p -> sb.append(sb.length() > 0 ? " + " : "")
-                .append(p.getFormaPago().getEtiqueta()).append(" " + Moneda.formato(p.getMonto())));
+                .append(p.getFormaPago().getEtiqueta()).append(" " + Moneda.formato(p.getMonto()))
+                .append(p.tieneDatosTarjeta() ? " (" + p.resumenTarjeta() + ")" : ""));
         return sb.toString();
     }
 

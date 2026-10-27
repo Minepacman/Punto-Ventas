@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_impresora.fxml  –  Impresora de tickets, copias, cajón y prueba
+    Controlador: ConfiguracionImpresoraController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionImpresoraController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="14">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Impresora de tickets" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="4">
+                    <Label text="Tipo de impresión" styleClass="field-label"/>
+                    <ComboBox fx:id="cmbModo" maxWidth="Infinity" onAction="#onModoCambio"/>
+                    <Label fx:id="lblModoAyuda" wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox fx:id="boxImpresora" spacing="4">
+                    <Label text="Impresora" styleClass="field-label"/>
+                    <HBox spacing="8">
+                        <ComboBox fx:id="cmbImpresora" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                                  promptText="Elige una impresora instalada"/>
+                        <Button text="Actualizar lista" onAction="#onActualizarLista"/>
+                    </HBox>
+                    <Label fx:id="lblListaEstado" text="" styleClass="hint" wrapText="true"/>
+                </VBox>
+
+                <VBox fx:id="boxCodePage" spacing="4">
+                    <Label text="Tabla de caracteres (acentos y ñ)" styleClass="field-label"/>
+                    <ComboBox fx:id="cmbCodePage" maxWidth="Infinity"/>
+                    <Label text="Si los acentos salen mal, prueba la otra tabla. CP850 funciona en casi todas las impresoras."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="4">
+                    <Label text="Ancho del papel" styleClass="field-label"/>
+                    <HBox spacing="16">
+                        <RadioButton fx:id="rb58" text="58 mm">
+                            <toggleGroup><ToggleGroup fx:id="grupoAncho"/></toggleGroup>
+                        </RadioButton>
+                        <RadioButton fx:id="rb80" text="80 mm" toggleGroup="$grupoAncho"/>
+                    </HBox>
+                    <Label text="Es el mismo ancho que se usa en Configuración → Ticket (58 mm = 32 columnas, 80 mm = 48)."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkAutomatico" text="Imprimir el ticket automáticamente al cobrar"/>
+                    <Label text="Apagada, el ticket se imprime solo desde Reimprimir (Ventas por período)."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="Copias del ticket:"/>
+                    <Spinner fx:id="spCopias" editable="true" prefWidth="80"/>
+                </HBox>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkCajon" text="Abrir el cajón al cobrar en efectivo"/>
+                    <Label text="Solo con impresora ESC/POS que tenga el cajón conectado (cable RJ11 a la impresora)."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <Label text="Imprimir nunca detiene una venta: si la impresora falla, la venta se guarda y aparece un aviso."
+                       wrapText="true" styleClass="callout, callout-info"/>
+
+                <Region minHeight="4"/>
+
+                <HBox spacing="12">
+                    <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                    <Button fx:id="btnPrueba" text="Imprimir prueba" onAction="#onPrueba" prefHeight="38"/>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

@@ -15,6 +15,7 @@ import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.TicketPendienteRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
+import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +60,7 @@ public class VentaService {
     @Autowired private ConfiguracionService      configuracionService;
     @Autowired private SesionService             sesionService;
     @Autowired private AuditoriaService          auditoriaService;
+    @Autowired private DispositivosService       dispositivosService;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -454,7 +456,7 @@ public class VentaService {
                         + "\" no está habilitada en Configuración.");
             }
             if (p.getFormaPago() != Venta.FormaPago.EFECTIVO) noEfectivo += p.getMonto();
-            validos.add(new PagoVenta(p.getFormaPago(), redondear(p.getMonto())));
+            validos.add(copiarPago(p));
         }
         if (validos.isEmpty()) {
             throw new NegocioException("El monto pagado no es válido.");
@@ -470,6 +472,27 @@ public class VentaService {
                     "El pago (%s) es menor que el total (%s).", Moneda.formato(suma), Moneda.formato(total)));
         }
         return validos;
+    }
+
+    /**
+     * Copia el pago con el monto redondeado. En pagos con tarjeta valida y
+     * normaliza los datos del voucher (terminal, últimos 4, autorización):
+     * obligatorios si Configuración → Terminal bancaria lo exige; si se
+     * capturaron, siempre se validan. En los demás medios se descartan.
+     */
+    private PagoVenta copiarPago(PagoVenta p) {
+        PagoVenta nuevo = new PagoVenta(p.getFormaPago(), redondear(p.getMonto()));
+        if (p.getFormaPago() != Venta.FormaPago.TARJETA) return nuevo;
+        boolean capturado = DatosTarjeta.hayAlgo(p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion());
+        var dispositivos = dispositivosService.obtener();
+        if (capturado || dispositivos.isExigirDatosTarjeta()) {
+            DatosTarjeta d = DatosTarjeta.validar(p.getTerminalNombre(), p.getTarjetaUltimos4(),
+                    p.getAutorizacion(), dispositivos.getListaTerminales());
+            nuevo.setTerminalNombre(d.terminal());
+            nuevo.setTarjetaUltimos4(d.ultimos4());
+            nuevo.setAutorizacion(d.autorizacion());
+        }
+        return nuevo;
     }
 
     /** Productos de la venta que quedaron en o por debajo de su mínimo (INV-03) */
@@ -639,6 +662,15 @@ public class VentaService {
         for (Object[] f : ventaRepo.ventasSinPagosPorForma(inicio, fin)) {
             sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
         }
+        for (Object[] f : ventaRepo.tarjetaPorTerminal(inicio, fin, Venta.FormaPago.TARJETA)) {
+            String terminal = f[0] != null ? (String) f[0] : "Sin datos de terminal";
+            r.tarjetaPorTerminal.add(new TarjetaTerminal(terminal, ((Number) f[1]).intValue(),
+                    redondear(((Number) f[2]).doubleValue())));
+        }
+        for (PagoVenta p : ventaRepo.vouchersTarjeta(inicio, fin, Venta.FormaPago.TARJETA)) {
+            r.vouchers.add(new VoucherTarjeta(p.getVenta().getFecha(), p.getVenta().getFolioMostrado(),
+                    p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion(), p.getMonto()));
+        }
         for (Object[] f : ventaRepo.importesPorDepartamento(inicio, fin)) {
             String nombre = f[0] != null ? (String) f[0] : "Sin departamento";
             double importe = ((Number) f[1]).doubleValue();
@@ -688,7 +720,18 @@ public class VentaService {
         public boolean gananciaVisible = true;
         public final Map<String, Double> porDepartamento = new LinkedHashMap<>();
         public final List<Producto> productosBajos = new ArrayList<>();
+        /** Cobros con tarjeta del día por terminal (los capturados a mano en Ventas) */
+        public final List<TarjetaTerminal> tarjetaPorTerminal = new ArrayList<>();
+        /** Cada cobro con tarjeta del día, para cuadrar contra el voucher */
+        public final List<VoucherTarjeta> vouchers = new ArrayList<>();
     }
+
+    /** Cobros con tarjeta de una terminal: cuántos y cuánto */
+    public record TarjetaTerminal(String terminal, int pagos, double monto) { }
+
+    /** Un cobro con tarjeta con los datos del voucher (alguno puede ser null en ventas antiguas) */
+    public record VoucherTarjeta(LocalDateTime fecha, String folio, String terminal, String ultimos4,
+                                 String autorizacion, double monto) { }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 

@@ -31,6 +31,7 @@
             <Separator orientation="VERTICAL"/>
             <Button fx:id="btnCancelarVenta" text="⛔ Cancelar venta" onAction="#onCancelarVenta"
                     styleClass="button-danger"/>
+            <Button fx:id="btnReimprimir" text="🖨 Reimprimir ticket" onAction="#onReimprimir"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
