@@ -193,6 +193,12 @@ public final class ConstructorCfdi {
      */
     public static CfdiDocumento global(List<Venta> ventas, ConfiguracionFiscal cfg, String periodicidad,
                                        String meses, String anio, String folio, BigDecimal tasaPorDefecto) {
+        return global(ventas, cfg, periodicidad, meses, anio, folio, null, tasaPorDefecto);
+    }
+
+    /** @param numeroOrden referencia única del periodo en el PAC (null = se arma con la primera venta) */
+    public static CfdiDocumento global(List<Venta> ventas, ConfiguracionFiscal cfg, String periodicidad,
+                                       String meses, String anio, String folio, String numeroOrden, BigDecimal tasaPorDefecto) {
         if (ventas == null || ventas.isEmpty()) throw new IllegalArgumentException("No hay ventas para la factura global.");
         List<Concepto> conceptos = new ArrayList<>();
         for (Venta v : ventas) {
@@ -205,7 +211,7 @@ public final class ConstructorCfdi {
                 CatalogoSat.REGIMEN_SIN_OBLIGACIONES, cfg.getEmisorCodigoPostal(), CatalogoSat.USO_SIN_EFECTOS);
         return new CfdiDocumento(cfg.getSerie(), folio, cfg.getEmisorCodigoPostal(), "01", CfdiDocumento.METODO_PUE,
                 receptor, conceptos, new InformacionGlobal(periodicidad, meses, anio),
-                "G-" + periodicidad + "-" + anio + "-" + meses + "-" + ventas.get(0).getId(),
+                numeroOrden != null ? numeroOrden : "G-" + periodicidad + "-" + anio + "-" + meses + "-" + ventas.get(0).getId(),
                 "Factura global " + ventas.size() + " venta(s)");
     }
 

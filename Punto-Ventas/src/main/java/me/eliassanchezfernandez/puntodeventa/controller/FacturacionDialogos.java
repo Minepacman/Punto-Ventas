@@ -211,6 +211,111 @@ public class FacturacionDialogos {
         return Optional.of(f);
     }
 
+    // ── Factura global ───────────────────────────────────────────────────
+
+    /** Periodicidad y periodo; muestra cuántas ventas entrarían y timbra la global */
+    public Optional<Factura> facturaGlobal(Window owner) {
+        if (!fiscalService.facturacionLista()) {
+            Ventanas.alerta(Alert.AlertType.WARNING, "Factura global",
+                    "Antes de facturar captura el emisor y las credenciales del PAC en Configuración → Facturación.");
+            return Optional.empty();
+        }
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle("Factura global (público en general)");
+        dlg.setHeaderText("Una factura con las ventas del periodo que NO se facturaron a un cliente"
+                + (fiscalService.obtener().isPacSandbox() ? "\nMODO PRUEBAS: la factura no tendrá validez fiscal." : ""));
+        if (owner != null) dlg.initOwner(owner);
+
+        ComboBox<Entrada> cmbPeriodicidad = new ComboBox<>(FXCollections.observableArrayList(CatalogoSat.PERIODICIDADES));
+        cmbPeriodicidad.setValue(CatalogoSat.PERIODICIDADES.get(0));
+        javafx.scene.control.DatePicker dpDesde = new javafx.scene.control.DatePicker(java.time.LocalDate.now());
+        javafx.scene.control.DatePicker dpHasta = new javafx.scene.control.DatePicker(java.time.LocalDate.now());
+        Label resumen = new Label();
+        resumen.setWrapText(true);
+        Label error = new Label();
+        error.setWrapText(true);
+        error.getStyleClass().add("field-error-label");
+        error.setVisible(false);
+        error.setManaged(false);
+        Label progreso = new Label("Timbrando con el PAC… espera unos segundos.");
+        progreso.setVisible(false);
+        progreso.setManaged(false);
+
+        Runnable recalcular = () -> {
+            try {
+                var sel = facturacionService.ventasParaGlobal(dpDesde.getValue(), dpHasta.getValue());
+                resumen.setText(sel.ventas().size() + " venta(s) por " + Moneda.formato(sel.total()) + " entrarían en la factura."
+                        + (sel.yaFacturadas() > 0 ? "  Se excluyen " + sel.yaFacturadas() + " ya facturada(s)." : "")
+                        + (sel.canceladas() > 0 ? "  Se excluyen " + sel.canceladas() + " cancelada(s)." : ""));
+                error.setVisible(false);
+                error.setManaged(false);
+            } catch (NegocioException e) {
+                resumen.setText("");
+                mostrarError(error, e.getMessage());
+            }
+        };
+        cmbPeriodicidad.valueProperty().addListener((o, a, p) -> {
+            if (p != null && "01".equals(p.clave())) dpHasta.setValue(dpDesde.getValue());
+            recalcular.run();
+        });
+        dpDesde.valueProperty().addListener((o, a, b) -> {
+            if (cmbPeriodicidad.getValue() != null && "01".equals(cmbPeriodicidad.getValue().clave())) dpHasta.setValue(b);
+            recalcular.run();
+        });
+        dpHasta.valueProperty().addListener((o, a, b) -> recalcular.run());
+        recalcular.run();
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.addRow(0, new Label("Periodicidad:"), cmbPeriodicidad);
+        grid.addRow(1, new Label("Desde:"), dpDesde);
+        grid.addRow(2, new Label("Hasta:"), dpHasta);
+        Label nota = new Label("Receptor XAXX010101000 (público en general), uso S01, un concepto por ticket. "
+                + "El SAT pide emitirla a más tardar en las 24 horas (diaria) o los primeros días del periodo siguiente.");
+        nota.setWrapText(true);
+        nota.getStyleClass().add("hint");
+        VBox caja = new VBox(10, grid, resumen, nota, error, progreso);
+        caja.setPadding(new Insets(10));
+        caja.setPrefWidth(460);
+        dlg.getDialogPane().setContent(caja);
+        ButtonType facturar = new ButtonType("Facturar", ButtonBar.ButtonData.OK_DONE);
+        dlg.getDialogPane().getButtonTypes().addAll(facturar, ButtonType.CANCEL);
+        Button btn = (Button) dlg.getDialogPane().lookupButton(facturar);
+        btn.getStyleClass().add("button-primary");
+        Ventanas.estilizar(dlg);
+
+        final Factura[] resultado = {null};
+        btn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            ev.consume();
+            if (cmbPeriodicidad.getValue() == null) { mostrarError(error, "Elige la periodicidad."); return; }
+            error.setVisible(false);
+            error.setManaged(false);
+            progreso.setVisible(true);
+            progreso.setManaged(true);
+            dlg.getDialogPane().setDisable(true);
+            String periodicidad = cmbPeriodicidad.getValue().clave();
+            java.time.LocalDate desde = dpDesde.getValue();
+            java.time.LocalDate hasta = dpHasta.getValue();
+            enSegundoPlano(() -> facturacionService.facturarGlobal(desde, hasta, periodicidad), f -> {
+                resultado[0] = f;
+                dlg.setResult(facturar);
+                dlg.close();
+            }, msg -> {
+                dlg.getDialogPane().setDisable(false);
+                progreso.setVisible(false);
+                progreso.setManaged(false);
+                mostrarError(error, msg);
+            });
+        });
+        dlg.showAndWait();
+        if (resultado[0] == null) return Optional.empty();
+        Factura f = resultado[0];
+        accionesFactura(owner, f, "Factura global " + f.getSerieFolio() + " emitida" + (f.isSandbox() ? " (PRUEBAS)" : "")
+                + " con " + f.getVentas().size() + " venta(s)\nUUID: " + f.getUuid() + "\nTotal: " + Moneda.formato(f.getTotal()));
+        return Optional.of(f);
+    }
+
     // ── Acciones sobre una factura ───────────────────────────────────────
 
     /** Ventana con Ver PDF / Guardar XML / Guardar PDF / Enviar por correo */

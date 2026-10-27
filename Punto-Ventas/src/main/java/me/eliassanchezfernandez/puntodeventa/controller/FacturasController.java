@@ -110,6 +110,10 @@ public class FacturasController implements Initializable {
         dialogos.accionesFactura(raiz.getScene().getWindow(), f, detalle(f));
     }
 
+    @FXML private void onGlobal() {
+        dialogos.facturaGlobal(raiz.getScene().getWindow()).ifPresent(f -> onBuscar());
+    }
+
     @FXML private void onClientes() {
         try {
             Ventanas.abrirModal(springContext, "/fxml/clientes_fiscales.fxml", "Clientes fiscales", raiz.getScene().getWindow(), 900, 560);

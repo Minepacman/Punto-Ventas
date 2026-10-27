@@ -31,21 +31,30 @@ import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Emisión de facturas (CFDI 4.0) de una venta a través del PAC.
+ * Emisión de facturas (CFDI 4.0) a través del PAC: de una venta y global de
+ * público en general.
  *
  * El timbrado habla con internet, así que NO va dentro de una transacción
  * larga: (1) en una transacción corta se valida y se registra la factura
- * como PENDIENTE con su folio y su referencia (OrderNumber = "V-{id}");
- * (2) fuera de transacción se timbra; (3) en otra transacción corta se marca
- * VIGENTE con el UUID. Si el PAC rechaza de forma definitiva (validación,
- * credenciales) la factura pendiente se elimina: no queda nada a medias. Si
- * no se sabe qué pasó (tiempo agotado, caída), queda PENDIENTE y el siguiente
- * intento consulta al PAC por la referencia antes de volver a timbrar: una
- * venta nunca se timbra dos veces.
+ * como PENDIENTE con su folio y su referencia (OrderNumber); (2) fuera de
+ * transacción se timbra; (3) en otra transacción corta se marca VIGENTE con
+ * el UUID. Si el PAC rechaza de forma definitiva (validación, credenciales)
+ * la factura pendiente se elimina: no queda nada a medias. Si no se sabe qué
+ * pasó (tiempo agotado, caída), queda PENDIENTE y el siguiente intento
+ * consulta al PAC por la referencia antes de volver a timbrar: una venta
+ * nunca se timbra dos veces.
  *
  * Los archivos XML y PDF se guardan junto a la base de datos; si no se
  * pudieron bajar en el momento se bajan la primera vez que se piden.
@@ -55,6 +64,8 @@ public class FacturacionService {
 
     static final List<String> ESTADOS_QUE_BLOQUEAN = List.of(Factura.Estado.VIGENTE.name(),
             Factura.Estado.PENDIENTE.name(), Factura.Estado.CANCELACION_EN_PROCESO.name());
+
+    private static final DateTimeFormatter FECHA_CORTA = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     @Autowired private FacturaRepository facturaRepo;
     @Autowired private VentaRepository ventaRepo;
@@ -82,8 +93,8 @@ public class FacturacionService {
     }
 
     /** Factura (vigente, pendiente o en proceso) de cada una de las ventas dadas; una sola consulta */
-    public java.util.Map<Long, Factura> facturasDeVentas(java.util.Collection<Long> ventaIds) {
-        java.util.Map<Long, Factura> r = new java.util.HashMap<>();
+    public Map<Long, Factura> facturasDeVentas(Collection<Long> ventaIds) {
+        Map<Long, Factura> r = new HashMap<>();
         if (ventaIds == null || ventaIds.isEmpty()) return r;
         for (FacturaVenta fv : facturaRepo.facturasDeVentas(ventaIds, ESTADOS_QUE_BLOQUEAN)) r.put(fv.getVentaId(), fv.getFactura());
         return r;
@@ -92,9 +103,7 @@ public class FacturacionService {
     @Transactional(readOnly = true)
     public List<Factura> facturasEntre(LocalDate desde, LocalDate hasta) {
         sesionService.verificarPermiso(Permiso.FACTURAR);
-        if (desde == null) desde = LocalDate.now();
-        if (hasta == null) hasta = desde;
-        if (hasta.isBefore(desde)) throw new NegocioException("La fecha final no puede ser anterior a la inicial.");
+        validarRango(desde, hasta);
         List<Factura> lista = facturaRepo.findEntre(desde.atStartOfDay(), hasta.plusDays(1).atStartOfDay());
         lista.forEach(f -> f.getVentas().size());   // inicializa dentro de la transacción
         return lista;
@@ -119,37 +128,27 @@ public class FacturacionService {
      * @param formaPagoSat c_FormaPago (null = la del pago mayor de la venta)
      */
     public Factura facturarVenta(Long ventaId, Long clienteFiscalId, String usoCfdi, String formaPagoSat) {
+        Contexto ctx = iniciar();
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+        Preparada prep = tx.execute(st -> prepararVenta(ventaId, clienteFiscalId, usoCfdi, formaPagoSat, ctx));
+        return emitir(prep, ctx, tx);
+    }
+
+    private record Contexto(Cajero quien, ConfiguracionFiscal cfg, ProveedorCfdi pac) { }
+
+    private record Preparada(Factura factura, CfdiDocumento documento, boolean reintento) { }
+
+    private Contexto iniciar() {
         sesionService.verificarPermiso(Permiso.FACTURAR);
         Cajero quien = sesionService.requerirSesion();
         ConfiguracionFiscal cfg = fiscalService.obtener();
         if (!cfg.estaLista()) {
             throw new NegocioException("Falta configurar el emisor o las credenciales del PAC en Configuración → Facturación.");
         }
-        ProveedorCfdi pac = fiscalService.proveedor();
-        TransactionTemplate tx = new TransactionTemplate(txManager);
-
-        // 1) Transacción corta: validar, armar el comprobante y dejar la factura PENDIENTE
-        Preparada prep = tx.execute(st -> preparar(ventaId, clienteFiscalId, usoCfdi, formaPagoSat, cfg, quien));
-
-        // 2) Red: si ya había un intento sin respuesta, preguntar al PAC antes de volver a timbrar
-        Timbrado timbrado;
-        try {
-            Optional<Timbrado> previo = prep.reintento() ? pac.buscarPorNumeroOrden(prep.documento().numeroOrden()) : Optional.empty();
-            timbrado = previo.isPresent() ? previo.get() : pac.timbrar(prep.documento());
-        } catch (PacException e) {
-            return fallo(prep.factura().getId(), e, quien, tx);
-        }
-
-        // 3) Transacción corta: vigente con UUID
-        Factura vigente = tx.execute(st -> confirmar(prep.factura().getId(), timbrado, cfg, quien));
-        descargarArchivos(vigente, pac);
-        return facturaRepo.findConVentasById(vigente.getId()).orElse(vigente);
+        return new Contexto(quien, cfg, fiscalService.proveedor());
     }
 
-    private record Preparada(Factura factura, CfdiDocumento documento, boolean reintento) { }
-
-    private Preparada preparar(Long ventaId, Long clienteFiscalId, String usoCfdi, String formaPagoSat,
-                               ConfiguracionFiscal cfg, Cajero quien) {
+    private Preparada prepararVenta(Long ventaId, Long clienteFiscalId, String usoCfdi, String formaPagoSat, Contexto ctx) {
         Venta venta = ventaRepo.findConDetallesById(ventaId)
                 .orElseThrow(() -> new NegocioException("La venta ya no existe."));
         ventaRepo.cargarPagos(List.of(venta));
@@ -180,14 +179,14 @@ public class FacturacionService {
             f.setTipoEnum(Factura.Tipo.VENTA);
             f.setVenta(venta);
             f.getVentas().add(new FacturaVenta(f, venta));
-            f.setSerie(cfg.getSerie());
+            f.setSerie(ctx.cfg().getSerie());
             f.setFolio(String.valueOf(siguienteFolio()));
             f.setNumeroOrden(ConstructorCfdi.numeroOrdenDe(venta));
-            f.setEmitidaPorId(quien.getId());
-            f.setEmitidaPorNombre(quien.getNombreCompleto());
+            f.setEmitidaPorId(ctx.quien().getId());
+            f.setEmitidaPorNombre(ctx.quien().getNombreCompleto());
         }
         f.setEstadoEnum(Factura.Estado.PENDIENTE);
-        f.setSandbox(cfg.isPacSandbox());
+        f.setSandbox(ctx.cfg().isPacSandbox());
         f.setFecha(LocalDateTime.now());
         f.setReceptorRfc(cliente.getRfc());
         f.setReceptorNombre(cliente.getNombre());
@@ -198,17 +197,152 @@ public class FacturacionService {
 
         CfdiDocumento doc;
         try {
-            doc = ConstructorCfdi.paraVenta(venta, cfg, cliente, uso, forma, f.getFolio(),
-                    BigDecimal.valueOf(configuracionService.getTasaIva()));
+            doc = ConstructorCfdi.paraVenta(venta, ctx.cfg(), cliente, uso, forma, f.getFolio(), tasaPorDefecto());
         } catch (IllegalArgumentException e) {
             throw new NegocioException(e.getMessage());
         }
-        f.setSubtotal(doc.subtotal().doubleValue());
-        f.setDescuento(doc.descuento().doubleValue());
-        f.setIva(doc.totalImpuestos().doubleValue());
-        f.setTotal(doc.total().doubleValue());
-        Factura guardada = facturaRepo.save(f);
-        return new Preparada(guardada, doc, reintento);
+        copiarImportes(f, doc);
+        return new Preparada(facturaRepo.save(f), doc, reintento);
+    }
+
+    // ── Factura global (público en general) ─────────────────────────────
+
+    /** Resultado de la selección de ventas para la factura global */
+    public record SeleccionGlobal(List<Venta> ventas, int canceladas, int yaFacturadas, double total) { }
+
+    /**
+     * Ventas del periodo que entrarían en la factura global: activas (no
+     * canceladas) y que no estén ya en una factura vigente, pendiente o en
+     * proceso (individual o global). Requiere FACTURAR.
+     */
+    @Transactional(readOnly = true)
+    public SeleccionGlobal ventasParaGlobal(LocalDate desde, LocalDate hasta) {
+        sesionService.verificarPermiso(Permiso.FACTURAR);
+        validarRango(desde, hasta);
+        List<Venta> todas = ventaRepo.findEntre(desde.atStartOfDay(), hasta.plusDays(1).atStartOfDay());
+        int canceladas = 0;
+        List<Venta> activas = new ArrayList<>();
+        for (Venta v : todas) {
+            if (v.isCancelada()) canceladas++; else activas.add(v);
+        }
+        Set<Long> facturadas = activas.isEmpty() ? Set.of()
+                : new HashSet<>(facturaRepo.ventasYaFacturadas(activas.stream().map(Venta::getId).toList(), ESTADOS_QUE_BLOQUEAN));
+        List<Venta> elegibles = new ArrayList<>();
+        for (Venta v : activas) if (!facturadas.contains(v.getId())) elegibles.add(v);
+        elegibles.sort(java.util.Comparator.comparing(Venta::getFecha));
+        double total = elegibles.stream().mapToDouble(Venta::getTotal).sum();
+        return new SeleccionGlobal(elegibles, canceladas, facturadas.size(), VentaService.redondear(total));
+    }
+
+    /**
+     * Timbra la factura global del periodo (receptor XAXX010101000, régimen
+     * 616, uso S01, CP del emisor). Hace red. Requiere FACTURAR.
+     * @param periodicidad c_Periodicidad: 01 diario, 02 semanal, 03 quincenal, 04 mensual, 05 bimestral
+     */
+    public Factura facturarGlobal(LocalDate desde, LocalDate hasta, String periodicidad) {
+        Contexto ctx = iniciar();
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+        Preparada prep = tx.execute(st -> prepararGlobal(desde, hasta, periodicidad, ctx));
+        return emitir(prep, ctx, tx);
+    }
+
+    private Preparada prepararGlobal(LocalDate desde, LocalDate hasta, String periodicidad, Contexto ctx) {
+        validarPeriodo(desde, hasta, periodicidad);
+        String numeroOrden = "G-" + desde.format(FECHA_CORTA) + "-" + hasta.format(FECHA_CORTA) + "-" + periodicidad;
+
+        // Un intento anterior sin respuesta para el MISMO periodo se retoma con sus mismas ventas
+        Factura pendiente = facturaRepo.findByEstadoOrderByIdAsc(Factura.Estado.PENDIENTE.name()).stream()
+                .filter(f -> f.esGlobal() && numeroOrden.equals(f.getNumeroOrden())).findFirst().orElse(null);
+        List<Venta> ventas;
+        Factura f;
+        boolean reintento = pendiente != null;
+        if (reintento) {
+            f = pendiente;
+            ventas = new ArrayList<>();
+            for (FacturaVenta fv : f.getVentas()) ventaRepo.findById(fv.getVentaId()).ifPresent(ventas::add);
+            ventas.sort(java.util.Comparator.comparing(Venta::getFecha));
+            if (ventas.isEmpty()) throw new NegocioException("La factura global pendiente no tiene ventas.");
+        } else {
+            SeleccionGlobal sel = ventasParaGlobal(desde, hasta);
+            ventas = sel.ventas();
+            if (ventas.isEmpty()) {
+                throw new NegocioException("No hay ventas por facturar en el periodo" + (sel.yaFacturadas() > 0
+                        ? " (las " + sel.yaFacturadas() + " ventas activas ya están facturadas)." : "."));
+            }
+            f = new Factura();
+            f.setTipoEnum(Factura.Tipo.GLOBAL);
+            for (Venta v : ventas) f.getVentas().add(new FacturaVenta(f, v));
+            f.setSerie(ctx.cfg().getSerie());
+            f.setFolio(String.valueOf(siguienteFolio()));
+            f.setNumeroOrden(numeroOrden);
+            f.setEmitidaPorId(ctx.quien().getId());
+            f.setEmitidaPorNombre(ctx.quien().getNombreCompleto());
+        }
+        String meses = mesesDe(periodicidad, hasta);
+        String anio = ConstructorCfdi.anioDe(hasta);
+        f.setEstadoEnum(Factura.Estado.PENDIENTE);
+        f.setSandbox(ctx.cfg().isPacSandbox());
+        f.setFecha(LocalDateTime.now());
+        f.setReceptorRfc(me.eliassanchezfernandez.puntodeventa.facturacion.Rfc.PUBLICO_EN_GENERAL);
+        f.setReceptorNombre("PUBLICO EN GENERAL");
+        f.setUsoCfdi(CatalogoSat.USO_SIN_EFECTOS);
+        f.setFormaPago("01");
+        f.setPeriodicidad(periodicidad);
+        f.setMeses(meses);
+        f.setAnio(anio);
+        f.setPeriodoDesde(desde);
+        f.setPeriodoHasta(hasta);
+        f.setUltimoError(null);
+
+        CfdiDocumento doc;
+        try {
+            doc = ConstructorCfdi.global(ventas, ctx.cfg(), periodicidad, meses, anio, f.getFolio(), numeroOrden, tasaPorDefecto());
+        } catch (IllegalArgumentException e) {
+            throw new NegocioException(e.getMessage());
+        }
+        copiarImportes(f, doc);
+        return new Preparada(facturaRepo.save(f), doc, reintento);
+    }
+
+    /** Periodicidad válida y rango acorde (diario = un día, semanal ≤ 7 días, quincenal ≤ 16, mensual y bimestral dentro del/los mes(es)) */
+    static void validarPeriodo(LocalDate desde, LocalDate hasta, String periodicidad) {
+        validarRango(desde, hasta);
+        if (hasta.isAfter(LocalDate.now())) throw new NegocioException("El periodo no puede terminar en el futuro.");
+        if (periodicidad == null || CatalogoSat.PERIODICIDADES.stream().noneMatch(p -> p.clave().equals(periodicidad))) {
+            throw new NegocioException("Elige la periodicidad de la factura global (diario, semanal, quincenal, mensual o bimestral).");
+        }
+        long dias = ChronoUnit.DAYS.between(desde, hasta) + 1;
+        switch (periodicidad) {
+            case "01" -> { if (dias != 1) throw new NegocioException("Con periodicidad diaria el periodo debe ser un solo día."); }
+            case "02" -> { if (dias > 7) throw new NegocioException("Con periodicidad semanal el periodo no puede pasar de 7 días."); }
+            case "03" -> { if (dias > 16) throw new NegocioException("Con periodicidad quincenal el periodo no puede pasar de 16 días."); }
+            case "04" -> { if (desde.getYear() != hasta.getYear() || desde.getMonth() != hasta.getMonth())
+                    throw new NegocioException("Con periodicidad mensual el periodo debe estar dentro de un mismo mes."); }
+            case "05" -> { if (desde.getYear() != hasta.getYear() || (desde.getMonthValue() - 1) / 2 != (hasta.getMonthValue() - 1) / 2)
+                    throw new NegocioException("Con periodicidad bimestral el periodo debe caer en el mismo bimestre (ene-feb, mar-abr, ...)."); }
+            default -> { }
+        }
+    }
+
+    /** c_Meses: 01-12 el mes en que termina el periodo; bimestral 13-18 (13 = ene-feb ... 18 = nov-dic) */
+    static String mesesDe(String periodicidad, LocalDate hasta) {
+        if ("05".equals(periodicidad)) return String.valueOf(13 + (hasta.getMonthValue() - 1) / 2);
+        return ConstructorCfdi.mesesDe(hasta);
+    }
+
+    // ── Emisión común ────────────────────────────────────────────────────
+
+    private Factura emitir(Preparada prep, Contexto ctx, TransactionTemplate tx) {
+        Timbrado timbrado;
+        try {
+            Optional<Timbrado> previo = prep.reintento() ? ctx.pac().buscarPorNumeroOrden(prep.documento().numeroOrden()) : Optional.empty();
+            timbrado = previo.isPresent() ? previo.get() : ctx.pac().timbrar(prep.documento());
+        } catch (PacException e) {
+            return fallo(prep.factura().getId(), e, ctx.quien(), tx);
+        }
+        Factura vigente = tx.execute(st -> confirmar(prep.factura().getId(), timbrado, ctx.quien()));
+        descargarArchivos(vigente, ctx.pac());
+        return facturaRepo.findConVentasById(vigente.getId()).orElse(vigente);
     }
 
     /** Siguiente folio de la serie (consume el contador; dentro de la transacción de preparar) */
@@ -220,7 +354,7 @@ public class FacturacionService {
         return siguiente;
     }
 
-    Factura confirmar(Long facturaId, Timbrado t, ConfiguracionFiscal cfg, Cajero quien) {
+    Factura confirmar(Long facturaId, Timbrado t, Cajero quien) {
         Factura f = facturaRepo.findById(facturaId).orElseThrow(() -> new NegocioException("La factura ya no existe."));
         f.setEstadoEnum(Factura.Estado.VIGENTE);
         f.setIdExterno(t.idExterno());
@@ -238,12 +372,10 @@ public class FacturacionService {
     private Factura fallo(Long facturaId, PacException e, Cajero quien, TransactionTemplate tx) {
         String resumen = e.getMessage().length() > 480 ? e.getMessage().substring(0, 477) + "..." : e.getMessage();
         if (e.esDefinitivo()) {
-            tx.executeWithoutResult(st -> {
-                facturaRepo.findById(facturaId).ifPresent(f -> {
-                    auditoriaService.registrar(quien, "FACTURA_RECHAZADA", "Folio " + f.getSerieFolio() + " — " + resumen, (Cajero) null);
-                    facturaRepo.delete(f);
-                });
-            });
+            tx.executeWithoutResult(st -> facturaRepo.findById(facturaId).ifPresent(f -> {
+                auditoriaService.registrar(quien, "FACTURA_RECHAZADA", "Folio " + f.getSerieFolio() + " — " + resumen, (Cajero) null);
+                facturaRepo.delete(f);
+            }));
             throw new NegocioException("El PAC rechazó la factura:\n" + e.getMessage());
         }
         tx.executeWithoutResult(st -> facturaRepo.findById(facturaId).ifPresent(f -> {
@@ -251,7 +383,7 @@ public class FacturacionService {
             facturaRepo.save(f);
         }));
         throw new NegocioException(e.getMessage() + "\n\nNo se sabe si la factura se timbró. Cuando vuelva el internet, "
-                + "vuelve a facturar esta venta: el sistema consultará al PAC antes de timbrar para no duplicarla.");
+                + "vuelve a facturar: el sistema consultará al PAC antes de timbrar para no duplicarla.");
     }
 
     // ── Archivos ─────────────────────────────────────────────────────────
@@ -326,8 +458,25 @@ public class FacturacionService {
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
+    private BigDecimal tasaPorDefecto() {
+        return BigDecimal.valueOf(configuracionService.getTasaIva());
+    }
+
+    private static void copiarImportes(Factura f, CfdiDocumento doc) {
+        f.setSubtotal(doc.subtotal().doubleValue());
+        f.setDescuento(doc.descuento().doubleValue());
+        f.setIva(doc.totalImpuestos().doubleValue());
+        f.setTotal(doc.total().doubleValue());
+    }
+
+    static void validarRango(LocalDate desde, LocalDate hasta) {
+        if (desde == null || hasta == null) throw new NegocioException("Indica las fechas del periodo.");
+        if (hasta.isBefore(desde)) throw new NegocioException("La fecha final no puede ser anterior a la inicial.");
+    }
+
     static String descripcion(Factura f) {
-        return "Factura " + f.getSerieFolio() + (f.esGlobal() ? " (global)" : f.getVenta() != null ? " de la venta " + f.getVenta().getFolioMostrado() : "")
+        return "Factura " + f.getSerieFolio() + (f.esGlobal() ? " (global, " + f.getVentas().size() + " ventas)"
+                : f.getVenta() != null ? " de la venta " + f.getVenta().getFolioMostrado() : "")
                 + " a " + f.getReceptorRfc() + " por " + me.eliassanchezfernandez.puntodeventa.util.Moneda.formato(f.getTotal())
                 + (f.getUuid() != null ? " UUID " + f.getUuid() : "");
     }
