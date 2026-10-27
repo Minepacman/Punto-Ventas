@@ -39,6 +39,9 @@
                 <Label text="Dirección para abrir en el teléfono" styleClass="form-section-title"/>
                 <VBox fx:id="cajaUrls" spacing="6"/>
 
+                <Label text="Código QR" styleClass="form-section-title"/>
+                <VBox fx:id="cajaQr" spacing="8" alignment="TOP_LEFT"/>
+
                 <Separator/>
                 <Label text="Sesiones móviles abiertas" styleClass="form-section-title"/>
                 <TableView fx:id="tablaSesiones" prefHeight="220">

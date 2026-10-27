@@ -12,11 +12,10 @@
   ----------------------------------------------------------------------------
   - Lo sirve el programa de escritorio (ServidorMovilService) en la red local.
   - Sin dependencias externas ni CDNs: funciona sin internet, solo en la LAN.
-  - LOGIN y SESIÓN son reales (api.login / api.sesion / api.logout / api.recordar
-    llaman al servidor). Los DATOS (ventas, inventario, estadísticas, ticket)
-    son SIMULADOS en la sección "2. DATOS DE DEMOSTRACIÓN" y se leen/escriben
-    solo a través del objeto `api` (sección 3). Para pasar a datos reales basta
-    con reescribir esos métodos con fetch() (ver comentarios "TODO real:").
+  - LOGIN, SESIÓN y DATOS (estadísticas, ventas, inventario, ajustes) son
+    reales: el objeto `api` (sección 3) llama con fetch() a /api/* y el servidor
+    vuelve a comprobar los permisos del usuario en cada petición. SOLO la lectura
+    del ticket del proveedor (OCR) sigue siendo un DEMO (objeto `ocr`).
   - Seguridad: todo texto dinámico se inserta con textContent/createTextNode
     (función h()), nunca con innerHTML.
   ============================================================================
@@ -297,6 +296,14 @@ function cargando(texto) {
   return h('div', { class: 'cargando' }, h('div', { class: 'rueda' }), texto || 'Cargando…');
 }
 
+/** Mensaje de error de una petición con botón "Reintentar" cuando el problema es de red o del servidor */
+function errorConReintento(e, reintentar) {
+  const sinPermiso = e.estado === 403;
+  return h('div', { style: 'display:grid;gap:.6rem' },
+    h('div', { class: 'aviso-err', role: 'alert' }, sinPermiso ? 'Sin permiso. ' + e.message : e.message),
+    sinPermiso ? null : h('button', { class: 'btn btn-block', type: 'button', onclick: reintentar }, 'Reintentar'));
+}
+
 /** Hoja inferior modal. cerrable=false obliga a elegir una opción. */
 function hoja(contenido, { cerrable = true } = {}) {
   const previo = document.activeElement;
@@ -343,82 +350,10 @@ function interruptor(activo, alCambiar, etiqueta) {
 }
 
 /* ============================================================================
-   2. DATOS DE DEMOSTRACIÓN (SIMULADOS - no vienen del programa de escritorio)
-      Se generan una vez al abrir la página con un generador pseudoaleatorio
-      fijo, así que los números son estables entre visitas.
-   ============================================================================ */
-function semilla(s) {   // mulberry32
-  return () => {
-    s |= 0; s = s + 0x6D2B79F5 | 0;
-    let t = Math.imul(s ^ s >>> 15, 1 | s);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-const DEMO = (() => {
-  const azar = semilla(20260607);
-  const p = (id, nombre, depto, precio, costo, stock, minimo, unidad = 'pza') =>
-    ({ id, codigo: '75010' + String(55300000 + id * 137), nombre, depto, precio, costo, stock, minimo, unidad });
-  const productos = [
-    p(1, 'Coca-Cola 600 ml', 'Bebidas', 18, 12.5, 48, 12),
-    p(2, 'Agua natural 1 L', 'Bebidas', 12, 7, 6, 12),
-    p(3, 'Jugo del Valle 413 ml', 'Bebidas', 16, 10.5, 30, 10),
-    p(4, 'Sabritas Original 45 g', 'Botanas', 19, 13, 25, 10),
-    p(5, 'Doritos Nacho 62 g', 'Botanas', 21, 14.5, 4, 8),
-    p(6, 'Galletas Marías 170 g', 'Galletas', 14, 9, 36, 10),
-    p(7, 'Pan blanco grande', 'Panadería', 42, 31, 14, 6),
-    p(8, 'Leche entera 1 L', 'Lácteos', 27, 21, 22, 12),
-    p(9, 'Huevo (kg)', 'Abarrotes', 52, 42, 18.5, 8, 'kg'),
-    p(10, 'Frijol negro (kg)', 'Abarrotes', 38, 28, 12.25, 6, 'kg'),
-    p(11, 'Arroz 1 kg', 'Abarrotes', 29, 21, 40, 10),
-    p(12, 'Aceite vegetal 900 ml', 'Abarrotes', 48, 37, 0, 6),
-    p(13, 'Azúcar 1 kg', 'Abarrotes', 31, 24, 20, 8),
-    p(14, 'Atún en agua 140 g', 'Enlatados', 24, 17, 33, 10),
-    p(15, 'Sopa instantánea', 'Enlatados', 15, 9.5, 52, 15),
-    p(16, 'Papel higiénico 4 rollos', 'Limpieza', 36, 26, 17, 6),
-    p(17, 'Detergente 1 kg', 'Limpieza', 44, 33, 9, 5),
-    p(18, 'Jabón de tocador', 'Limpieza', 17, 11, 28, 8),
-    p(19, 'Cerveza clara 355 ml', 'Cervezas', 24, 18, 60, 24),
-    p(20, 'Cigarros 20 pzas', 'Tabaco', 78, 70, 15, 10),
-  ];
-  const cajeros = ['María López', 'Luis Hernández'];
-  const pagos = ['Efectivo', 'Efectivo', 'Efectivo', 'Tarjeta', 'Transferencia'];
-  const pesoHora = { 7: 1, 8: 3, 9: 3, 10: 2, 11: 2, 12: 3, 13: 5, 14: 5, 15: 3, 16: 2, 17: 3, 18: 5, 19: 5, 20: 3, 21: 1 };
-  const horasPonderadas = Object.entries(pesoHora).flatMap(([hh, w]) => Array(w).fill(+hh));
-
-  const ahora = new Date();
-  const ventas = [];
-  for (let d = 34; d >= 0; d--) {
-    const dia = sumarDias(inicioDia(ahora), -d);
-    const n = 9 + Math.floor(azar() * 14) + ([0, 6].includes(dia.getDay()) ? 4 : 0);
-    for (let i = 0; i < n; i++) {
-      const hh = horasPonderadas[Math.floor(azar() * horasPonderadas.length)];
-      const f = new Date(dia.getFullYear(), dia.getMonth(), dia.getDate(), hh, Math.floor(azar() * 60), Math.floor(azar() * 60));
-      if (f > ahora) continue;
-      const nLin = 1 + Math.floor(azar() * 4), lineas = [];
-      for (let k = 0; k < nLin; k++) {
-        const pr = productos[Math.floor(azar() * productos.length)];
-        if (lineas.some(l => l.pid === pr.id)) continue;
-        const cant = pr.unidad === 'kg' ? 0.25 * (1 + Math.floor(azar() * 6)) : 1 + Math.floor(azar() * 3);
-        lineas.push({ pid: pr.id, nombre: pr.nombre, unidad: pr.unidad, cantidad: cant, precio: pr.precio, costo: pr.costo });
-      }
-      ventas.push({
-        fecha: f, cajero: cajeros[Math.floor(azar() * cajeros.length)],
-        pago: pagos[Math.floor(azar() * pagos.length)], lineas,
-        total: lineas.reduce((s, l) => s + l.cantidad * l.precio, 0),
-      });
-    }
-  }
-  ventas.sort((a, b) => a.fecha - b.fecha);
-  ventas.forEach((v, i) => { v.id = i + 1; v.folio = 'A-' + (1000 + i); });
-  return { productos, ventas, azar };
-})();
-
-/* ============================================================================
-   3. CAPA `api`  (ÚNICO punto de acceso a datos)
-      - Autenticación: llamadas REALES al servidor.
-      - Datos de negocio: hoy devuelven DEMO; mañana se cambian por fetch().
+   2. CAPA `api`  (ÚNICO punto de acceso a datos; todo con fetch() al servidor)
+      - 401 -> evento 'sesion-terminada' (vuelve al inicio de sesión).
+      - 403 -> ErrorApi con el mensaje "Sin permiso ..." (no se cierra la sesión).
+      - Sin red -> ErrorApi(0, 'SIN_CONEXION') y las vistas ofrecen "Reintentar".
    ============================================================================ */
 class ErrorApi extends Error {
   constructor(estado, codigo, mensaje) { super(mensaje); this.estado = estado; this.codigo = codigo; }
@@ -459,106 +394,91 @@ const api = {
   recordar: (recordar, contrasena) => peticion('POST', '/api/sesion/recordar', { recordar, contrasena }),
   logout: () => peticion('POST', '/api/logout', {}),
 
-  /* ---------- Datos de negocio (SIMULADOS) ----------
-     TODO real: sustituir el cuerpo de cada método por un fetch() a un endpoint
-     nuevo que use los servicios del escritorio (ver informe de la integración):
-       estadisticas -> GET  /api/estadisticas?periodo=dia|semana|mes
-       ventas       -> GET  /api/ventas?desde=AAAA-MM-DD&hasta=AAAA-MM-DD
-       inventario   -> GET  /api/inventario
-       ajustarStock -> POST /api/inventario/ajuste {id, tipo, cantidad, motivo}
-       procesarTicket / aplicarTicket -> POST /api/tickets (ver `ocr` más abajo) */
+  /* ---------- Datos de negocio (REALES) ---------- */
 
+  /** periodo: 'dia' | 'semana' | 'mes'. Devuelve totales, comparación, top y franjas del día. */
   async estadisticas(periodo) {
-    await espera(250);
-    const hoy = inicioDia(new Date());
-    let desde;
-    if (periodo === 'semana') desde = sumarDias(hoy, -((hoy.getDay() + 6) % 7));   // lunes
-    else if (periodo === 'mes') desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    else desde = hoy;
-    const hasta = sumarDias(hoy, 1);
-    const largo = hasta - desde;
-    const previoDesde = new Date(desde.getTime() - largo), previoHasta = desde;
-    const enRango = (v, a, b) => v.fecha >= a && v.fecha < b;
-    const actuales = DEMO.ventas.filter(v => enRango(v, desde, hasta));
-    const previas = DEMO.ventas.filter(v => enRango(v, previoDesde, previoHasta));
-    const suma = (arr, f) => arr.reduce((s, v) => s + f(v), 0);
-    const total = suma(actuales, v => v.total), totalPrevio = suma(previas, v => v.total);
-    const ganancia = suma(actuales, v => v.lineas.reduce((s, l) => s + l.cantidad * (l.precio - l.costo), 0));
-    const porProducto = new Map();
-    for (const v of actuales) for (const l of v.lineas) {
-      const a = porProducto.get(l.pid) || { nombre: l.nombre, unidad: l.unidad, cantidad: 0, importe: 0 };
-      a.cantidad += l.cantidad; a.importe += l.cantidad * l.precio; porProducto.set(l.pid, a);
-    }
-    const horas = [];
-    for (let hh = 7; hh <= 21; hh++) horas.push({ hora: hh, total: 0, tickets: 0 });
-    for (const v of actuales) { const x = horas[v.fecha.getHours() - 7]; if (x) { x.total += v.total; x.tickets++; } }
+    const d = await peticion('GET', '/api/estadisticas?periodo=' + encodeURIComponent(periodo));
+    const c = d.comparacion;
     return {
-      periodo, desde, hasta: sumarDias(hasta, -1),
-      total, tickets: actuales.length, promedio: actuales.length ? total / actuales.length : 0,
-      ganancia, variacion: totalPrevio ? (total - totalPrevio) / totalPrevio : null,
-      top: [...porProducto.values()].sort((a, b) => b.importe - a.importe).slice(0, 5),
-      horas,
+      periodo, desde: d.desde, hasta: d.hasta,
+      total: d.totales.total, tickets: d.totales.transacciones, promedio: d.totales.ticketPromedio,
+      ganancia: d.gananciaVisible ? d.ganancia : null,
+      variacion: c && c.variacionPct != null ? c.variacionPct / 100 : null,
+      top: d.top.map(t => ({ nombre: t.descripcion, unidad: t.unidad || 'pza', cantidad: t.piezas, importe: t.importe })),
+      franjas: d.franjas,
     };
   },
 
-  async ventas({ desde, hasta }) {   // desde/hasta: 'AAAA-MM-DD' (inclusive)
-    await espera(250);
-    return DEMO.ventas
-      .filter(v => { const c = claveDia(v.fecha); return c >= desde && c <= hasta; })
-      .sort((a, b) => b.fecha - a.fecha);
+  async ventas({ desde, hasta }) {   // desde/hasta: 'AAAA-MM-DD' (inclusive; máximo 93 días)
+    const d = await peticion('GET', '/api/ventas?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta));
+    const r = d.ventas.map(v => ({
+      id: v.id, folio: v.folio || String(v.id), fecha: new Date(v.fecha), cajero: v.cajero, pago: v.formaPago,
+      cancelada: v.cancelada, total: v.total,
+      lineas: v.lineas.map(l => ({ nombre: l.descripcion, unidad: l.unidad || 'pza', cantidad: l.cantidad, precio: l.precio })),
+    }));
+    r.truncado = d.truncado; r.totalReal = d.total;
+    return r;
   },
 
-  async inventario() {
-    await espera(200);
-    return DEMO.productos.map(p => ({ ...p }));
+  async inventario(q = '') {
+    const d = await peticion('GET', '/api/inventario?q=' + encodeURIComponent(q));
+    const r = d.productos.map(p => ({
+      id: p.id, codigo: p.codigo || '', nombre: p.descripcion, depto: p.departamento || '',
+      precio: p.precio, costo: p.costo, stock: p.existencia, minimo: p.minimo, unidad: p.unidad,
+    }));
+    r.truncado = d.truncado; r.totalReal = d.total;
+    return r;
   },
 
   /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
-  async ajustarStock({ id, tipo, cantidad, motivo }) {
-    await espera(300);
-    const p = DEMO.productos.find(x => x.id === id);
-    if (!p) throw new ErrorApi(404, 'NO_ENCONTRADO', 'El producto no existe.');
-    if (!(cantidad >= 0) || !isFinite(cantidad)) throw new ErrorApi(400, 'NEGOCIO', 'Captura una cantidad válida.');
-    let nuevo = tipo === 'ENTRADA' ? p.stock + cantidad : tipo === 'SALIDA' ? p.stock - cantidad : cantidad;
-    if (nuevo < 0) throw new ErrorApi(400, 'NEGOCIO', 'La existencia no puede quedar en negativo.');
-    p.stock = Math.round(nuevo * 1000) / 1000;
-    return { ...p };
+  async ajustarStock({ id, tipo, cantidad, motivo, proveedor }) {
+    const t = tipo === 'ENTRADA' ? 'entrada' : tipo === 'SALIDA' ? 'merma' : 'ajuste';
+    const generico = ['ENTRADA', 'SALIDA', 'CONTEO'].includes(motivo);
+    const texto = motivo && !generico ? motivo
+      : t === 'entrada' ? 'Entrada registrada desde el móvil'
+      : t === 'merma' ? 'Merma registrada desde el móvil' : 'Conteo físico desde el móvil';
+    const d = await peticion('POST', '/api/inventario/ajuste', { productoId: id, tipo: t, cantidad, motivo: texto, proveedor });
+    return { id: d.producto.id, stock: d.producto.existencia };
   },
 
-  /** Recibe las líneas ya leídas del ticket y las suma al inventario simulado. */
+  /** Entradas de mercancía de un ticket: UNA petición real por línea; devuelve lo aplicado y lo que falló. */
   async aplicarTicket(lineas) {
-    await espera(400);
-    for (const l of lineas) { const p = DEMO.productos.find(x => x.id === l.pid); if (p) p.stock += l.cantidad; }
-    return { aplicadas: lineas.length };
+    const fallidas = [];
+    let aplicadas = 0;
+    for (const l of lineas) {
+      try {
+        await api.ajustarStock({ id: l.pid, tipo: 'ENTRADA', cantidad: l.cantidad,
+          motivo: 'Entrada por ticket de proveedor (móvil)', proveedor: 'Ticket de proveedor (móvil)' });
+        aplicadas++;
+      } catch (e) {
+        if (e.estado === 401) throw e;
+        fallidas.push({ nombre: l.nombre, mensaje: e.message });
+      }
+    }
+    return { aplicadas, fallidas };
   },
 };
 
 /* ----------------------------------------------------------------------------
-   GANCHO DE OCR (aquí se conectará la lectura real del ticket del proveedor)
+   GANCHO DE OCR  (DEMO: la lectura de la foto NO es real)
    ----------------------------------------------------------------------------
    Contrato: extraerLineas(archivoImagen: File) -> Promise<Array<{
-       pid, nombre, cantidad, costo }>>
-   HOY: ignora la imagen y devuelve líneas de ejemplo (simulación).
-   MAÑANA: enviar la foto al servidor y devolver sus líneas, p. ej.
-       const fd = new FormData(); fd.append('foto', archivoImagen);
-       const r = await fetch('/api/tickets/ocr', { method: 'POST', body: fd,
-                   headers: { Authorization: 'Bearer ' + token } });
-       return (await r.json()).lineas;           // el servidor hace el OCR y
-                                                 // empareja con productos
-   (Ese endpoint y el OCR no existen todavía; ver el informe.) */
+       pid, nombre, unidad, cantidad, costo }>>
+   HOY: ignora la imagen e inventa líneas de EJEMPLO con productos reales del
+   inventario (los de menor existencia). Nada se aplica sin que el usuario
+   marque cada línea. MAÑANA: enviar la foto al servidor y devolver sus líneas. */
 const ocr = {
   async extraerLineas(archivoImagen) {
     await espera(1400);   // simula el tiempo de lectura
-    const ejemplo = [[1, 24, 12.1], [19, 48, 17.6], [4, 20, 12.8], [8, 12, 20.5]];
-    return ejemplo.map(([pid, cantidad, costo]) => {
-      const p = DEMO.productos.find(x => x.id === pid);
-      return { pid, nombre: p.nombre, cantidad, costo };
-    });
+    const productos = (await api.inventario('')).slice(0, 4);
+    const cantidades = [24, 48, 20, 12];
+    return productos.map((p, i) => ({ pid: p.id, nombre: p.nombre, unidad: p.unidad, cantidad: cantidades[i], costo: p.costo || 0 }));
   },
 };
 
 /* ============================================================================
-   4. ESTADO DE SESIÓN Y ARRANQUE
+   3. ESTADO DE SESIÓN Y ARRANQUE
    ============================================================================ */
 const raiz = document.getElementById('app');
 const E = { sesion: null, vista: 'estadisticas', desfase: 0, temporizador: null, periodo: 'dia' };
@@ -770,8 +690,8 @@ async function vistaEstadisticas() {
       const d = await api.estadisticas(E.periodo);
       const verGanancia = E.sesion.permisos.includes('VER_GANANCIAS');
       const maxTop = Math.max(...d.top.map(t => t.importe), 1);
-      const maxHora = Math.max(...d.horas.map(x => x.total), 1);
-      const pico = d.horas.reduce((a, b) => b.total > a.total ? b : a, d.horas[0]);
+      const maxFranja = Math.max(...d.franjas.map(x => x.total), 1);
+      const pico = d.franjas.reduce((a, b) => b.total > a.total ? b : a, d.franjas[0]);
       const variacion = d.variacion == null ? null :
         h('div', { class: 'var ' + (d.variacion >= 0 ? 'sube' : 'baja') },
           (d.variacion >= 0 ? '▲ ' : '▼ ') + Math.abs(d.variacion * 100).toFixed(0) + '% vs. periodo anterior');
@@ -780,7 +700,7 @@ async function vistaEstadisticas() {
           h('div', { class: 'kpi grande' }, h('div', { class: 'e' }, 'Ventas · ' + nombres[E.periodo]), h('div', { class: 'v' }, dinero(d.total)), variacion),
           h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Tickets'), h('div', { class: 'v' }, String(d.tickets))),
           h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Ticket promedio'), h('div', { class: 'v' }, dinero(d.promedio))),
-          verGanancia ? h('div', { class: 'kpi', style: 'grid-column:1/-1' }, h('div', { class: 'e' }, 'Ganancia estimada'), h('div', { class: 'v' }, dinero(d.ganancia))) : null),
+          verGanancia && d.ganancia != null ? h('div', { class: 'kpi', style: 'grid-column:1/-1' }, h('div', { class: 'e' }, 'Ganancia estimada'), h('div', { class: 'v' }, dinero(d.ganancia))) : null),
         h('section', { class: 'tarjeta' },
           h('div', { class: 'seccion-t' }, 'Productos más vendidos'),
           d.top.length ? d.top.map((t, i) => h('div', { class: 'top-item' },
@@ -790,16 +710,15 @@ async function vistaEstadisticas() {
             h('div', { class: 'sub' }, num(t.cantidad) + ' ' + t.unidad + ' vendidas')))
             : h('p', { class: 'vacio' }, 'Aún no hay ventas en este periodo.')),
         h('section', { class: 'tarjeta' },
-          h('div', { class: 'seccion-t' }, 'Horas pico'),
+          h('div', { class: 'seccion-t' }, 'Ventas por franja del día'),
           d.total ? [
-            h('div', { class: 'horas', role: 'img', 'aria-label': 'Ventas por hora' },
-              d.horas.map(x => { const i = h('i', { title: pad(x.hora) + ':00 · ' + dinero(x.total) });
-                i.style.height = Math.max(3, x.total / maxHora * 100) + '%';
-                return h('div', { class: 'col' + (x === pico ? ' pico' : '') }, i); })),
-            h('div', { class: 'horas-et' }, d.horas.map(x => h('span', null, x.hora % 2 ? '' : String(x.hora)))),
-            h('p', { class: 'sub', style: 'margin-top:.7rem' }, 'Hora más fuerte: ' + pad(pico.hora) + ':00 a ' + pad(pico.hora + 1) + ':00 (' + pico.tickets + ' tickets)'),
+            d.franjas.map(x => h('div', { class: 'top-item' },
+              h('div', { class: 'l' }, h('span', null, x.etiqueta + (x === pico ? ' · la más fuerte' : '')), h('span', null, dinero(x.total))),
+              h('div', { class: 'barra', role: 'img', 'aria-label': x.etiqueta + ': ' + dinero(x.total) },
+                (() => { const b = h('i'); b.style.width = (x.total / maxFranja * 100) + '%'; return b; })()),
+              h('div', { class: 'sub' }, x.transacciones + ' ticket(s)'))),
           ] : h('p', { class: 'vacio' }, 'Aún no hay ventas en este periodo.')));
-    } catch (e) { cuerpo.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message)); }
+    } catch (e) { if (e.estado !== 401) cuerpo.replaceChildren(errorConReintento(e, cargar)); }
   }
   pintarSeg(); cargar();
   return caja;
@@ -830,22 +749,23 @@ async function vistaHistorial() {
 
   async function cargar() {
     if (!desde.value || !hasta.value) return;
+    if ((new Date(hasta.value) - new Date(desde.value)) / 86400000 + 1 > 93) { lista.replaceChildren(h('div', { class: 'aviso-err' }, 'El rango máximo es de 93 días.')); return; }
     if (desde.value > hasta.value) { lista.replaceChildren(h('div', { class: 'aviso-err' }, 'La fecha inicial no puede ser posterior a la final.')); return; }
     lista.replaceChildren(cargando());
     try {
       const ventas = await api.ventas({ desde: desde.value, hasta: hasta.value });
-      const total = ventas.reduce((s, v) => s + v.total, 0);
-      resumen.textContent = ventas.length + ' venta(s) · ' + dinero(total);
+      const total = ventas.filter(v => !v.cancelada).reduce((s, v) => s + v.total, 0);
+      resumen.textContent = ventas.length + ' venta(s) · ' + dinero(total) + ' (sin canceladas)';
       if (!ventas.length) { lista.replaceChildren(h('div', { class: 'vacio' }, 'No hay ventas en ese rango.')); return; }
       const tope = 80;
       lista.replaceChildren(...ventas.slice(0, tope).map(v =>
         h('button', { class: 'fila', type: 'button', onclick: () => detalleVenta(v) },
           h('div', { class: 'cuerpo' },
-            h('div', { class: 't' }, 'Folio ' + v.folio),
+            h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada') : null),
             h('div', { class: 'd' }, fechaHora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero)),
           h('div', { class: 'der' }, dinero(v.total)))),
-        ventas.length > tope ? h('p', { class: 'sub', style: 'text-align:center;margin-top:.8rem' }, 'Se muestran las ' + tope + ' más recientes. Acota las fechas para ver el resto.') : null);
-    } catch (e) { lista.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message)); }
+        ventas.length > tope || ventas.truncado ? h('p', { class: 'sub', style: 'text-align:center;margin-top:.8rem' }, 'Se muestran las ' + Math.min(tope, ventas.length) + ' más recientes. Acota las fechas para ver el resto.') : null);
+    } catch (e) { if (e.estado !== 401) lista.replaceChildren(errorConReintento(e, cargar)); }
   }
   cargar();
   return h('div', { style: 'display:grid;gap:1rem' }, filtros, resumen, lista);
@@ -854,7 +774,7 @@ async function vistaHistorial() {
 function detalleVenta(v) {
   const h2 = hoja([
     h('h2', null, 'Venta ' + v.folio),
-    h('p', { class: 'sub' }, fechaLarga(v.fecha) + ' ' + hora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero),
+    h('p', { class: 'sub' }, fechaLarga(v.fecha) + ' ' + hora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero + (v.cancelada ? ' · CANCELADA' : '')),
     h('div', null, v.lineas.map(l => h('div', { class: 'linea' },
       h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio))),
       h('div', null, dinero(l.cantidad * l.precio))))),
@@ -867,8 +787,8 @@ function detalleVenta(v) {
    9. VISTA: INVENTARIO  (ver: todos · ajustar: AJUSTAR_INVENTARIO)
    ============================================================================ */
 async function vistaInventario() {
-  const productos = await api.inventario();
-  let filtro = 'todos', texto = '';
+  let productos = await api.inventario('');
+  let filtro = 'todos', texto = '', pendiente = null, secuencia = 0;
   const lista = h('div');
   const busca = h('input', { class: 'entrada', type: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off' });
   const chips = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Filtrar' });
@@ -879,10 +799,8 @@ async function vistaInventario() {
     for (const [k, t] of [['todos', 'Todos'], ['bajo', 'Stock bajo'], ['agotado', 'Agotados']]) {
       chips.append(h('button', { type: 'button', 'aria-pressed': String(filtro === k), onclick: () => { filtro = k; pintar(); } }, t));
     }
-    const q = texto.trim().toLowerCase();
     const vis = productos.filter(p =>
-      (!q || p.nombre.toLowerCase().includes(q) || p.codigo.includes(q) || p.depto.toLowerCase().includes(q)) &&
-      (filtro === 'todos' || (filtro === 'agotado' ? p.stock <= 0 : p.stock <= p.minimo)));
+      filtro === 'todos' || (filtro === 'agotado' ? p.stock <= 0 : p.stock <= p.minimo));
     vaciar(lista);
     if (!vis.length) { lista.append(h('div', { class: 'vacio' }, 'No hay productos con ese filtro.')); return; }
     for (const p of vis) {
@@ -892,7 +810,18 @@ async function vistaInventario() {
         h('div', { class: 'der' }, num(p.stock) + ' ' + p.unidad, h('div', null, h('span', { class: 'insignia ' + clase }, et)))));
     }
   }
-  busca.addEventListener('input', () => { texto = busca.value; pintar(); });
+  async function buscar() {   // la búsqueda la hace el servidor (hasta 200 productos por consulta)
+    const mia = ++secuencia;
+    lista.replaceChildren(cargando());
+    try {
+      const nuevos = await api.inventario(texto.trim());
+      if (mia !== secuencia) return;   // llegó una búsqueda más reciente
+      productos = nuevos; pintar();
+      if (productos.truncado) lista.append(h('p', { class: 'sub', style: 'text-align:center;margin-top:.8rem' },
+        'Hay ' + productos.totalReal + ' productos; se muestran los primeros ' + productos.length + '. Escribe más letras para acotar.'));
+    } catch (e) { if (mia === secuencia && e.estado !== 401) lista.replaceChildren(errorConReintento(e, buscar)); }
+  }
+  busca.addEventListener('input', () => { texto = busca.value; clearTimeout(pendiente); pendiente = setTimeout(buscar, 300); });
   pintar();
   return h('div', { style: 'display:grid;gap:1rem' }, busca, chips, lista);
 }
@@ -930,13 +859,17 @@ function hojaAjuste(producto, alGuardar) {
   guardar.addEventListener('click', async () => {
     const n = parseFloat(cant.value.replace(',', '.'));
     if (!isFinite(n) || n < 0 || cant.value.trim() === '') { err.className = 'aviso-err'; err.textContent = 'Captura una cantidad válida.'; return; }
-    guardar.disabled = true;
+    guardar.disabled = true; guardar.textContent = 'Guardando…';
     try {
       const nuevo = await api.ajustarStock({ id: producto.id, tipo, cantidad: n, motivo: tipo });
       producto.stock = nuevo.stock;
       v.cerrar(); vibrar(30); avisar('Inventario actualizado: ' + num(nuevo.stock) + ' ' + producto.unidad);
       alGuardar();
-    } catch (e) { err.className = 'aviso-err'; err.textContent = e.message; guardar.disabled = false; }
+    } catch (e) {
+      if (e.estado === 401) { v.cerrar(); return; }
+      err.className = 'aviso-err'; err.textContent = e.estado === 403 ? 'Sin permiso. ' + e.message : e.message;
+      guardar.disabled = false; guardar.textContent = 'Guardar ajuste';
+    }
   });
 }
 
@@ -944,8 +877,9 @@ function hojaAjuste(producto, alGuardar) {
    10. VISTA: ESCANEAR TICKET DE PROVEEDOR (MAQUETA)
        - <input type="file" accept="image/*" capture="environment"> abre la
          cámara trasera del teléfono.
-       - "Procesar" simula la lectura (ocr.extraerLineas) y actualiza solo el
-         inventario simulado (api.aplicarTicket).
+       - "Procesar" simula la lectura (ocr.extraerLineas, DEMO). Las líneas se
+         proponen sin marcar: solo las que el usuario marque y confirme se
+         aplican de verdad (api.aplicarTicket -> entradas reales de inventario).
    ============================================================================ */
 async function vistaEscanear() {
   const caja = h('div', { style: 'display:grid;gap:1rem' });
@@ -964,7 +898,7 @@ async function vistaEscanear() {
         h('div', { class: 'sub' }, 'Se abrirá la cámara del teléfono')),
       entrada,
       h('div', { class: 'aviso-ok', style: 'background:var(--warning-subtle);color:var(--warning-text)' },
-        'Maqueta: por ahora la lectura es simulada y solo cambia el inventario de demostración.'));
+        'DEMO: la lectura de la foto es simulada. Se mostrarán líneas de ejemplo con productos de tu inventario y NADA se aplica hasta que marques cada línea y confirmes.'));
   }
 
   function vistaPrevia(archivo) {
@@ -983,24 +917,45 @@ async function vistaEscanear() {
     caja.replaceChildren(h('div', { class: 'tarjeta cargando' }, h('div', { class: 'rueda' }), h('div', { class: 'paso' }, paso)));
     try {
       const lineas = await ocr.extraerLineas(archivo);     // <-- AQUÍ entra el OCR real
-      paso.textContent = 'Actualizando el inventario…';
-      await api.aplicarTicket(lineas);
       liberar();
-      const total = lineas.reduce((s, l) => s + l.cantidad * l.costo, 0);
-      caja.replaceChildren(
-        h('div', { class: 'aviso-ok', role: 'status' }, '✅ Ticket procesado. Inventario actualizado'),
-        h('section', { class: 'tarjeta' },
-          h('div', { class: 'seccion-t' }, 'Líneas detectadas (ejemplo)'),
-          lineas.map(l => h('div', { class: 'linea' },
-            h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, '+' + num(l.cantidad) + ' pzas × ' + dinero(l.costo))),
-            h('div', null, dinero(l.cantidad * l.costo)))),
-          h('div', { class: 'total-fila' }, h('span', null, 'Total del ticket'), h('span', null, dinero(total)))),
-        h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: inicio }, 'Escanear otro ticket'));
-      vibrar(40);
+      pantallaLineas(lineas);
     } catch (e) {
       caja.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message),
         h('button', { class: 'btn btn-block', type: 'button', onclick: inicio }, 'Intentar de nuevo'));
     }
+  }
+  function pantallaLineas(lineas) {
+    const marcas = lineas.map(() => h('input', { type: 'checkbox', style: 'width:1.4rem;height:1.4rem;flex:none' }));
+    const aplicar = h('button', { class: 'btn btn-primario btn-block', type: 'button' }, 'Aplicar las líneas marcadas');
+    const resumen = h('p', { class: 'sub', role: 'status' });
+    const marcadas = () => lineas.filter((l, i) => marcas[i].checked);
+    const filas = lineas.map((l, i) => h('label', { class: 'linea', style: 'display:flex;gap:.7rem;align-items:center' },
+      marcas[i],
+      h('div', { class: 'n', style: 'flex:1' }, h('div', null, l.nombre), h('div', { class: 's' }, '+' + num(l.cantidad) + ' ' + l.unidad + ' (ejemplo)'))));
+    aplicar.addEventListener('click', async () => {
+      const elegidas = marcadas();
+      if (!elegidas.length) { resumen.textContent = 'No marcaste ninguna línea: no se cambió el inventario.'; return; }
+      aplicar.disabled = true; aplicar.textContent = 'Aplicando…';
+      try {
+        const r = await api.aplicarTicket(elegidas);
+        caja.replaceChildren(
+          r.aplicadas ? h('div', { class: 'aviso-ok', role: 'status' }, r.aplicadas + ' entrada(s) registrada(s) en el inventario') : null,
+          r.fallidas.length ? h('div', { class: 'aviso-err', role: 'alert' }, 'No se pudieron aplicar: ' + r.fallidas.map(f => f.nombre + ' (' + f.mensaje + ')').join('; ')) : null,
+          h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: inicio }, 'Escanear otro ticket'));
+        if (r.aplicadas) vibrar(40);
+      } catch (e) {
+        if (e.estado === 401) return;
+        aplicar.disabled = false; aplicar.textContent = 'Aplicar las líneas marcadas';
+        resumen.textContent = e.estado === 403 ? 'Sin permiso. ' + e.message : e.message;
+      }
+    });
+    caja.replaceChildren(
+      h('div', { class: 'aviso-ok', style: 'background:var(--warning-subtle);color:var(--warning-text)' },
+        'DEMO: estas líneas son de ejemplo, no salen de tu foto. Marca solo las que quieras registrar como entrada real.'),
+      h('section', { class: 'tarjeta' }, h('div', { class: 'seccion-t' }, 'Líneas de ejemplo'),
+        lineas.length ? filas : h('p', { class: 'vacio' }, 'No hay productos en el inventario para el ejemplo.')),
+      resumen, lineas.length ? aplicar : null,
+      h('button', { class: 'btn btn-block', type: 'button', onclick: inicio }, 'Descartar'));
   }
   inicio();
   return caja;
@@ -1062,7 +1017,7 @@ async function vistaConfig() {
         interruptor(almacen.get('pv.texto') === 'grande', v => { if (v) almacen.set('pv.texto', 'grande'); else almacen.del('pv.texto'); aplicarPreferencias(); }, 'Texto grande'))),
     h('section', { class: 'tarjeta' },
       h('div', { class: 'seccion-t' }, 'Acerca de'),
-      h('p', { class: 'sub' }, 'Interfaz móvil del Punto de Venta. Las ventas, el inventario y las estadísticas mostradas son datos de demostración; el inicio de sesión sí es real.')),
+      h('p', { class: 'sub' }, 'Interfaz móvil del Punto de Venta. Las ventas, el inventario y las estadísticas vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.')),
     cerrar);
 }
 

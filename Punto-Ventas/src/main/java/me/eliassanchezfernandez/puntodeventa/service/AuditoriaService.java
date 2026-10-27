@@ -26,7 +26,7 @@ public class AuditoriaService {
     /** Registra dentro de la transacción actual, con actor y autorizador por id/login/nombre */
     @Transactional
     public void registrar(Cajero actor, String accion, String detalle, Cajero autorizador) {
-        auditoriaRepo.save(new Auditoria(actor, accion, recortar(detalle), autorizador));
+        auditoriaRepo.save(new Auditoria(actor, accion, recortar(conContexto(detalle)), autorizador));
     }
 
     /** Igual, tomando al autorizador de la autorización usada (puede ser null) */
@@ -38,7 +38,7 @@ public class AuditoriaService {
     /** Evento del sistema (sin usuario en sesión) dentro de la transacción actual */
     @Transactional
     public void registrarSistema(String accion, String detalle) {
-        auditoriaRepo.save(new Auditoria("sistema", accion, recortar(detalle)));
+        auditoriaRepo.save(new Auditoria("sistema", accion, recortar(conContexto(detalle))));
     }
 
     /**
@@ -54,6 +54,13 @@ public class AuditoriaService {
 
     public List<Auditoria> ultimas() {
         return auditoriaRepo.findTop200ByOrderByFechaDesc();
+    }
+
+    /** Si la acción viene del móvil agrega "[vía móvil, IP x]" (el actor ya queda en el registro) */
+    private static String conContexto(String detalle) {
+        String sufijo = ContextoActor.sufijoAuditoria();
+        if (sufijo.isEmpty()) return detalle;
+        return (detalle == null ? "" : detalle) + sufijo;
     }
 
     private static String recortar(String detalle) {

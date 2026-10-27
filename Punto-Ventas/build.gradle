@@ -57,6 +57,9 @@ dependencies {
     // JSON del servicio de clima (Open-Meteo); versión administrada por el BOM de Spring Boot
     implementation 'com.fasterxml.jackson.core:jackson-databind'
 
+    // Código QR del acceso móvil (Nayuki QR Code generator, MIT, ~50 KB, sin dependencias)
+    implementation 'io.nayuki:qrcodegen:1.8.0'
+
     // Testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testCompileOnly 'org.projectlombok:lombok'

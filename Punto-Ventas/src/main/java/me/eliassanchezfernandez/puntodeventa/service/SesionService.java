@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Servicio de autenticación, sesión activa y permisos.
@@ -57,6 +58,7 @@ public class SesionService {
      */
     public Cajero autenticar(String usuario, String contrasena)
             throws CredencialesInvalidasException {
+        rechazarSiEsActorMovil();
         Cajero cajero = verificarCredenciales(usuario, contrasena);
         cajeroActual = cajero;
         return cajero;
@@ -179,6 +181,7 @@ public class SesionService {
 
     /** Cierra la sesión actual */
     public void cerrarSesion() {
+        rechazarSiEsActorMovil();
         cajeroActual = null;
     }
 
@@ -189,6 +192,7 @@ public class SesionService {
      */
     @Transactional
     public void cambiarContrasenaPropia(String actual, String nueva) {
+        rechazarSiEsActorMovil();
         Cajero c = cajeroActual;
         if (c == null) throw new NegocioException("No hay una sesión activa. Vuelve a iniciar sesión.");
         if (actual == null || !passwordEncoder.matches(actual, c.getContrasenaHash())) {
@@ -215,32 +219,32 @@ public class SesionService {
 
     /** true solo si hay alguien autenticado Y no tiene pendiente cambiar su contraseña */
     public boolean haySesionActiva() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena();
     }
 
     /** Hay alguien autenticado pero debe cambiar su contraseña antes de operar */
     public boolean sesionPendienteDeCambio() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && c.isDebeCambiarContrasena();
     }
 
     public Cajero getCajeroActual() {
-        return cajeroActual;
+        return actorEfectivo();
     }
 
     public String getNombreCajero() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null ? c.getNombreCompleto() : "—";
     }
 
     public boolean esAdmin() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena() && c.getRol() == Cajero.Rol.ADMIN;
     }
 
     public boolean esGerente() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena() && c.getRol() == Cajero.Rol.GERENTE;
     }
 
@@ -258,6 +262,8 @@ public class SesionService {
      * para que desactivaciones o cambios de permisos surtan efecto de inmediato.
      */
     public Cajero requerirSesion() {
+        ContextoActor.Actor movil = ContextoActor.actual();
+        if (movil != null) return requerirActorMovil(movil);
         Cajero c = cajeroActual;
         if (c == null) {
             throw new NegocioException("No hay una sesión activa. Vuelve a iniciar sesión.");
@@ -277,7 +283,7 @@ public class SesionService {
     // ── Permisos ──────────────────────────────────────────────────────────
 
     public boolean tienePermiso(Permiso permiso) {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena() && c.tienePermiso(permiso);
     }
 
@@ -316,9 +322,63 @@ public class SesionService {
 
     /** Refresca el cajero en sesión desde la BD (p. ej. tras cambiar sus permisos) */
     public void refrescarSesion() {
+        if (ContextoActor.actual() != null) return;   // el escritorio no se toca desde el móvil
         Cajero c = cajeroActual;
         if (c != null) {
             cajeroRepo.findById(c.getId()).ifPresent(x -> cajeroActual = x);
+        }
+    }
+
+    // ── Usuario que actúa (acceso móvil) ──────────────────────────────────
+
+    /**
+     * Ejecuta {@code accion} haciendo que TODO lo que consulte la sesión
+     * (verificarPermiso, requerirSesion, getCajeroActual, auditoría, movimientos
+     * de inventario) vea a {@code cajero} como el usuario, en lugar del de la
+     * sesión de escritorio. El actor vive en un ThreadLocal y se limpia SIEMPRE en
+     * el finally (también si la acción lanza una excepción), restaurando el
+     * anterior si hubiera anidamiento. La sesión de escritorio (cajeroActual) no
+     * se lee ni se escribe dentro del ámbito. La auditoría agrega "[vía móvil, IP x]".
+     *
+     * Debe ejecutarse en el MISMO hilo que las llamadas a servicios (las
+     * transacciones de Spring también son por hilo, así que es lo natural).
+     */
+    public <T> T ejecutarComo(Cajero cajero, String ip, Supplier<T> accion) {
+        if (cajero == null) throw new IllegalArgumentException("Falta el usuario que actúa.");
+        ContextoActor.Actor anterior = ContextoActor.fijar(new ContextoActor.Actor(cajero, ip));
+        try {
+            return accion.get();
+        } finally {
+            ContextoActor.restaurar(anterior);
+        }
+    }
+
+    public void ejecutarComo(Cajero cajero, String ip, Runnable accion) {
+        ejecutarComo(cajero, ip, () -> { accion.run(); return null; });
+    }
+
+    /** Usuario del ámbito móvil si lo hay; si no, el de la sesión de escritorio */
+    private Cajero actorEfectivo() {
+        ContextoActor.Actor a = ContextoActor.actual();
+        return a != null ? a.cajero() : cajeroActual;
+    }
+
+    /** Relee al usuario móvil de la BD en cada operación: desactivarlo o quitarle permisos surte efecto de inmediato */
+    private Cajero requerirActorMovil(ContextoActor.Actor actor) {
+        Cajero enBd = cajeroRepo.findById(actor.cajero().getId()).orElse(null);
+        if (enBd == null || !enBd.isActivo()) {
+            throw new NegocioException("Tu usuario ya no está disponible. Inicia sesión de nuevo.");
+        }
+        if (enBd.isDebeCambiarContrasena()) {
+            throw new NegocioException("Debes cambiar tu contraseña en el programa de escritorio.");
+        }
+        return enBd;
+    }
+
+    /** Dentro de un ámbito móvil nunca se abre, cierra ni modifica la sesión de escritorio */
+    private static void rechazarSiEsActorMovil() {
+        if (ContextoActor.actual() != null) {
+            throw new IllegalStateException("La sesión de escritorio no se puede cambiar desde el acceso móvil.");
         }
     }
 
