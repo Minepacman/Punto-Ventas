@@ -71,6 +71,10 @@
                        wrapText="true" styleClass="hint"/>
                 <Button fx:id="btnGuardarConexion" text="Guardar conexión y caja" onAction="#onGuardarConexion"
                         styleClass="button-primary" maxWidth="Infinity" prefHeight="38"/>
+                <Label fx:id="lblMigrarHint" wrapText="true" styleClass="hint"
+                       text="¿Esta caja ya tiene ventas en el archivo local y la tienda va a tener varias cajas? Copia todos los datos del archivo a una base de datos VACÍA del servidor (los datos del servidor capturados arriba). El archivo local no se toca: queda como respaldo."/>
+                <Button fx:id="btnMigrar" text="Migrar datos de esta caja al servidor..." onAction="#onMigrar"
+                        maxWidth="Infinity" prefHeight="38"/>
 
                 <Separator/>
                 <Label text="Respaldo" styleClass="form-section-title"/>

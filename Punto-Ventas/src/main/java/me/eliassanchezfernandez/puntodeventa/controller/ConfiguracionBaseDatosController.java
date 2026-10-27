@@ -74,6 +74,8 @@ public class ConfiguracionBaseDatosController implements Initializable {
     @FXML private Spinner<Integer> spnCaja;
     @FXML private TextField     txtCajaNombre;
     @FXML private Button        btnGuardarConexion;
+    @FXML private Label         lblMigrarHint;
+    @FXML private Button        btnMigrar;
 
     // Respaldo
     @FXML private Label    lblRespaldoHint;
@@ -84,6 +86,7 @@ public class ConfiguracionBaseDatosController implements Initializable {
 
     @Autowired private BaseDatosService baseDatosService;
     @Autowired private ConexionService  conexionService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.MigracionServidorService migracionService;
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
@@ -109,7 +112,84 @@ public class ConfiguracionBaseDatosController implements Initializable {
         spnCaja.getValueFactory().setValue(c.getCajaNumero());
         txtCajaNombre.setText(c.getCajaNombre());
         lblPrueba.setText("");
+        // El asistente de migración solo tiene sentido mientras el programa trabaja con el archivo local
+        boolean sqlite = enUso.esSqlite();
+        btnMigrar.setVisible(sqlite);
+        btnMigrar.setManaged(sqlite);
+        lblMigrarHint.setVisible(sqlite);
+        lblMigrarHint.setManaged(sqlite);
         onCambiarModo();
+    }
+
+    /** Asistente "Migrar datos de esta caja al servidor" (ADMIN): copia el archivo local a una base vacía y cambia el modo */
+    @FXML
+    void onMigrar() {
+        ConexionLocal destino;
+        try {
+            destino = leerFormulario();
+            destino.setModo(PerfilBaseDatos.POSTGRESQL);
+            destino.validarServidor();
+        } catch (NegocioException | IllegalArgumentException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Migrar al servidor", "Captura primero los datos del servidor: " + e.getMessage());
+            return;
+        }
+        if (!Ventanas.confirmar("Migrar datos de esta caja al servidor",
+                "Se copiarán TODOS los datos del archivo local (productos, ventas, usuarios, cortes, bitácoras...) a la base "
+                + "\"" + destino.getBaseDatos() + "\" del servidor " + destino.getHost() + ":" + destino.getPuerto() + ".\n\n"
+                + "La base del servidor debe estar VACÍA (recién creada). El archivo local no se modifica y queda como respaldo.\n"
+                + "Al terminar, esta caja quedará configurada como \"Varias cajas\" y habrá que reiniciar el programa.\n\n"
+                + "Mientras se copia, no hagas ventas en esta caja. ¿Continuar?")) {
+            return;
+        }
+        Dialog<Void> dlg = new Dialog<>();
+        dlg.setTitle("Migrando al servidor");
+        dlg.setHeaderText("Copiando los datos al servidor…");
+        javafx.scene.control.ProgressBar barra = new javafx.scene.control.ProgressBar(-1);
+        barra.setPrefWidth(420);
+        Label lblEstado = new Label("Conectando con el servidor…");
+        lblEstado.setWrapText(true);
+        VBox caja = new VBox(10, barra, lblEstado);
+        caja.setPadding(new Insets(10));
+        dlg.getDialogPane().setContent(caja);
+        dlg.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        dlg.getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true);   // no se puede cancelar a medias
+        Ventanas.estilizar(dlg);
+        if (raiz.getScene() != null) dlg.initOwner(raiz.getScene().getWindow());
+
+        Thread t = new Thread(() -> {
+            String error = null;
+            me.eliassanchezfernandez.puntodeventa.service.MigracionServidorService.Resultado resultado = null;
+            try {
+                resultado = migracionService.migrarYCambiarModo(destino, p -> Platform.runLater(() -> {
+                    if (p.total() > 0) barra.setProgress(Math.min(1.0, (p.indice() - (p.filas() > 0 ? 0.5 : 1.0)) / p.total() + 0.5 / p.total()));
+                    lblEstado.setText(p.mensaje());
+                }));
+            } catch (NegocioException e) {
+                error = e.getMessage();
+            } catch (RuntimeException e) {
+                error = "Error inesperado: " + e.getMessage();
+            }
+            final String msg = error;
+            final var res = resultado;
+            Platform.runLater(() -> {
+                dlg.getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(false);
+                dlg.close();
+                if (msg != null) {
+                    Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo migrar", msg);
+                    return;
+                }
+                cargarConexion();
+                Ventanas.alerta(Alert.AlertType.INFORMATION, "Migración terminada", String.format(
+                        "Se copiaron %d tablas (%d filas) al servidor.%s\n\nEsta caja quedó configurada como \"Varias cajas\". "
+                        + "Cierra y vuelve a abrir el programa para trabajar contra el servidor. El archivo local sigue en su "
+                        + "lugar como respaldo.", res.tablas(), res.filas(),
+                        res.omitidas().isEmpty() ? "" : "\nTablas del archivo que ya no usa el programa y no se copiaron: "
+                                + String.join(", ", res.omitidas()) + "."));
+            });
+        }, "migracion-servidor");
+        t.setDaemon(true);
+        t.start();
+        dlg.showAndWait();
     }
 
     @FXML

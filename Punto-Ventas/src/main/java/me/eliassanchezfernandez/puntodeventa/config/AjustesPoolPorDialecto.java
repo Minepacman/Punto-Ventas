@@ -24,8 +24,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class AjustesPoolPorDialecto implements BeanPostProcessor {
 
-    static final int POOL_SQLITE = 3;
-    static final int POOL_POSTGRESQL = 5;
+    public static final int POOL_SQLITE = 3;
+    public static final int POOL_POSTGRESQL = 5;
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {

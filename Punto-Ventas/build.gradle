@@ -80,6 +80,9 @@ dependencies {
     // PostgreSQL embebido SOLO para las pruebas con etiqueta "postgres" (./gradlew testPostgres):
     // descarga un binario de PostgreSQL para el sistema actual la primera vez; no instala nada en el equipo.
     testImplementation 'io.zonky.test:embedded-postgres:2.2.2'
+    testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8:14.22.0'
+    // zonky usa commons-compress 1.28, que necesita commons-lang3 >= 3.17; el BOM de Spring Boot fija 3.13 (solo pruebas)
+    testImplementation 'org.apache.commons:commons-lang3:3.17.0'
 }
 
 // El código fuente y las pruebas están en UTF-8 (acentos, ñ, emojis). Sin esto, compilar en Windows

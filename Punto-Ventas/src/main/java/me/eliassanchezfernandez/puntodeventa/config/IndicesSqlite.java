@@ -25,7 +25,7 @@ import java.util.List;
 @Component
 public class IndicesSqlite {
 
-    static final List<String> INDICES = List.of(
+    public static final List<String> INDICES = List.of(
             "CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas (fecha)",
             "CREATE INDEX IF NOT EXISTS idx_ventas_fecha_cancelacion ON ventas (fecha_cancelacion)",
             "CREATE INDEX IF NOT EXISTS idx_detalle_ventas_venta ON detalle_ventas (venta_id)",
@@ -61,7 +61,14 @@ public class IndicesSqlite {
 
     /** Punto de entrada reutilizable (también desde las pruebas) */
     public static void crear(DataSource dataSource) throws SQLException {
-        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+        try (Connection c = dataSource.getConnection()) {
+            crear(c);
+        }
+    }
+
+    /** Igual, sobre una conexión abierta (la migración al servidor los crea en la base nueva) */
+    public static void crear(Connection c) throws SQLException {
+        try (Statement st = c.createStatement()) {
             SQLException primero = null;
             for (String sql : INDICES) {
                 try {
