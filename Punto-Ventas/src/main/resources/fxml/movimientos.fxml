@@ -25,6 +25,7 @@
             <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
             <Separator orientation="VERTICAL"/>
             <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." HBox.hgrow="ALWAYS"/>
+            <Button text="📤 Exportar…" onAction="#onExportar"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
         </ScrollPane>

@@ -60,6 +60,17 @@ dependencies {
     // Código QR del acceso móvil (Nayuki QR Code generator, MIT, ~50 KB, sin dependencias)
     implementation 'io.nayuki:qrcodegen:1.8.0'
 
+    // Báscula por puerto serial (RS-232 / USB-serial). ~0.9 MB con los nativos de Windows x86/x64, macOS y Linux.
+    // Solo se carga cuando el administrador configura una báscula.
+    implementation 'com.fazecast:jSerialComm:2.10.4'
+
+    // Exportar tablas a .xlsx (Excel): escritor mínimo (~115 KB + opczip ~27 KB), sin Apache POI
+    implementation 'org.dhatim:fastexcel:0.18.4'
+
+    // Exportar tablas a PDF (~2 MB). Se prefirió a imprimir a una "impresora PDF" porque no
+    // depende de que el equipo tenga una y se puede probar sin interfaz gráfica.
+    implementation 'com.github.librepdf:openpdf:1.3.32'
+
     // Testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testCompileOnly 'org.projectlombok:lombok'

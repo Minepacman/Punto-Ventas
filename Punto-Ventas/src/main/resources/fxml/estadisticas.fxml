@@ -143,6 +143,37 @@
                 </ScrollPane>
             </Tab>
 
+            <!-- ── Cajeros y horas ─────────────────────── -->
+            <Tab text="Cajeros y horas">
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="16">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
+
+                        <VBox styleClass="card" spacing="8">
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Ventas por cajero" styleClass="card-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="btnExportarCajeros" text="Exportar…" onAction="#onExportarCajeros"/>
+                            </HBox>
+                            <Label text="Total y número de ventas de cada cajero en el periodo. Las ventas canceladas no se cuentan."
+                                   styleClass="subtitle" wrapText="true"/>
+                            <TableView fx:id="tablaCajeros" prefHeight="220"/>
+                        </VBox>
+
+                        <VBox styleClass="card" spacing="8">
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Ventas por hora" styleClass="card-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="btnExportarHoras" text="Exportar…" onAction="#onExportarHoras"/>
+                            </HBox>
+                            <Label text="A qué hora se vende más en el periodo elegido. Solo aparecen las horas con ventas."
+                                   styleClass="subtitle" wrapText="true"/>
+                            <TableView fx:id="tablaHoras" prefHeight="320"/>
+                        </VBox>
+                    </VBox>
+                </ScrollPane>
+            </Tab>
+
             <!-- ── Productos más vendidos ──────────────── -->
             <Tab text="Productos más vendidos">
                 <VBox spacing="16">
@@ -152,7 +183,7 @@
                         <HBox spacing="8" alignment="CENTER_LEFT">
                             <Label fx:id="lblProductosTitulo" text="Ranking por importe" styleClass="card-title"/>
                             <Region HBox.hgrow="ALWAYS"/>
-                            <Button fx:id="btnExportarProductos" text="Exportar CSV" onAction="#onExportarProductos"/>
+                            <Button fx:id="btnExportarProductos" text="Exportar…" onAction="#onExportarProductos"/>
                         </HBox>
                         <TableView fx:id="tablaProductos" VBox.vgrow="ALWAYS" prefHeight="360"/>
                     </VBox>
@@ -201,7 +232,7 @@
                             <HBox spacing="8" alignment="CENTER_LEFT">
                                 <Label text="Correlación producto × clima" styleClass="card-title"/>
                                 <Region HBox.hgrow="ALWAYS"/>
-                                <Button fx:id="btnExportarCorrelacion" text="Exportar CSV" onAction="#onExportarCorrelacion"/>
+                                <Button fx:id="btnExportarCorrelacion" text="Exportar…" onAction="#onExportarCorrelacion"/>
                             </HBox>
                             <Label text="Índice 1.0 = igual que siempre; 2.0 = el producto pesa el doble en las ventas con ese clima."
                                    styleClass="subtitle" wrapText="true"/>
@@ -237,7 +268,7 @@
                             <HBox spacing="8" alignment="CENTER_LEFT">
                                 <Label text="Ventas por condición climática" styleClass="card-title"/>
                                 <Region HBox.hgrow="ALWAYS"/>
-                                <Button fx:id="btnExportarClima" text="Exportar CSV" onAction="#onExportarClima"/>
+                                <Button fx:id="btnExportarClima" text="Exportar…" onAction="#onExportarClima"/>
                             </HBox>
                             <TableView fx:id="tablaClima" prefHeight="220"/>
                         </VBox>

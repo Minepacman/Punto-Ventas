@@ -10,10 +10,12 @@ import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
 import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
 import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,7 +52,11 @@ public class InventarioController implements Initializable {
     @FXML private Label     labelCantidadActual;
     @FXML private Label     lblEtiquetaCantidad;
     @FXML private VBox      vboxEntrada;
-    @FXML private TextField txtProveedor;
+    @FXML private ComboBox<Proveedor> cmbProveedor;
+    @FXML private Label     lblSinProveedores;
+    @FXML private Label     lblVisitanHoy;
+    @FXML private Button    btnProveedores;
+    @FXML private Button    btnOrdenes;
     @FXML private TextField txtCosto;
     @FXML private VBox      vboxAjuste;
     @FXML private ComboBox<String> comboMotivo;
@@ -66,6 +72,7 @@ public class InventarioController implements Initializable {
     @FXML private TableColumn<Producto, String> colEstado;
 
     @Autowired private ProductoService     productoService;
+    @Autowired private ProveedorService    proveedorService;
     @Autowired private SesionService       sesionService;
     @Autowired private AutorizacionService autorizacionService;
     @Autowired private ApplicationContext  springContext;
@@ -87,12 +94,18 @@ public class InventarioController implements Initializable {
             if (p != null) mostrarProducto(p);
         });
 
+        boolean gestiona = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
+        for (Button b : List.of(btnProveedores, btnOrdenes)) {
+            b.setVisible(gestiona);
+            b.setManaged(gestiona);
+        }
         aplicarModo(Modo.ENTRADA);
         recargar();
     }
 
     /** Recarga la tabla (lo llama MainController al entrar a la pestaña) */
     public void recargar() {
+        recargarProveedores();
         boolean soloBajos = btnSoloBajos != null && btnSoloBajos.isSelected();
         lista.setAll(soloBajos
                 ? productoService.productosConStockBajo()
@@ -105,7 +118,53 @@ public class InventarioController implements Initializable {
         }
     }
 
+    /** Combo de proveedores activos y el aviso de quiénes visitan hoy; un fallo aquí no estorba al inventario */
+    private void recargarProveedores() {
+        try {
+            Proveedor elegido = cmbProveedor.getValue();
+            List<Proveedor> activos = proveedorService.listarActivos();
+            cmbProveedor.setItems(FXCollections.observableArrayList(activos));
+            if (elegido != null) {
+                activos.stream().filter(p -> p.getId().equals(elegido.getId())).findFirst().ifPresent(cmbProveedor::setValue);
+            }
+            lblSinProveedores.setVisible(activos.isEmpty());
+            lblSinProveedores.setManaged(activos.isEmpty());
+
+            List<Proveedor> hoy = proveedorService.queVisitanHoy();
+            lblVisitanHoy.setText(hoy.isEmpty() ? "Hoy no visita ningún proveedor."
+                    : "Proveedores que visitan hoy: " + hoy.stream()
+                        .map(p -> p.getNombre() + (p.getContacto() != null ? " (" + p.getContacto() + ")" : ""))
+                        .collect(java.util.stream.Collectors.joining(", ")));
+        } catch (RuntimeException e) {
+            lblVisitanHoy.setText("");
+        }
+    }
+
     // ── Toolbar ───────────────────────────────────────────────────────────
+
+    /** Exporta la tabla de inventario visible a CSV, Excel o PDF */
+    @FXML void onExportar() {
+        me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas.exportar(tablaInventario, "inventario", "Inventario");
+    }
+
+    @FXML void onProveedores() {
+        abrirModal("/fxml/proveedores.fxml", "Proveedores", 980, 620);
+        recargarProveedores();
+    }
+
+    @FXML void onOrdenesCompra() {
+        abrirModal("/fxml/ordenes_compra.fxml", "Órdenes de compra", 1100, 680);
+        recargar();
+    }
+
+    private void abrirModal(String fxml, String titulo, double ancho, double alto) {
+        try {
+            Ventanas.abrirModal(springContext, fxml, titulo, tablaInventario.getScene().getWindow(), ancho, alto);
+        } catch (Exception e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la ventana: " + e.getMessage());
+        }
+    }
 
     @FXML void onAgregar() {
         aplicarModo(Modo.ENTRADA);
@@ -185,9 +244,11 @@ public class InventarioController implements Initializable {
         double costo = 0;
         String motivo = null;
         if (modo == Modo.ENTRADA) {
-            if (txtProveedor.getText() == null || txtProveedor.getText().isBlank()) {
-                alerta(Alert.AlertType.WARNING, "Proveedor requerido", "Indica el proveedor de la entrada.");
-                txtProveedor.requestFocus();
+            if (cmbProveedor.getValue() == null) {
+                alerta(Alert.AlertType.WARNING, "Proveedor requerido", cmbProveedor.getItems().isEmpty()
+                        ? "Aún no hay proveedores. Da de alta uno en el botón Proveedores."
+                        : "Elige el proveedor de la entrada.");
+                cmbProveedor.requestFocus();
                 return;
             }
             try {
@@ -224,15 +285,15 @@ public class InventarioController implements Initializable {
         try {
             Producto actualizado;
             if (modo == Modo.ENTRADA) {
-                actualizado = productoService.registrarEntrada(productoSeleccionado.getId(), cantidad,
-                        txtProveedor.getText(), costo, auts);
+                actualizado = productoService.registrarEntradaDeProveedor(productoSeleccionado.getId(), cantidad,
+                        cmbProveedor.getValue().getId(), null, costo, auts);
             } else {
                 actualizado = productoService.ajustarStock(productoSeleccionado.getId(), cantidad, motivo, auts);
             }
 
             productoSeleccionado = actualizado;
             txtCantidad.clear();
-            txtProveedor.clear();
+            cmbProveedor.setValue(null);
             txtCosto.clear();
             comboMotivo.setValue(null);          // el motivo no se arrastra al siguiente ajuste
             comboMotivo.getEditor().clear();

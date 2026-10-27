@@ -6,6 +6,7 @@ import me.eliassanchezfernandez.puntodeventa.model.HistorialPrecio;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.repository.DepartamentoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.DetalleVentaRepository;
@@ -50,6 +51,8 @@ public class ProductoService {
     @Autowired private AuditoriaService               auditoriaService;
     @Autowired private UnidadRepository               unidadRepo;
     @Autowired private ConfiguracionService           configuracionService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProveedorRepository proveedorRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.OrdenCompraRepository ordenCompraRepo;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -217,6 +220,11 @@ public class ProductoService {
                     "No se puede eliminar \"" + p.getDescripcion() + "\" porque tiene movimientos de " +
                     "inventario o historial de precios. Desactívalo para que deje de aparecer en Ventas.");
         }
+        if (ordenCompraRepo.productoEnOrdenes(id)) {
+            throw new NegocioException(
+                    "No se puede eliminar \"" + p.getDescripcion() + "\" porque está en una orden de compra. "
+                    + "Desactívalo para que deje de aparecer en Ventas.");
+        }
         if (ticketPendienteRepo.contarLineasConProducto(id) > 0) {
             throw new NegocioException(
                     "No se puede eliminar \"" + p.getDescripcion() + "\": está en un ticket pendiente de cobrar.");
@@ -237,12 +245,36 @@ public class ProductoService {
     @Transactional
     public Producto registrarEntrada(Long productoId, double cantidad, String proveedor,
                                      double costoUnitario, Collection<Autorizacion> autorizaciones) {
+        if (proveedor == null || proveedor.isBlank()) {
+            throw new NegocioException("Indica el proveedor de la entrada.");
+        }
+        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones);
+    }
+
+    /**
+     * Entrada de mercancía de un proveedor del catálogo. La bitácora guarda el
+     * id y también el nombre (historial legible aunque luego se renombre el
+     * proveedor). {@code motivo} es opcional (p. ej. "Orden de compra #12").
+     */
+    @Transactional
+    public Producto registrarEntradaDeProveedor(Long productoId, double cantidad, Long proveedorId,
+                                                String motivo, double costoUnitario,
+                                                Collection<Autorizacion> autorizaciones) {
+        if (proveedorId == null) throw new NegocioException("Elige el proveedor de la entrada.");
+        Proveedor proveedor = proveedorRepo.findById(proveedorId)
+                .orElseThrow(() -> new NegocioException("El proveedor ya no existe."));
+        if (!proveedor.isActivo()) {
+            throw new NegocioException("El proveedor \"" + proveedor.getNombre() + "\" está desactivado.");
+        }
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
+                costoUnitario, autorizaciones);
+    }
+
+    private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Long proveedorId,
+                                    String motivo, double costoUnitario, Collection<Autorizacion> autorizaciones) {
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         if (!Double.isFinite(cantidad) || cantidad <= 0) {
             throw new NegocioException("La cantidad a agregar debe ser mayor a cero.");
-        }
-        if (proveedor == null || proveedor.isBlank()) {
-            throw new NegocioException("Indica el proveedor de la entrada.");
         }
         if (!Double.isFinite(costoUnitario) || costoUnitario < 0) {
             throw new NegocioException("El costo unitario no puede ser negativo.");
@@ -260,8 +292,12 @@ public class ProductoService {
         Producto guardado = productoRepo.save(p);
 
         Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
-        registrarMovimiento(guardado, MovimientoInventario.Tipo.ENTRADA, cantidad, antes,
-                guardado.getCantidadActual(), null, proveedor.trim(), costoUnitario, null, aut);
+        MovimientoInventario m = registrarMovimiento(guardado, MovimientoInventario.Tipo.ENTRADA, cantidad, antes,
+                guardado.getCantidadActual(), motivo, proveedorNombre, costoUnitario, null, aut);
+        if (proveedorId != null) {
+            m.setProveedorId(proveedorId);
+            movimientoRepo.save(m);
+        }
         auditarSiAutorizado("ENTRADA_INVENTARIO", guardado, aut);
         return guardado;
     }

@@ -23,7 +23,6 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import me.eliassanchezfernandez.puntodeventa.model.ClimaRegistro;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.Franja;
@@ -42,15 +41,13 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.RecomendacionService;
 import me.eliassanchezfernandez.puntodeventa.service.RecomendacionService.Sugerencia;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
-import me.eliassanchezfernandez.puntodeventa.util.ExportarCsv;
+import me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
-import java.io.IOException;
 import java.net.URL;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -132,6 +129,12 @@ public class EstadisticasController implements Initializable {
     @FXML private Label  lblProductosTitulo;
     @FXML private Button btnExportarProductos;
     @FXML private TableView<FilaProducto> tablaProductos;
+
+    // Cajeros y horas
+    @FXML private Button btnExportarCajeros;
+    @FXML private TableView<EstadisticasService.VentasCajero> tablaCajeros;
+    @FXML private Button btnExportarHoras;
+    @FXML private TableView<EstadisticasService.VentasHora> tablaHoras;
 
     // Recomendaciones
     @FXML private Label lblNivelJuntos;
@@ -234,9 +237,11 @@ public class EstadisticasController implements Initializable {
         t.start();
     }
 
-    @FXML private void onExportarProductos()   { exportar(tablaProductos, "productos-mas-vendidos"); }
-    @FXML private void onExportarCorrelacion() { exportar(tablaCorrelacion, "correlacion-clima"); }
-    @FXML private void onExportarClima()       { exportar(tablaClima, "ventas-por-clima"); }
+    @FXML private void onExportarProductos()   { exportar(tablaProductos, "productos-mas-vendidos", "Productos más vendidos"); }
+    @FXML private void onExportarCorrelacion() { exportar(tablaCorrelacion, "correlacion-clima", "Correlación producto por clima"); }
+    @FXML private void onExportarClima()       { exportar(tablaClima, "ventas-por-clima", "Ventas por condición climática"); }
+    @FXML private void onExportarCajeros()     { exportar(tablaCajeros, "ventas-por-cajero", "Ventas por cajero — " + lblPeriodo.getText()); }
+    @FXML private void onExportarHoras()       { exportar(tablaHoras, "ventas-por-hora", "Ventas por hora — " + lblPeriodo.getText()); }
 
     // ── Carga ─────────────────────────────────────────────────────────────
 
@@ -246,7 +251,8 @@ public class EstadisticasController implements Initializable {
     /** Lo que se lee de la base de datos para el periodo (en segundo plano) */
     private record DatosPeriodo(Totales totales, List<Comparacion> comparaciones, Map<LocalDate, Double> serie,
                                 double[] porDia, Map<Franja, Totales> porFranja, double[][] mapa,
-                                List<EstadisticasService.ProductoTop> top, List<EstadisticasService.VentasClima> porClima) { }
+                                List<EstadisticasService.ProductoTop> top, List<EstadisticasService.VentasClima> porClima,
+                                List<EstadisticasService.VentasCajero> porCajero, List<EstadisticasService.VentasHora> porHora) { }
 
     /** Lo que se lee para las recomendaciones, el nivel y el clima de ahora */
     private record DatosGenerales(NivelDatos nivel, Optional<LocalDateTime> ultimaActualizacion, Optional<ClimaRegistro> clima,
@@ -297,7 +303,8 @@ public class EstadisticasController implements Initializable {
         return new DatosPeriodo(estadisticasService.totales(p), estadisticasService.comparaciones(),
                 estadisticasService.serieDiaria(p), estadisticasService.porDiaSemana(p),
                 estadisticasService.porFranja(p), estadisticasService.mapaCalor(p),
-                estadisticasService.topProductos(p, TOP_PRODUCTOS), estadisticasService.ventasPorClima(p));
+                estadisticasService.topProductos(p, TOP_PRODUCTOS), estadisticasService.ventasPorClima(p),
+                estadisticasService.ventasPorCajero(p), estadisticasService.ventasPorHora(p));
     }
 
     private void pintarNivel(DatosGenerales g) {
@@ -379,6 +386,8 @@ public class EstadisticasController implements Initializable {
         construirMapaDeCalor(d.mapa());
         mostrarProductos(p, d.top());
         mostrarVentasPorClima(d.porClima());
+        tablaCajeros.getItems().setAll(d.porCajero());
+        tablaHoras.getItems().setAll(d.porHora());
     }
 
     private void mostrarComparaciones(List<Comparacion> comparaciones) {
@@ -630,6 +639,21 @@ public class EstadisticasController implements Initializable {
                 columna("Ventas",    100, true,  f -> String.valueOf(f.ventas())),
                 columna("Importe",   140, true,  f -> Moneda.formato(f.importe())));
         tablaClima.setPlaceholder(new Label("Sin ventas en el periodo."));
+
+        tablaCajeros.getColumns().setAll(
+                columna("Cajero",          220, false, EstadisticasService.VentasCajero::cajero),
+                columna("Ventas",          80,  true,  f -> String.valueOf(f.ventas())),
+                columna("Total",           130, true,  f -> Moneda.formato(f.total())),
+                columna("Ticket promedio", 130, true,  f -> Moneda.formato(f.ticketPromedio())),
+                columna("% del total",     90,  true,  f -> String.format("%.1f %%", f.porcentaje())));
+        tablaCajeros.setPlaceholder(new Label("Sin ventas en el periodo."));
+
+        tablaHoras.getColumns().setAll(
+                columna("Hora",        140, false, EstadisticasService.VentasHora::rango),
+                columna("Ventas",      80,  true,  f -> String.valueOf(f.ventas())),
+                columna("Total",       130, true,  f -> Moneda.formato(f.total())),
+                columna("% del total", 90,  true,  f -> String.format("%.1f %%", f.porcentaje())));
+        tablaHoras.setPlaceholder(new Label("Sin ventas en el periodo."));
     }
 
     private void mostrarNivel(NivelDatos nivel) {
@@ -666,36 +690,9 @@ public class EstadisticasController implements Initializable {
         lblNivel.getStyleClass().removeAll(CLASES_NIVEL);
     }
 
-    /** Exporta la tabla visible a CSV (FileChooser) */
-    private <T> void exportar(TableView<T> tabla, String nombreBase) {
-        if (tabla.getItems().isEmpty()) {
-            Ventanas.alerta(Alert.AlertType.INFORMATION, "Exportar CSV", "No hay filas que exportar.");
-            return;
-        }
-        FileChooser fc = new FileChooser();
-        fc.setTitle("Exportar CSV");
-        fc.setInitialFileName(nombreBase + "-" + LocalDate.now() + ".csv");
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV (*.csv)", "*.csv"));
-        File destino = fc.showSaveDialog(tabla.getScene().getWindow());
-        if (destino == null) return;
-
-        List<String> encabezados = new ArrayList<>();
-        for (TableColumn<T, ?> c : tabla.getColumns()) encabezados.add(c.getText());
-        List<List<String>> filas = new ArrayList<>();
-        for (T item : tabla.getItems()) {
-            List<String> fila = new ArrayList<>();
-            for (TableColumn<T, ?> c : tabla.getColumns()) {
-                Object v = c.getCellObservableValue(item) != null ? c.getCellObservableValue(item).getValue() : null;
-                fila.add(v == null ? "" : v.toString());
-            }
-            filas.add(fila);
-        }
-        try {
-            ExportarCsv.escribir(destino.toPath(), encabezados, filas);
-            Ventanas.alerta(Alert.AlertType.INFORMATION, "Exportar CSV", "Se exportaron " + filas.size() + " filas a:\n" + destino);
-        } catch (IOException e) {
-            Ventanas.alerta(Alert.AlertType.ERROR, "Exportar CSV", "No se pudo escribir el archivo: " + e.getMessage());
-        }
+    /** Exporta la tabla visible a CSV, Excel (.xlsx) o PDF (cuadro "Guardar como"; se escribe fuera del hilo de JavaFX) */
+    private <T> void exportar(TableView<T> tabla, String nombreBase, String titulo) {
+        ExportadorTablas.exportar(tabla, nombreBase, titulo);
     }
 
     private static <T> TableColumn<T, String> columna(String titulo, double ancho, boolean numerica,

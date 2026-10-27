@@ -103,6 +103,23 @@
                     </TableView>
                 </VBox>
 
+                <!-- Fila 3: cobros con tarjeta (voucher capturado en Ventas) -->
+                <VBox GridPane.columnIndex="0" GridPane.rowIndex="3" GridPane.columnSpan="2" spacing="8">
+                    <padding><Insets top="20"/></padding>
+                    <Label text="Cobros con tarjeta del día" styleClass="corte-section-title"/>
+                    <Label fx:id="lblTarjetaTerminales" text="Sin cobros con tarjeta." wrapText="true" styleClass="hint"/>
+                    <TableView fx:id="tablaVouchers" prefHeight="170">
+                        <columns>
+                            <TableColumn fx:id="colVHora"     text="Hora"          prefWidth="70"/>
+                            <TableColumn fx:id="colVFolio"    text="Folio"         prefWidth="80"/>
+                            <TableColumn fx:id="colVTerminal" text="Terminal"      prefWidth="180"/>
+                            <TableColumn fx:id="colVTarjeta"  text="Tarjeta"       prefWidth="90"/>
+                            <TableColumn fx:id="colVAut"      text="Autorización"  prefWidth="130"/>
+                            <TableColumn fx:id="colVMonto"    text="Monto"         prefWidth="100" styleClass="align-right"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+
             </GridPane>
         </ScrollPane>
     </center>

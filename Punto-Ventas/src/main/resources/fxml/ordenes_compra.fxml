@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    ordenes_compra.fxml  –  Órdenes de compra a proveedores (Inventario → Órdenes de compra)
+    Controlador: OrdenesCompraController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.OrdenesCompraController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Button text="➕ Nueva orden" onAction="#onNueva" styleClass="button-success"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="lblAviso" text="" styleClass="hint"/>
+            <Button text="Cerrar" onAction="#onCerrar"/>
+        </HBox>
+    </top>
+
+    <center>
+        <SplitPane dividerPositions="0.32">
+
+            <!-- Lista de órdenes -->
+            <TableView fx:id="tablaOrdenes">
+                <columns>
+                    <TableColumn fx:id="colOrdFolio"     text="Orden"     prefWidth="55"/>
+                    <TableColumn fx:id="colOrdFecha"     text="Fecha"     prefWidth="105"/>
+                    <TableColumn fx:id="colOrdProveedor" text="Proveedor" prefWidth="140"/>
+                    <TableColumn fx:id="colOrdEstado"    text="Estado"    prefWidth="80"/>
+                    <TableColumn fx:id="colOrdTotal"     text="Total"     prefWidth="80" styleClass="align-right"/>
+                </columns>
+            </TableView>
+
+            <!-- Editor de la orden -->
+            <VBox spacing="8">
+                <padding><Insets topRightBottomLeft="12"/></padding>
+
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label fx:id="lblTitulo" text="ORDEN NUEVA" styleClass="section-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="lblEstado" text="" styleClass="badge"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="Proveedor:"/>
+                    <ComboBox fx:id="cmbProveedor" prefWidth="260" promptText="Elige el proveedor"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <ComboBox fx:id="cmbModoSugerencia" prefWidth="290"/>
+                    <Button fx:id="btnSugerir" text="💡 Sugerir pedido" onAction="#onSugerir"/>
+                </HBox>
+
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <TextField fx:id="txtProducto" HBox.hgrow="ALWAYS" promptText="Código o nombre del producto a pedir"
+                               onAction="#onAgregarProducto"/>
+                    <Button fx:id="btnAgregar" text="↵ Agregar" onAction="#onAgregarProducto"/>
+                    <Button fx:id="btnQuitar" text="🗑 Quitar" onAction="#onQuitarLinea" styleClass="button-danger"/>
+                </HBox>
+
+                <TableView fx:id="tablaLineas" editable="true" VBox.vgrow="ALWAYS">
+                    <columns>
+                        <TableColumn fx:id="colCodigo"   text="Código"        prefWidth="110" editable="false"/>
+                        <TableColumn fx:id="colProducto" text="Producto"      prefWidth="250" editable="false"/>
+                        <TableColumn fx:id="colExistencia" text="Existencia"  prefWidth="80"  editable="false" styleClass="align-right"/>
+                        <TableColumn fx:id="colCantidad" text="Cantidad"      prefWidth="80"  styleClass="align-right"/>
+                        <TableColumn fx:id="colCosto"    text="Costo unitario" prefWidth="100" styleClass="align-right"/>
+                        <TableColumn fx:id="colImporte"  text="Importe"       prefWidth="90"  editable="false" styleClass="align-right"/>
+                    </columns>
+                </TableView>
+                <Label fx:id="lblSugerenciaNota" text="Doble clic en Cantidad o Costo para corregirlos (solo en borrador)."
+                       styleClass="hint" wrapText="true"/>
+
+                <TextArea fx:id="txtNotas" prefRowCount="2" wrapText="true" promptText="Notas para el proveedor (opcional)"/>
+
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <Label fx:id="lblTotal" text="Total: \$0.00" style="-fx-font-weight:bold"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="lblMensaje" text="" styleClass="hint" wrapText="true"/>
+                </HBox>
+
+                <FlowPane hgap="8" vgap="8">
+                    <Button fx:id="btnGuardar"  text="💾 Guardar borrador"    onAction="#onGuardar" styleClass="button-primary"/>
+                    <Button fx:id="btnEnviada"  text="📤 Marcar como enviada" onAction="#onEnviar"/>
+                    <Button fx:id="btnRecibir"  text="📥 Recibir mercancía"   onAction="#onRecibir" styleClass="button-success"/>
+                    <Button fx:id="btnCancelarOrden" text="⛔ Cancelar orden" onAction="#onCancelarOrden" styleClass="button-danger"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Button fx:id="btnImprimir" text="🖨 Imprimir"            onAction="#onImprimir"/>
+                    <Button fx:id="btnCsv"      text="CSV"                    onAction="#onExportarCsv"/>
+                    <Button fx:id="btnXlsx"     text="Excel"                  onAction="#onExportarXlsx"/>
+                    <Button fx:id="btnPdf"      text="PDF"                    onAction="#onExportarPdf"/>
+                </FlowPane>
+            </VBox>
+
+        </SplitPane>
+    </center>
+
+</BorderPane>

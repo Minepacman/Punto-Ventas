@@ -66,6 +66,13 @@ public class MovimientoInventario {
     @Column(name = "costo_unitario")
     private Double costoUnitario;
 
+    /**
+     * Proveedor de la entrada (catálogo de proveedores). Nullable: las entradas
+     * anteriores solo tienen el texto de {@link #proveedor}, que se conserva como historial.
+     */
+    @Column(name = "proveedor_id")
+    private Long proveedorId;
+
     /** Folio de la venta relacionada (VENTA / CANCELACION) */
     @Column(name = "venta_id")
     private Long ventaId;

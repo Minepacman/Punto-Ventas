@@ -47,7 +47,7 @@ import java.util.ResourceBundle;
  * lo demás es solo ADMIN y además lo verifica cada servicio. Las pantallas
  * grandes tienen su propio FXML/controlador; las chicas (formas de pago,
  * moneda, folios, respaldo automático, licencia, actualizaciones) son diálogos
- * armados aquí. Facturación y los dispositivos avisan que son de una etapa posterior.
+ * armados aquí. Los dispositivos (impresora, báscula, lector, cajón y terminal bancaria) son solo ADMIN; Facturación avisa que es de una etapa posterior.
  */
 @Component
 @Scope("prototype")
@@ -62,6 +62,7 @@ public class ConfiguracionController implements Initializable {
     @Autowired private ApplicationContext springContext;
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private ArticulosPrecargadosService articulosPrecargadosService;
+    @Autowired private DispositivosDialogos dispositivosDialogos;
 
     @Value("${app.version:1.0.0}")
     private String version;
@@ -253,10 +254,14 @@ public class ConfiguracionController implements Initializable {
     // ── Etapa posterior ───────────────────────────────────────────────────
 
     @FXML void onFacturacion()    { proximamente("Facturación"); }
-    @FXML void onImpresora()      { proximamente("Impresora de tickets"); }
-    @FXML void onLector()         { proximamente("Lector de códigos"); }
-    @FXML void onCajon()          { proximamente("Cajón de dinero"); }
-    @FXML void onBascula()        { proximamente("Báscula"); }
+
+    // ── Dispositivos (solo ADMIN; cada servicio lo vuelve a verificar y audita) ──
+
+    @FXML void onImpresora() { abrirAdmin("/fxml/configuracion_impresora.fxml", "Impresora de tickets", 600, 760); }
+    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", "Báscula", 600, 780); }
+    @FXML void onLector()    { if (soloAdmin()) dispositivosDialogos.lector(raiz.getScene().getWindow()); }
+    @FXML void onCajon()     { if (soloAdmin()) dispositivosDialogos.cajon(raiz.getScene().getWindow()); }
+    @FXML void onTerminalBancaria() { if (soloAdmin()) dispositivosDialogos.terminalBancaria(raiz.getScene().getWindow()); }
 
     private void proximamente(String opcion) {
         alerta(Alert.AlertType.INFORMATION, opcion,
