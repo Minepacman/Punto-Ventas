@@ -62,6 +62,7 @@ public class VentaService {
     @Autowired private AuditoriaService          auditoriaService;
     @Autowired private DispositivosService       dispositivosService;
     @Autowired private IdentidadCaja             identidadCaja;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -345,13 +346,27 @@ public class VentaService {
             cantidadPorProducto.merge(id, d.getCantidad(), Double::sum);
         }
 
-        // 2) Stock (sumando renglones repetidos). Sin existencia solo con permiso/autorización.
+        // 3) Total y pagos con los importes ya recalculados
+        double total = calcularTotal(detalles);
+        List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
+        double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
+        Venta.FormaPago formaPrincipal = pagosValidos.stream()
+                .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
+                .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
+
+        // 3b) Stock (sumando renglones repetidos), descontado EN la base de datos con un UPDATE
+        //    condicionado: con varias cajas vendiendo el mismo producto a la vez, ninguna puede
+        //    llevarse piezas que otra ya vendió. Sin existencia solo con permiso/autorización; si
+        //    falta el permiso, la excepción revierte la transacción completa (nada queda descontado).
         boolean ventaSinStock = false;
+        Map<Long, double[]> existencias = new LinkedHashMap<>();   // id → {antes, después}
         for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
-            try {
-                validarStock(p, e.getValue());
-            } catch (StockInsuficienteException sinStock) {
+            if (!p.isUsaInventario()) continue;
+            double cantidad = e.getValue();
+            if (productoRepo.descontarSiAlcanza(p.getId(), cantidad) == 0) {
+                em.refresh(p);   // existencia real (quizá otra caja acaba de vender) para el mensaje
+                StockInsuficienteException sinStock = new StockInsuficienteException(p, cantidad);
                 try {
                     sesionService.verificarPermiso(Permiso.VENDER_SIN_STOCK, autorizaciones);
                 } catch (PermisoRequeridoException pe) {
@@ -364,16 +379,11 @@ public class VentaService {
                 for (DetalleVenta d : detalles) {
                     if (d.getProducto().getId().equals(e.getKey())) marcarAutorizador(d, autorizadores, aut);
                 }
+                productoRepo.descontar(p.getId(), cantidad);
             }
+            double despues = releerExistencia(p);
+            existencias.put(p.getId(), new double[] { redondearCantidad(despues + cantidad), despues });
         }
-
-        // 3) Total y pagos con los importes ya recalculados
-        double total = calcularTotal(detalles);
-        List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
-        double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
-        Venta.FormaPago formaPrincipal = pagosValidos.stream()
-                .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
-                .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
 
         // 4) Armar la venta
         Venta venta = new Venta();
@@ -402,19 +412,15 @@ public class VentaService {
         Venta guardada = ventaRepo.save(venta);
         guardada.setFolio(config.folioDe(guardada.getId()));
 
-        // 5) Descontar inventario con bitácora y consumir cupo de promociones
-        for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
+        // 5) Bitácora del inventario ya descontado y consumo del cupo de promociones
+        for (Map.Entry<Long, double[]> e : existencias.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
-            if (p.isUsaInventario()) {
-                double antes = p.getCantidadActual();
-                p.setCantidadActual(redondearCantidad(antes - e.getValue()));
-                productoRepo.save(p);
-                productoService.registrarMovimiento(p, MovimientoInventario.Tipo.VENTA, -e.getValue(),
-                        antes, p.getCantidadActual(), "Venta #" + guardada.getId(), null, null, guardada.getId());
-                // Aviso solo si ESTA venta lo hizo cruzar el mínimo (INV-03)
-                if (antes > p.getCantidadMinima() && p.getCantidadActual() <= p.getCantidadMinima()) {
-                    guardada.getAlertasStockBajo().add(p);
-                }
+            double antes = e.getValue()[0], despues = e.getValue()[1];
+            productoService.registrarMovimiento(p, MovimientoInventario.Tipo.VENTA, -cantidadPorProducto.get(e.getKey()),
+                    antes, despues, "Venta #" + guardada.getId(), null, null, guardada.getId());
+            // Aviso solo si ESTA venta lo hizo cruzar el mínimo (INV-03)
+            if (antes > p.getCantidadMinima() && despues <= p.getCantidadMinima()) {
+                guardada.getAlertasStockBajo().add(p);
             }
         }
         for (DetalleVenta d : detalles) {
@@ -547,11 +553,10 @@ public class VentaService {
         for (Map.Entry<Long, Double> e : porProducto.entrySet()) {
             Producto p = productoRepo.findById(e.getKey()).orElse(null);
             if (p == null || !p.isUsaInventario()) continue;
-            double antes = p.getCantidadActual();
-            p.setCantidadActual(redondearCantidad(antes + e.getValue()));
-            productoRepo.save(p);
+            productoRepo.sumar(p.getId(), e.getValue());   // atómico: no pisa ventas de otras cajas
+            double despues = releerExistencia(p);
             productoService.registrarMovimiento(p, MovimientoInventario.Tipo.CANCELACION, e.getValue(),
-                    antes, p.getCantidadActual(), "Cancelación venta #" + v.getId(), null, null, v.getId());
+                    redondearCantidad(despues - e.getValue()), despues, "Cancelación venta #" + v.getId(), null, null, v.getId());
         }
         // Devolver cupo de promociones "hasta agotar"
         for (DetalleVenta d : v.getDetalles()) {
@@ -780,6 +785,21 @@ public class VentaService {
         d.setAutorizadoPorId(aut.administrador().getId());
         d.setAutorizadoPorUsuario(aut.administrador().getUsuario());
         autorizadores.add(aut.nombreAdministrador());
+    }
+
+    /**
+     * Vuelve a leer la existencia tras un UPDATE atómico y, si quedó con residuos
+     * de punto flotante (p. ej. 8.899999 tras vender 1.1), la deja en milésimas
+     * SOLO si nadie la cambió entre tanto (comparar-e-intercambiar).
+     */
+    double releerExistencia(Producto p) {
+        em.refresh(p);
+        double leida = p.getCantidadActual();
+        double redondeada = redondearCantidad(leida);
+        if (redondeada != leida && productoRepo.fijarSiNoCambio(p.getId(), leida, redondeada) == 1) {
+            em.refresh(p);
+        }
+        return p.getCantidadActual();
     }
 
     /** Redondea a centavos para evitar residuos de punto flotante */
