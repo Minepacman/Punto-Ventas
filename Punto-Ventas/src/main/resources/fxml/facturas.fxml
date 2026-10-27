@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    facturas.fxml  –  Facturas electrónicas emitidas (CFDI 4.0)
+    Controlador: FacturasController.java
+    Se abre como ventana modal desde Ventas por período.
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.FacturasController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
+                    style="-fx-background-color: transparent; -fx-padding: 0;">
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Label text="Desde:"/>
+            <DatePicker fx:id="dpDesde" prefWidth="140"/>
+            <Label text="Hasta:"/>
+            <DatePicker fx:id="dpHasta" prefWidth="140"/>
+            <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
+            <Separator orientation="VERTICAL"/>
+            <Button text="📄 PDF / XML / correo" onAction="#onAcciones"/>
+            <Button text="👥 Clientes fiscales" onAction="#onClientes"/>
+            <Button text="📤 Exportar…" onAction="#onExportar"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Cerrar" onAction="#onCerrar"/>
+        </HBox>
+        </ScrollPane>
+    </top>
+
+    <center>
+        <TableView fx:id="tabla">
+            <columns>
+                <TableColumn fx:id="colFolio"    text="Folio"     prefWidth="80"/>
+                <TableColumn fx:id="colFecha"    text="Fecha"     prefWidth="130"/>
+                <TableColumn fx:id="colTipo"     text="Tipo"      prefWidth="60"/>
+                <TableColumn fx:id="colVentas"   text="Venta(s)"  prefWidth="120"/>
+                <TableColumn fx:id="colReceptor" text="Receptor"  prefWidth="260"/>
+                <TableColumn fx:id="colTotal"    text="Total"     prefWidth="100" styleClass="align-right"/>
+                <TableColumn fx:id="colEstado"   text="Estado"    prefWidth="140"/>
+                <TableColumn fx:id="colUuid"     text="UUID"      prefWidth="280"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <VBox styleClass="ticket-footer" spacing="6">
+            <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+            <Label fx:id="lblDetalle" wrapText="true"/>
+            <Label fx:id="lblResumen" text="0 factura(s)" style="-fx-font-weight:bold"/>
+        </VBox>
+    </bottom>
+
+</BorderPane>

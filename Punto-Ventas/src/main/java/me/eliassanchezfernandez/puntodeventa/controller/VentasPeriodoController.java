@@ -53,6 +53,8 @@ public class VentasPeriodoController implements Initializable {
     @FXML private DatePicker dpHasta;
     @FXML private Button     btnCancelarVenta;
     @FXML private Button     btnReimprimir;
+    @FXML private Button     btnFacturar;
+    @FXML private Button     btnFacturas;
 
     // ── Tabla de ventas ──────────────────────────────────────────────────
     @FXML private TableView<Venta>           tablaVentas;
@@ -65,6 +67,7 @@ public class VentasPeriodoController implements Initializable {
     @FXML private TableColumn<Venta, String> colIva;
     @FXML private TableColumn<Venta, String> colTotal;
     @FXML private TableColumn<Venta, String> colEstado;
+    @FXML private TableColumn<Venta, String> colFactura;
 
     // ── Tabla de detalle ─────────────────────────────────────────────────
     @FXML private TableView<DetalleVenta>           tablaDetalle;
@@ -83,6 +86,12 @@ public class VentasPeriodoController implements Initializable {
     @Autowired private SesionService       sesionService;
     @Autowired private AutorizacionService autorizacionService;
     @Autowired private ImpresionService    impresionService;
+    @Autowired private FacturacionDialogos facturacionDialogos;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.FacturacionService facturacionService;
+    @Autowired private org.springframework.context.ApplicationContext springContext;
+
+    /** Factura de cada venta de la tabla (vigente, pendiente o en cancelación) */
+    private java.util.Map<Long, me.eliassanchezfernandez.puntodeventa.model.Factura> facturaPorVenta = java.util.Map.of();
 
     private final ObservableList<Venta>        ventas   = FXCollections.observableArrayList();
     private final ObservableList<DetalleVenta> detalles = FXCollections.observableArrayList();
@@ -114,10 +123,37 @@ public class VentasPeriodoController implements Initializable {
                     : "Detalle de la venta");
         });
 
+        boolean puedeFacturar = sesionService.tienePermiso(Permiso.FACTURAR);
+        btnFacturar.setDisable(!puedeFacturar);
+        btnFacturas.setDisable(!puedeFacturar);
         onHoy();
     }
 
     // ── Acciones ──────────────────────────────────────────────────────────
+
+    /** Factura la venta seleccionada (receptor, uso y forma de pago en el diálogo) */
+    @FXML private void onFacturar() {
+        Venta v = tablaVentas.getSelectionModel().getSelectedItem();
+        if (v == null) {
+            alerta(Alert.AlertType.WARNING, "Selecciona una venta", "Haz clic en una venta de la tabla para facturarla.");
+            return;
+        }
+        if (v.isCancelada()) {
+            alerta(Alert.AlertType.INFORMATION, "Venta cancelada", "Una venta cancelada no se puede facturar.");
+            return;
+        }
+        facturacionDialogos.facturarVenta(raiz.getScene().getWindow(), v).ifPresent(f -> onBuscar());
+    }
+
+    /** Facturas emitidas (archivos, correo, cancelación, factura global) */
+    @FXML private void onFacturas() {
+        try {
+            Ventanas.abrirModal(springContext, "/fxml/facturas.fxml", "Facturas electrónicas", raiz.getScene().getWindow(), 1100, 640);
+        } catch (Exception e) {
+            alerta(Alert.AlertType.ERROR, "Facturas", "No se pudo abrir la ventana: " + e.getMessage());
+        }
+        onBuscar();
+    }
 
     @FXML private void onBuscar() {
         try {
@@ -129,6 +165,12 @@ public class VentasPeriodoController implements Initializable {
             return;
         }
         detalles.clear();
+        try {
+            facturaPorVenta = facturacionService.facturasDeVentas(ventas.stream().map(Venta::getId).toList());
+        } catch (RuntimeException e) {
+            facturaPorVenta = java.util.Map.of();
+        }
+        tablaVentas.refresh();
         actualizarResumen();
     }
 
@@ -254,6 +296,11 @@ public class VentasPeriodoController implements Initializable {
         colIva.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getIvaODefault())));
         colTotal.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getTotal())));
         colEstado.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().isCancelada() ? "Cancelada" : "Cobrada"));
+        colFactura.setCellValueFactory(c -> {
+            var f = facturaPorVenta.get(c.getValue().getId());
+            return new SimpleStringProperty(f == null ? "" : f.getSerieFolio() + (f.esGlobal() ? " (global)" : "")
+                    + (f.isPendiente() ? " ?" : ""));
+        });
 
         colDetCodigo.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProducto().getCodigoBarras()));
         colDetDescripcion.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProducto().getDescripcion()));

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    clientes_fiscales.fxml  –  Receptores de factura (datos de la CSF)
+    Controlador: ClientesFiscalesController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ClientesFiscalesController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <TextField fx:id="txtBuscar" promptText="Buscar por RFC o nombre…" prefWidth="280"/>
+            <Button text="➕ Nuevo" onAction="#onNuevo" styleClass="button-primary"/>
+            <Button text="✏ Editar" onAction="#onEditar"/>
+            <Button text="🗑 Eliminar" onAction="#onEliminar" styleClass="button-danger"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Cerrar" onAction="#onCerrar"/>
+        </HBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tabla">
+            <columns>
+                <TableColumn fx:id="colRfc"     text="RFC"            prefWidth="130"/>
+                <TableColumn fx:id="colNombre"  text="Nombre / razón social" prefWidth="260"/>
+                <TableColumn fx:id="colRegimen" text="Régimen"        prefWidth="220"/>
+                <TableColumn fx:id="colCp"      text="C.P."           prefWidth="60"/>
+                <TableColumn fx:id="colUso"     text="Uso CFDI"       prefWidth="70"/>
+                <TableColumn fx:id="colEmail"   text="Correo"         prefWidth="180"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <Label text="Captura el nombre, el régimen y el código postal EXACTAMENTE como aparecen en la Constancia de Situación Fiscal del cliente; el SAT rechaza la factura si no coinciden."
+               wrapText="true" styleClass="hint">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+        </Label>
+    </bottom>
+
+</BorderPane>
