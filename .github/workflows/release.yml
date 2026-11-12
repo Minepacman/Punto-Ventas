@@ -83,6 +83,9 @@ jobs:
           "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: Pruebas
         run: .\gradlew.bat test --no-daemon
+      - name: Anotar pruebas fallidas
+        if: failure()
+        run: python ../.github/scripts/anotar-pruebas.py build/test-results
       - name: Instalador
         run: .\gradlew.bat jpackageTask --no-daemon
       - name: Renombrar

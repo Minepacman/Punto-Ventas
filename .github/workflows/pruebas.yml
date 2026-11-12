@@ -1,0 +1,38 @@
+# Pruebas en Windows (y Linux) con cada push a pos-basico o main, para enterarse ANTES de etiquetar una versión.
+# Las pruebas fallidas aparecen como anotaciones en la página del flujo (no hace falta descargar el registro).
+name: Pruebas
+
+on:
+  push:
+    branches: [pos-basico, main]
+    paths: ['Punto-Ventas/**', '.github/**']
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: Punto-Ventas
+
+jobs:
+  pruebas:
+    name: Pruebas (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - name: Pruebas
+        shell: bash
+        run: ./gradlew test --no-daemon
+      - name: Anotar pruebas fallidas
+        if: failure()
+        shell: bash
+        run: python ../.github/scripts/anotar-pruebas.py build/test-results
