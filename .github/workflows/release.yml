@@ -264,6 +264,35 @@ jobs:
           pattern: instalador-*
           path: instaladores
           merge-multiple: true
+      # Código fuente con nombre propio (GitHub agrega además sus "Source code" automáticos, que no se pueden quitar
+      # ni renombrar) y una guía de descarga al inicio de las notas para que nadie baje el archivo equivocado.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: repo
+      - name: Código fuente y guía de descarga
+        working-directory: .
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          git -C repo archive --format=zip --prefix="PuntoDeVenta-$VERSION-codigo-fuente/" -o "$PWD/instaladores/PuntoDeVenta-$VERSION-codigo-fuente.zip" HEAD
+          {
+            echo "## ¿Cuál archivo descargo?"
+            echo
+            echo "| Tu computadora | Archivo |"
+            echo "|---|---|"
+            echo "| Windows 10/11 (la mayoría) | \`PuntoDeVenta-$VERSION-windows-x64.exe\` |"
+            echo "| Windows de 32 bits (PCs muy viejas) | \`PuntoDeVenta-$VERSION-windows-x86.exe\` |"
+            echo "| Mac con chip Apple (M1, M2, M3…) | \`PuntoDeVenta-$VERSION-macos-arm64.dmg\` |"
+            echo "| Mac con procesador Intel | \`PuntoDeVenta-$VERSION-macos-x64.dmg\` |"
+            echo "| Ubuntu / Debian / Mint | \`PuntoDeVenta-$VERSION-linux-x64.deb\` |"
+            echo "| Fedora / openSUSE | \`PuntoDeVenta-$VERSION-linux-x64.rpm\` |"
+            echo "| Otro Linux | \`PuntoDeVenta-$VERSION-linux-x64.tar.gz\` |"
+            echo
+            echo "Los archivos **\"Source code\"** y \`codigo-fuente.zip\` son el código del programa para programadores: **no los necesitas para usarlo**."
+            echo "Si tu programa ya está instalado, ábrelo y usa *Acerca de → Buscar actualizaciones*."
+            echo
+          } > guia-descarga.md
+          cat guia-descarga.md
       - name: Sumas SHA-256
         working-directory: instaladores
         run: |
@@ -274,6 +303,7 @@ jobs:
           name: Punto de Venta ${{ needs.version.outputs.version }}
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
           generate_release_notes: true
+          body_path: guia-descarga.md
           fail_on_unmatched_files: true
           files: instaladores/*
 
