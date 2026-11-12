@@ -1,11 +1,12 @@
 /*
- * sitio.js — comportamiento del sitio público (sin dependencias).
+ * sitio.js — comportamiento del sitio público (sin dependencias). Lo cargan todas las páginas;
+ * cada parte solo actúa si en la página existen sus elementos.
  *  1. Rellena los datos de datos.js (autor, contacto, donación).
- *  2. Detecta el sistema del visitante y apunta "Descargar gratis" al instalador correcto.
- *  3. Consulta la última versión publicada en GitHub y llena las tarjetas de descarga
+ *  1b. Descarga los datos de donación FIRMADOS del repositorio y verifica la firma Ed25519.
+ *  2. Detecta el sistema del visitante y apunta los botones de descarga al instalador correcto.
+ *  3. Consulta la última versión publicada en GitHub y llena los enlaces de descarga
  *     (si falla, los enlaces siguen apuntando a la página de versiones).
- *  4. Detalles visuales: estrellas del hero, aparición al hacer scroll, ticket animado,
- *     números que cuentan. Todo respeta prefers-reduced-motion.
+ *  4. Pequeñas ayudas: copiar un comando, «Enviarme el enlace» en el teléfono, año del pie.
  */
 (function () {
   'use strict';
@@ -15,7 +16,6 @@
   const REPO_URL = 'https://github.com/' + repo.usuario + '/' + repo.nombre;
   const RELEASES_URL = REPO_URL + '/releases';
   const API_URL = 'https://api.github.com/repos/' + repo.usuario + '/' + repo.nombre + '/releases?per_page=15';
-  const reducirMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
@@ -52,13 +52,13 @@
       a.href = RELEASES_URL;
     } else if (tipo === 'licencia') {
       a.href = REPO_URL + '/blob/main/LICENSE';
-    } else {
+    } else if (tipo === 'correo' || tipo === 'whatsapp') {
       a.removeAttribute('href');
       a.textContent = 'Por confirmar';
       a.classList.add('pendiente-chip');
     }
   });
-  $$('[data-comando]').forEach(el => { el.textContent = D.homebrew || ''; });
+  $$('[data-comando]').forEach(el => { if (D.homebrew) el.textContent = D.homebrew; });
 
   // ── 1b. Datos de donación FIRMADOS por el autor (claves/donacion.pdvd del repositorio) ──
   // Mismo archivo que coteja el programa. Formato: PDVD1.<base64url(json)>.<base64url(firma Ed25519)>.
@@ -79,7 +79,7 @@
     });
     if (d.pendiente) {
       poner('clabe', ''); poner('banco', ''); poner('beneficiario', '');
-      if (estado) estado.textContent = 'El autor todavía no publica su cuenta de donación (archivo firmado del ' + d.emitido + '). Mientras tanto no dones a ninguna cuenta que diga ser de Caja Libre.';
+      if (estado) estado.textContent = 'Todavía no publico mi cuenta de donación (archivo firmado del ' + d.emitido + '). Mientras tanto no dones a ninguna cuenta que diga ser de Caja Libre.';
       return;
     }
     const clabe = String(d.clabe || '').replace(/\D/g, '');
@@ -97,7 +97,7 @@
       return await crypto.subtle.verify({ name: 'Ed25519' }, llave, firma, carga);
     } catch (e) { return false; }   // navegador sin Ed25519: se muestran los datos sin la marca «verificados»
   }
-  if (window.fetch) {
+  if (window.fetch && $('[data-dato^="donacion."]')) {
     fetch(DONACION_URL, { cache: 'no-cache' })
       .then(r => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
       .then(async texto => {
@@ -115,20 +115,22 @@
   function detectarSO() {
     const ua = navigator.userAgent || '';
     const plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return null;   // teléfono o tableta
     if (/Windows/i.test(ua) || /Win/i.test(plat)) {
       const x64 = /WOW64|Win64|x64|amd64/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.platform === 'Windows');
-      return { clave: x64 ? 'windows-x64' : 'windows-x86', nombre: x64 ? 'Windows (64 bits)' : 'Windows (32 bits)', alt: x64 ? 'windows-x86' : 'windows-x64' };
+      return { clave: x64 ? 'windows-x64' : 'windows-x86', nombre: x64 ? 'Windows (64 bits)' : 'Windows (32 bits)' };
     }
     if (/Macintosh|Mac OS X/i.test(ua) || /Mac/i.test(plat)) {
-      // El navegador no distingue Apple Silicon de Intel: se ofrece el de Apple Silicon y el otro al lado.
-      return { clave: 'macos-arm64', nombre: 'Mac (Apple Silicon)', alt: 'macos-x64' };
+      // El navegador no distingue Apple Silicon de Intel: se ofrece el de Apple Silicon y el otro está en la lista.
+      return { clave: 'macos-arm64', nombre: 'Mac (Apple Silicon)' };
     }
-    if (/Linux/i.test(ua) && !/Android/i.test(ua)) {
-      return { clave: 'linux-x64.deb', nombre: 'Linux (Ubuntu / Debian)', alt: 'linux-x64.tar.gz' };
+    if (/Linux|X11/i.test(ua)) {
+      return { clave: 'linux-x64.deb', nombre: 'Linux (paquete .deb)' };
     }
-    return null;   // teléfono u otro: se manda a la lista completa
+    return null;
   }
   const so = detectarSO();
+  const enTelefono = so === null && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
 
   // ── 3. Última versión publicada ────────────────────────────────────
   const SUFIJOS = {
@@ -149,69 +151,79 @@
     try { return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }); }
     catch (e) { return ''; }
   }
+  function poner(sel, texto) { $$(sel).forEach(el => { el.textContent = texto; }); }
+
   function aplicarVersion(release) {
     const version = (release.tag_name || '').replace(/^v/, '');
     const activos = {};
     (release.assets || []).forEach(a => {
       Object.keys(SUFIJOS).forEach(k => { if (SUFIJOS[k].test(a.name)) activos[k] = a; });
     });
-    $$('[data-version]').forEach(el => { el.textContent = version; });
-    $$('[data-fecha-version]').forEach(el => { el.textContent = fechaLarga(release.published_at); });
+    poner('[data-version]', version);
+    poner('[data-fecha-version]', fechaLarga(release.published_at));
     $$('[data-activo]').forEach(a => {
       const act = activos[a.dataset.activo];
       const tam = $('small', a);
       if (act) {
         a.href = act.browser_download_url;
-        a.removeAttribute('target');
         a.setAttribute('download', '');
         if (tam) tam.textContent = tamano(act.size);
         a.classList.remove('no-disponible');
+        a.removeAttribute('aria-disabled');
       } else {
         a.href = release.html_url || RELEASES_URL;
         if (tam) tam.textContent = 'no incluido en esta versión';
         a.classList.add('no-disponible');
-        a.setAttribute('aria-disabled', 'true');
       }
     });
     $$('[data-notas]').forEach(a => { a.href = release.html_url || RELEASES_URL; });
-    // Botón principal
+
+    // Botón de la portada
     const btn = $('#btn-descarga-principal');
     if (btn && so && activos[so.clave]) {
       btn.href = activos[so.clave].browser_download_url;
       btn.setAttribute('download', '');
-      $('.sub', btn).textContent = 'para ' + so.nombre + ' · v' + version + ' · ' + tamano(activos[so.clave].size);
+      const det = $('.detalle', btn);
+      if (det) det.textContent = 'para ' + so.nombre + ' · versión ' + version + ' · ' + tamano(activos[so.clave].size);
     }
-    const dt = $('#detecta-so');
-    if (dt) {
-      const boton = $('a.btn', dt);
+    // Bloque «tu sistema» de la página de descargas
+    const auto = $('#descarga-auto');
+    if (auto) {
+      const boton = $('[data-auto-boton]', auto);
       if (so && activos[so.clave]) {
-        $('h3', dt).textContent = 'Detectamos que usas ' + so.nombre;
-        $('p', dt).textContent = 'Este es el instalador que te toca. Si tu equipo es distinto, elige otro abajo.';
+        poner('[data-auto-titulo]', 'Para esta computadora: ' + so.nombre);
+        poner('[data-auto-texto]', 'Es el instalador que le toca a este equipo. Si no es el correcto, elige otro de la lista de abajo.');
         boton.href = activos[so.clave].browser_download_url;
         boton.setAttribute('download', '');
-        boton.lastElementChild.textContent = 'Descargar v' + version + ' (' + tamano(activos[so.clave].size) + ')';
+        boton.lastElementChild.textContent = 'Descargar versión ' + version + ' (' + tamano(activos[so.clave].size) + ')';
       } else if (so) {
-        $('h3', dt).textContent = 'Detectamos que usas ' + so.nombre;
-        $('p', dt).textContent = 'Esta versión no incluye ese instalador; elige otro de la lista o entra a la página de versiones.';
-        boton.href = release.html_url || RELEASES_URL;
-      } else {
-        $('h3', dt).textContent = '¿Estás en el teléfono?';
-        $('p', dt).textContent = 'El programa se instala en la computadora de la tienda. Abre esta página desde esa PC y el botón elegirá el instalador correcto.';
+        poner('[data-auto-titulo]', 'Detecté ' + so.nombre);
+        poner('[data-auto-texto]', 'Esta versión no incluye ese instalador; elige otro de la lista o entra a la página de versiones.');
         boton.href = release.html_url || RELEASES_URL;
       }
     }
   }
   function sinApi() {
-    $$('[data-version]').forEach(el => { el.textContent = 'más reciente'; });
-    $$('[data-fecha-version]').forEach(el => { el.textContent = 'ver página de versiones'; });
-    const dt = $('#detecta-so');
-    if (dt && so) {
-      $('h3', dt).textContent = 'Detectamos que usas ' + so.nombre;
-      $('p', dt).textContent = 'No pudimos consultar la última versión en este momento: en la página de versiones busca el archivo ' +
-        'que termina en "' + so.clave + (so.clave.indexOf('.') < 0 ? (so.clave.indexOf('windows') === 0 ? '.exe' : '.dmg') : '') + '".';
+    poner('[data-version]', 'más reciente');
+    poner('[data-fecha-version]', 'ver página de versiones');
+    const auto = $('#descarga-auto');
+    if (auto && so) {
+      poner('[data-auto-titulo]', 'Para esta computadora: ' + so.nombre);
+      poner('[data-auto-texto]', 'No pude consultar la última versión en este momento. En la página de versiones busca el archivo que termina en «' + so.clave + (so.clave.indexOf('.') < 0 ? (so.clave.indexOf('windows') === 0 ? '.exe' : '.dmg') : '') + '».');
     }
   }
-  if (window.fetch) {
+  // Teléfono: se esconde el bloque de detección y se muestra «Enviarme el enlace»
+  if (enTelefono) {
+    const auto = $('#descarga-auto'); if (auto) auto.hidden = true;
+    const tel = $('#solo-telefono'); if (tel) tel.hidden = false;
+    const btn = $('#btn-descarga-principal');
+    if (btn) { const det = $('.detalle', btn); if (det) det.textContent = 'se instala en la computadora de la tienda'; }
+  } else if (so) {
+    poner('[data-auto-titulo]', 'Para esta computadora: ' + so.nombre);
+    const btn = $('#btn-descarga-principal');
+    if (btn) { const det = $('.detalle', btn); if (det) det.textContent = 'para ' + so.nombre; }
+  }
+  if (window.fetch && ($('[data-activo]') || $('#btn-descarga-principal'))) {
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     if (ctl) setTimeout(() => ctl.abort(), 8000);
     fetch(API_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: ctl && ctl.signal })
@@ -222,175 +234,45 @@
         aplicarVersion(estable);
       })
       .catch(sinApi);
-  } else {
+  } else if ($('[data-activo]')) {
     sinApi();
   }
-  // Sin API todavía, el botón principal al menos nombra el sistema detectado
-  const btn0 = $('#btn-descarga-principal');
-  if (btn0 && so) $('.sub', btn0).textContent = 'para ' + so.nombre;
 
-  // ── 4. Menú móvil, copiar comando ──────────────────────────────────
-  const menuBtn = $('.menu-boton');
-  const navMovil = $('.nav-movil');
-  if (menuBtn && navMovil) {
-    menuBtn.addEventListener('click', () => {
-      const abierto = navMovil.classList.toggle('abierto');
-      menuBtn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+  // ── 4. Copiar comando, «Enviarme el enlace», año del pie ──────────
+  function copiar(texto) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(texto);
+    return new Promise((ok, no) => {
+      const ta = document.createElement('textarea');
+      ta.value = texto; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy') ? ok() : no(); } catch (e) { no(e); }
+      document.body.removeChild(ta);
     });
-    $$('a', navMovil).forEach(a => a.addEventListener('click', () => { navMovil.classList.remove('abierto'); menuBtn.setAttribute('aria-expanded', 'false'); }));
   }
   $$('[data-copiar]').forEach(b => {
     b.addEventListener('click', () => {
-      const texto = $(b.dataset.copiar) ? $(b.dataset.copiar).textContent : '';
+      const el = $(b.dataset.copiar);
+      const texto = el ? el.textContent : '';
       const listo = () => { const t = b.textContent; b.textContent = 'Copiado'; setTimeout(() => { b.textContent = t; }, 1600); };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(listo, listo);
-      else listo();
+      copiar(texto).then(listo, listo);
     });
   });
 
-  // ── 4b. Pestañas de la vista rápida ────────────────────────────────
-  const vista = $('#vista-rapida');
-  if (vista) {
-    const tabs = $$('[role="tab"]', vista), paneles = $$('[role="tabpanel"]', vista);
-    function activar(tab) {
-      tabs.forEach(t => { const on = t === tab; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; });
-      paneles.forEach(p => { const on = p.id === tab.getAttribute('aria-controls'); p.classList.toggle('activo', on); p.hidden = !on; });
-    }
-    tabs.forEach((t, i) => {
-      t.addEventListener('click', () => activar(t));
-      t.addEventListener('keydown', e => {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          e.preventDefault();
-          const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-          n.focus(); activar(n);
-        }
-      });
+  const enlacePagina = 'https://minepacman.github.io/' + repo.nombre + '/descargar.html';
+  const estadoCompartir = $('[data-compartir-estado]');
+  const avisar = t => { if (estadoCompartir) estadoCompartir.textContent = t; };
+  $$('[data-compartir="whatsapp"]').forEach(a => { a.href = 'https://wa.me/?text=' + encodeURIComponent('Caja Libre, punto de venta gratis para la tienda. Descargar: ' + enlacePagina); });
+  $$('[data-compartir="copiar"]').forEach(b => {
+    b.addEventListener('click', () => copiar(enlacePagina).then(() => avisar('Enlace copiado. Pégalo en un mensaje para ti o escríbelo en la computadora: ' + enlacePagina), () => avisar('No se pudo copiar. El enlace es: ' + enlacePagina)));
+  });
+  $$('[data-compartir="compartir"]').forEach(b => {
+    if (!(navigator.share)) { b.hidden = true; return; }
+    b.addEventListener('click', () => {
+      navigator.share({ title: 'Descargar Caja Libre', text: 'Caja Libre, punto de venta gratis para la tienda.', url: enlacePagina })
+        .then(() => avisar('Listo. Abre el enlace desde la computadora de la tienda.'))
+        .catch(() => { /* el visitante canceló */ });
     });
-    activar(tabs[0]);
-  }
+  });
 
-  // ── 5. Aparición al hacer scroll ───────────────────────────────────
-  const reveal = $$('.reveal');
-  if ('IntersectionObserver' in window && !reducirMovimiento) {
-    const io = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
-    reveal.forEach(el => io.observe(el));
-  } else {
-    reveal.forEach(el => el.classList.add('visible'));
-  }
-
-  // ── 6. Estrellas del hero (canvas ligero) ──────────────────────────
-  const lienzo = $('#estrellas');
-  if (lienzo && lienzo.getContext) {
-    const ctx = lienzo.getContext('2d');
-    let estrellas = [], w = 0, h = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
-    function medir() {
-      const r = lienzo.parentElement.getBoundingClientRect();
-      w = Math.max(1, r.width); h = Math.max(1, r.height);
-      lienzo.width = w * dpr; lienzo.height = h * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const n = Math.min(160, Math.floor(w * h / 9000));
-      estrellas = Array.from({ length: n }, () => ({
-        x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.3 + 0.3,
-        a: Math.random() * Math.PI * 2, v: 0.004 + Math.random() * 0.01, b: 0.25 + Math.random() * 0.6
-      }));
-    }
-    function pintar(estatico) {
-      ctx.clearRect(0, 0, w, h);
-      estrellas.forEach(s => {
-        const alfa = estatico ? s.b : s.b * (0.55 + 0.45 * Math.sin(s.a));
-        s.a += s.v;
-        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(214, 228, 248,' + alfa.toFixed(3) + ')'; ctx.fill();
-      });
-    }
-    let visible = true, animando = false;
-    function ciclo() { if (!visible) { animando = false; return; } pintar(false); requestAnimationFrame(ciclo); }
-    medir(); pintar(reducirMovimiento);
-    if (!reducirMovimiento) {
-      animando = true; ciclo();
-      if ('IntersectionObserver' in window) {
-        new IntersectionObserver(en => { visible = en[0].isIntersecting; if (visible && !animando) { animando = true; ciclo(); } }).observe(lienzo);
-      }
-    }
-    let t; window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { medir(); pintar(reducirMovimiento); }, 150); });
-  }
-
-  // ── 7. Ticket animado: escanear → renglones → total → cobrar ───────
-  const demo = $('#demo-ticket');
-  if (demo) {
-    const cuerpo = $('tbody', demo), campo = $('.campo', demo), lector = $('.lector', demo),
-          total = $('.total .m', demo), pie = $('.pie', demo), boton = $('.cobrar', demo), cambio = $('.cambio', demo);
-    const productos = [
-      ['7501055300778', 'Coca-Cola 600 ml', 1, 20], ['7501000111589', 'Sabritas Sal 45 g', 2, 20],
-      ['2004', 'Aguacate', '0.750 kg', 48.75], ['7501020511116', 'Leche Lala 1 L', 1, 29],
-      ['7501073200145', 'Huevo 12 pz', 1, 48]
-    ];
-    const dinero = n => '$' + n.toFixed(2);
-    const esperar = ms => new Promise(r => setTimeout(r, ms));
-    function pintarEstatico() {
-      cuerpo.innerHTML = '';
-      let suma = 0;
-      productos.forEach(p => { suma += p[3]; const tr = document.createElement('tr'); tr.innerHTML = '<td>' + p[1] + '</td><td>' + p[2] + '</td><td>' + dinero(p[3]) + '</td>'; cuerpo.appendChild(tr); });
-      total.textContent = dinero(suma);
-      boton.textContent = 'Cobrado ✓'; boton.classList.add('ok'); cambio.textContent = 'Cambio: $34.25';
-    }
-    async function ciclo() {
-      while (true) {
-        cuerpo.innerHTML = ''; total.textContent = '$0.00'; campo.textContent = ''; campo.classList.add('activo');
-        boton.textContent = 'Cobrar  F12'; boton.classList.remove('ok'); cambio.textContent = ''; $('.ayuda', pie).textContent = 'Escanea los productos…';
-        let suma = 0;
-        for (const p of productos) {
-          await esperar(650);
-          lector.classList.add('escaneando');
-          for (let i = 1; i <= p[0].length; i++) { campo.textContent = p[0].slice(0, i); await esperar(p[0].length > 6 ? 22 : 70); }
-          await esperar(140);
-          lector.classList.remove('escaneando');
-          campo.textContent = '';
-          const tr = document.createElement('tr'); tr.className = 'nueva';
-          tr.innerHTML = '<td>' + p[1] + '</td><td>' + p[2] + '</td><td>' + dinero(p[3]) + '</td>';
-          cuerpo.appendChild(tr);
-          suma += p[3]; total.textContent = dinero(suma);
-        }
-        await esperar(900);
-        $('.ayuda', pie).textContent = 'F12 · Recibe $200.00';
-        campo.classList.remove('activo');
-        await esperar(1100);
-        boton.textContent = 'Cobrado ✓'; boton.classList.add('ok');
-        cambio.textContent = 'Cambio: ' + dinero(200 - suma);
-        $('.ayuda', pie).textContent = 'Ticket impreso · cajón abierto';
-        await esperar(3800);
-      }
-    }
-    if (reducirMovimiento) pintarEstatico();
-    else if ('IntersectionObserver' in window) {
-      let iniciado = false;
-      new IntersectionObserver((en, obs) => { if (en[0].isIntersecting && !iniciado) { iniciado = true; ciclo(); obs.disconnect(); } }, { threshold: 0.3 }).observe(demo);
-    } else ciclo();
-  }
-
-  // ── 8. Números que cuentan ─────────────────────────────────────────
-  const contadores = $$('[data-contar]');
-  function contar(el) {
-    const fin = parseFloat(el.dataset.contar), dec = parseInt(el.dataset.decimales || '0', 10),
-          pre = el.dataset.prefijo || '', suf = el.dataset.sufijo || '', dur = 1400, t0 = performance.now();
-    function paso(t) {
-      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-      el.textContent = pre + (fin * e).toLocaleString('es-MX', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + suf;
-      if (k < 1) requestAnimationFrame(paso);
-    }
-    requestAnimationFrame(paso);
-  }
-  if (contadores.length) {
-    if (reducirMovimiento || !('IntersectionObserver' in window)) {
-      contadores.forEach(el => { el.textContent = (el.dataset.prefijo || '') + parseFloat(el.dataset.contar).toLocaleString('es-MX', { minimumFractionDigits: parseInt(el.dataset.decimales || '0', 10), maximumFractionDigits: parseInt(el.dataset.decimales || '0', 10) }) + (el.dataset.sufijo || ''); });
-    } else {
-      const io = new IntersectionObserver(en => { en.forEach(e => { if (e.isIntersecting) { contar(e.target); io.unobserve(e.target); } }); }, { threshold: 0.5 });
-      contadores.forEach(el => io.observe(el));
-    }
-  }
-
-  // Año del pie
   $$('[data-anio]').forEach(el => { el.textContent = new Date().getFullYear(); });
 })();

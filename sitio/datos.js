@@ -2,7 +2,7 @@
  * datos.js — ÚNICO lugar que hay que editar para llenar los datos del sitio.
  * Todo lo que diga PENDIENTE se muestra en la página como "por confirmar".
  *
- * Después de cambiar algo aquí no hay que tocar nada más: index.html lee estos
+ * Después de cambiar algo aquí no hay que tocar nada más: todas las páginas leen estos
  * valores al cargar (atributos data-dato="clave").
  */
 window.DATOS_SITIO = {
@@ -12,7 +12,7 @@ window.DATOS_SITIO = {
 
   autor: {
     nombre: 'Elias Oziel Sánchez Fernández',   // también es el beneficiario que debe mostrar el banco al donar
-    ocupacion: 'PENDIENTE',                    // REVISAR: p. ej. "Desarrollador de software"
+    ocupacion: 'Desarrollador de software',    // REVISAR: cámbialo si prefieres otra descripción
     ciudad: 'PENDIENTE',                       // opcional: "Ciudad de México"
   },
 

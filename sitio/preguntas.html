@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preguntas frecuentes — Caja Libre</title>
+<meta name="description" content="Respuestas a lo que todo el mundo pregunta sobre Caja Libre: si de verdad es gratis, si necesita internet, dónde quedan los datos, si funciona en una PC vieja, cómo actualizar, varias cajas, facturación y respaldos.">
+<meta name="theme-color" content="#2A4566">
+<link rel="icon" type="image/svg+xml" href="img/icono.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="img/icono-32.png">
+<link rel="canonical" href="https://minepacman.github.io/Punto-Ventas/preguntas.html">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_MX">
+<meta property="og:title" content="Preguntas frecuentes sobre Caja Libre">
+<meta property="og:description" content="¿De verdad es gratis? ¿Necesito internet? ¿A dónde van mis datos? ¿Funciona en mi PC vieja?">
+<meta property="og:url" content="https://minepacman.github.io/Punto-Ventas/preguntas.html">
+<meta property="og:image" content="https://minepacman.github.io/Punto-Ventas/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<a class="saltar" href="#contenido">Ir al contenido</a>
+<header class="cabecera">
+  <div class="contenedor cabecera-fila">
+    <a class="marca" href="./"><img src="img/icono.svg" alt="" width="30" height="30">Caja Libre</a>
+    <nav class="nav" aria-label="Páginas">
+      <a href="./">Inicio</a>
+      <a href="funciones.html">Funciones</a>
+      <a href="empezar.html">Cómo empezar</a>
+      <a href="apoyar.html">Apoyar</a>
+      <a href="acerca.html">Quién lo hace</a>
+      <a href="preguntas.html" aria-current="page">Preguntas</a>
+      <a href="descargar.html" class="nav-descargar">Descargar</a>
+    </nav>
+    <details class="menu">
+      <summary>Menú</summary>
+      <nav aria-label="Páginas">
+        <a href="./">Inicio</a>
+        <a href="funciones.html">Funciones</a>
+        <a href="descargar.html">Descargar</a>
+        <a href="empezar.html">Cómo empezar</a>
+        <a href="apoyar.html">Apoyar el proyecto</a>
+        <a href="acerca.html">Quién lo hace</a>
+        <a href="preguntas.html" aria-current="page">Preguntas frecuentes</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="contenido">
+  <div class="contenedor angosto">
+    <h1>Preguntas frecuentes</h1>
+    <p class="sub">Si tu duda no está aquí, <a href="apoyar.html#contacto">escríbeme</a>.</p>
+
+    <details class="plegable" open>
+      <summary>¿De verdad es gratis? ¿No hay letra chiquita?</summary>
+      <div><p>Sí, de verdad. No hay mensualidad, no hay límite de productos, de ventas ni de cajas, y ninguna función se bloquea. Es software libre con licencia GPLv3: puedes usarlo, copiarlo, regalarlo y hasta modificarlo. Si quieres apoyar, hay <a href="apoyar.html">donaciones voluntarias</a>, pero no son obligatorias para nada.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Necesito internet?</summary>
+      <div><p>No. Vender, cobrar, inventario, corte y estadísticas funcionan sin conexión. Internet se usa solo para tres cosas opcionales: buscar actualizaciones, el pronóstico del clima para las sugerencias y facturar (CFDI).</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿A dónde van mis datos?</summary>
+      <div><p>Se quedan en tu computadora, en un archivo de base de datos dentro de tu carpeta de usuario. No se suben a ninguna nube y el programa no manda estadísticas a nadie. Por eso mismo conviene activar los respaldos automáticos (Configuración) y guardar una copia en una USB de vez en cuando.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Funciona en mi PC vieja?</summary>
+      <div><p>Está pensado para eso: Windows 10 u 11 con 2 GB de RAM, disco duro normal y pantalla de 1024×768. Hay instalador de 32 bits para equipos muy antiguos (cuando está incluido en la versión). Windows 7 ya no es compatible. En un equipo lento tarda unos segundos más en abrir; una vez abierto, vende igual de rápido. <a href="descargar.html#requisitos">Requisitos completos</a>.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Cómo actualizo? ¿Pierdo mis datos?</summary>
+      <div><p>Cuando hay versión nueva, el programa muestra un enlace discreto en la barra de abajo (nunca descarga ni instala nada solo). Bajas el instalador, lo ejecutas encima del anterior y listo: la base de datos y la configuración no se tocan. En Mac arrastras la app nueva sobre la anterior; en Linux instalas el paquete nuevo. <a href="descargar.html#actualizar">Más detalle</a>.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Las estadísticas sirven desde el primer día?</summary>
+      <div><p>El resumen del día sí. Las proyecciones, el reabastecimiento por proveedor y los rezagados se calculan con tus propias ventas, así que necesitan historial: a las dos o tres semanas empiezan a verse tus días y horas fuertes, y con un mes ya son confiables. El programa te dice en cada pantalla en qué nivel va.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Puedo tener varias cajas?</summary>
+      <div><p>Sí. Una computadora de la tienda corre el servidor PostgreSQL (gratis) y las demás cajas se conectan a él por la red local; las existencias y los cortes se comparten. El programa trae la migración desde una sola caja y una <a href="https://github.com/Minepacman/Punto-Ventas/blob/main/Punto-Ventas/docs/varias-cajas.md">guía paso a paso</a>. Para una tienda con una sola caja no necesitas nada de esto.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Puedo facturar (CFDI)?</summary>
+      <div><p>Sí, factura por venta y factura global con CFDI 4.0 a través de Facturama, un proveedor autorizado por el SAT. Necesitas contratar una cuenta con ellos (ese servicio sí tiene costo, que le pagas a Facturama); el programa solo se conecta con tus credenciales. Si no facturas, simplemente no lo configuras.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Sirve para verdulería, papelería o tortillería?</summary>
+      <div><p>Sí. Maneja venta por pieza y a granel (kilos con decimales, báscula opcional), productos sin código de barras con foto, departamentos y promociones. Lo que no es: un sistema de restaurante con mesas y comandas.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Y si se descompone la computadora?</summary>
+      <div><p>Si tenías respaldos activos, instalas el programa en la computadora nueva y restauras el último respaldo desde Configuración: vuelven productos, ventas, cortes y usuarios. Por eso insisto tanto en guardar copias fuera del equipo.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Qué lector, impresora o báscula compro?</summary>
+      <div><p>Lector de código de barras USB de los que funcionan «como teclado»: cualquiera, desde los más baratos. Impresora térmica de tickets ESC/POS de 58 u 80 mm (las genéricas sirven) o la impresora normal que ya tengas. Báscula con puerto serial o USB-serial. Ninguno es obligatorio para empezar.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Por qué Windows o Mac me advierten al instalarlo?</summary>
+      <div><p>Porque el instalador no está firmado con un certificado comercial ni notarizado por Apple (cuesta varios cientos de dólares al año). El archivo que descargas de aquí o de GitHub es el original y puedes comprobarlo con las sumas SHA-256. En <a href="descargar.html">Descargar</a> digo exactamente qué botón tocar en cada sistema.</p></div>
+    </details>
+    <details class="plegable">
+      <summary>¿Quién hace esto y por qué debería confiar?</summary>
+      <div><p>Lo hace una sola persona, <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>, y todo el código es público en GitHub: cualquiera puede revisarlo. Las contraseñas se guardan cifradas, hay bitácora de todo lo que hacen los usuarios y el programa no se comunica con ningún servidor salvo los tres casos opcionales de arriba. <a href="acerca.html">Aquí cuento quién soy y por qué lo hice</a>.</p></div>
+    </details>
+  </div>
+</main>
+
+<footer class="pie">
+  <div class="contenedor">
+    <div class="pie-fila">
+      <div>
+        <p><b>Caja Libre</b> · software libre bajo licencia GPLv3 · hecho en México por <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>.</p>
+        <ul>
+          <li><a href="descargar.html">Descargar</a></li>
+          <li><a href="funciones.html">Funciones</a></li>
+          <li><a href="empezar.html">Cómo empezar</a></li>
+          <li><a href="apoyar.html">Apoyar</a></li>
+          <li><a href="acerca.html">Quién lo hace</a></li>
+          <li><a href="preguntas.html">Preguntas</a></li>
+        </ul>
+      </div>
+      <ul>
+        <li><a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">Código en GitHub</a></li>
+        <li><a data-enlace="releases" href="https://github.com/Minepacman/Punto-Ventas/releases">Versiones</a></li>
+        <li><a data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Reportar un problema</a></li>
+        <li><a href="https://github.com/Minepacman/Punto-Ventas/blob/main/MARCA.md">Política de marca</a></li>
+      </ul>
+    </div>
+    <p class="legal">© <span data-anio>2026</span> <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>. El nombre «Caja Libre» y el logotipo identifican la versión del autor. Este sitio no usa cookies ni rastreadores.</p>
+  </div>
+</footer>
+<script src="datos.js"></script>
+<script src="sitio.js"></script>
+</body>
+</html>
