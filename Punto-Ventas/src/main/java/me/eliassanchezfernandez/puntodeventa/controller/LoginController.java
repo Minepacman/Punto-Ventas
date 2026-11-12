@@ -133,6 +133,7 @@ public class LoginController implements Initializable {
     @FXML private ProgressIndicator progressLogin;
     @FXML private Hyperlink         lnkVolver;
     @FXML private Label             lblAyudaTeclas;
+    @FXML private Label             lblVersion;
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private SesionService        sesionService;
@@ -165,6 +166,7 @@ public class LoginController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         lblPoliticaContrasena.setText(PoliticaContrasena.DESCRIPCION);
+        lblVersion.setText(me.eliassanchezfernandez.puntodeventa.util.VersionApp.etiqueta());
         txtContrasenaVisible.textProperty().bindBidirectional(txtContrasena.textProperty());
 
         // Ocultar el error al volver a escribir
@@ -638,6 +640,8 @@ public class LoginController implements Initializable {
         }
         try {
             sesionService.cambiarContrasenaPropia(contrasenaCapturada, nueva);
+            // La pantalla "sin conexión" debe pedir la contraseña NUEVA del administrador, no la vieja
+            conexionService.recordarAdministrador(sesionService.getCajeroActual());
         } catch (NegocioException e) {
             mostrarError(e.getMessage());
             txtNuevaContrasena.requestFocus();

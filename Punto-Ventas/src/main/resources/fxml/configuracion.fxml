@@ -84,6 +84,8 @@
                             prefWidth="110" prefHeight="80"/>
                     <Button text="🔄 Actualizaciones"            onAction="#onActualizaciones"
                             prefWidth="110" prefHeight="80"/>
+                    <Button text="♥ Donador y&#10;soporte"        onAction="#onDonador"
+                            prefWidth="110" prefHeight="80"/>
                 </TilePane>
 
             </VBox>

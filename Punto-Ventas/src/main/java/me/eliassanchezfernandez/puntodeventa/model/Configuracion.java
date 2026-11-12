@@ -206,6 +206,30 @@ public class Configuracion {
     @Column(name = "recuperacion_generado")
     private LocalDateTime recuperacionGenerado;
 
+    // ── Donador y actualizaciones ────────────────────────────────────────
+
+    /**
+     * Clave de donador firmada por el desarrollador (util/ClaveDonador); null = versión gratuita.
+     * Es del negocio, no de la caja: con varias cajas vale en todas.
+     */
+    @Column(name = "clave_donador", length = 1000)
+    private String claveDonador;
+
+    /** Buscar versiones nuevas en GitHub (una vez al día, en segundo plano); null = sí */
+    @Column(name = "actualizaciones_auto")
+    private Boolean actualizacionesAuto;
+
+    /**
+     * Última lista de revocación de claves de donador descargada del repositorio
+     * (texto firmado PDVR1, util/RevocacionesApoyo). Copia local: sin internet se
+     * usa esta; sin copia, nada está revocado (fail-open).
+     */
+    @Column(name = "revocaciones_apoyo", length = 65536)
+    private String revocacionesApoyo;
+
+    public boolean isActualizacionesAuto() { return actualizacionesAuto == null || actualizacionesAuto; }
+    public boolean tieneClaveDonador()     { return claveDonador != null && !claveDonador.isBlank(); }
+
     public boolean isLoginMostrarUsuarios() { return loginMostrarUsuarios != null && loginMostrarUsuarios; }
     public boolean isHayCodigoRecuperacion() { return recuperacionHash != null && !recuperacionHash.isBlank(); }
 

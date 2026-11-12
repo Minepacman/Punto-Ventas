@@ -28,12 +28,25 @@ public final class Donacion {
 
     private Donacion() { }
 
-    /** Lo que muestra la ventana de donación */
-    public record Datos(String clabe, String banco, String beneficiario) {
+    public static final String PENDIENTE = "PENDIENTE";
+
+    /** Lo que muestra la ventana de donación y la sección de soporte */
+    public record Datos(String clabe, String banco, String beneficiario, String soporteWhatsapp, String soporteCorreo) {
+
+        /** Compatibilidad: sin datos de soporte */
+        public Datos(String clabe, String banco, String beneficiario) {
+            this(clabe, banco, beneficiario, PENDIENTE, PENDIENTE);
+        }
+
         /** true solo si la CLABE del recurso es válida (largo, dígitos, verificador y banco real) */
         public boolean clabeConfigurada() {
             return clabeValida(clabe);
         }
+
+        public boolean whatsappConfigurado() { return whatsappValido(soporteWhatsapp); }
+        public boolean correoConfigurado()   { return correoValido(soporteCorreo); }
+        /** Hay al menos un medio de contacto real */
+        public boolean soporteConfigurado()  { return whatsappConfigurado() || correoConfigurado(); }
     }
 
     /** Lee donacion.properties; si falta o está incompleto regresa valores pendientes (nunca lanza) */
@@ -49,12 +62,68 @@ public final class Donacion {
 
     static Datos desde(Properties p) {
         return new Datos(limpiarClabe(p.getProperty("clabe", "")),
-                valor(p, "banco"), valor(p, "beneficiario"));
+                valor(p, "banco"), valor(p, "beneficiario"),
+                valor(p, "soporte.whatsapp"), valor(p, "soporte.correo"));
     }
 
     private static String valor(Properties p, String clave) {
         String v = p.getProperty(clave, "");
-        return v == null || v.isBlank() ? "PENDIENTE" : v.trim();
+        return v == null || v.isBlank() ? PENDIENTE : v.trim();
+    }
+
+    // ── Contacto de soporte ───────────────────────────────────────────────
+
+    /** Solo dígitos del número ("55 1234 5678" → "5512345678") */
+    public static String limpiarTelefono(String numero) {
+        return numero == null ? "" : numero.replaceAll("\\D", "");
+    }
+
+    /** 10 dígitos (México) o entre 11 y 15 con lada de país; nunca el valor PENDIENTE */
+    public static boolean whatsappValido(String numero) {
+        String d = limpiarTelefono(numero);
+        return d.length() >= 10 && d.length() <= 15;
+    }
+
+    public static boolean correoValido(String correo) {
+        return correo != null && correo.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+    }
+
+    /** Número internacional para wa.me: 10 dígitos → se antepone 52 (México); con lada se respeta */
+    public static String whatsappInternacional(String numero) {
+        String d = limpiarTelefono(numero);
+        return d.length() == 10 ? "52" + d : d;
+    }
+
+    /** https://wa.me/52XXXXXXXXXX?text=... (el texto es opcional) */
+    public static String whatsappUrl(String numero, String mensaje) {
+        String url = "https://wa.me/" + whatsappInternacional(numero);
+        if (mensaje != null && !mensaje.isBlank()) {
+            url += "?text=" + java.net.URLEncoder.encode(mensaje, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        }
+        return url;
+    }
+
+    /** mailto: con asunto opcional */
+    public static String correoUrl(String correo, String asunto) {
+        return correoUrl(correo, asunto, null);
+    }
+
+    /** mailto: con asunto y cuerpo opcionales (el cuerpo va codificado; los saltos de línea se conservan) */
+    public static String correoUrl(String correo, String asunto, String cuerpo) {
+        StringBuilder url = new StringBuilder("mailto:" + correo.trim());
+        char sep = '?';
+        if (asunto != null && !asunto.isBlank()) {
+            url.append(sep).append("subject=").append(codificar(asunto));
+            sep = '&';
+        }
+        if (cuerpo != null && !cuerpo.isBlank()) {
+            url.append(sep).append("body=").append(codificar(cuerpo));
+        }
+        return url.toString();
+    }
+
+    private static String codificar(String texto) {
+        return java.net.URLEncoder.encode(texto, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     /** Quita espacios y guiones: "032 180 ..." → "032180..." */

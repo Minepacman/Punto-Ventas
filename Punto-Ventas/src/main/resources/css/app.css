@@ -1900,3 +1900,43 @@ TilePane > .button:armed,
     -fx-font-size: 12px;
     -fx-text-fill: -pos-text-muted;
 }
+
+.donacion-subtitulo {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.donacion-ventaja {
+    -fx-font-size: 13px;
+    -fx-text-fill: -pos-success-text;
+}
+
+.donacion-nota {
+    -fx-font-size: 12px;
+    -fx-text-fill: -pos-text-muted;
+}
+
+/* "Acerca de" */
+.acerca-version {
+    -fx-font-size: 13px;
+    -fx-text-fill: -pos-text-muted;
+}
+
+.acerca-donador {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-success-text;
+}
+
+/* Versión en la esquina del inicio de sesión */
+.login-version {
+    -fx-font-size: 10px;
+    -fx-text-fill: -pos-text-subtle;
+}
+
+/* Aviso de versión nueva en la barra de estado */
+.status-actualizacion {
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-success-text;
+}

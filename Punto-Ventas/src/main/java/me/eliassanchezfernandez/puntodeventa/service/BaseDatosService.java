@@ -197,8 +197,8 @@ public class BaseDatosService {
         try {
             sesionService.verificarCredenciales(admin.getUsuario(), contrasenaAdmin);
         } catch (SesionService.CredencialesInvalidasException e) {
-            throw new NegocioException(e.getMessage().startsWith("Usuario bloqueado")
-                    ? e.getMessage() : "La contraseña del administrador es incorrecta.");
+            // Bloqueo por intentos o espera de la terminal: el mensaje explica qué pasa; si no, solo "incorrecta"
+            throw new NegocioException(e.isBloqueo() ? e.getMessage() : "La contraseña del administrador es incorrecta.");
         }
         if (respaldo == null) throw new NegocioException("Elige el archivo de respaldo.");
         respaldo = respaldo.toAbsolutePath();

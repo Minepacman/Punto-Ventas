@@ -39,7 +39,8 @@ public class ConexionService {
     }
 
     public Path carpeta() {
-        return RutasApp.carpetaAplicacion();
+        Path pruebas = carpetaParaPruebas;
+        return pruebas != null ? pruebas : RutasApp.carpetaAplicacion();
     }
 
     /** Motor contra el que está corriendo AHORA el programa (puede diferir del archivo hasta reiniciar) */
@@ -156,5 +157,35 @@ public class ConexionService {
         } catch (IOException | RuntimeException e) {
             System.err.println("No se pudo recordar al administrador para la pantalla sin conexión: " + e.getMessage());
         }
+    }
+
+    /**
+     * Lo contrario: si el hash recordado es el de un administrador que acaba de ser
+     * desactivado, eliminado, degradado o al que le restablecieron la contraseña, se
+     * borra, para que su contraseña vieja ya no abra la pantalla "sin conexión" de
+     * esta caja. Lo llama CajeroService. Nunca lanza.
+     * @return true si había ese hash y se borró
+     */
+    public boolean olvidarAdministradorSi(String hashAnterior) {
+        if (hashAnterior == null || hashAnterior.isBlank()) return false;
+        try {
+            Path carpeta = carpeta();
+            if (!ConexionLocal.existe(carpeta)) return false;
+            ConexionLocal c = ConexionLocal.cargar(carpeta);
+            if (!hashAnterior.equals(c.getAdminHash())) return false;
+            c.setAdminHash(null);
+            c.guardar(carpeta);
+            return true;
+        } catch (IOException | RuntimeException e) {
+            System.err.println("No se pudo olvidar al administrador de la pantalla sin conexión: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** Solo pruebas: trabajar sobre una carpeta temporal en vez de la del usuario (null = la real) */
+    private volatile Path carpetaParaPruebas;
+
+    void usarCarpetaParaPruebas(Path carpeta) {
+        carpetaParaPruebas = carpeta;
     }
 }

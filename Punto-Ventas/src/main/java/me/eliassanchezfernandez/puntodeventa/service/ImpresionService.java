@@ -167,6 +167,10 @@ public class ImpresionService {
             return CompletableFuture.completedFuture(Resultado.fallo("Todavía no hay ventas cobradas en esta caja."));
         }
         auditoriaService.registrar(cajero, "TICKET_REIMPRESO", "Última venta #" + ultima.getId(), autorizacion);
+        // La autorización es de un solo uso: si cubrió esta reimpresión, ya no sirve para otra
+        Autorizacion usada = sesionService.autorizacionUsada(Permiso.VER_HISTORIAL,
+                autorizacion == null ? null : java.util.List.of(autorizacion));
+        if (usada != null) usada.consumir();
         final Long id = ultima.getId();
         return CompletableFuture.supplyAsync(() -> reimprimirVenta(id), hilo);
     }

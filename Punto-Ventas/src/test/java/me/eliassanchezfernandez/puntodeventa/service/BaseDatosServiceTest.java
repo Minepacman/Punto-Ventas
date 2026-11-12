@@ -48,6 +48,7 @@ class BaseDatosServiceTest {
     @AfterEach
     void limpiar() throws Exception {
         sesionService.cerrarSesion();
+        sesionService.reiniciarLimiteTerminalParaPruebas();
         Files.deleteIfExists(rutas.archivoRestauracionPendiente());
         try (Stream<Path> s = Files.list(rutas.archivoBd().getParent())) {
             for (Path p : s.filter(x -> x.getFileName().toString().contains(".antes-de-restaurar-")).toList()) {
@@ -299,5 +300,23 @@ class BaseDatosServiceTest {
 
         assertThat(baseDatosService.respaldoAutomaticoAlCerrar()).isEmpty();   // no lanza
         configuracionService.guardarRespaldoAutomatico(false, "", 3);
+    }
+
+    @Test
+    void conLaCajaLimitadaPorIntentosElMensajeLoExplicaEnVezDeDecirContrasenaIncorrecta() throws Exception {
+        entrarComo("admin", "admin123");
+        Path respaldo = baseDatosService.respaldar(temporal.resolve("limite.db"));
+        assertThatThrownBy(() -> baseDatosService.restaurar(respaldo, "mala"))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("incorrecta");
+        // Se llena el límite de la caja con usuarios inexistentes (ningún usuario real se bloquea)
+        for (int i = 0; i < SesionService.MAX_FALLOS_TERMINAL; i++) {
+            String u = "fantasma" + i;
+            assertThatThrownBy(() -> sesionService.verificarCredenciales(u, "x"))
+                    .isInstanceOf(SesionService.CredencialesInvalidasException.class);
+        }
+        // Ya con el límite de la caja activo, la contraseña correcta no entra y el mensaje dice por qué
+        assertThatThrownBy(() -> baseDatosService.restaurar(respaldo, "admin123"))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("Demasiados intentos");
+        assertThat(baseDatosService.hayRestauracionPendiente()).isFalse();
     }
 }

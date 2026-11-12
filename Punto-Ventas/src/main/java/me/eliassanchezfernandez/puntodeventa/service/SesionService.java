@@ -114,7 +114,7 @@ public class SesionService {
             // Mismo costo (un BCrypt) que una contraseña incorrecta: el tiempo de
             // respuesta no delata si el usuario existe. Mismo mensaje, mismo conteo.
             passwordEncoder.matches(contrasena, hashFicticio());
-            limitadorTerminal.registrarFallo(TERMINAL);
+            registrarFalloTerminal(nombreUsuario);
             auditoriaService.registrarIndependiente(nombreUsuario, "LOGIN_FALLIDO",
                     encontrado.isEmpty() ? "Usuario inexistente" : "Usuario inactivo");
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
@@ -130,7 +130,7 @@ public class SesionService {
         }
 
         if (!passwordEncoder.matches(contrasena, cajero.getContrasenaHash())) {
-            limitadorTerminal.registrarFallo(TERMINAL);
+            registrarFalloTerminal(nombreUsuario);
             registrarIntentoFallido(cajero);
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
@@ -140,10 +140,31 @@ public class SesionService {
             cajero.setBloqueadoHasta(null);
             cajeroRepo.save(cajero);
         }
-        // Un acceso correcto demuestra que quien está en la caja conoce una clave válida:
-        // se olvidan los fallos previos para que no bloqueen al siguiente cajero.
-        limitadorTerminal.olvidar(TERMINAL);
+        // Un acceso correcto olvida los fallos de la caja SOLO si todos fueron de este mismo
+        // usuario (se equivocó de tecla y ya entró). Si hubo fallos contra otros usuarios no se
+        // limpian: un cajero no debe poder "reiniciar" el límite entrando con su propia clave
+        // entre tandas de intentos contra la del administrador (la ventana es de 5 min).
+        olvidarFallosTerminalSiSonDe(nombreUsuario);
         return cajero;
+    }
+
+    /** Usuarios (en minúsculas) con fallos en la ventana vigente de la terminal */
+    private final java.util.Set<String> usuariosConFallosTerminal = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void registrarFalloTerminal(String nombreUsuario) {
+        limitadorTerminal.registrarFallo(TERMINAL);
+        usuariosConFallosTerminal.add(nombreUsuario.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private void olvidarFallosTerminalSiSonDe(String nombreUsuario) {
+        String u = nombreUsuario.toLowerCase(java.util.Locale.ROOT);
+        synchronized (usuariosConFallosTerminal) {
+            boolean soloDeEl = usuariosConFallosTerminal.isEmpty()
+                    || (usuariosConFallosTerminal.size() == 1 && usuariosConFallosTerminal.contains(u));
+            if (!soloDeEl) return;
+            limitadorTerminal.olvidar(TERMINAL);
+            usuariosConFallosTerminal.clear();
+        }
     }
 
     /** Mensaje único de todo fallo de credenciales móviles (no revela si el usuario existe, está bloqueado, etc.) */
@@ -165,6 +186,7 @@ public class SesionService {
     /** Solo para pruebas: olvida los fallos acumulados de la terminal */
     void reiniciarLimiteTerminalParaPruebas() {
         limitadorTerminal.olvidar(TERMINAL);
+        usuariosConFallosTerminal.clear();
     }
 
     /**
@@ -203,8 +225,13 @@ public class SesionService {
         return h;
     }
 
-    @Transactional
-    protected void registrarIntentoFallido(Cajero cajero) {
+    /**
+     * Sin @Transactional a propósito: se llama desde la misma clase (sin pasar por el
+     * proxy de Spring, la anotación no haría nada) y cada guardado abre su propia
+     * transacción, que es justo lo que se quiere: el conteo no debe perderse con
+     * el rollback de nadie.
+     */
+    private void registrarIntentoFallido(Cajero cajero) {
         int intentos = cajero.getIntentosFallidosOCero() + 1;
         cajero.setIntentosFallidos(intentos);
         String detalle = "Intento fallido " + intentos + " (bloqueo cada " + MAX_INTENTOS_FALLIDOS + ")";

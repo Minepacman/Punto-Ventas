@@ -38,21 +38,27 @@ public class BienvenidaService {
     @Autowired private ConfiguracionService    configuracionService;
     @Autowired private SesionService           sesionService;
     @Autowired private AuditoriaService        auditoriaService;
+    @Autowired private DonadorService          donadorService;
 
     // ── Orden del flujo ───────────────────────────────────────────────────
 
     /**
      * Pasos que faltan, en orden, para un usuario con ese rol.
-     * ADMIN: asistente (si no está hecho) → tutorial (si no lo vio) → donación.
+     * ADMIN: asistente (si no está hecho) → tutorial (si no lo vio) → donación (salvo que el negocio ya sea donador).
      * GERENTE y CAJERO: solo el tutorial la primera vez.
      */
-    public static List<Paso> pasos(Cajero.Rol rol, boolean asistenteHecho, boolean tutorialVisto) {
+    public static List<Paso> pasos(Cajero.Rol rol, boolean asistenteHecho, boolean tutorialVisto, boolean donador) {
         List<Paso> lista = new ArrayList<>();
         boolean admin = rol == Cajero.Rol.ADMIN;
         if (admin && !asistenteHecho) lista.add(Paso.ASISTENTE_INICIAL);
         if (!tutorialVisto) lista.add(Paso.TUTORIAL_GENERAL);
-        if (admin) lista.add(Paso.DONACION);
+        if (admin && !donador) lista.add(Paso.DONACION);
         return lista;
+    }
+
+    /** Compatibilidad: negocio sin clave de donador */
+    public static List<Paso> pasos(Cajero.Rol rol, boolean asistenteHecho, boolean tutorialVisto) {
+        return pasos(rol, asistenteHecho, tutorialVisto, false);
     }
 
     /** Pasos pendientes para el usuario de la sesión (vacío si no hay sesión activa) */
@@ -60,7 +66,8 @@ public class BienvenidaService {
     public List<Paso> pasosPendientes() {
         Cajero actual = sesionService.getCajeroActual();
         if (actual == null || actual.isDebeCambiarContrasena()) return List.of();
-        return pasos(actual.getRol(), configuracionService.obtener().isAsistenteInicialHecho(), tutorialGeneralVisto());
+        return pasos(actual.getRol(), configuracionService.obtener().isAsistenteInicialHecho(), tutorialGeneralVisto(),
+                donadorService.esDonador());
     }
 
     // ── Asistente inicial (por instalación, solo ADMIN) ──────────────────
@@ -142,8 +149,8 @@ public class BienvenidaService {
 
     // ── Donación ─────────────────────────────────────────────────────────
 
-    /** La ventana de donación la ve solo el administrador (en cada inicio de sesión) */
+    /** La ventana de donación la ve solo el administrador (en cada inicio de sesión) y nunca un negocio donador */
     public boolean mostrarDonacion() {
-        return sesionService.esAdmin();
+        return sesionService.esAdmin() && !donadorService.esDonador();
     }
 }

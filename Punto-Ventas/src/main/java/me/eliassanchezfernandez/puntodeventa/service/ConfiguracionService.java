@@ -556,6 +556,22 @@ public class ConfiguracionService {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
+    // ── Actualizaciones ───────────────────────────────────────────────────
+
+    public boolean isActualizacionesAuto() { return obtener().isActualizacionesAuto(); }
+
+    /** Buscar versiones nuevas automáticamente (solo ADMIN, auditado) */
+    @Transactional
+    public Configuracion guardarActualizacionesAutomaticas(boolean activo) {
+        sesionService.verificarAdmin();
+        Configuracion c = obtenerParaEditar();
+        boolean antes = c.isActualizacionesAuto();
+        c.setActualizacionesAuto(activo);
+        Configuracion g = guardarConfig(c);
+        if (antes != activo) auditar("Actualizaciones", "automáticas=" + antes, "automáticas=" + activo);
+        return g;
+    }
+
     private void auditar(String seccion, String antes, String despues) {
         auditoriaService.registrar(sesionService.getCajeroActual(), "CONFIGURACION_MODIFICADA",
                 "[" + seccion + "] antes: " + antes + " | después: " + despues, (Cajero) null);

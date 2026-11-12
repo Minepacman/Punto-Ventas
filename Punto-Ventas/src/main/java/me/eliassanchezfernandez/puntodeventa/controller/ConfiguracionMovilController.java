@@ -64,7 +64,9 @@ public class ConfiguracionMovilController implements Initializable {
     static final String[] PASOS_QR = {
             "1. Conecta el teléfono al Wi-Fi de la tienda.",
             "2. Abre la cámara y apunta al código.",
-            "3. Toca el enlace e inicia sesión con tu usuario."
+            "3. Toca el enlace e inicia sesión con tu usuario.",
+            "Úsalo solo en el Wi-Fi del negocio (con contraseña), nunca en el de los clientes ni en redes públicas: "
+                    + "la conexión no va cifrada."
     };
     private static final int QR_PANTALLA_PX = 300;   // ≈ 8 cm en pantalla: se lee a 50 cm
     private static final int QR_IMPRESION_PX = 360;  // puntos de impresión (≈ 12.7 cm a 72 dpi)
