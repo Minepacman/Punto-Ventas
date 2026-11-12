@@ -19,23 +19,31 @@
         <VBox spacing="0">
             <fx:define>
                 <ToggleGroup fx:id="grupoPeriodo"/>
+                <ToggleGroup fx:id="grupoCriterioTop"/>
             </fx:define>
 
             <HBox styleClass="section-toolbar" spacing="10" alignment="CENTER_LEFT">
                 <Label text="Estadísticas" styleClass="title"/>
+                <Button fx:id="btnAyuda" text="? Ayuda" onAction="#onAyuda" styleClass="button-ghost, ayuda-button">
+                    <tooltip><Tooltip text="Abre el tutorial: qué muestra cada sección y cómo mejora con el tiempo"/></tooltip>
+                </Button>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="lblActualizado" text="Agregados: —" styleClass="hint"/>
                 <Button fx:id="btnRecalcular" text="Recalcular" onAction="#onRecalcular"/>
+                <Button text="?" onAction="#onAyudaSeccion" userData="recalcular" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                 <Separator orientation="VERTICAL"/>
                 <Label text="Nivel de datos:" styleClass="text-muted"/>
                 <Label fx:id="lblNivel" text="—" styleClass="badge"/>
+                <Button text="?" onAction="#onAyudaSeccion" userData="nivel" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
             </HBox>
 
             <VBox spacing="8">
                 <padding><Insets top="12" right="16" bottom="0" left="16"/></padding>
-                <HBox styleClass="callout" alignment="CENTER_LEFT">
+                <!-- Indicador de madurez: días de ventas, aviso de confiabilidad y confianza; el color lo pone el controlador -->
+                <HBox fx:id="boxNivel" styleClass="callout" alignment="CENTER_LEFT" spacing="10">
                     <Label fx:id="lblNivelMensaje" text="Calculando el nivel de datos…"
-                           wrapText="true" HBox.hgrow="ALWAYS"/>
+                           wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                    <Label fx:id="lblConfianza" text="" styleClass="badge"/>
                 </HBox>
 
                 <HBox spacing="8" alignment="CENTER_LEFT">
@@ -68,7 +76,10 @@
 
                         <HBox spacing="12">
                             <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
-                                <Label text="Venta total" styleClass="metric-label"/>
+                                <HBox spacing="6" alignment="CENTER_LEFT">
+                                    <Label text="Venta total" styleClass="metric-label"/>
+                                    <Button text="?" onAction="#onAyudaSeccion" userData="resumen" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                                </HBox>
                                 <Label fx:id="lblTotal" text="—" styleClass="metric-value"/>
                             </VBox>
                             <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
@@ -85,13 +96,19 @@
                             </VBox>
                         </HBox>
 
-                        <Label text="Comparativos (siempre a la fecha de hoy)" styleClass="card-title"/>
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <Label text="Comparativos (siempre a la fecha de hoy)" styleClass="card-title"/>
+                            <Button text="?" onAction="#onAyudaSeccion" userData="comparativos" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                        </HBox>
                         <!-- Cuatro tarjetas: hoy, semana, mes y año; se arman en el controlador -->
                         <HBox fx:id="boxComparaciones" spacing="12"/>
 
                         <HBox spacing="12">
                             <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
-                                <Label fx:id="lblTituloSerie" text="Ventas por día" styleClass="card-title"/>
+                                <HBox spacing="8" alignment="CENTER_LEFT">
+                                    <Label fx:id="lblTituloSerie" text="Ventas por día" styleClass="card-title"/>
+                                    <Button text="?" onAction="#onAyudaSeccion" userData="serie" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                                </HBox>
                                 <LineChart fx:id="chartVentasDia" legendVisible="false" createSymbols="true" prefHeight="280" animated="false">
                                     <xAxis><CategoryAxis label="Día"/></xAxis>
                                     <yAxis><NumberAxis label="Ventas"/></yAxis>
@@ -117,7 +134,10 @@
                         <padding><Insets topRightBottomLeft="16"/></padding>
 
                         <VBox styleClass="card" spacing="8">
-                            <Label text="Ventas por franja horaria" styleClass="card-title"/>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Ventas por franja horaria" styleClass="card-title"/>
+                                <Button text="?" onAction="#onAyudaSeccion" userData="horarios" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                            </HBox>
                             <Label fx:id="lblFranjaPico" text="" styleClass="subtitle"/>
                             <BarChart fx:id="chartFranjas" legendVisible="false" prefHeight="260" animated="false">
                                 <xAxis><CategoryAxis label="Franja"/></xAxis>
@@ -170,6 +190,7 @@
                         <VBox styleClass="card" spacing="8">
                             <HBox spacing="8" alignment="CENTER_LEFT">
                                 <Label text="Ventas por cajero" styleClass="card-title"/>
+                                <Button text="?" onAction="#onAyudaSeccion" userData="cajeros" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                                 <Region HBox.hgrow="ALWAYS"/>
                                 <Button fx:id="btnExportarCajeros" text="Exportar…" onAction="#onExportarCajeros"/>
                             </HBox>
@@ -194,18 +215,44 @@
 
             <!-- ── Productos más vendidos ──────────────── -->
             <Tab text="Productos más vendidos">
-                <VBox spacing="16">
-                    <padding><Insets topRightBottomLeft="16"/></padding>
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="16">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
 
-                    <VBox styleClass="card" spacing="8" VBox.vgrow="ALWAYS">
-                        <HBox spacing="8" alignment="CENTER_LEFT">
-                            <Label fx:id="lblProductosTitulo" text="Ranking por importe" styleClass="card-title"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Button fx:id="btnExportarProductos" text="Exportar…" onAction="#onExportarProductos"/>
-                        </HBox>
-                        <TableView fx:id="tablaProductos" VBox.vgrow="ALWAYS" prefHeight="360"/>
+                        <VBox styleClass="card" spacing="8">
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label fx:id="lblProductosTitulo" text="Ranking por importe" styleClass="card-title"/>
+                                <Button text="?" onAction="#onAyudaSeccion" userData="productos" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label text="Ordenar:" styleClass="text-muted"/>
+                                <ToggleButton fx:id="tgTopImporte" text="Por importe" toggleGroup="$grupoCriterioTop" selected="true" onAction="#onCriterioTop"/>
+                                <ToggleButton fx:id="tgTopPiezas"  text="Por piezas"  toggleGroup="$grupoCriterioTop" onAction="#onCriterioTop"/>
+                                <Button fx:id="btnExportarProductos" text="Exportar…" onAction="#onExportarProductos"/>
+                            </HBox>
+                            <Label text="Los 25 productos que más venden en el periodo elegido arriba. Cambia el criterio para ver lo que más dinero deja o lo que más se mueve."
+                                   styleClass="subtitle" wrapText="true"/>
+                            <TableView fx:id="tablaProductos" prefHeight="440"/>
+                        </VBox>
+
+                        <!-- Secciones registradas en EstadisticasController.secciones() con Ubicacion.PRODUCTOS -->
+                        <VBox fx:id="boxSeccionesProductos" spacing="16"/>
                     </VBox>
-                </VBox>
+                </ScrollPane>
+            </Tab>
+
+            <!-- ── Reabastecimiento ────────────────────── -->
+            <Tab text="Reabastecimiento">
+                <ScrollPane fitToWidth="true">
+                    <VBox spacing="16">
+                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <HBox styleClass="callout-info" alignment="CENTER_LEFT">
+                            <Label text="Qué dejar de pedir y qué, cuánto y a quién pedir. Se calcula con la venta promedio de los últimos 30 días, la existencia y el mínimo de cada producto; no depende del periodo elegido arriba. Las cantidades son una sugerencia: revísalas antes de pedir."
+                                   wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        </HBox>
+                        <!-- Secciones registradas en EstadisticasController.secciones() con Ubicacion.REABASTECIMIENTO -->
+                        <VBox fx:id="boxSeccionesReabastecimiento" spacing="16"/>
+                    </VBox>
+                </ScrollPane>
             </Tab>
 
             <!-- ── Recomendaciones ─────────────────────── -->
@@ -218,6 +265,7 @@
                             <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Label text="Se compran juntos" styleClass="card-title"/>
+                                    <Button text="?" onAction="#onAyudaSeccion" userData="juntos" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                                     <Region HBox.hgrow="ALWAYS"/>
                                     <Label fx:id="lblNivelJuntos" text="—" styleClass="badge"/>
                                 </HBox>
@@ -228,6 +276,7 @@
                             <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Label text="Para este momento" styleClass="card-title"/>
+                                    <Button text="?" onAction="#onAyudaSeccion" userData="momento" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                                     <Region HBox.hgrow="ALWAYS"/>
                                     <Label fx:id="lblNivelDiaHora" text="—" styleClass="badge"/>
                                 </HBox>
@@ -238,6 +287,7 @@
                             <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Label text="Según el clima" styleClass="card-title"/>
+                                    <Button text="?" onAction="#onAyudaSeccion" userData="clima" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                                     <Region HBox.hgrow="ALWAYS"/>
                                     <Label fx:id="lblNivelClima" text="—" styleClass="badge"/>
                                 </HBox>
@@ -249,6 +299,7 @@
                         <VBox styleClass="card" spacing="8">
                             <HBox spacing="8" alignment="CENTER_LEFT">
                                 <Label text="Correlación producto × clima" styleClass="card-title"/>
+                                <Button text="?" onAction="#onAyudaSeccion" userData="clima" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                                 <Region HBox.hgrow="ALWAYS"/>
                                 <Button fx:id="btnExportarCorrelacion" text="Exportar…" onAction="#onExportarCorrelacion"/>
                             </HBox>
@@ -256,6 +307,9 @@
                                    styleClass="subtitle" wrapText="true"/>
                             <TableView fx:id="tablaCorrelacion" prefHeight="260"/>
                         </VBox>
+
+                        <!-- Secciones registradas con Ubicacion.RECOMENDACIONES -->
+                        <VBox fx:id="boxSeccionesRecomendaciones" spacing="12"/>
                     </VBox>
                 </ScrollPane>
             </Tab>
@@ -285,11 +339,15 @@
                         <VBox styleClass="card" spacing="8">
                             <HBox spacing="8" alignment="CENTER_LEFT">
                                 <Label text="Ventas por condición climática" styleClass="card-title"/>
+                                <Button text="?" onAction="#onAyudaSeccion" userData="clima-ventas" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
                                 <Region HBox.hgrow="ALWAYS"/>
                                 <Button fx:id="btnExportarClima" text="Exportar…" onAction="#onExportarClima"/>
                             </HBox>
                             <TableView fx:id="tablaClima" prefHeight="220"/>
                         </VBox>
+
+                        <!-- Secciones registradas con Ubicacion.CLIMA -->
+                        <VBox fx:id="boxSeccionesClima" spacing="16"/>
                     </VBox>
                 </ScrollPane>
             </Tab>

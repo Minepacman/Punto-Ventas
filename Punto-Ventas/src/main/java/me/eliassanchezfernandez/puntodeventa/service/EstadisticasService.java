@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 /**
@@ -60,7 +61,12 @@ public class EstadisticasService {
     @Autowired(required = false)
     private Clock reloj = Clock.systemDefaultZone();
 
-    // ── Nivel de datos (cold start) ──────────────────────────────────────
+    // ── Nivel y madurez de datos (cold start) ────────────────────────────
+
+    /** Días de historial a partir de los cuales las recomendaciones se consideran confiables (~un mes) */
+    public static final int DIAS_CONFIABLES = 30;
+    /** Hasta este día (exclusivo) el nivel es "Entrenamiento" */
+    public static final int DIAS_ENTRENAMIENTO = 7;
 
     /** Nivel según la fecha de la primera venta registrada; SIN_DATOS si no hay ventas */
     public NivelDatos nivelDatosActual() {
@@ -69,11 +75,65 @@ public class EstadisticasService {
                 .orElse(NivelDatos.SIN_DATOS);
     }
 
-    /** Función pura: 0–6 días = entrenamiento, 7–27 = parcial, 28 o más = suficiente */
+    /** Función pura: 0–6 días = entrenamiento, 7–29 = parcial, 30 o más = suficiente */
     public NivelDatos nivelDatos(long dias) {
-        if (dias < 7)  return NivelDatos.ENTRENAMIENTO;
-        if (dias < 28) return NivelDatos.PARCIAL;
+        if (dias < DIAS_ENTRENAMIENTO) return NivelDatos.ENTRENAMIENTO;
+        if (dias < DIAS_CONFIABLES)    return NivelDatos.PARCIAL;
         return NivelDatos.SUFICIENTE;
+    }
+
+    /**
+     * Madurez de los datos: cuántos días lleva la tienda vendiendo (desde la
+     * primera venta), en cuántos de ellos hubo ventas, el nivel y un factor
+     * 0..1 con el que se acota la confianza de las recomendaciones.
+     *
+     * @param diasDesdePrimeraVenta días de calendario desde la primera venta (0 si la primera venta fue hoy)
+     * @param diasConVentas         días distintos con al menos una venta activa
+     */
+    public record MadurezDatos(long diasDesdePrimeraVenta, long diasConVentas, NivelDatos nivel) {
+
+        public static final MadurezDatos SIN_DATOS = new MadurezDatos(0, 0, NivelDatos.SIN_DATOS);
+
+        public boolean hayVentas()  { return nivel != NivelDatos.SIN_DATOS; }
+        public boolean confiable()  { return hayVentas() && diasDesdePrimeraVenta >= DIAS_CONFIABLES; }
+        public long diasFaltantes() { return Math.max(0, DIAS_CONFIABLES - diasDesdePrimeraVenta); }
+
+        /**
+         * Factor 0..1 que crece linealmente con los días de historial (día 0 = 0,
+         * día 30 o más = 1). Multiplica el tope de confianza de las recomendaciones.
+         */
+        public double factorConfianza() {
+            if (!hayVentas()) return 0;
+            return Math.min(1.0, Math.max(0.0, (double) diasDesdePrimeraVenta / DIAS_CONFIABLES));
+        }
+
+        /** Porcentaje 0..100 del factor de confianza (para la pantalla) */
+        public int porcentajeConfianza() { return (int) Math.round(factorConfianza() * 100); }
+
+        /** Texto para la pantalla: "Datos de N días…" */
+        public String mensaje() {
+            if (!hayVentas()) return "Aún no hay ventas registradas. Las estadísticas aparecerán con las primeras ventas.";
+            String dias = diasDesdePrimeraVenta == 1 ? "1 día" : diasDesdePrimeraVenta + " días";
+            if (confiable()) {
+                return "Datos de " + dias + " (" + diasConVentas + " con ventas): hay historial suficiente, "
+                        + "las estadísticas y recomendaciones son confiables.";
+            }
+            return "Datos de " + dias + " (" + diasConVentas + " con ventas): las recomendaciones serán más "
+                    + "confiables a partir de " + DIAS_CONFIABLES + " días (faltan " + diasFaltantes() + "). "
+                    + "Mientras tanto el modelo se está entrenando con las ventas.";
+        }
+    }
+
+    /** Madurez actual: lectura de la primera venta, de resumen_diario y de "hoy" en vivo. No requiere permiso. */
+    @Transactional(readOnly = true)
+    public MadurezDatos madurezActual() {
+        Optional<Venta> primera = ventaRepository.findFirstByOrderByFechaAsc();
+        if (primera.isEmpty()) return MadurezDatos.SIN_DATOS;
+        LocalDate hoy = hoy();
+        long dias = Math.max(0, ChronoUnit.DAYS.between(primera.get().getFecha().toLocalDate(), hoy));
+        long conVentas = resumenRepo.countByFechaBefore(hoy);
+        if (agregadosService.calcularDia(hoy).resumen().getTransacciones() > 0) conVentas++;
+        return new MadurezDatos(dias, Math.max(conVentas, 1), nivelDatos(dias));
     }
 
     public LocalDate hoy() {
@@ -121,6 +181,24 @@ public class EstadisticasService {
     }
 
     public record ProductoTop(Producto producto, double piezas, double importe) { }
+
+    /** Cómo se ordena el ranking de productos más vendidos */
+    public enum CriterioTop {
+        IMPORTE("Por importe"), PIEZAS("Por piezas");
+
+        private final String etiqueta;
+        CriterioTop(String etiqueta) { this.etiqueta = etiqueta; }
+        public String getEtiqueta() { return etiqueta; }
+    }
+
+    /** Ranking del periodo con el total del periodo (para el "% del total") */
+    public record RankingProductos(List<ProductoTop> productos, double piezasTotal, double importeTotal, CriterioTop criterio) {
+        public double porcentaje(ProductoTop t) {
+            double total = criterio == CriterioTop.PIEZAS ? piezasTotal : importeTotal;
+            double valor = criterio == CriterioTop.PIEZAS ? t.piezas() : t.importe();
+            return total <= 0 ? 0 : valor / total * 100.0;
+        }
+    }
 
     public record VentasClima(String categoria, int ventas, double importe) { }
 
@@ -236,23 +314,37 @@ public class EstadisticasService {
     /** Ranking por importe del periodo (producto_diario + hoy en vivo) */
     @Transactional(readOnly = true)
     public List<ProductoTop> topProductos(Periodo p, int maximo) {
+        return ranking(p, maximo, CriterioTop.IMPORTE).productos();
+    }
+
+    /** Ranking del periodo por importe o por piezas, con los totales del periodo para el "% del total" */
+    @Transactional(readOnly = true)
+    public RankingProductos ranking(Periodo p, int maximo, CriterioTop criterio) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
+        CriterioTop c = criterio == null ? CriterioTop.IMPORTE : criterio;
         Map<Long, double[]> acumulado = new HashMap<>();
         Map<Long, Producto> productos = new HashMap<>();
+        double piezasTotal = 0, importeTotal = 0;
         for (ProductoDiario pd : productosDiariosEntre(p)) {
             Producto prod = pd.getProducto();
             productos.put(prod.getId(), prod);
             double[] a = acumulado.computeIfAbsent(prod.getId(), k -> new double[2]);
             a[0] += pd.getPiezas();
             a[1] += pd.getImporte();
+            piezasTotal += pd.getPiezas();
+            importeTotal += pd.getImporte();
         }
         List<ProductoTop> lista = new ArrayList<>();
         acumulado.forEach((id, a) -> lista.add(new ProductoTop(productos.get(id),
                 ResumenDiario.VentaRedondeo.milesimas(a[0]), ResumenDiario.VentaRedondeo.centavos(a[1]))));
-        lista.sort(Comparator.comparingDouble(ProductoTop::importe).reversed()
-                .thenComparing(Comparator.comparingDouble(ProductoTop::piezas).reversed())
-                .thenComparing(t -> t.producto().getId()));
-        return lista.subList(0, Math.min(maximo, lista.size()));
+        Comparator<ProductoTop> orden = c == CriterioTop.PIEZAS
+                ? Comparator.comparingDouble(ProductoTop::piezas).reversed()
+                        .thenComparing(Comparator.comparingDouble(ProductoTop::importe).reversed())
+                : Comparator.comparingDouble(ProductoTop::importe).reversed()
+                        .thenComparing(Comparator.comparingDouble(ProductoTop::piezas).reversed());
+        lista.sort(orden.thenComparing(t -> t.producto().getId()));
+        return new RankingProductos(lista.subList(0, Math.min(maximo, lista.size())),
+                ResumenDiario.VentaRedondeo.milesimas(piezasTotal), ResumenDiario.VentaRedondeo.centavos(importeTotal), c);
     }
 
     /** Filas producto-día del periodo; "hoy" en vivo */

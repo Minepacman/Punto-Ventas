@@ -23,8 +23,8 @@
             </HBox>
 
             <!-- Barra de búsqueda -->
-            <HBox spacing="8" alignment="CENTER_LEFT">
-                <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
+            <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">
+                <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
                 <Label text="🔍"/>
                 <TextField fx:id="txtBuscar" promptText="Buscar por nombre o número..."
                            HBox.hgrow="ALWAYS" onKeyReleased="#onBuscar"/>

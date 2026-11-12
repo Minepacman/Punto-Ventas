@@ -44,4 +44,14 @@ public interface MovimientoInventarioRepository extends JpaRepository<Movimiento
             Long proveedorId, String nombreMinusculas, MovimientoInventario.Tipo tipo);
 
     boolean existsByProveedorId(Long proveedorId);
+
+    /**
+     * La ÚLTIMA entrada con proveedor de cada producto: [productoId, proveedorId (puede ser null),
+     * proveedor (texto)]. Una fila por producto; sirve para saber quién surte cada producto.
+     */
+    @Query("SELECT m.producto.id, m.proveedorId, m.proveedor FROM MovimientoInventario m " +
+           "WHERE m.id IN (SELECT MAX(m2.id) FROM MovimientoInventario m2 WHERE m2.tipo = :tipo " +
+           "AND (m2.proveedorId IS NOT NULL OR (m2.proveedor IS NOT NULL AND TRIM(m2.proveedor) <> '')) " +
+           "GROUP BY m2.producto.id)")
+    List<Object[]> ultimoProveedorPorProducto(MovimientoInventario.Tipo tipo);
 }

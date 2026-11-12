@@ -174,6 +174,68 @@ class SesionServiceTest extends BaseServicioTest {
                 .isInstanceOf(NegocioException.class);
     }
 
+    // ── Sin enumeración de usuarios (SEG-07) ──────────────────────────────
+
+    @Test
+    void elMensajeEsElMismoParaUsuarioInexistenteInactivoYContrasenaIncorrecta() throws Exception {
+        Cajero inactivo = new Cajero();
+        inactivo.setUsuario("inactivo2");
+        inactivo.setNombreCompleto("Usuario Inactivo");
+        inactivo.setContrasenaHash(passwordEncoder.encode("clave1234"));
+        inactivo.setRol(Cajero.Rol.CAJERO);
+        inactivo.setActivo(false);
+        cajeroRepo.save(inactivo);
+
+        for (String[] intento : new String[][] {{"nadie", "clave1234"}, {"inactivo2", "clave1234"}, {"admin", "mal"}}) {
+            assertThatThrownBy(() -> sesionService.autenticar(intento[0], intento[1]))
+                    .isInstanceOf(SesionService.CredencialesInvalidasException.class)
+                    .hasMessage(SesionService.MENSAJE_CREDENCIALES)
+                    .matches(e -> !((SesionService.CredencialesInvalidasException) e).isBloqueo());
+        }
+    }
+
+    @Test
+    void elBloqueoPorUsuarioSeDistingueConLaBanderaNoConElTexto() {
+        for (int i = 0; i < 5; i++) {
+            assertThatThrownBy(() -> sesionService.autenticar("admin", "mal"))
+                    .isInstanceOf(SesionService.CredencialesInvalidasException.class);
+        }
+        assertThatThrownBy(() -> sesionService.autenticar("admin", "mal"))
+                .isInstanceOf(SesionService.CredencialesInvalidasException.class)
+                .matches(e -> ((SesionService.CredencialesInvalidasException) e).isBloqueo())
+                .hasMessageContaining("bloqueado");
+    }
+
+    @Test
+    void trasMuchosFallosSeguidosEnLaCajaHayQueEsperarSinImportarElUsuario() throws Exception {
+        assertThat(sesionService.segundosDeEsperaTerminal()).isZero();
+        // Usuarios distintos e inexistentes: ningún usuario llega a bloquearse, pero la caja sí
+        for (int i = 0; i < SesionService.MAX_FALLOS_TERMINAL; i++) {
+            String usuario = "fantasma" + i;
+            assertThatThrownBy(() -> sesionService.autenticar(usuario, "loquesea1"))
+                    .isInstanceOf(SesionService.CredencialesInvalidasException.class)
+                    .hasMessage(SesionService.MENSAJE_CREDENCIALES);
+        }
+        assertThat(sesionService.segundosDeEsperaTerminal()).isPositive();
+
+        // Ni siquiera con credenciales correctas, hasta que pase la espera
+        assertThatThrownBy(() -> sesionService.autenticar("admin", "admin123"))
+                .isInstanceOf(SesionService.CredencialesInvalidasException.class)
+                .hasMessageContaining("Demasiados intentos")
+                .matches(e -> ((SesionService.CredencialesInvalidasException) e).isBloqueo());
+        assertThat(sesionService.haySesionActiva()).isFalse();
+
+        sesionService.reiniciarLimiteTerminalParaPruebas();
+        assertThat(sesionService.segundosDeEsperaTerminal()).isZero();
+        assertThat(iniciarComoAdmin().getUsuario()).isEqualTo("admin");
+    }
+
+    @Test
+    void elMensajeDeEsperaDeLaCajaHablaEnSegundosOMinutos() {
+        assertThat(SesionService.mensajeEsperaTerminal(45)).contains("45 segundos");
+        assertThat(SesionService.mensajeEsperaTerminal(300)).contains("5 minutos");
+    }
+
     @Test
     void unUsuarioDesactivadoMientrasOperaPierdeLaSesion() throws Exception {
         Cajero c = iniciarComoCajero("fugaz", null);

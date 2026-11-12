@@ -4,33 +4,42 @@
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
-<BorderPane xmlns:fx="http://javafx.com/fxml"
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.VentasController">
 
-    <!-- ── BARRA SUPERIOR: búsqueda de producto ── -->
+    <!-- ── BARRA SUPERIOR: captura del código (fila 1) y acciones del ticket (fila 2).
+         Los textos de los botones los completa el controlador con la tecla de cada atajo
+         (catálogo util/Atajo), para que en Mac diga Cmd en vez de Ctrl. ── -->
     <top>
-        <HBox styleClass="search-bar" spacing="8" alignment="CENTER_LEFT">
-            <padding><Insets topRightBottomLeft="10"/></padding>
-            <Label text="Código del Producto:"/>
-            <TextField fx:id="txtCodigo" promptText="Escanea o escribe el código"
-                       HBox.hgrow="ALWAYS"
-                       onAction="#onAgregarProducto"/>
-            <Button fx:id="btnAgregar" text="↵ Agregar"
-                    onAction="#onAgregarProducto"
-                    styleClass="button-success"/>
-            <Separator orientation="VERTICAL"/>
-            <Button fx:id="btnBuscar"    text="🔍 Buscar"      onAction="#onBuscar"/>
-            <Button fx:id="btnMayoreo"   text="Mayoreo"        onAction="#onMayoreo"/>
-            <Button fx:id="btnDescuento" text="Descuento manual"    onAction="#onDescuentoManual"/>
-            <Separator orientation="VERTICAL"/>
-            <Button fx:id="btnCantidad"  text="Cantidad…"      onAction="#onCambiarCantidad"/>
-            <Button fx:id="btnLeerPeso"  text="⚖ Leer peso"    onAction="#onLeerPeso"
-                    visible="false" managed="false"/>
-            <Button fx:id="btnQuitar"    text="🗑 Quitar"       onAction="#onQuitarLinea"
-                    styleClass="button-danger"/>
-            <Button fx:id="btnAbrirCajon" text="💰 Abrir cajón"  onAction="#onAbrirCajon"
-                    visible="false" managed="false"/>
-        </HBox>
+        <VBox styleClass="search-bar" spacing="6">
+            <padding><Insets top="8" right="10" bottom="8" left="10"/></padding>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Label text="Código del producto:"/>
+                <TextField fx:id="txtCodigo" promptText="Escanea o escribe el código (o cantidad*código)"
+                           HBox.hgrow="ALWAYS"
+                           onAction="#onAgregarProducto"/>
+                <Button fx:id="btnAgregar" text="↵ Agregar"
+                        onAction="#onAgregarProducto"
+                        styleClass="button-success" focusTraversable="false"/>
+                <Button fx:id="btnBuscar"    text="🔍 Buscar  F6"   onAction="#onBuscar" focusTraversable="false"/>
+            </HBox>
+            <HBox spacing="6" alignment="CENTER_LEFT">
+                <Button fx:id="btnCantidad"  text="Cantidad  F7"      onAction="#onCambiarCantidad" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnQuitar"    text="🗑 Quitar  Supr"   onAction="#onQuitarLinea"
+                        styleClass="button-danger, button-sm" focusTraversable="false"/>
+                <Button fx:id="btnDescuento" text="Descuento  F8"     onAction="#onDescuentoManual" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnMayoreo"   text="Mayoreo  F9"       onAction="#onMayoreo" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnLeerPeso"  text="⚖ Peso"            onAction="#onLeerPeso"
+                        visible="false" managed="false" styleClass="button-sm" focusTraversable="false"/>
+                <Separator orientation="VERTICAL"/>
+                <Button fx:id="btnEnEspera"  text="⏸ En espera  F11"  onAction="#onPonerEnEspera" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnRecuperar" text="▶ Recuperar"       onAction="#onRecuperarEspera" styleClass="button-sm" focusTraversable="false"/>
+                <Separator orientation="VERTICAL"/>
+                <Button fx:id="btnReimprimir" text="🖨 Reimprimir"    onAction="#onReimprimirUltimo" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnAbrirCajon" text="💰 Cajón"         onAction="#onAbrirCajon"
+                        visible="false" managed="false" styleClass="button-sm" focusTraversable="false"/>
+            </HBox>
+        </VBox>
     </top>
 
     <!-- ── TABLA DE PRODUCTOS EN TICKET + SUGERENCIAS ── -->
@@ -58,7 +67,7 @@
                     <Label fx:id="lblSugerenciasEstado" text="" styleClass="hint"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <Button fx:id="btnOcultarSugerencias" text="Ocultar" onAction="#onOcultarSugerencias"
-                            styleClass="button-ghost, button-sm"/>
+                            styleClass="button-ghost, button-sm" focusTraversable="false"/>
                 </HBox>
                 <FlowPane fx:id="contenedorSugerencias" hgap="8" vgap="6"/>
             </VBox>
@@ -70,45 +79,46 @@
         <VBox styleClass="totales-panel" spacing="10" minWidth="240">
             <padding><Insets topRightBottomLeft="16"/></padding>
 
-            <Label text="TOTAL" styleClass="total-label-title"/>
-            <Label fx:id="labelTotal" text="\$0.00" styleClass="total-amount"/>
+            <!-- Caja oscura del total (estilo .total-box en app.css) -->
+            <VBox styleClass="total-box">
+                <Label text="TOTAL" styleClass="total-label-title"/>
+                <Label fx:id="labelTotal" text="\$0.00" styleClass="total-amount"/>
+            </VBox>
 
             <Separator/>
 
-            <!-- Solo se muestran las formas de pago habilitadas en Configuración -->
+            <!-- Captura rápida del pago mientras se escanea. Solo se muestran las formas
+                 de pago habilitadas en Configuración. F12 abre la ventana de cobro
+                 (o cobra directo si aquí ya se capturó un pago suficiente). -->
             <VBox fx:id="boxEfectivo" spacing="4">
                 <Label text="Efectivo recibido:"/>
                 <TextField fx:id="txtEfectivo" promptText="0.00"
-                           onKeyReleased="#onPagoChanged"
                            onAction="#onCobrar"/>
             </VBox>
 
             <VBox fx:id="boxTarjeta" spacing="4">
                 <Label text="Tarjeta:"/>
                 <TextField fx:id="txtTarjeta" promptText="0.00"
-                           onKeyReleased="#onPagoChanged"
                            onAction="#onCobrar"/>
             </VBox>
 
             <VBox fx:id="boxTransferencia" spacing="4">
                 <Label text="Transferencia:"/>
                 <TextField fx:id="txtTransferencia" promptText="0.00"
-                           onKeyReleased="#onPagoChanged"
                            onAction="#onCobrar"/>
             </VBox>
 
             <VBox fx:id="boxVales" spacing="4">
                 <Label text="Vales:"/>
                 <TextField fx:id="txtVales" promptText="0.00"
-                           onKeyReleased="#onPagoChanged"
                            onAction="#onCobrar"/>
             </VBox>
 
             <FlowPane hgap="6" vgap="6">
-                <Button fx:id="btnTodoEfectivo"      text="Todo efectivo"       onAction="#onTodoEfectivo"      styleClass="button-ghost"/>
-                <Button fx:id="btnTodoTarjeta"       text="Todo tarjeta"        onAction="#onTodoTarjeta"       styleClass="button-ghost"/>
-                <Button fx:id="btnTodoTransferencia" text="Todo transferencia"  onAction="#onTodoTransferencia" styleClass="button-ghost"/>
-                <Button fx:id="btnTodoVales"         text="Todo vales"          onAction="#onTodoVales"         styleClass="button-ghost"/>
+                <Button fx:id="btnTodoEfectivo"      text="Todo efectivo"       onAction="#onTodoEfectivo"      styleClass="button-ghost" focusTraversable="false"/>
+                <Button fx:id="btnTodoTarjeta"       text="Todo tarjeta"        onAction="#onTodoTarjeta"       styleClass="button-ghost" focusTraversable="false"/>
+                <Button fx:id="btnTodoTransferencia" text="Todo transferencia"  onAction="#onTodoTransferencia" styleClass="button-ghost" focusTraversable="false"/>
+                <Button fx:id="btnTodoVales"         text="Todo vales"          onAction="#onTodoVales"         styleClass="button-ghost" focusTraversable="false"/>
             </FlowPane>
 
             <HBox spacing="8" alignment="CENTER_LEFT">
@@ -117,20 +127,20 @@
                 <Label fx:id="labelPagado" text="\$0.00"/>
             </HBox>
 
-            <Label text="Cambio:"/>
+            <Label fx:id="labelCambioTitulo" text="Cambio:"/>
             <Label fx:id="labelCambio" text="\$0.00" styleClass="cambio-label"/>
 
             <Region VBox.vgrow="ALWAYS"/>
 
-            <Button fx:id="btnCobrar" text="F12 · Cobrar"
+            <Button fx:id="btnCobrar" text="Cobrar  F12"
                     onAction="#onCobrar"
                     maxWidth="Infinity"
-                    styleClass="button-primary, btn-cobrar"/>
+                    styleClass="button-primary, btn-cobrar" focusTraversable="false"/>
 
             <Button fx:id="btnCancelar" text="Cancelar ticket"
                     onAction="#onCancelarTicket"
                     maxWidth="Infinity"
-                    styleClass="button-danger"/>
+                    styleClass="button-danger" focusTraversable="false"/>
         </VBox>
     </right>
 
@@ -139,6 +149,7 @@
         <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
             <padding><Insets top="6" right="12" bottom="6" left="12"/></padding>
             <Label fx:id="labelNumProductos" text="0 productos en la venta actual."/>
+            <Label fx:id="labelEnEspera" text="" styleClass="badge"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label text="Vendido hoy:"/>
             <Label fx:id="labelTotalPagado" text="\$0.00"/>

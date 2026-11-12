@@ -45,7 +45,7 @@ public class AutorizacionService {
         } catch (SesionService.CredencialesInvalidasException e) {
             auditoriaService.registrarIndependiente(login, "AUTORIZACION_RECHAZADA",
                     "Permiso " + permiso + " — usuario capturado: " + capturado + " — " + e.getMessage());
-            throw new NegocioException(e.getMessage().startsWith("Usuario bloqueado")
+            throw new NegocioException(e.isBloqueo()
                     ? e.getMessage()
                     : "Usuario o contraseña de administrador incorrectos.");
         }

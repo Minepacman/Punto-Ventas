@@ -42,12 +42,34 @@ public class CajeroService {
     @Autowired private SesionService    sesionService;
     @Autowired private AuditoriaService auditoriaService;
     @Autowired private SesionMovilService sesionMovilService;
+    @Autowired private ConfiguracionService configuracionService;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
     public List<Cajero> listar() {
         verificarAdminOGerente();
         return cajeroRepo.findAllByOrderByUsuarioAsc();
+    }
+
+    /** Lo único del usuario que ve la pantalla de inicio de sesión (sin hash ni permisos) */
+    public record UsuarioLogin(String usuario, String nombreCompleto) { }
+
+    /** Cuántos usuarios como máximo muestra el selector rápido del login */
+    public static final int MAX_USUARIOS_LOGIN = 12;
+
+    /**
+     * Usuarios activos para el selector rápido del inicio de sesión. Se consulta
+     * ANTES de autenticar, así que no exige sesión ni permiso; por eso solo
+     * devuelve algo cuando el administrador activó la opción en Configuración →
+     * Cajeros (apagada por defecto: mostrar la lista revela los usuarios).
+     */
+    public List<UsuarioLogin> usuariosParaLogin() {
+        if (!configuracionService.isLoginMostrarUsuarios()) return List.of();
+        return cajeroRepo.findAllByOrderByUsuarioAsc().stream()
+                .filter(Cajero::isActivo)
+                .limit(MAX_USUARIOS_LOGIN)
+                .map(c -> new UsuarioLogin(c.getUsuario(), c.getNombreCompleto()))
+                .toList();
     }
 
     // ── Altas / cambios ───────────────────────────────────────────────────
@@ -69,7 +91,7 @@ public class CajeroService {
 
         usuario = normalizarUsuario(usuario);
         nombreCompleto = validarNombre(nombreCompleto);
-        PoliticaContrasena.validar(contrasena);
+        PoliticaContrasena.validar(contrasena, usuario);
         if (rol == null) throw new NegocioException("Selecciona el rol del usuario.");
 
         if (cajeroRepo.findByUsuarioIgnoreCase(usuario).isPresent()) {
@@ -123,7 +145,7 @@ public class CajeroService {
         if (rol == null) throw new NegocioException("Selecciona el rol del usuario.");
 
         boolean cambiaContrasena = nuevaContrasena != null && !nuevaContrasena.isEmpty();
-        if (cambiaContrasena) PoliticaContrasena.validar(nuevaContrasena);
+        if (cambiaContrasena) PoliticaContrasena.validar(nuevaContrasena, usuario);
 
         cajeroRepo.findByUsuarioIgnoreCase(usuario)
                 .filter(otro -> !otro.getId().equals(id))
@@ -165,9 +187,9 @@ public class CajeroService {
     @Transactional
     public void cambiarContrasena(Long id, String nuevaContrasena) {
         sesionService.verificarAdmin();
-        PoliticaContrasena.validar(nuevaContrasena);
-
         Cajero c = obtener(id);
+        PoliticaContrasena.validar(nuevaContrasena, c.getUsuario());
+
         c.setContrasenaHash(passwordEncoder.encode(nuevaContrasena));
         c.setDebeCambiarContrasena(true);
         cajeroRepo.save(c);

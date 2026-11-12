@@ -77,7 +77,7 @@
                 <TextArea fx:id="txtNotas" prefRowCount="2" wrapText="true" promptText="Notas para el proveedor (opcional)"/>
 
                 <HBox spacing="12" alignment="CENTER_LEFT">
-                    <Label fx:id="lblTotal" text="Total: \$0.00" style="-fx-font-weight:bold"/>
+                    <Label fx:id="lblTotal" text="Total: \$0.00" styleClass="text-bold"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <Label fx:id="lblMensaje" text="" styleClass="hint" wrapText="true"/>
                 </HBox>

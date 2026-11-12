@@ -110,7 +110,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .cabecera h1 { font-size: 1.15rem; flex: 1; }
 .pastilla {
-  font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
   padding: .2rem .55rem; border-radius: 999px; background: var(--warning-subtle); color: var(--warning-text);
 }
 .vista { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 1rem 1rem calc(96px + env(safe-area-inset-bottom)); }
@@ -221,6 +221,96 @@ h1, h2, h3, p { margin: 0; }
 /* ===== Aviso emergente ===== */
 .toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30; max-width: 92vw;
   background: #222B36; color: #fff; padding: .75rem 1.1rem; border-radius: 14px; font-weight: 600; box-shadow: var(--shadow); }
+
+/* ===== Responsivo (mobile-first: lo de arriba es teléfono vertical; aquí se amplía) ===== */
+html, body { overflow-x: clip; }
+.cabecera h1 { font-size: clamp(1.05rem, 0.9rem + 1vw, 1.5rem); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titulo { font-size: clamp(1.2rem, 1.05rem + 1vw, 1.6rem); }
+.kpi .v { font-size: clamp(1.25rem, 1rem + 1.6vw, 1.7rem); overflow-wrap: anywhere; }
+.kpi.grande .v { font-size: clamp(1.7rem, 1.3rem + 2.4vw, 2.4rem); }
+.login h1 { font-size: clamp(1.4rem, 1.2rem + 1.2vw, 1.9rem); }
+.cabecera { padding-left: calc(1rem + env(safe-area-inset-left)); padding-right: calc(1rem + env(safe-area-inset-right)); }
+.vista { max-width: 760px; padding-left: calc(1rem + env(safe-area-inset-left)); padding-right: calc(1rem + env(safe-area-inset-right)); }
+.nav { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.campo, .rejilla > *, .fila .cuerpo, .linea .n { min-width: 0; }
+.entrada[type="date"] { min-width: 0; text-align: left; }
+.top-item .l span:first-child, .linea .n, .previa { overflow-wrap: anywhere; min-width: 0; }
+.segmentos button { min-width: 0; padding: 0 .3rem; font-size: clamp(.8rem, .72rem + .6vw, 1rem); }
+.fila .der { white-space: nowrap; }
+.interruptor::before { content: ""; position: absolute; inset: -8px -4px; }   /* zona táctil >= 44px */
+.lista-rej { display: block; }
+.estrecho { max-width: 640px; }
+
+@media (hover: hover) {
+  .fila:hover { background: var(--accent-subtle); border-color: var(--accent); }
+  .btn:hover:not(.btn-primario):not(.btn-peligro) { background: var(--inset); }
+  .nav button:hover { color: var(--accent-text); }
+}
+
+/* Teléfono apaisado: poca altura, se compacta barra y modales */
+@media (orientation: landscape) and (max-height: 520px) {
+  .nav button { min-height: 48px; grid-auto-flow: column; gap: .4rem; font-size: .8rem; }
+  .nav button .ico { font-size: 1.15rem; }
+  .vista { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .cabecera { padding-top: calc(env(safe-area-inset-top) + .3rem); padding-bottom: .3rem; }
+  .hoja { max-height: 96dvh; padding-top: .9rem; }
+  .login { align-items: start; padding: .75rem 1rem; }
+  .login-caja { gap: .7rem; }
+  .logo { width: 48px; height: 48px; font-size: 1.5rem; border-radius: 14px; }
+  .toast { bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .previa { max-height: 60dvh; }
+}
+
+/* Teléfono grande / tableta vertical */
+@media (min-width: 600px) {
+  .velo { align-items: center; padding: 1rem; }
+  .hoja { border-radius: 24px; max-height: 90dvh; overscroll-behavior: contain; }
+  .r4 { grid-template-columns: repeat(4, 1fr); }
+  .kpi .v { font-size: clamp(1.4rem, 1rem + 1.2vw, 1.9rem); }
+}
+@media (min-width: 700px) {
+  .lista-rej { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; align-items: stretch; }
+  .lista-rej > :not(.fila) { grid-column: 1 / -1; }
+  .lista-rej .fila { margin-top: 0; }
+}
+@media (min-width: 768px) {
+  .vista { max-width: 980px; padding-top: 1.5rem; }
+  .nav-int { max-width: 980px; }
+  .vista > * + * { margin-top: 1.25rem; }
+}
+
+/* Escritorio / tableta horizontal: barra lateral fija */
+@media (min-width: 1024px) {
+  #app { padding-left: 232px; }
+  .nav { top: 0; right: auto; bottom: 0; width: 232px; border-top: 0; border-right: 1px solid var(--border-subtle);
+    justify-content: flex-start; padding: 1.25rem .75rem calc(1rem + env(safe-area-inset-bottom)) calc(.75rem + env(safe-area-inset-left)); }
+  .nav-int { flex-direction: column; max-width: none; gap: .25rem; }
+  .nav button { flex: none; display: flex; justify-content: flex-start; align-items: center; gap: .75rem;
+    min-height: 48px; padding: 0 1rem; border-radius: 12px; font-size: .95rem; text-align: left; }
+  .nav button .ico { font-size: 1.25rem; width: 1.6rem; text-align: center; }
+  .nav button[aria-current="page"] { background: var(--accent-subtle); }
+  .nav button[aria-current="page"] .ico { transform: none; }
+  .vista { max-width: 1180px; padding-bottom: 2rem; padding-left: 2rem; padding-right: 2rem; }
+  .cabecera { padding-left: 2rem; padding-right: 2rem; }
+  .toast { bottom: 24px; left: calc(50% + 116px); }
+  .lista-rej { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .vista-int { grid-template-columns: 1fr 1fr; align-items: start; }
+  .vista-int > .rejilla { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .vista-int > .rejilla > .kpi { grid-column: auto !important; }
+  .vista-int > .rejilla > .kpi.grande { grid-column: span 2 !important; }
+  .vista-int > .rejilla > .kpi:nth-child(4) { grid-column: 1 / -1 !important; }
+  .cfg { grid-template-columns: 1fr 1fr; align-items: start; }
+  .cfg > .tarjeta:first-child, .cfg > .btn { grid-column: 1 / -1; }
+  .cfg > .btn { justify-self: start; min-width: 240px; }
+}
+@media (min-width: 1280px) {
+  .lista-rej { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  *:not(.rueda), *:not(.rueda)::before, *:not(.rueda)::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
 </style>
 </head>
 <body>
@@ -530,9 +620,9 @@ async function revalidar() {
    ============================================================================ */
 function pantallaLogin(mensaje) {
   const error = h('div', { class: mensaje ? 'aviso-err' : 'oculto', role: 'alert' }, mensaje || '');
-  const usuario = h('input', { class: 'entrada', id: 'usuario', type: 'text', autocomplete: 'username',
+  const usuario = h('input', { class: 'entrada', id: 'usuario', type: 'text', enterkeyhint: 'next', autocomplete: 'username',
     autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', required: true });
-  const clave = h('input', { class: 'entrada', id: 'clave', type: 'password', autocomplete: 'current-password', required: true });
+  const clave = h('input', { class: 'entrada', id: 'clave', type: 'password', enterkeyhint: 'go', autocomplete: 'current-password', required: true });
   const ver = h('button', { class: 'btn icono-btn', type: 'button', 'aria-label': 'Mostrar contraseña' }, '👁');
   ver.addEventListener('click', () => {
     clave.type = clave.type === 'password' ? 'text' : 'password';
@@ -611,7 +701,7 @@ function entrarAlSistema() {
   contVista = h('main', { class: 'vista', id: 'vista', tabindex: '-1' });
   contNav = h('div', { class: 'nav-int' });
   raiz.replaceChildren(
-    h('header', { class: 'cabecera' }, tituloCab, h('span', { class: 'pastilla' }, 'Datos demo')),
+    h('header', { class: 'cabecera' }, tituloCab),
     contVista,
     h('nav', { class: 'nav', 'aria-label': 'Secciones' }, contNav));
   const ok = permitidas();
@@ -731,7 +821,7 @@ async function vistaHistorial() {
   const hoy = claveDia(new Date());
   const desde = h('input', { class: 'entrada', type: 'date', id: 'desde', value: hoy, max: hoy });
   const hasta = h('input', { class: 'entrada', type: 'date', id: 'hasta', value: hoy, max: hoy });
-  const lista = h('div');
+  const lista = h('div', { class: 'lista-rej' });
   const resumen = h('p', { class: 'sub' });
 
   const atajo = (t, f) => h('button', { class: 'btn btn-suave', type: 'button', onclick: () => { f(); cargar(); } }, t);
@@ -740,7 +830,7 @@ async function vistaHistorial() {
     h('div', { class: 'rejilla' },
       h('div', { class: 'campo' }, h('label', { for: 'desde' }, 'Desde'), desde),
       h('div', { class: 'campo' }, h('label', { for: 'hasta' }, 'Hasta'), hasta)),
-    h('div', { class: 'rejilla' },
+    h('div', { class: 'rejilla r4' },
       atajo('Hoy', () => { desde.value = hasta.value = hoy; }),
       atajo('Ayer', () => { desde.value = hasta.value = ayer(); }),
       atajo('Últimos 7 días', () => { desde.value = claveDia(sumarDias(new Date(), -6)); hasta.value = hoy; }),
@@ -789,8 +879,8 @@ function detalleVenta(v) {
 async function vistaInventario() {
   let productos = await api.inventario('');
   let filtro = 'todos', texto = '', pendiente = null, secuencia = 0;
-  const lista = h('div');
-  const busca = h('input', { class: 'entrada', type: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off' });
+  const lista = h('div', { class: 'lista-rej' });
+  const busca = h('input', { class: 'entrada', type: 'search', inputmode: 'search', enterkeyhint: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off' });
   const chips = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Filtrar' });
   const estado = p => p.stock <= 0 ? ['Agotado', 'mal'] : p.stock <= p.minimo ? ['Stock bajo', 'aviso'] : ['En existencia', 'ok'];
 
@@ -882,7 +972,7 @@ function hojaAjuste(producto, alGuardar) {
          aplican de verdad (api.aplicarTicket -> entradas reales de inventario).
    ============================================================================ */
 async function vistaEscanear() {
-  const caja = h('div', { style: 'display:grid;gap:1rem' });
+  const caja = h('div', { class: 'estrecho', style: 'display:grid;gap:1rem' });
   let urlPrevia = null;
   const liberar = () => { if (urlPrevia) { URL.revokeObjectURL(urlPrevia); urlPrevia = null; } };
 
@@ -996,7 +1086,7 @@ async function vistaConfig() {
         } }, 'Cerrar sesión'))]);
   });
 
-  return h('div', { style: 'display:grid;gap:1rem' },
+  return h('div', { class: 'cfg', style: 'display:grid;gap:1rem' },
     h('section', { class: 'tarjeta' },
       h('div', { class: 'titulo' }, s.nombre),
       h('div', { class: 'sub' }, s.rolEtiqueta + ' · usuario ' + s.usuario)),

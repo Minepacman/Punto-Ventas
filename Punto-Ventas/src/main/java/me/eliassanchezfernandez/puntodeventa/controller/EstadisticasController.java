@@ -20,10 +20,17 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
+import javafx.scene.Node;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.AyudaEstadisticas;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.ContextoEstadisticas;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionEstadisticas;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionRezagados;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionSurtido;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.TutorialEstadisticasDialogo;
 import me.eliassanchezfernandez.puntodeventa.model.ClimaRegistro;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.Franja;
@@ -36,12 +43,18 @@ import me.eliassanchezfernandez.puntodeventa.service.ClimaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Comparacion;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.CriterioTop;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.MadurezDatos;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Periodo;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.RankingProductos;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Totales;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
+import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
+import me.eliassanchezfernandez.puntodeventa.service.ReabastecimientoService;
 import me.eliassanchezfernandez.puntodeventa.service.RecomendacionService;
 import me.eliassanchezfernandez.puntodeventa.service.RecomendacionService.Sugerencia;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.service.TutorialesService;
 import me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -56,6 +69,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,7 +85,14 @@ import java.util.function.Function;
  * main.fxml incluye esta vista para todos, pero MainController solo muestra
  * la pestaña a quien tiene VER_HISTORIAL; sin ese permiso no se consulta nada
  * en initialize(). No se muestran costos ni ganancias (no hace falta
- * VER_GANANCIAS); los totales sí, como en el historial de ventas.
+ * VER_GANANCIAS); los totales sí, como en el historial de ventas. Las
+ * secciones de Reabastecimiento muestran costos solo si el usuario puede verlos.
+ *
+ * Secciones registrables: además de lo que está en el FXML, {@link #secciones()}
+ * da de alta tarjetas que implementan {@link SeccionEstadisticas}; cada una se
+ * coloca en el contenedor de su pestaña, se carga en segundo plano y tiene su
+ * botón «?» (texto en {@link AyudaEstadisticas}). El tutorial de la primera
+ * vez se muestra una sola vez por usuario (TutorialesService).
  */
 @Component
 @Scope("prototype")
@@ -90,12 +112,24 @@ public class EstadisticasController implements Initializable {
     @Autowired private RecomendacionService recomendacionService;
     @Autowired private ClimaService         climaService;
     @Autowired private ConfiguracionService configuracionService;
+    @Autowired private ReabastecimientoService reabastecimientoService;
+    @Autowired private ProveedorService     proveedorService;
+    @Autowired private TutorialesService    tutorialesService;
 
     // Cabecera
     @FXML private Label  lblNivel;
     @FXML private Label  lblNivelMensaje;
+    @FXML private Label  lblConfianza;
+    @FXML private HBox   boxNivel;
     @FXML private Label  lblActualizado;
     @FXML private Button btnRecalcular;
+    @FXML private Button btnAyuda;
+
+    // Contenedores de las secciones registradas (una por pestaña)
+    @FXML private VBox boxSeccionesProductos;
+    @FXML private VBox boxSeccionesReabastecimiento;
+    @FXML private VBox boxSeccionesRecomendaciones;
+    @FXML private VBox boxSeccionesClima;
 
     // Periodo
     @FXML private ToggleGroup  grupoPeriodo;
@@ -129,6 +163,9 @@ public class EstadisticasController implements Initializable {
     // Productos
     @FXML private Label  lblProductosTitulo;
     @FXML private Button btnExportarProductos;
+    @FXML private ToggleGroup  grupoCriterioTop;
+    @FXML private ToggleButton tgTopImporte;
+    @FXML private ToggleButton tgTopPiezas;
     @FXML private TableView<FilaProducto> tablaProductos;
 
     // Cajas (varias cajas contra un servidor), cajeros y horas
@@ -167,7 +204,13 @@ public class EstadisticasController implements Initializable {
     /** Periodo personalizado vigente (null = usar el botón seleccionado) */
     private Periodo personalizado;
 
-    public record FilaProducto(int pos, String producto, String departamento, double piezas, double importe) { }
+    /** Secciones registradas, en el orden en que se colocan en su pestaña */
+    private final List<SeccionEstadisticas<?>> secciones = new ArrayList<>();
+
+    /** Madurez de la última carga (para el tutorial) */
+    private MadurezDatos madurezActual;
+
+    public record FilaProducto(int pos, String producto, String departamento, double piezas, double importe, double porcentaje) { }
     public record FilaCorrelacion(String producto, String tipo, String clave, double piezas, double indice) { }
     public record FilaClima(String condicion, int ventas, double importe) { }
 
@@ -175,6 +218,7 @@ public class EstadisticasController implements Initializable {
     public void initialize(URL url, ResourceBundle rb) {
         configurarTablas();
         gridCalor.getChildren().clear();
+        registrarSecciones();
 
         if (sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
             recargar();
@@ -186,7 +230,149 @@ public class EstadisticasController implements Initializable {
         }
     }
 
+    // ── Secciones registrables ────────────────────────────────────────────
+
+    /**
+     * Catálogo de secciones. Para agregar una: implementar SeccionEstadisticas,
+     * dar de alta su ayuda en AyudaEstadisticas con la misma clave y añadirla aquí.
+     */
+    private List<SeccionEstadisticas<?>> secciones() {
+        return List.of(
+                new SeccionRezagados(reabastecimientoService),
+                new SeccionSurtido(reabastecimientoService, proveedorService, sesionService));
+    }
+
+    private final SeccionEstadisticas.Acciones acciones = new SeccionEstadisticas.Acciones() {
+        @Override public void ayuda(String clave) { mostrarAyuda(clave); }
+        @Override public void recargar(SeccionEstadisticas<?> seccion) { recargarSeccion(seccion); }
+    };
+
+    /** Construye cada sección y la coloca en el contenedor de su pestaña */
+    private void registrarSecciones() {
+        Map<SeccionEstadisticas.Ubicacion, VBox> contenedores = new EnumMap<>(SeccionEstadisticas.Ubicacion.class);
+        contenedores.put(SeccionEstadisticas.Ubicacion.PRODUCTOS,        boxSeccionesProductos);
+        contenedores.put(SeccionEstadisticas.Ubicacion.REABASTECIMIENTO, boxSeccionesReabastecimiento);
+        contenedores.put(SeccionEstadisticas.Ubicacion.RECOMENDACIONES,  boxSeccionesRecomendaciones);
+        contenedores.put(SeccionEstadisticas.Ubicacion.CLIMA,            boxSeccionesClima);
+        secciones.clear();
+        for (SeccionEstadisticas<?> s : secciones()) {
+            VBox contenedor = contenedores.get(s.ubicacion());
+            if (contenedor == null) continue;
+            try {
+                Node nodo = s.construir(acciones);
+                contenedor.getChildren().add(nodo);
+                secciones.add(s);
+            } catch (RuntimeException e) {
+                e.printStackTrace();   // una sección rota no debe tirar la pantalla
+            }
+        }
+    }
+
+    /** Resultado de cargar una sección en segundo plano (datos o error) */
+    private record CargaSeccion(Object datos, String error) { }
+
+    /** Corre cargar() de cada sección (fuera del hilo de JavaFX) */
+    private Map<SeccionEstadisticas<?>, CargaSeccion> cargarSecciones(List<SeccionEstadisticas<?>> lista, ContextoEstadisticas ctx) {
+        Map<SeccionEstadisticas<?>, CargaSeccion> r = new IdentityHashMap<>();
+        for (SeccionEstadisticas<?> s : lista) {
+            try {
+                r.put(s, new CargaSeccion(s.cargar(ctx), null));
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+                r.put(s, new CargaSeccion(null, e.getMessage() != null ? e.getMessage() : e.toString()));
+            }
+        }
+        return r;
+    }
+
+    /** pintar()/pintarError() de cada sección (hilo de JavaFX) */
+    private void pintarSecciones(Map<SeccionEstadisticas<?>, CargaSeccion> cargas) {
+        if (cargas == null) return;
+        cargas.forEach((s, c) -> {
+            try {
+                if (c.error() != null) s.pintarError(c.error());
+                else pintarCrudo(s, c.datos());
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+                s.pintarError(e.getMessage() != null ? e.getMessage() : e.toString());
+            }
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <D> void pintarCrudo(SeccionEstadisticas<D> s, Object datos) {
+        s.pintar((D) datos);
+    }
+
+    /** Vuelve a cargar una sola sección (por ejemplo, cambió un filtro propio) */
+    private void recargarSeccion(SeccionEstadisticas<?> seccion) {
+        if (!sesionService.tienePermiso(Permiso.VER_HISTORIAL)) return;
+        final ContextoEstadisticas ctx = contexto();
+        Thread t = new Thread(() -> {
+            Map<SeccionEstadisticas<?>, CargaSeccion> cargas = cargarSecciones(List.of(seccion), ctx);
+            Platform.runLater(() -> pintarSecciones(cargas));
+        }, "estadisticas-seccion-" + seccion.clave());
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private ContextoEstadisticas contexto() {
+        return new ContextoEstadisticas(periodoActual(), cajaFiltro(), madurezActual);
+    }
+
+    private List<SeccionEstadisticas<?>> seccionesDelPeriodo() {
+        return secciones.stream().filter(SeccionEstadisticas::dependeDelPeriodo).toList();
+    }
+
+    // ── Ayuda y tutorial ──────────────────────────────────────────────────
+
+    /** Botón «? Ayuda» de la cabecera: vuelve a abrir el tutorial */
+    @FXML
+    private void onAyuda() {
+        mostrarTutorial();
+    }
+
+    /** Botones «?» del FXML: la clave de ayuda va en userData */
+    @FXML
+    private void onAyudaSeccion(ActionEvent e) {
+        if (e.getSource() instanceof Node n && n.getUserData() != null) mostrarAyuda(String.valueOf(n.getUserData()));
+    }
+
+    private void mostrarAyuda(String clave) {
+        TutorialEstadisticasDialogo.mostrarAyuda(ventana(), AyudaEstadisticas.de(clave));
+    }
+
+    private void mostrarTutorial() {
+        TutorialEstadisticasDialogo.mostrar(ventana(), AyudaEstadisticas.paginasTutorial(madurezActual));
+    }
+
+    /** Primera vez por usuario: abre el tutorial y deja la marca (aunque lo cierre con Esc) */
+    private void mostrarTutorialSiEsLaPrimeraVez(boolean yaVisto) {
+        if (yaVisto) return;
+        try {
+            tutorialesService.marcarEstadisticasVisto();
+        } catch (RuntimeException e) {
+            e.printStackTrace();   // sin marca se volvería a mostrar; no es grave
+        }
+        mostrarTutorial();
+    }
+
+    private javafx.stage.Window ventana() {
+        return lblNivel != null && lblNivel.getScene() != null ? lblNivel.getScene().getWindow() : null;
+    }
+
     // ── Acciones FXML ─────────────────────────────────────────────────────
+
+    /** Cambio de criterio del ranking (importe / piezas): se vuelve a leer el periodo */
+    @FXML
+    private void onCriterioTop(ActionEvent e) {
+        if (grupoCriterioTop.getSelectedToggle() == null && e.getSource() instanceof ToggleButton tb) tb.setSelected(true);
+        cargarPeriodo();
+    }
+
+    private CriterioTop criterioTop() {
+        return grupoCriterioTop != null && grupoCriterioTop.getSelectedToggle() == tgTopPiezas ? CriterioTop.PIEZAS : CriterioTop.IMPORTE;
+    }
 
     @FXML
     private void onPeriodo(ActionEvent e) {
@@ -285,14 +471,16 @@ public class EstadisticasController implements Initializable {
     /** Lo que se lee de la base de datos para el periodo (en segundo plano) */
     private record DatosPeriodo(Totales totales, List<Comparacion> comparaciones, Map<LocalDate, Double> serie,
                                 double[] porDia, Map<Franja, Totales> porFranja, double[][] mapa,
-                                List<EstadisticasService.ProductoTop> top, List<EstadisticasService.VentasClima> porClima,
+                                RankingProductos ranking, List<EstadisticasService.VentasClima> porClima,
                                 List<EstadisticasService.VentasCajero> porCajero, List<EstadisticasService.VentasHora> porHora,
                                 List<EstadisticasService.VentasPorCaja> porCaja, List<Integer> cajas) { }
 
-    /** Lo que se lee para las recomendaciones, el nivel y el clima de ahora */
-    private record DatosGenerales(NivelDatos nivel, Optional<LocalDateTime> ultimaActualizacion, Optional<ClimaRegistro> clima,
+    /** Lo que se lee para las recomendaciones, el nivel/madurez, el clima de ahora y el tutorial */
+    private record DatosGenerales(MadurezDatos madurez, Optional<LocalDateTime> ultimaActualizacion, Optional<ClimaRegistro> clima,
                                   Configuracion configuracion, List<ParProductos> pares, List<Sugerencia> momento,
-                                  List<ProductoClima> correlacion) { }
+                                  List<ProductoClima> correlacion, boolean tutorialVisto) {
+        NivelDatos nivel() { return madurez.nivel(); }
+    }
 
     /**
      * Recalcula todo lo visible (lo llama MainController al entrar a la pestaña).
@@ -304,6 +492,7 @@ public class EstadisticasController implements Initializable {
         final int gen = ++generacionCarga;
         final Periodo p = periodoActual();
         final Integer caja = cajaFiltro();
+        final List<SeccionEstadisticas<?>> todas = List.copyOf(secciones);
         lblActualizado.setText("Cargando…");
         Thread t = new Thread(() -> {
             DatosGenerales g = null;
@@ -312,12 +501,16 @@ public class EstadisticasController implements Initializable {
             try { d = leerPeriodo(p, caja); } catch (RuntimeException e) { e.printStackTrace(); }
             final DatosGenerales gf = g;
             final DatosPeriodo df = d;
+            final Map<SeccionEstadisticas<?>, CargaSeccion> cargas =
+                    cargarSecciones(todas, new ContextoEstadisticas(p, caja, g != null ? g.madurez() : null));
             Platform.runLater(() -> {
                 if (gen != generacionCarga) return;
                 pintarNivel(gf);
                 pintarPeriodo(p, df);
                 pintarRecomendaciones(gf);
                 pintarClima(gf);
+                pintarSecciones(cargas);
+                if (gf != null) mostrarTutorialSiEsLaPrimeraVez(gf.tutorialVisto());
             });
         }, "estadisticas-cargar");
         t.setDaemon(true);
@@ -325,21 +518,27 @@ public class EstadisticasController implements Initializable {
     }
 
     private DatosGenerales leerGenerales() {
-        NivelDatos nivel = estadisticasService.nivelDatosActual();
+        MadurezDatos madurez = estadisticasService.madurezActual();
         Optional<ClimaRegistro> clima = climaService.actual();
         Optional<LocalDateTime> ultima = agregadosService.ultimaActualizacion();
         Configuracion cfg = configuracionService.obtener();
         List<ParProductos> pares = estadisticasService.paresTop(12);
-        List<Sugerencia> momento = recomendacionService.sugerir(List.of(), LocalDateTime.now(), clima.orElse(null), 8, nivel);
+        List<Sugerencia> momento = recomendacionService.sugerir(List.of(), LocalDateTime.now(), clima.orElse(null), 8, madurez);
         List<ProductoClima> correlacion = estadisticasService.correlacionClima();
-        return new DatosGenerales(nivel, ultima, clima, cfg, pares, momento, correlacion);
+        boolean tutorialVisto = true;
+        try {
+            tutorialVisto = tutorialesService.estadisticasVisto();
+        } catch (RuntimeException e) {
+            e.printStackTrace();   // si no se puede leer la marca, no se insiste con el tutorial
+        }
+        return new DatosGenerales(madurez, ultima, clima, cfg, pares, momento, correlacion, tutorialVisto);
     }
 
     private DatosPeriodo leerPeriodo(Periodo p, Integer caja) {
         return new DatosPeriodo(estadisticasService.totales(p), estadisticasService.comparaciones(),
                 estadisticasService.serieDiaria(p), estadisticasService.porDiaSemana(p),
                 estadisticasService.porFranja(p), estadisticasService.mapaCalor(p),
-                estadisticasService.topProductos(p, TOP_PRODUCTOS), estadisticasService.ventasPorClima(p),
+                estadisticasService.ranking(p, TOP_PRODUCTOS, criterioTop()), estadisticasService.ventasPorClima(p),
                 estadisticasService.ventasPorCajero(p, caja), estadisticasService.ventasPorHora(p, caja),
                 estadisticasService.ventasPorCaja(p), estadisticasService.cajasConVentas());
     }
@@ -350,12 +549,34 @@ public class EstadisticasController implements Initializable {
             quitarColorDeNivel();
             lblNivel.setText("—");
             lblNivelMensaje.setText("No se pudo calcular el nivel de datos.");
+            lblConfianza.setText("");
             lblActualizado.setText("");
             return;
         }
+        madurezActual = g.madurez();
         mostrarNivel(g.nivel());
+        mostrarMadurez(g.madurez());
         lblActualizado.setText(g.ultimaActualizacion()
                 .map(f -> "Agregados: " + f.format(FMT_HORA)).orElse("Agregados: sin calcular"));
+    }
+
+    /** Indicador de madurez: días de ventas, aviso de confiabilidad y confianza de las recomendaciones */
+    private void mostrarMadurez(MadurezDatos m) {
+        lblNivelMensaje.setText(m.mensaje());
+        boxNivel.getStyleClass().removeAll("callout-warning", "callout-success", "callout-info");
+        lblConfianza.getStyleClass().removeAll(CLASES_NIVEL);
+        if (!m.hayVentas()) {
+            boxNivel.getStyleClass().add("callout-info");
+            lblConfianza.setText("Confianza: —");
+        } else if (m.confiable()) {
+            boxNivel.getStyleClass().add("callout-success");
+            lblConfianza.setText("Confianza " + m.porcentajeConfianza() + " %");
+            lblConfianza.getStyleClass().add("badge-success");
+        } else {
+            boxNivel.getStyleClass().add("callout-warning");
+            lblConfianza.setText("Confianza " + m.porcentajeConfianza() + " % · día " + m.diasDesdePrimeraVenta() + " de " + EstadisticasService.DIAS_CONFIABLES);
+            lblConfianza.getStyleClass().add("badge-warning");
+        }
     }
 
     private Periodo periodoActual() {
@@ -374,6 +595,8 @@ public class EstadisticasController implements Initializable {
         final int gen = ++generacionCarga;
         final Periodo p = periodoActual();
         final Integer caja = cajaFiltro();
+        final List<SeccionEstadisticas<?>> delPeriodo = seccionesDelPeriodo();
+        final ContextoEstadisticas ctx = new ContextoEstadisticas(p, caja, madurezActual);
         lblPeriodo.setText(etiquetaDe(p));
         Thread t = new Thread(() -> {
             DatosPeriodo d = null;
@@ -386,6 +609,7 @@ public class EstadisticasController implements Initializable {
             }
             final DatosPeriodo df = d;
             final String mensaje = error;
+            final Map<SeccionEstadisticas<?>, CargaSeccion> cargas = cargarSecciones(delPeriodo, ctx);
             Platform.runLater(() -> {
                 if (gen != generacionCarga) return;
                 if (df == null) {
@@ -394,6 +618,7 @@ public class EstadisticasController implements Initializable {
                     return;
                 }
                 pintarPeriodo(p, df);
+                pintarSecciones(cargas);
             });
         }, "estadisticas-periodo");
         t.setDaemon(true);
@@ -422,7 +647,7 @@ public class EstadisticasController implements Initializable {
         mostrarDiaSemana(d.porDia());
         mostrarFranjas(d.porFranja());
         construirMapaDeCalor(d.mapa());
-        mostrarProductos(p, d.top());
+        mostrarProductos(p, d.ranking());
         mostrarVentasPorClima(d.porClima());
         tablaCajeros.getItems().setAll(d.porCajero());
         tablaHoras.getItems().setAll(d.porHora());
@@ -533,16 +758,17 @@ public class EstadisticasController implements Initializable {
         }
     }
 
-    private void mostrarProductos(Periodo p, List<EstadisticasService.ProductoTop> top) {
+    private void mostrarProductos(Periodo p, RankingProductos ranking) {
         List<FilaProducto> filas = new ArrayList<>();
         int pos = 1;
-        for (EstadisticasService.ProductoTop t : top) {
+        for (EstadisticasService.ProductoTop t : ranking.productos()) {
             filas.add(new FilaProducto(pos++, t.producto().getDescripcion(),
                     t.producto().getDepartamento() != null ? t.producto().getDepartamento().getNombre() : "—",
-                    t.piezas(), t.importe()));
+                    t.piezas(), t.importe(), ranking.porcentaje(t)));
         }
         tablaProductos.setItems(FXCollections.observableArrayList(filas));
-        lblProductosTitulo.setText("Ranking por importe · " + p.etiqueta());
+        lblProductosTitulo.setText("Ranking " + ranking.criterio().getEtiqueta().toLowerCase(ES_MX) + " · " + p.etiqueta()
+                + " · " + cantidad(ranking.piezasTotal()) + " piezas, " + Moneda.formato(ranking.importeTotal()) + " en total");
     }
 
     private void mostrarVentasPorClima(List<EstadisticasService.VentasClima> porClimaVentas) {
@@ -663,7 +889,8 @@ public class EstadisticasController implements Initializable {
                 columna("Producto",     260, false, FilaProducto::producto),
                 columna("Departamento", 160, false, FilaProducto::departamento),
                 columna("Piezas",       90,  true,  f -> cantidad(f.piezas())),
-                columna("Importe",      120, true,  f -> Moneda.formato(f.importe())));
+                columna("Importe",      120, true,  f -> Moneda.formato(f.importe())),
+                columna("% del total",  90,  true,  f -> String.format("%.1f %%", f.porcentaje())));
         tablaProductos.setPlaceholder(new Label("Sin ventas en el periodo."));
 
         tablaCorrelacion.getColumns().setAll(

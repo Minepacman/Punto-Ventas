@@ -29,3 +29,6 @@ datos.db-shm
 
 # Copias de trabajo temporales de agentes
 .claude/worktrees/
+
+# Contexto local para Claude Code (no publicar)
+CLAUDE.md

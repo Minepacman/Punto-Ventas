@@ -28,6 +28,10 @@
 
             <Separator orientation="VERTICAL"/>
 
+            <Button fx:id="btnBloquear" text="Bloquear" onAction="#onBloquear">
+                <tooltip><Tooltip text="Volver al inicio de sesión sin cerrar el programa (Ctrl+L). El ticket sin cobrar se conserva."/></tooltip>
+            </Button>
+
             <Button fx:id="btnCerrarSesion" text="Cerrar sesión" onAction="#onCerrarSesion"/>
 
             <Button fx:id="btnSalir" text="Salir" onAction="#onSalir"
@@ -75,7 +79,13 @@
         <HBox styleClass="status-bar" spacing="12">
             <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
             <Region HBox.hgrow="ALWAYS"/>
-            <Label text="F1 Ventas · F2 Clientes · F3 Productos · F4 Inventario · F5 Estadísticas · F12 Cobrar"/>
+            <!-- El texto lo arma MainController desde el catálogo util/Atajo -->
+            <Label fx:id="labelAtajos" text="F1 Ventas · F2 Clientes · F3 Productos · F4 Inventario · F5 Estadísticas · F6 Buscar · F11 En espera · F12 Cobrar"/>
+            <Hyperlink fx:id="lnkAtajos" text="Atajos F10" onAction="#onAtajos" focusTraversable="false"/>
+            <!-- Vuelve a mostrar el recorrido por las pestañas (TutorialGeneralDialogo) -->
+            <Hyperlink fx:id="lnkTutorial" text="Tutorial" onAction="#onTutorial" focusTraversable="false">
+                <tooltip><Tooltip text="Ver de nuevo el recorrido por las pestañas del programa"/></tooltip>
+            </Hyperlink>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="labelVersion" text="v1.0.0"/>
         </HBox>

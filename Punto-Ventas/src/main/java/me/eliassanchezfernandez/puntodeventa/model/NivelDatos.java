@@ -13,7 +13,7 @@ public enum NivelDatos {
     PARCIAL("Datos parciales",
             "Ya hay historial suficiente para tendencias básicas; las recomendaciones mejoran con más días."),
     SUFICIENTE("Datos suficientes",
-            "Hay al menos cuatro semanas de historial: las estadísticas y recomendaciones son confiables.");
+            "Hay al menos un mes de historial: las estadísticas y recomendaciones son confiables.");
 
     private final String etiqueta;
     private final String mensaje;

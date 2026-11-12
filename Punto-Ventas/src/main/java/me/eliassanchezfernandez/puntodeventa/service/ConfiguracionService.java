@@ -198,6 +198,38 @@ public class ConfiguracionService {
                 c.isMostrarSugerencias());
     }
 
+    // ── Inicio de sesión ──────────────────────────────────────────────────
+
+    /** La pantalla de inicio de sesión muestra la lista de usuarios activos (se lee ANTES de autenticar; sin permiso) */
+    public boolean isLoginMostrarUsuarios() { return obtener().isLoginMostrarUsuarios(); }
+
+    /** ¿Hay un código de recuperación del administrador vigente? (se lee desde el login, sin permiso) */
+    public boolean isHayCodigoRecuperacion() { return obtener().isHayCodigoRecuperacion(); }
+
+    @Transactional
+    public Configuracion guardarOpcionesLogin(boolean mostrarUsuarios) {
+        sesionService.verificarAdmin();
+        Configuracion c = obtenerParaEditar();
+        boolean antes = c.isLoginMostrarUsuarios();
+        c.setLoginMostrarUsuarios(mostrarUsuarios);
+        Configuracion g = guardarConfig(c);
+        auditar("Inicio de sesión", "mostrarUsuarios=" + antes, "mostrarUsuarios=" + mostrarUsuarios);
+        return g;
+    }
+
+    /**
+     * Guarda (o borra con null) el hash del código de recuperación. Sin permiso
+     * aquí a propósito: lo llama RecuperacionService, que ya verificó al admin al
+     * generar y consume el código desde el login, donde no hay sesión.
+     */
+    @Transactional
+    public void guardarCodigoRecuperacion(String hashONull) {
+        Configuracion c = obtenerParaEditar();
+        c.setRecuperacionHash(hashONull);
+        c.setRecuperacionGenerado(hashONull == null ? null : java.time.LocalDateTime.now());
+        guardarConfig(c);
+    }
+
     // ── Ubicación del negocio y clima ─────────────────────────────────────
 
     /**

@@ -212,6 +212,56 @@ class ImpresionServiceTest extends BaseServicioTest {
     }
 
     @Test
+    void reimprimirElUltimoTicketExigePermisoOAutorizacionYQuedaEnLaBitacora() throws Exception {
+        configurarTermica(false, false, 1);
+        Venta vieja = cobrarEfectivo(producto("Pan", 10, 10));
+        Venta ultima = cobrarEfectivo(producto("Leche", 28, 10));
+        iniciarComoCajero("cajero_reimp", EnumSet.noneOf(Permiso.class));
+
+        // Sin VER_HISTORIAL ni autorización no se reimprime (vía clásica de fraude)
+        assertThatThrownBy(() -> impresionService.reimprimirUltimaVentaAsync())
+                .isInstanceOf(PermisoRequeridoException.class);
+
+        // Con la autorización de un administrador sí
+        Autorizacion aut = autorizacionService.autorizar("admin", "admin123", Permiso.VER_HISTORIAL);
+        impresionService.reimprimirUltimaVentaAsync(aut).get();
+
+        assertThat(auditoriaService.ultimas()).anyMatch(a -> "TICKET_REIMPRESO".equals(a.getAccion())
+                && a.getDetalle().contains("#" + ultima.getId()));
+        assertThat(auditoriaService.ultimas()).noneMatch(a -> "TICKET_REIMPRESO".equals(a.getAccion())
+                && a.getDetalle().contains("#" + vieja.getId()));
+    }
+
+    @Autowired private IdentidadCaja identidadCaja;
+    @Autowired private AutorizacionService autorizacionService;
+
+    @Test
+    void reimprimirElUltimoTicketEsSoloDeEstaCaja() throws Exception {
+        configurarTermica(false, false, 1);
+        try {
+            identidadCaja.fijarParaPruebas(1, "Caja 1", true);
+            Venta deLaUno = cobrarEfectivo(producto("Atún", 22, 10));
+            identidadCaja.fijarParaPruebas(2, "Caja 2", true);
+            Venta deLaDos = cobrarEfectivo(producto("Sardina", 25, 10));   // más reciente, pero de otra caja
+
+            identidadCaja.fijarParaPruebas(1, "Caja 1", true);
+            impresionService.reimprimirUltimaVentaAsync().get();
+            var reimpresiones = auditoriaService.ultimas().stream()
+                    .filter(a -> "TICKET_REIMPRESO".equals(a.getAccion())).toList();
+            assertThat(reimpresiones).anyMatch(a -> a.getDetalle().equals("Última venta #" + deLaUno.getId()));
+            assertThat(reimpresiones).noneMatch(a -> a.getDetalle().endsWith("#" + deLaDos.getId()));
+        } finally {
+            identidadCaja.fijarParaPruebas(1, "", false);
+        }
+    }
+
+    @Test
+    void reimprimirElUltimoTicketSinSesionSeRechaza() {
+        sesionService.cerrarSesion();
+        assertThatThrownBy(() -> impresionService.reimprimirUltimaVentaAsync()).isInstanceOf(NegocioException.class);
+    }
+
+    @Test
     void reimprimirSinImpresoraDaUnAvisoClaro() {
         Venta v = cobrarEfectivo(producto("Chicle", 3, 10));
         Resultado r = impresionService.reimprimirVenta(v.getId());

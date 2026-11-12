@@ -67,6 +67,22 @@ public class Cajero {
     @Column(name = "bloqueado_hasta")
     private LocalDateTime bloqueadoHasta;
 
+    /**
+     * true = este usuario ya vio el tutorial de la pestaña Estadísticas (se
+     * muestra solo la primera vez por usuario). Nullable para que
+     * ddl-auto=update agregue la columna en bases existentes (null = no visto).
+     */
+    @Column(name = "tutorial_estadisticas_visto")
+    private Boolean tutorialEstadisticasVisto;
+
+    /**
+     * true = este usuario ya vio el recorrido general por las pestañas del
+     * programa (BienvenidaService; se muestra la primera vez que entra).
+     * Nullable por la misma razón que la columna anterior (null = no visto).
+     */
+    @Column(name = "tutorial_general_visto")
+    private Boolean tutorialGeneralVisto;
+
     /** Permisos agregados a los del rol */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "cajero_permisos", joinColumns = @JoinColumn(name = "cajero_id"))
@@ -91,6 +107,14 @@ public class Cajero {
 
     public int getIntentosFallidosOCero() {
         return intentosFallidos == null ? 0 : intentosFallidos;
+    }
+
+    public boolean isTutorialEstadisticasVisto() {
+        return Boolean.TRUE.equals(tutorialEstadisticasVisto);
+    }
+
+    public boolean isTutorialGeneralVisto() {
+        return Boolean.TRUE.equals(tutorialGeneralVisto);
     }
 
     /** Permisos efectivos = (por defecto del rol ∪ concedidos) − revocados. ADMIN: todos. */

@@ -44,6 +44,10 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     /** Primera venta registrada (para el nivel de datos de Estadísticas) */
     Optional<Venta> findFirstByOrderByFechaAsc();
 
+    /** Última venta cobrada en una caja (cancelada o no), para reimprimir el último ticket */
+    @Query("SELECT v FROM Venta v WHERE COALESCE(v.caja, 1) = :caja ORDER BY v.id DESC")
+    List<Venta> findUltimasDeCaja(int caja, org.springframework.data.domain.Pageable pagina);
+
     /** Mayor id de venta (0 si no hay): el siguiente folio es este + 1 */
     @Query("SELECT COALESCE(MAX(v.id), 0) FROM Venta v")
     long maxId();

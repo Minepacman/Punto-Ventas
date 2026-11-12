@@ -49,7 +49,7 @@
     <bottom>
         <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-            <Label fx:id="lblResumen" text="0 movimiento(s)" style="-fx-font-weight:bold"/>
+            <Label fx:id="lblResumen" text="0 movimiento(s)" styleClass="text-bold"/>
         </HBox>
     </bottom>
 

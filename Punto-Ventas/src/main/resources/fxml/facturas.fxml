@@ -55,7 +55,7 @@
         <VBox styleClass="ticket-footer" spacing="6">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
             <Label fx:id="lblDetalle" wrapText="true"/>
-            <Label fx:id="lblResumen" text="0 factura(s)" style="-fx-font-weight:bold"/>
+            <Label fx:id="lblResumen" text="0 factura(s)" styleClass="text-bold"/>
         </VBox>
     </bottom>
 

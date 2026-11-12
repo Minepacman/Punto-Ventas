@@ -62,6 +62,7 @@ public class ImpresionService {
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
     @Autowired private PlatformTransactionManager transacciones;
+    @Autowired private IdentidadCaja identidadCaja;
 
     private final ExecutorService hilo = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "impresion");
@@ -141,6 +142,33 @@ public class ImpresionService {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
         auditoriaService.registrar(sesionService.getCajeroActual(), "TICKET_REIMPRESO", "Venta #" + ventaId, (Cajero) null);
         return CompletableFuture.supplyAsync(() -> reimprimirVenta(ventaId), hilo);
+    }
+
+    /**
+     * Reimprime el ÚLTIMO ticket cobrado en esta caja (se rompió el papel, el
+     * cliente lo pidió después). Requiere VER_HISTORIAL o autorización de un
+     * administrador; queda en la bitácora. Sin ventas en la caja, devuelve FALLO con aviso.
+     */
+    public CompletableFuture<Resultado> reimprimirUltimaVentaAsync() {
+        return reimprimirUltimaVentaAsync(null);
+    }
+
+    /**
+     * Igual que {@link #reimprimirUltimaVentaAsync()}, pero exige VER_HISTORIAL (HIS-05)
+     * o una autorización de administrador: reimprimir es la vía clásica para
+     * "comprobar" con un ticket viejo una compra que no se pagó.
+     */
+    public CompletableFuture<Resultado> reimprimirUltimaVentaAsync(Autorizacion autorizacion) {
+        Cajero cajero = sesionService.requerirSesion();
+        sesionService.verificarPermiso(Permiso.VER_HISTORIAL, autorizacion);
+        Venta ultima = ventaRepo.findUltimasDeCaja(identidadCaja.numero(), org.springframework.data.domain.PageRequest.of(0, 1))
+                .stream().findFirst().orElse(null);
+        if (ultima == null) {
+            return CompletableFuture.completedFuture(Resultado.fallo("Todavía no hay ventas cobradas en esta caja."));
+        }
+        auditoriaService.registrar(cajero, "TICKET_REIMPRESO", "Última venta #" + ultima.getId(), autorizacion);
+        final Long id = ultima.getId();
+        return CompletableFuture.supplyAsync(() -> reimprimirVenta(id), hilo);
     }
 
     Resultado reimprimirVenta(Long ventaId) {

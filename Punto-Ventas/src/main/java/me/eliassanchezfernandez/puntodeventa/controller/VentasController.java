@@ -11,8 +11,13 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
+import javafx.scene.Node;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -20,6 +25,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 import me.eliassanchezfernandez.puntodeventa.bascula.BasculaService;
+import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.ClimaRegistro;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
@@ -42,6 +48,9 @@ import me.eliassanchezfernandez.puntodeventa.service.StockInsuficienteException;
 import me.eliassanchezfernandez.puntodeventa.service.TicketPendienteService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
+import me.eliassanchezfernandez.puntodeventa.util.Atajo;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
+import me.eliassanchezfernandez.puntodeventa.util.EntradaCodigo;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,8 +78,16 @@ import java.util.stream.Collectors;
  *  2. Se ajustan cantidades, mayoreo o descuento manual (con permiso o
  *     autorización de administrador)
  *  3. Se captura el pago (una o varias formas de pago habilitadas en
- *     Configuración) → cambio en vivo
- *  4. Cobrar (botón o F12) → VentaService.cobrar() guarda la venta y descuenta stock
+ *     Configuración) → cambio en vivo; o se abre la ventana de cobro (F12)
+ *  4. Cobrar (botón, F12 o Enter en un pago) → VentaService.cobrar() guarda la
+ *     venta y descuenta stock; se imprime, se abre el cajón y se ofrece facturar
+ *
+ * Teclado: todos los atajos están en el catálogo util/Atajo. Los que caen sobre
+ * teclas F o combinaciones con Ctrl/Cmd llegan como aceleradores desde
+ * MainController (ejecutarAtajo); los que compiten con la escritura (Supr, +, −,
+ * Esc, flechas, Enter en el ticket) se atienden aquí con filtros según dónde
+ * esté el cursor. Los diálogos modales tienen su propia escena, así que ningún
+ * atajo de la ventana principal se dispara mientras uno está abierto.
  *
  * Al cerrar sesión el ticket sin cobrar se guarda y se restaura cuando el
  * mismo cajero vuelve a entrar. Las reglas viven en VentaService; aquí solo UI.
@@ -85,6 +102,7 @@ import java.util.stream.Collectors;
 public class VentasController implements Initializable {
 
     // ── FXML ─────────────────────────────────────────────────────────────
+    @FXML private BorderPane raiz;
     @FXML private TextField  txtCodigo;
     @FXML private TextField  txtEfectivo;
     @FXML private TextField  txtTarjeta;
@@ -98,8 +116,18 @@ public class VentasController implements Initializable {
     @FXML private Button     btnTodoTarjeta;
     @FXML private Button     btnTodoTransferencia;
     @FXML private Button     btnTodoVales;
+    @FXML private Button     btnBuscar;
+    @FXML private Button     btnCantidad;
+    @FXML private Button     btnQuitar;
+    @FXML private Button     btnDescuento;
+    @FXML private Button     btnMayoreo;
     @FXML private Button     btnLeerPeso;
     @FXML private Button     btnAbrirCajon;
+    @FXML private Button     btnEnEspera;
+    @FXML private Button     btnRecuperar;
+    @FXML private Button     btnReimprimir;
+    @FXML private Button     btnCobrar;
+    @FXML private Button     btnCancelar;
     @FXML private TableView<DetalleVenta> tablaProductos;
     @FXML private TableColumn<DetalleVenta, String>  colCodigo;
     @FXML private TableColumn<DetalleVenta, String>  colDescripcion;
@@ -111,8 +139,10 @@ public class VentasController implements Initializable {
     @FXML private TableColumn<DetalleVenta, Double>  colExistencia;
     @FXML private Label labelTotal;
     @FXML private Label labelPagado;
+    @FXML private Label labelCambioTitulo;
     @FXML private Label labelCambio;
     @FXML private Label labelNumProductos;
+    @FXML private Label labelEnEspera;
     @FXML private Label labelTotalPagado;
     @FXML private VBox     boxSugerencias;
     @FXML private Label    lblSugerenciasEstado;
@@ -133,6 +163,8 @@ public class VentasController implements Initializable {
     @Autowired private DispositivosService    dispositivosService;
     @Autowired private DispositivosDialogos   dispositivosDialogos;
     @Autowired private FacturacionDialogos    facturacionDialogos;
+
+    private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
     /** Sugerencias: retardo tras el último cambio del ticket y hilo de cálculo */
     private static final Duration RETARDO_SUGERENCIAS = Duration.millis(400);
@@ -172,38 +204,211 @@ public class VentasController implements Initializable {
         tablaProductos.setPlaceholder(new Label(
                 "Escanea un código o usa 🔍 Buscar para agregar productos."));
 
-        // Supr / Retroceso sobre un renglón → quitarlo
-        tablaProductos.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.DELETE || e.getCode() == KeyCode.BACK_SPACE) {
-                onQuitarLinea();
-            }
-        });
+        // Los montos se recalculan al cambiar el texto (también al pegar con el ratón)
+        camposPago.values().forEach(c -> c.textProperty().addListener((o, a, b) -> actualizarCambio()));
+        configurarTeclado();
+        etiquetarBotones();
 
         configurarSugerencias();
         restaurarTicketPendiente();
         actualizarTotales();
         actualizarVendidoHoy();
+        actualizarEnEspera();
         programarSugerencias();
         Platform.runLater(() -> txtCodigo.requestFocus());
     }
 
+    // ── Teclado ───────────────────────────────────────────────────────────
+
+    /** Texto de cada botón con su tecla (Cmd en Mac) y tooltip con la alternativa */
+    private void etiquetarBotones() {
+        boolean mac = Atajo.esMac();
+        etiquetar(btnBuscar,     "🔍 Buscar",     Atajo.BUSCAR_PRODUCTO, mac);
+        etiquetar(btnCantidad,   "Cantidad",      Atajo.CANTIDAD, mac);
+        etiquetar(btnQuitar,     "🗑 Quitar",     Atajo.QUITAR_RENGLON, mac);
+        etiquetar(btnDescuento,  "Descuento",     Atajo.DESCUENTO_MANUAL, mac);
+        etiquetar(btnMayoreo,    "Mayoreo",       Atajo.MAYOREO, mac);
+        etiquetar(btnEnEspera,   "⏸ En espera",   Atajo.PONER_EN_ESPERA, mac);
+        etiquetar(btnCobrar,     "Cobrar",        Atajo.COBRAR, mac);
+        // Combinaciones con Ctrl/Cmd: la tecla va solo en el tooltip (caben en 1024 px)
+        soloTooltip(btnLeerPeso,   Atajo.LEER_PESO, mac);
+        soloTooltip(btnReimprimir, Atajo.REIMPRIMIR_ULTIMO, mac);
+        soloTooltip(btnAbrirCajon, Atajo.ABRIR_CAJON, mac);
+        soloTooltip(btnRecuperar,  Atajo.RECUPERAR_ESPERA, mac);
+        soloTooltip(btnCancelar,   Atajo.CANCELAR_TICKET, mac);
+    }
+
+    private static void etiquetar(Button b, String texto, Atajo a, boolean mac) {
+        b.setText(texto + "  " + a.etiquetaCorta(mac));
+        soloTooltip(b, a, mac);
+    }
+
+    private static void soloTooltip(Button b, Atajo a, boolean mac) {
+        b.setTooltip(new Tooltip(a.getDescripcion() + "  —  " + a.etiquetaTeclas(mac)
+                + (a.getPermiso() != null ? "\nRequiere: " + a.getPermiso().getDescripcion() + " (o autorización)" : "")));
+    }
+
+    /**
+     * Teclas que dependen de dónde está el cursor (no pueden ser aceleradores
+     * de la escena porque un campo de texto las usa para escribir):
+     *  - Esc: limpia el código o regresa el cursor al código;
+     *  - ↓/↑ en el código: pasan al ticket; Enter en el ticket: cantidad;
+     *  - Supr/Retroceso fuera de un campo de texto: quitar renglón;
+     *  - + / − en el ticket o con el código vacío: una pieza más/menos;
+     *  - Ctrl+Supr (Cmd+Supr): cancelar ticket (el campo de texto lo consumiría).
+     */
+    private void configurarTeclado() {
+        raiz.addEventFilter(KeyEvent.KEY_PRESSED, this::teclaPulsada);
+        raiz.addEventFilter(KeyEvent.KEY_TYPED, this::teclaEscrita);
+    }
+
+    private void teclaPulsada(KeyEvent e) {
+        Node foco = raiz.getScene() != null ? raiz.getScene().getFocusOwner() : null;
+        boolean enTexto = foco instanceof TextInputControl;
+        boolean enCodigo = foco == txtCodigo;
+        boolean enTabla = foco == tablaProductos;
+        KeyCode c = e.getCode();
+
+        if (c == KeyCode.ESCAPE) {
+            if (enCodigo && !txtCodigo.getText().isEmpty()) {
+                txtCodigo.clear();
+            } else if (enTexto && foco != txtCodigo) {
+                ((TextInputControl) foco).clear();
+                txtCodigo.requestFocus();
+            } else if (!enCodigo) {
+                txtCodigo.requestFocus();
+            }
+            e.consume();
+            return;
+        }
+        if (enCodigo && (c == KeyCode.DOWN || c == KeyCode.UP) && !itemsTicket.isEmpty()) {
+            irAlTicket(c == KeyCode.UP);
+            e.consume();
+            return;
+        }
+        if (enTabla && c == KeyCode.ENTER) {
+            onCambiarCantidad();
+            e.consume();
+            return;
+        }
+        // Ctrl/Cmd+Supr = cancelar ticket, aunque el cursor esté en un campo de texto
+        if (Atajo.CANCELAR_TICKET.coincide(c, e.isShortcutDown(), e.isShiftDown(), e.isAltDown())) {
+            onCancelarTicket();
+            e.consume();
+            return;
+        }
+        if (!enTexto && Atajo.QUITAR_RENGLON.coincide(c, e.isShortcutDown(), e.isShiftDown(), e.isAltDown())) {
+            onQuitarLinea();
+            e.consume();
+        }
+    }
+
+    /** + y − se leen como carácter escrito: así valen en teclado numérico, español y en inglés (Shift+=) */
+    private void teclaEscrita(KeyEvent e) {
+        String ch = e.getCharacter();
+        if (!"+".equals(ch) && !"-".equals(ch)) return;
+        Node foco = raiz.getScene() != null ? raiz.getScene().getFocusOwner() : null;
+        boolean permitido = !(foco instanceof TextInputControl) || (foco == txtCodigo && txtCodigo.getText().isEmpty());
+        if (!permitido) return;
+        ajustarCantidad("+".equals(ch) ? 1 : -1);
+        e.consume();
+    }
+
+    private void irAlTicket(boolean alFinal) {
+        if (tablaProductos.getSelectionModel().getSelectedItem() == null) {
+            if (alFinal) tablaProductos.getSelectionModel().selectLast();
+            else tablaProductos.getSelectionModel().selectFirst();
+        }
+        tablaProductos.requestFocus();
+        DetalleVenta sel = tablaProductos.getSelectionModel().getSelectedItem();
+        if (sel != null) tablaProductos.scrollTo(sel);
+    }
+
+    /** Una pieza más o menos al renglón seleccionado (o al último si no hay selección) */
+    private void ajustarCantidad(int delta) {
+        DetalleVenta d = tablaProductos.getSelectionModel().getSelectedItem();
+        if (d == null && !itemsTicket.isEmpty()) {
+            d = itemsTicket.get(itemsTicket.size() - 1);
+            tablaProductos.getSelectionModel().select(d);
+        }
+        if (d == null) return;
+        // A granel (p. ej. 0.5 kg) "−" no debe dejar la cantidad en cero o negativa ni quitar
+        // el renglón sin querer: solo se quita con "−" un renglón de exactamente 1 pieza.
+        if (d.getCantidad() + delta <= 0 && d.getCantidad() != 1) return;
+        cambiarCantidad(d, d.getCantidad() + delta);
+        if (itemsTicket.contains(d)) tablaProductos.getSelectionModel().select(d);
+    }
+
+    /**
+     * Atajos de Ventas que llegan como aceleradores de la escena (MainController
+     * los registra y los manda aquí solo cuando la pestaña Ventas está activa).
+     * Cada acción aplica sus permisos como si se hubiera pulsado el botón.
+     */
+    public void ejecutarAtajo(Atajo atajo) {
+        switch (atajo) {
+            case BUSCAR_PRODUCTO   -> onBuscar();
+            case CANTIDAD          -> onCambiarCantidad();
+            case DESCUENTO_MANUAL  -> onDescuentoManual();
+            case MAYOREO           -> onMayoreo();
+            case PONER_EN_ESPERA   -> onPonerEnEspera();
+            case RECUPERAR_ESPERA  -> onRecuperarEspera();
+            case COBRAR            -> onCobrar();
+            case REIMPRIMIR_ULTIMO -> onReimprimirUltimo();
+            case CANCELAR_TICKET   -> onCancelarTicket();
+            case QUITAR_RENGLON    -> onQuitarLinea();
+            case MAS_UNO           -> ajustarCantidad(1);
+            case MENOS_UNO         -> ajustarCantidad(-1);
+            case ABRIR_CAJON -> {
+                if (btnAbrirCajon.isVisible()) onAbrirCajon();
+                else alerta(Alert.AlertType.INFORMATION, "Cajón de dinero",
+                        "El cajón se abre con el pulso de una impresora térmica (ESC/POS). Configúrala en Configuración → Impresora de tickets.");
+            }
+            case LEER_PESO -> {
+                if (btnLeerPeso.isVisible()) onLeerPeso();
+                else alerta(Alert.AlertType.INFORMATION, "Báscula",
+                        "No hay báscula activa. Configúrala en Configuración → Báscula.");
+            }
+            default -> { }
+        }
+    }
+
+
     // ── Acciones FXML ─────────────────────────────────────────────────────
 
+    /** Enter en el código: "código" o "cantidad*código" (3*7501…, 1.5*granel) */
     @FXML
     private void onAgregarProducto() {
-        String codigo = txtCodigo.getText().trim();
-        if (codigo.isEmpty()) return;
-
+        String texto = txtCodigo.getText();
+        if (texto.isBlank()) return;
+        // Un código que de por sí parece "cantidad x código" (p. ej. la bolsa "40X60")
+        // gana: si existe tal cual, se agrega una pieza de ese producto
+        if (EntradaCodigo.traeCantidad(texto)) {
+            Optional<Producto> talCual = ventaService.buscarPorCodigo(texto.trim());
+            if (talCual.isPresent()) {
+                agregarAlTicket(talCual.get(), 1);
+                txtCodigo.clear();
+                txtCodigo.requestFocus();
+                return;
+            }
+        }
+        Optional<EntradaCodigo.Captura> captura = EntradaCodigo.interpretar(texto);
+        if (captura.isEmpty()) {
+            alerta(Alert.AlertType.WARNING, "Cantidad inválida",
+                    "Escribe la cantidad, un asterisco y el código: por ejemplo 3*7501055300006.");
+            txtCodigo.selectAll();
+            return;
+        }
+        String codigo = captura.get().codigo();
         Optional<Producto> encontrado = ventaService.buscarPorCodigo(codigo);
         if (encontrado.isEmpty()) {
             alerta(Alert.AlertType.WARNING, "Producto no encontrado",
                     "No existe un producto activo con el código \"" + codigo + "\".\n" +
-                    "Usa 🔍 Buscar para localizarlo por nombre.");
+                    "Usa 🔍 Buscar (F6) para localizarlo por nombre.");
             txtCodigo.selectAll();
             return;
         }
 
-        agregarAlTicket(encontrado.get(), 1);
+        agregarAlTicket(encontrado.get(), captura.get().cantidad());
         txtCodigo.clear();
         txtCodigo.requestFocus();
     }
@@ -259,12 +464,38 @@ public class VentasController implements Initializable {
                 dialogo.close();
             }
         });
-        // Enter en el filtro = seleccionar el primero
+        // Enter en el filtro = seleccionar el primero (o el elegido con las flechas)
         txtFiltro.setOnAction(e -> {
             if (!tabla.getItems().isEmpty()) {
-                tabla.getSelectionModel().selectFirst();
+                if (tabla.getSelectionModel().getSelectedItem() == null) tabla.getSelectionModel().selectFirst();
                 dialogo.setResult(tabla.getSelectionModel().getSelectedItem());
                 dialogo.close();
+            }
+        });
+        // ↓ desde el filtro pasa a la lista; Enter en la lista acepta; cualquier letra regresa al filtro
+        txtFiltro.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.DOWN && !tabla.getItems().isEmpty()) {
+                tabla.getSelectionModel().selectFirst();
+                tabla.requestFocus();
+                e.consume();
+            }
+        });
+        tabla.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ENTER && tabla.getSelectionModel().getSelectedItem() != null) {
+                dialogo.setResult(tabla.getSelectionModel().getSelectedItem());
+                dialogo.close();
+                e.consume();
+            } else if (e.getCode() == KeyCode.UP && tabla.getSelectionModel().getSelectedIndex() == 0) {
+                txtFiltro.requestFocus();
+                txtFiltro.end();
+                e.consume();
+            }
+        });
+        tabla.addEventFilter(KeyEvent.KEY_TYPED, e -> {
+            String ch = e.getCharacter();
+            if (ch != null && ch.length() == 1 && Character.isLetterOrDigit(ch.charAt(0))) {
+                txtFiltro.requestFocus();
+                txtFiltro.end();
             }
         });
 
@@ -367,15 +598,20 @@ public class VentasController implements Initializable {
     @FXML
     private void onQuitarLinea() {
         DetalleVenta d = tablaProductos.getSelectionModel().getSelectedItem();
-        if (d == null) return;
+        if (d == null) {
+            if (!itemsTicket.isEmpty()) alerta(Alert.AlertType.WARNING, "Sin selección", "Selecciona un renglón del ticket para quitarlo.");
+            return;
+        }
+        int idx = itemsTicket.indexOf(d);
+        boolean focoEnTabla = tablaProductos.isFocused();
         itemsTicket.remove(d);
         recalcularTodo();
-        txtCodigo.requestFocus();
-    }
-
-    @FXML
-    private void onPagoChanged() {
-        actualizarCambio();
+        if (focoEnTabla && !itemsTicket.isEmpty()) {
+            tablaProductos.getSelectionModel().select(Math.min(idx, itemsTicket.size() - 1));
+            tablaProductos.requestFocus();
+        } else {
+            txtCodigo.requestFocus();
+        }
     }
 
     @FXML private void onTodoEfectivo()      { pagarTodoCon(Venta.FormaPago.EFECTIVO); }
@@ -391,39 +627,58 @@ public class VentasController implements Initializable {
         camposPago.get(forma).selectAll();
     }
 
+    /**
+     * Cobrar (F12, botón o Enter en un campo de pago).
+     *  - Ticket vacío: aviso.
+     *  - Si en el panel ya hay un pago válido y suficiente y la opción "Confirmar
+     *    antes de cobrar" está apagada, cobra directo (el camino más rápido:
+     *    teclear el efectivo y Enter).
+     *  - Si no, abre la ventana de cobro (CobroDialogo) con lo ya capturado; ahí
+     *    Enter cobra y Esc regresa al ticket sin tocar nada.
+     */
     @FXML
     private void onCobrar() {
         if (itemsTicket.isEmpty()) {
             alerta(Alert.AlertType.INFORMATION, "Ticket vacío",
                     "Agrega al menos un producto antes de cobrar.");
+            txtCodigo.requestFocus();
             return;
         }
-
         double total = ventaService.calcularTotal(itemsTicket);
-        Map<Venta.FormaPago, Double> montos = leerPagos();
-        if (montos == null) {
+        Map<Venta.FormaPago, Double> montosPanel = leerPagos();
+        if (montosPanel == null) {
             alerta(Alert.AlertType.WARNING, "Pago inválido", "Escribe montos válidos (ej: 200).");
             txtEfectivo.requestFocus();
+            txtEfectivo.selectAll();
             return;
         }
-        double pagado = montos.values().stream().mapToDouble(Double::doubleValue).sum();
-        if (pagado + 0.001 < total) {
-            alerta(Alert.AlertType.WARNING, "Pago insuficiente", String.format(
-                    "El cliente pagó %s pero el total es %s.", Moneda.formato(pagado), Moneda.formato(total)));
-            txtEfectivo.requestFocus();
-            return;
+        Map<Venta.FormaPago, Double> montos;
+        CalculoCobro.Resultado cuentas = CalculoCobro.calcular(total, montosPanel);
+        if (cuentas.esValido() && !configuracionService.isConfirmarCobro()) {
+            montos = montosPanel;
+        } else {
+            Optional<Map<Venta.FormaPago, Double>> elegido = CobroDialogo.mostrar(
+                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel);
+            if (elegido.isEmpty()) {                  // Esc: nada cambia, el ticket sigue en captura
+                txtCodigo.requestFocus();
+                return;
+            }
+            montos = elegido.get();
         }
-        if (configuracionService.isConfirmarCobro() && !Ventanas.confirmar("Confirmar cobro",
-                "¿Cobrar la venta por " + Moneda.formato(total) + "?")) {
-            return;
-        }
+        cobrarCon(montos);
+    }
 
+    /** Registra la venta con los montos ya validados en pantalla; pide los datos de tarjeta si aplica */
+    private void cobrarCon(Map<Venta.FormaPago, Double> montos) {
         // Cobro con tarjeta: terminal, últimos 4 dígitos y autorización del voucher (captura manual)
         DatosTarjeta tarjeta = null;
         if (montos.containsKey(Venta.FormaPago.TARJETA)) {
             Optional<DatosTarjeta> capturada = dispositivosDialogos.capturarTarjeta(
-                    tablaProductos.getScene().getWindow(), montos.get(Venta.FormaPago.TARJETA), tarjetaCapturada);
-            if (capturada.isEmpty()) return;          // cobro cancelado: no se guarda nada
+                    raiz.getScene().getWindow(), montos.get(Venta.FormaPago.TARJETA), tarjetaCapturada);
+            if (capturada.isEmpty()) {                // cobro cancelado: no se guarda nada
+                txtCodigo.requestFocus();
+                return;
+            }
             tarjeta = capturada.get();
             tarjetaCapturada = tarjeta;
         }
@@ -441,19 +696,19 @@ public class VentasController implements Initializable {
             Venta venta = ventaService.cobrar(new ArrayList<>(itemsTicket), pagos, autorizaciones);
 
             imprimirTicketSinBloquear(venta);
-
-            String msg = String.format("Venta #%d registrada.\n\nTotal:  %s\nPagó:   %s\nCambio: %s",
-                    venta.getId(), Moneda.formato(venta.getTotal()), Moneda.formato(venta.getPagoCon()), Moneda.formato(venta.getCambio()));
-            avisarVentaCobrada(venta, msg);
-
-            avisarStockBajo(venta);
-            limpiarTicket();
+            limpiarTicket();                          // el ticket queda limpio antes de cualquier diálogo
+            mostrarCambioUltimaVenta(venta);
             actualizarVendidoHoy();
+            actualizarEnEspera();
+
+            avisarVentaCobrada(venta);
+            avisarStockBajo(venta);
 
         } catch (PermisoRequeridoException e) {
-            // Falta un permiso del ticket (p. ej. renglón restaurado con mayoreo): pedir autorización
+            // Falta un permiso del ticket (p. ej. renglón restaurado con mayoreo o
+            // existencia que otra caja se llevó): pedir autorización y reintentar con los mismos montos
             if (asegurarPermiso(e.getPermiso())) {
-                onCobrar();
+                cobrarCon(montos);
                 return;
             }
             refrescarTicket();
@@ -466,24 +721,56 @@ public class VentasController implements Initializable {
         txtCodigo.requestFocus();
     }
 
+    /** En el panel queda a la vista el cambio de la venta recién cobrada (hasta que se agregue otro producto) */
+    private void mostrarCambioUltimaVenta(Venta venta) {
+        labelCambioTitulo.setText("Cambio de la venta " + venta.getFolioMostrado() + ":");
+        labelCambio.setText(Moneda.formato(venta.getCambio()));
+        labelPagado.setText(Moneda.formato(venta.getPagoCon()));
+    }
+
     /**
-     * Aviso de venta cobrada; si la facturación está configurada y el usuario
-     * puede facturar, ofrece el botón "Facturar" (el cliente pidió factura).
+     * Ventana "Venta cobrada" con el cambio en grande. Enter o Esc continúan; si la
+     * facturación está configurada y el usuario puede facturar, "Facturar" (F).
      */
-    private void avisarVentaCobrada(Venta venta, String msg) {
-        if (!facturacionDialogos.puedeFacturar()) {
-            alerta(Alert.AlertType.INFORMATION, "Venta cobrada", msg);
-            return;
-        }
-        Alert a = new Alert(Alert.AlertType.INFORMATION);
-        a.setTitle("Venta cobrada");
-        a.setHeaderText(null);
-        a.setContentText(msg);
-        ButtonType facturar = new ButtonType("Facturar", javafx.scene.control.ButtonBar.ButtonData.OTHER);
-        a.getButtonTypes().setAll(ButtonType.OK, facturar);
-        Ventanas.estilizar(a);
-        if (a.showAndWait().filter(b -> b == facturar).isPresent()) {
-            facturacionDialogos.facturarVenta(tablaProductos.getScene().getWindow(), venta);
+    private void avisarVentaCobrada(Venta venta) {
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle("Venta cobrada");
+        dlg.setHeaderText("Venta " + venta.getFolioMostrado() + " registrada");
+        dlg.initOwner(raiz.getScene().getWindow());
+        Ventanas.estilizar(dlg);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(16);
+        grid.setVgap(6);
+        grid.setPadding(new Insets(10));
+        grid.addRow(0, new Label("Total:"), new Label(Moneda.formato(venta.getTotal())));
+        grid.addRow(1, new Label("Pagó:"), new Label(Moneda.formato(venta.getPagoCon())));
+        Label cambioTitulo = new Label("CAMBIO");
+        cambioTitulo.getStyleClass().add("total-label-title");
+        Label cambio = new Label(Moneda.formato(venta.getCambio()));
+        cambio.getStyleClass().add("total-amount");
+        VBox contenido = new VBox(8, grid, cambioTitulo, cambio);
+        contenido.setAlignment(javafx.geometry.Pos.CENTER);
+        contenido.setPadding(new Insets(6, 20, 6, 20));
+        dlg.getDialogPane().setContent(contenido);
+
+        // CANCEL_CLOSE: así la X de la ventana también continúa (JavaFX exige un botón de cancelar para cerrarla)
+        ButtonType continuar = new ButtonType("Continuar  (Enter)", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType facturar = new ButtonType("Facturar  (F)", javafx.scene.control.ButtonBar.ButtonData.OTHER);
+        boolean puedeFacturar = facturacionDialogos.puedeFacturar();
+        if (puedeFacturar) dlg.getDialogPane().getButtonTypes().addAll(continuar, facturar);
+        else dlg.getDialogPane().getButtonTypes().add(continuar);
+        Button btnContinuar = (Button) dlg.getDialogPane().lookupButton(continuar);
+        btnContinuar.getStyleClass().add("button-primary");
+        btnContinuar.setDefaultButton(true);   // Enter continúa
+        dlg.setOnShown(e -> {
+            var acc = dlg.getDialogPane().getScene().getAccelerators();
+            acc.put(new KeyCodeCombination(KeyCode.ESCAPE), () -> { dlg.setResult(continuar); dlg.close(); });
+            if (puedeFacturar) acc.put(new KeyCodeCombination(KeyCode.F), () -> { dlg.setResult(facturar); dlg.close(); });
+            Platform.runLater(() -> dlg.getDialogPane().lookupButton(continuar).requestFocus());
+        });
+        if (dlg.showAndWait().filter(b -> b == facturar).isPresent()) {
+            facturacionDialogos.facturarVenta(raiz.getScene().getWindow(), venta);
         }
     }
 
@@ -543,7 +830,7 @@ public class VentasController implements Initializable {
     /** Pulso al cajón de dinero (ABRIR_CAJON o autorización de administrador; queda en la bitácora) */
     @FXML
     private void onAbrirCajon() {
-        dispositivosDialogos.abrirCajon(tablaProductos.getScene().getWindow());
+        dispositivosDialogos.abrirCajon(raiz.getScene().getWindow());
         txtCodigo.requestFocus();
     }
 
@@ -551,6 +838,7 @@ public class VentasController implements Initializable {
     private void onCancelarTicket() {
         if (itemsTicket.isEmpty()) {
             limpiarTicket();
+            txtCodigo.requestFocus();
             return;
         }
         if (Ventanas.confirmar("Cancelar ticket",
@@ -561,9 +849,238 @@ public class VentasController implements Initializable {
         txtCodigo.requestFocus();
     }
 
-    /** Invocado por MainController con la tecla F12 */
-    public void cobrarDesdeAtajo() {
-        onCobrar();
+    // ── Tickets en espera (F11 / Shift+F11) ──────────────────────────────
+
+    /** Aparta el ticket en captura con una nota opcional y deja la pantalla lista para otro cliente */
+    @FXML
+    private void onPonerEnEspera() {
+        if (itemsTicket.isEmpty()) {
+            alerta(Alert.AlertType.INFORMATION, "Ticket en espera", "El ticket está vacío: no hay nada que poner en espera.");
+            txtCodigo.requestFocus();
+            return;
+        }
+        TextInputDialog dlg = new TextInputDialog();
+        dlg.setTitle("Poner ticket en espera");
+        dlg.setHeaderText(itemsTicket.size() + " renglón(es) por " + Moneda.formato(ventaService.calcularTotal(itemsTicket))
+                + "\nEl ticket se guarda sin cobrar y lo recuperas con Shift+F11.");
+        dlg.setContentText("Nota (opcional):");
+        dlg.getEditor().setPromptText("Ej. Sra. Lupita, el de la camioneta…");
+        dlg.initOwner(raiz.getScene().getWindow());
+        Ventanas.estilizar(dlg);
+        Optional<String> nota = dlg.showAndWait();
+        if (nota.isEmpty()) { txtCodigo.requestFocus(); return; }
+        try {
+            ticketPendienteService.ponerEnEspera(new ArrayList<>(itemsTicket), nota.get());
+            ticketPendienteService.descartarDelCajeroActual();   // el autoguardado era este mismo ticket
+            limpiarTicket();
+            actualizarEnEspera();
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "Ticket en espera", e.getMessage());
+        }
+        txtCodigo.requestFocus();
+    }
+
+    /**
+     * Al bloquear la pantalla (Ctrl/Cmd+L) el ticket en captura pasa a "en espera" con
+     * la nota "Bloqueo de <cajero>", para que CUALQUIER cajero de la caja lo recupere
+     * (si no, el siguiente cajero no lo vería y el cliente se queda esperando).
+     * Devuelve false si no se pudo (p. ej. tope de tickets en espera): entonces el
+     * llamador lo guarda como pendiente del cajero, como antes.
+     */
+    public boolean ponerEnEsperaPorBloqueo() {
+        if (itemsTicket.isEmpty()) return true;
+        try {
+            Cajero c = sesionService.getCajeroActual();
+            String nombre = c != null ? c.getNombreCompleto() : "cajero";
+            String nota = "Bloqueo de " + nombre;
+            if (nota.length() > TicketPendienteService.MAX_LARGO_NOTA) nota = nota.substring(0, TicketPendienteService.MAX_LARGO_NOTA);
+            ticketPendienteService.ponerEnEspera(new ArrayList<>(itemsTicket), nota);
+            ticketPendienteService.descartarDelCajeroActual();
+            limpiarTicket();
+            actualizarEnEspera();
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Lista de tickets en espera de esta caja: Enter recupera, Supr descarta, Esc cierra */
+    @FXML
+    private void onRecuperarEspera() {
+        List<TicketPendienteService.EnEspera> lista;
+        try {
+            lista = ticketPendienteService.listarEnEspera();
+        } catch (RuntimeException e) {
+            lista = List.of();
+        }
+        if (lista.isEmpty()) {
+            alerta(Alert.AlertType.INFORMATION, "Recuperar ticket", "No hay tickets en espera en esta caja.");
+            txtCodigo.requestFocus();
+            return;
+        }
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle("Tickets en espera");
+        dlg.setHeaderText("Elige el ticket y pulsa Enter para recuperarlo (Supr lo descarta)");
+        dlg.initOwner(raiz.getScene().getWindow());
+        Ventanas.estilizar(dlg);
+
+        TableView<TicketPendienteService.EnEspera> tabla = new TableView<>(FXCollections.observableArrayList(lista));
+        tabla.setPrefSize(640, 260);
+        TableColumn<TicketPendienteService.EnEspera, String> cHora = new TableColumn<>("Hora");
+        cHora.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().guardadoEn().format(FMT_HORA)));
+        cHora.setPrefWidth(70);
+        TableColumn<TicketPendienteService.EnEspera, String> cNota = new TableColumn<>("Nota");
+        cNota.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().nota() != null ? c.getValue().nota() : "—"));
+        cNota.setPrefWidth(220);
+        TableColumn<TicketPendienteService.EnEspera, String> cCajero = new TableColumn<>("Cajero");
+        cCajero.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().cajero()));
+        cCajero.setPrefWidth(150);
+        TableColumn<TicketPendienteService.EnEspera, String> cRenglones = new TableColumn<>("Renglones");
+        cRenglones.setCellValueFactory(c -> new SimpleStringProperty(String.valueOf(c.getValue().renglones())));
+        cRenglones.getStyleClass().add("align-right");
+        TableColumn<TicketPendienteService.EnEspera, String> cPiezas = new TableColumn<>("Piezas");
+        cPiezas.setCellValueFactory(c -> new SimpleStringProperty(formatoCantidad(c.getValue().piezas())));
+        cPiezas.getStyleClass().add("align-right");
+        tabla.getColumns().add(cHora);
+        tabla.getColumns().add(cNota);
+        tabla.getColumns().add(cCajero);
+        tabla.getColumns().add(cRenglones);
+        tabla.getColumns().add(cPiezas);
+        tabla.getSelectionModel().selectFirst();
+
+        ButtonType recuperar = new ButtonType("Recuperar  (Enter)", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        ButtonType descartar = new ButtonType("Descartar  (Supr)", javafx.scene.control.ButtonBar.ButtonData.OTHER);
+        dlg.getDialogPane().getButtonTypes().addAll(recuperar, descartar, ButtonType.CANCEL);
+        ((Button) dlg.getDialogPane().lookupButton(recuperar)).getStyleClass().add("button-primary");
+        ((Button) dlg.getDialogPane().lookupButton(descartar)).getStyleClass().add("button-danger");
+        Button btnRecuperarDlg = (Button) dlg.getDialogPane().lookupButton(recuperar);
+        Button btnDescartarDlg = (Button) dlg.getDialogPane().lookupButton(descartar);
+        btnRecuperarDlg.disableProperty().bind(tabla.getSelectionModel().selectedItemProperty().isNull());
+        btnDescartarDlg.disableProperty().bind(tabla.getSelectionModel().selectedItemProperty().isNull());
+
+        // Descartar no cierra la ventana: confirma, borra y refresca la lista
+        btnDescartarDlg.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            ev.consume();
+            TicketPendienteService.EnEspera sel = tabla.getSelectionModel().getSelectedItem();
+            if (sel == null) return;
+            if (!Ventanas.confirmar("Descartar ticket en espera",
+                    "¿Descartar el ticket" + (sel.nota() != null ? " \"" + sel.nota() + "\"" : "") + " de las " + sel.guardadoEn().format(FMT_HORA)
+                    + " con " + sel.renglones() + " renglón(es)? No se cobrará.")) return;
+            try {
+                ticketPendienteService.descartarEnEspera(sel.id());
+            } catch (NegocioException e) {
+                alerta(Alert.AlertType.ERROR, "Descartar", e.getMessage());
+            }
+            tabla.getItems().remove(sel);
+            tabla.getSelectionModel().selectFirst();
+            actualizarEnEspera();
+            if (tabla.getItems().isEmpty()) { dlg.setResult(ButtonType.CANCEL); dlg.close(); }
+        });
+        tabla.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ENTER && !btnRecuperarDlg.isDisable()) { btnRecuperarDlg.fire(); e.consume(); }
+            else if (e.getCode() == KeyCode.DELETE || e.getCode() == KeyCode.BACK_SPACE) { btnDescartarDlg.fire(); e.consume(); }
+        });
+        tabla.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2 && !btnRecuperarDlg.isDisable()) btnRecuperarDlg.fire();
+        });
+        VBox caja = new VBox(8, tabla);
+        caja.setPadding(new Insets(8));
+        dlg.getDialogPane().setContent(caja);
+        Platform.runLater(tabla::requestFocus);
+
+        Optional<ButtonType> res = dlg.showAndWait();
+        TicketPendienteService.EnEspera elegido = tabla.getSelectionModel().getSelectedItem();
+        if (res.isEmpty() || res.get() != recuperar || elegido == null) {
+            txtCodigo.requestFocus();
+            return;
+        }
+        // Si hay un ticket en captura, se aparta primero (no se pierde ni se mezcla)
+        boolean actualApartado = false;
+        if (!itemsTicket.isEmpty()) {
+            if (!Ventanas.confirmar("Recuperar ticket",
+                    "El ticket actual tiene " + itemsTicket.size() + " renglón(es). ¿Ponerlo en espera y recuperar el elegido?")) {
+                txtCodigo.requestFocus();
+                return;
+            }
+            try {
+                ticketPendienteService.ponerEnEspera(new ArrayList<>(itemsTicket), null);
+                actualApartado = true;
+            } catch (NegocioException e) {
+                alerta(Alert.AlertType.ERROR, "Ticket en espera", e.getMessage());
+                txtCodigo.requestFocus();
+                return;
+            }
+        }
+        try {
+            List<DetalleVenta> detalles = ticketPendienteService.recuperarEnEspera(elegido.id());
+            ticketPendienteService.descartarDelCajeroActual();
+            limpiarTicket();
+            int omitidos = 0;
+            for (DetalleVenta d : detalles) {
+                try {
+                    ventaService.recalcularPrecio(d);
+                    itemsTicket.add(d);
+                } catch (NegocioException ignorada) { omitidos++; }   // renglón ya no válido
+            }
+            recalcularTodo();
+            if (!itemsTicket.isEmpty()) tablaProductos.getSelectionModel().selectLast();
+            if (omitidos > 0) {
+                alerta(Alert.AlertType.WARNING, "Ticket recuperado",
+                        omitidos + " renglón(es) ya no se pueden vender y se omitieron.");
+            }
+        } catch (NegocioException e) {
+            if (actualApartado) {
+                // El ticket de la pantalla ya quedó en espera: si siguiera aquí también,
+                // se podría cobrar dos veces (una aquí y otra al recuperarlo)
+                ticketPendienteService.descartarDelCajeroActual();
+                limpiarTicket();
+            }
+            alerta(Alert.AlertType.ERROR, "Recuperar ticket", e.getMessage()
+                    + (actualApartado ? "\nEl ticket que tenías en pantalla quedó en espera." : ""));
+        }
+        actualizarEnEspera();
+        txtCodigo.requestFocus();
+    }
+
+    /** Contador de tickets en espera en el botón "Recuperar" y en el pie */
+    private void actualizarEnEspera() {
+        int n;
+        try {
+            n = ticketPendienteService.contarEnEspera();
+        } catch (RuntimeException e) {
+            n = 0;
+        }
+        btnRecuperar.setText("▶ Recuperar" + (n > 0 ? " (" + n + ")" : ""));
+        labelEnEspera.setText(n == 0 ? "" : n + " en espera");
+        labelEnEspera.setVisible(n > 0);
+        labelEnEspera.setManaged(n > 0);
+    }
+
+    // ── Reimprimir último ticket (Ctrl+I) ────────────────────────────────
+
+    @FXML
+    private void onReimprimirUltimo() {
+        // Reimprimir pide permiso de historial o la clave de un administrador (de un solo uso)
+        Autorizacion aut = null;
+        if (!sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
+            Optional<Autorizacion> obtenida = Ventanas.pedirAutorizacion(autorizacionService, Permiso.VER_HISTORIAL);
+            if (obtenida.isEmpty()) { txtCodigo.requestFocus(); return; }
+            aut = obtenida.get();
+        }
+        btnReimprimir.setDisable(true);
+        try {
+            impresionService.reimprimirUltimaVentaAsync(aut).whenComplete((res, error) -> Platform.runLater(() -> {
+                btnReimprimir.setDisable(false);
+                if (error != null || res == null || res.esFallo()) {
+                    alerta(Alert.AlertType.WARNING, "Reimprimir",
+                            res != null ? res.mensaje() : "No se pudo reimprimir el ticket.");
+                }
+            }));
+        } catch (NegocioException e) {
+            btnReimprimir.setDisable(false);
+            alerta(Alert.AlertType.ERROR, "Reimprimir", e.getMessage());
+        }
+        txtCodigo.requestFocus();
     }
 
     public boolean hayTicketEnCaptura() {
@@ -879,15 +1396,7 @@ public class VentasController implements Initializable {
      * La coma es separador de miles ("1,500" = 1500), igual que en Login y Corte.
      */
     private static double parsearODefault(String txt, double porDefecto) {
-        if (txt == null) return porDefecto;
-        String t = txt.trim().replace("$", "").replace(",", "").replace("%", "");
-        if (t.isEmpty()) return porDefecto;
-        try {
-            double v = Double.parseDouble(t);
-            return Double.isFinite(v) && v >= 0 ? v : Double.NaN;
-        } catch (NumberFormatException e) {
-            return Double.NaN;
-        }
+        return CalculoCobro.parsearMonto(txt, porDefecto);
     }
 
     private void actualizarTotales() {
@@ -900,6 +1409,7 @@ public class VentasController implements Initializable {
     }
 
     private void actualizarCambio() {
+        if (labelCambioTitulo != null) labelCambioTitulo.setText("Cambio:");
         double total = ventaService.calcularTotal(itemsTicket);
         Map<Venta.FormaPago, Double> montos = leerPagos();
         if (montos == null) {
@@ -907,27 +1417,25 @@ public class VentasController implements Initializable {
             labelCambio.setText("—");
             return;
         }
-        double pagado = montos.values().stream().mapToDouble(Double::doubleValue).sum();
-        labelPagado.setText(Moneda.formato(pagado));
-        if (pagado <= 0) {
+        CalculoCobro.Resultado r = CalculoCobro.calcular(total, montos);
+        labelPagado.setText(Moneda.formato(r.pagado()));
+        if (!r.hayPago() && !montos.isEmpty()) {     // monto rechazado (p. ej. un código escaneado en el campo)
+            labelPagado.setText("—");
+            labelCambio.setText("—");
+        } else if (!r.hayPago()) {
             labelCambio.setText(Moneda.formato(0));
-            return;
+        } else if (r.faltante() > 0) {
+            labelCambio.setText("Faltan " + Moneda.formato(r.faltante()));
+        } else {
+            labelCambio.setText(Moneda.formato(r.cambio()));
         }
-        double cambio = pagado - total;
-        labelCambio.setText(cambio < 0
-                ? "Faltan " + Moneda.formato(-cambio)
-                : Moneda.formato(cambio));
     }
 
     /** Montos capturados > 0 por forma de pago; null si algún campo no es válido */
     private Map<Venta.FormaPago, Double> leerPagos() {
-        Map<Venta.FormaPago, Double> montos = new LinkedHashMap<>();
-        for (Map.Entry<Venta.FormaPago, TextField> e : camposPago.entrySet()) {
-            double monto = parsearODefault(e.getValue().getText(), 0);
-            if (Double.isNaN(monto)) return null;
-            if (monto > 0) montos.put(e.getKey(), monto);
-        }
-        return montos;
+        Map<Venta.FormaPago, String> textos = new LinkedHashMap<>();
+        camposPago.forEach((f, c) -> textos.put(f, c.getText()));
+        return CalculoCobro.leerMontos(textos);
     }
 
     /**
@@ -953,6 +1461,7 @@ public class VentasController implements Initializable {
         }
         actualizarTotales();
         actualizarDispositivos();
+        if (btnRecuperar != null) actualizarEnEspera();
         if (boxSugerencias != null) {
             mostrarTiraSugerencias(configuracionService.isMostrarSugerencias());
             programarSugerencias();
@@ -989,7 +1498,6 @@ public class VentasController implements Initializable {
         autorizaciones.clear();
         tarjetaCapturada = null;
         txtCodigo.clear();
-        txtEfectivo.clear();
         camposPago.values().forEach(TextField::clear);
         labelTotal.setText("$0.00");
         labelPagado.setText("$0.00");
