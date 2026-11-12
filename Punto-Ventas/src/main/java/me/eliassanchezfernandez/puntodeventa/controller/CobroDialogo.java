@@ -71,6 +71,7 @@ public final class CobroDialogo {
         lblTotal.getStyleClass().add("total-amount");
         VBox cajaTotal = new VBox(2, lblTotalTitulo, lblTotal);
         cajaTotal.setAlignment(Pos.CENTER);
+        cajaTotal.getStyleClass().add("total-box");   // fondo oscuro: las etiquetas .total-amount son blancas
 
         // ── Campos por forma de pago ─────────────────────────────────────
         Map<Venta.FormaPago, TextField> campos = new LinkedHashMap<>();

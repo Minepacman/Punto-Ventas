@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://minepacman.github.io/Punto-Ventas/sitemap.xml
