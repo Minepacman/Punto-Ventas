@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -43,7 +44,7 @@
                 <Label text="La serie debe existir también en tu cuenta de Facturama (Configuración → Series). El folio lo lleva este programa y se envía al timbrar."
                        wrapText="true" styleClass="hint"/>
                 <HBox spacing="12">
-                    <Button text="✅ Guardar emisor" onAction="#onGuardarEmisor" styleClass="button-success" prefHeight="36"/>
+                    <Button text="Guardar emisor" onAction="#onGuardarEmisor" styleClass="button-success" prefHeight="36"><graphic><Icono nombre="listo"/></graphic></Button>
                 </HBox>
 
                 <Separator/>
@@ -66,7 +67,7 @@
                 <Label text="Las credenciales se guardan cifradas con una llave propia de esta computadora (datos/facturacion.key) y nunca se escriben en la bitácora. Quien tenga acceso a la carpeta de datos podría leerlas: protege esa carpeta."
                        wrapText="true" styleClass="hint"/>
                 <HBox spacing="12">
-                    <Button text="💾 Guardar credenciales" onAction="#onGuardarCredenciales" styleClass="button-primary" prefHeight="36"/>
+                    <Button text="Guardar credenciales" onAction="#onGuardarCredenciales" styleClass="button-primary" prefHeight="36"><graphic><Icono nombre="guardar"/></graphic></Button>
                     <Button fx:id="btnProbar" text="Probar conexión" onAction="#onProbarConexion" prefHeight="36"/>
                     <Button text="Borrar credenciales" onAction="#onBorrarCredenciales" styleClass="button-danger" prefHeight="36"/>
                 </HBox>

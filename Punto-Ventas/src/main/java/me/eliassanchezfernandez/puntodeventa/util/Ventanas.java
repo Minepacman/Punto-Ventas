@@ -5,6 +5,8 @@ import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Parent;
+import javafx.scene.control.Button;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -109,6 +111,44 @@ public final class Ventanas {
         stage.show();
     }
 
+    /** Ventana ligera que aparece de inmediato mientras Spring arranca en segundo plano (ver PuntoDeVentaApp) */
+    public static void mostrarArranque(Stage stage) throws IOException {
+        FXMLLoader loader = new FXMLLoader(Ventanas.class.getResource("/fxml/arranque.fxml"));
+        Parent root = loader.load();
+        Scene scene = new Scene(root);
+        aplicarCss(scene);
+        stage.setScene(scene);
+        stage.setTitle("Punto de Venta");
+        aplicarIcono(stage);
+        stage.setResizable(false);
+        stage.sizeToScene();
+        stage.centerOnScreen();
+        stage.show();
+    }
+
+    /**
+     * Carga en el hilo de JavaFX las clases, pieles y estilos de los controles que usan el login y
+     * la ventana principal, sin mostrar nada: ocurre mientras Spring arranca en el otro núcleo, así
+     * el login aparece antes. Solo es un calentamiento: cualquier fallo se ignora.
+     */
+    public static void precalentar() {
+        try {
+            javafx.scene.layout.VBox raiz = new javafx.scene.layout.VBox(
+                    new javafx.scene.control.TextField("a"), new javafx.scene.control.PasswordField(),
+                    new javafx.scene.control.Button("b"), new javafx.scene.control.CheckBox("c"),
+                    new javafx.scene.control.ComboBox<String>(), new javafx.scene.control.TableView<String>(),
+                    new javafx.scene.control.TabPane(), new javafx.scene.control.ScrollPane(),
+                    new javafx.scene.control.Hyperlink("d"), new javafx.scene.control.ProgressBar(),
+                    new javafx.scene.control.Spinner<Integer>(0, 9, 1), new javafx.scene.control.ToggleButton("e"));
+            Scene escena = new Scene(raiz, 300, 300);
+            aplicarCss(escena);
+            raiz.applyCss();
+            raiz.layout();
+        } catch (RuntimeException | LinkageError e) {
+            // solo es un calentamiento
+        }
+    }
+
     /** Ventana principal (pestañas) a pantalla completa */
     public static void mostrarPrincipal(Stage stage, ApplicationContext ctx, String titulo)
             throws IOException {
@@ -146,10 +186,81 @@ public final class Ventanas {
         aplicarIcono(stage);
         Scene scene = new Scene(root, ancho, alto);
         aplicarCss(scene);
+        instalarTecladoModal(scene, stage);
         stage.setScene(scene);
         stage.setMinWidth(Math.min(ancho, 640));
         stage.setMinHeight(Math.min(alto, 420));
         stage.showAndWait();
+    }
+
+    /**
+     * Teclado uniforme en TODAS las ventanas modales FXML (un POS se usa sin soltar el teclado):
+     *  - Esc cierra la ventana (salvo que un control ya lo haya usado: p. ej. para cerrar la
+     *    lista de un ComboBox);
+     *  - Enter en un campo de texto de una línea dispara el botón principal de la ventana
+     *    (el marcado como defaultButton o, si no hay, el primero con estilo button-primary /
+     *    button-success), igual que harían las ventanas de cobro. En un TextArea, botón o tabla
+     *    Enter conserva su función normal.
+     * Se instala como manejador (no filtro) para respetar lo que los controles ya consumieron.
+     */
+    public static void instalarTecladoModal(Scene scene, Stage stage) {
+        scene.addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.isConsumed()) return;
+            if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                e.consume();
+                stage.close();
+            } else if (e.getCode() == javafx.scene.input.KeyCode.ENTER && !e.isShortcutDown() && !e.isShiftDown()) {
+                Node foco = scene.getFocusOwner();
+                boolean campoDeUnaLinea = foco instanceof javafx.scene.control.TextField
+                        || foco instanceof javafx.scene.control.PasswordField;
+                if (!campoDeUnaLinea) return;
+                if (foco instanceof javafx.scene.control.TextField tf && tf.getOnAction() != null) return;   // ya hace algo
+                Button principal = botonPrincipal(scene.getRoot());
+                if (principal != null && !principal.isDisabled() && principal.isVisible()) {
+                    e.consume();
+                    principal.fire();
+                }
+            }
+        });
+    }
+
+    /** El botón "principal" visible de la ventana: defaultButton, o el primero con estilo primario/éxito */
+    static Button botonPrincipal(Parent raiz) {
+        Button porEstilo = null;
+        java.util.ArrayDeque<Node> cola = new java.util.ArrayDeque<>();
+        cola.add(raiz);
+        while (!cola.isEmpty()) {
+            Node n = cola.poll();
+            if (!n.isVisible() || !n.isManaged()) continue;
+            if (n instanceof Button b) {
+                if (b.isDefaultButton()) return b;
+                if (porEstilo == null && (b.getStyleClass().contains("button-primary") || b.getStyleClass().contains("button-success"))) {
+                    porEstilo = b;
+                }
+            }
+            if (n instanceof Parent p) cola.addAll(p.getChildrenUnmodifiable());
+            if (n instanceof javafx.scene.control.ScrollPane sp && sp.getContent() != null) cola.add(sp.getContent());
+            if (n instanceof javafx.scene.control.TitledPane tp && tp.getContent() != null) cola.add(tp.getContent());
+            if (n instanceof javafx.scene.control.TabPane tabs && tabs.getSelectionModel().getSelectedItem() != null
+                    && tabs.getSelectionModel().getSelectedItem().getContent() != null) {
+                cola.add(tabs.getSelectionModel().getSelectedItem().getContent());
+            }
+        }
+        return porEstilo;
+    }
+
+    /**
+     * Toma lo escrito a mano en el campo de un Spinner. Si no es un número,
+     * en vez de la NumberFormatException cruda al hilo de JavaFX lanza una
+     * NegocioException con el nombre del campo, que la pantalla ya sabe mostrar.
+     */
+    public static void confirmarSpinner(javafx.scene.control.Spinner<?> spinner, String campo) {
+        try {
+            spinner.commitValue();
+        } catch (RuntimeException e) {
+            throw new me.eliassanchezfernandez.puntodeventa.service.NegocioException(
+                    "\"" + campo + "\" debe ser un número entero (ej: " + spinner.getValue() + ").");
+        }
     }
 
     static final double ANCHO_MINIMO = 1000;

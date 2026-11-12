@@ -195,7 +195,7 @@ public class ConfiguracionController implements Initializable {
         grid.addRow(1, new Label("Copias a conservar:"), copias);
         dialogoGuardar("Respaldo automático", "Copias de seguridad automáticas",
                 new VBox(10, activo, grid, nota, ultimo), () -> {
-                    copias.commitValue();   // toma lo escrito a mano en el campo del Spinner
+                    Ventanas.confirmarSpinner(copias, "Copias a conservar");   // lo escrito a mano en el campo
                     configuracionService.guardarRespaldoAutomatico(activo.isSelected(), carpeta.getText(), copias.getValue());
                 });
     }

@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "unidades")
 @Data
 @NoArgsConstructor
+@org.hibernate.annotations.BatchSize(size = 100)   // listas de productos: unidades en una sola consulta
 public class Unidad {
 
     @Id

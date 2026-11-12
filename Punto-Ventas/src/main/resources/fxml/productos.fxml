@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
+<?import javafx.scene.image.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -24,22 +26,22 @@
                     <padding><Insets topRightBottomLeft="10"/></padding>
                     <Button fx:id="btnNuevo"      text="+ Nuevo"
                             onAction="#onNuevo"   styleClass="button-success"/>
-                    <Button fx:id="btnModificar"  text="✏ Modificar"
-                            onAction="#onModificar"/>
-                    <Button fx:id="btnEliminar"   text="🗑 Eliminar"
-                            onAction="#onEliminar" styleClass="button-danger"/>
-                    <Button fx:id="btnActivar"    text="⏻ Activar / Desactivar"
-                            onAction="#onCambiarActivo"/>
+                    <Button fx:id="btnModificar"  text="Modificar"
+                            onAction="#onModificar"><graphic><Icono nombre="editar"/></graphic></Button>
+                    <Button fx:id="btnEliminar"   text="Eliminar"
+                            onAction="#onEliminar" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
+                    <Button fx:id="btnActivar"    text="Activar / Desactivar"
+                            onAction="#onCambiarActivo"><graphic><Icono nombre="energia"/></graphic></Button>
                     <Separator orientation="VERTICAL"/>
                     <Button fx:id="btnDepartamentos" text="Departamentos"      onAction="#onDepartamentos"/>
                     <Button fx:id="btnVentasPeriodo" text="Ventas por Período" onAction="#onVentasPeriodo"/>
-                    <Button fx:id="btnPromociones"   text="⭐ Promociones"      onAction="#onPromociones"/>
-                    <Button text="📥 Importar"         onAction="#onImportar"/>
+                    <Button fx:id="btnPromociones"   text="Promociones"      onAction="#onPromociones"><graphic><Icono nombre="estrella"/></graphic></Button>
+                    <!-- "Importar" (desde archivo) se mostrará cuando exista; el handler onImportar queda en el controlador -->
                 </HBox>
 
                 <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">
                     <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
-                    <Label text="🔍"/>
+                    <Label><graphic><Icono nombre="buscar"/></graphic></Label>
                     <TextField fx:id="txtBuscar"
                                promptText="Buscar por código o descripción..."
                                HBox.hgrow="ALWAYS"
@@ -53,6 +55,7 @@
             <TableView fx:id="tablaProductos"
                        onMouseClicked="#onTablaDobleClick">
                 <columns>
+                    <TableColumn fx:id="colImagen"       text=""             prefWidth="44" minWidth="44" maxWidth="44" resizable="false"/>
                     <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="140"/>
                     <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="260"/>
                     <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="85" styleClass="align-right"/>
@@ -79,8 +82,8 @@
         <top>
             <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
                 <padding><Insets topRightBottomLeft="10"/></padding>
-                <Button text="← Regresar"
-                        onAction="#onCancelarFormulario"/>
+                <Button text="Regresar"
+                        onAction="#onCancelarFormulario"><graphic><Icono nombre="izquierda"/></graphic></Button>
                 <Separator orientation="VERTICAL"/>
                 <Label fx:id="lblTituloForm" text="NUEVO PRODUCTO"
                        styleClass="form-section-title"/>
@@ -106,7 +109,7 @@
                               visible="false" managed="false"
                               spacing="6" alignment="CENTER_LEFT"
                               styleClass="callout, callout-danger">
-                            <Label text="⚠"/>
+                            <Label><graphic><Icono nombre="alerta"/></graphic></Label>
                             <VBox spacing="1">
                                 <Label text="Este código ya está registrado."
                                        styleClass="text-bold"/>
@@ -121,6 +124,31 @@
                         <Label text="Descripción *" styleClass="field-label"/>
                         <TextField fx:id="txtDescripcion"
                                    promptText="Nombre del producto"/>
+                    </VBox>
+
+                    <!-- ── IMAGEN (opcional) ───────────────────── -->
+                    <VBox spacing="4">
+                        <Label text="Imagen (opcional)" styleClass="field-label"/>
+                        <HBox spacing="14" alignment="CENTER_LEFT">
+                            <!-- Zona de arrastrar y soltar; doble clic = elegir archivo -->
+                            <StackPane fx:id="zonaImagen" styleClass="imagen-zona"
+                                       minWidth="160" minHeight="160" maxWidth="160" maxHeight="160">
+                                <ImageView fx:id="imgProducto" fitWidth="150" fitHeight="150"
+                                           preserveRatio="true" smooth="true"/>
+                                <Label fx:id="lblSinImagen" text="Sin imagen&#10;&#10;Arrastra aquí una foto&#10;o elige un archivo"
+                                       textAlignment="CENTER" wrapText="true" styleClass="hint"/>
+                            </StackPane>
+                            <VBox spacing="6" HBox.hgrow="ALWAYS">
+                                <Button text="Elegir archivo…"             onAction="#onElegirImagen"   maxWidth="Infinity"><graphic><Icono nombre="carpeta"/></graphic></Button>
+                                <Button text="Pegar del portapapeles"      onAction="#onPegarImagen"    maxWidth="Infinity"><graphic><Icono nombre="lista"/></graphic></Button>
+                                <Button text="Desde una dirección (URL)…"  onAction="#onImagenDesdeUrl" maxWidth="Infinity"><graphic><Icono nombre="mundo"/></graphic></Button>
+                                <Button fx:id="btnQuitarImagen" text="Quitar imagen" onAction="#onQuitarImagen"
+                                        styleClass="button-danger" maxWidth="Infinity" disable="true"><graphic><Icono nombre="eliminar"/></graphic></Button>
+                                <Label fx:id="lblImagenEstado"
+                                       text="JPG o PNG hasta 10 MB. Se guarda reducida (512 px) en la base de datos."
+                                       wrapText="true" styleClass="hint"/>
+                            </VBox>
+                        </HBox>
                     </VBox>
 
                     <!-- ── TIPO DE VENTA ───────────────────────── -->
@@ -181,9 +209,9 @@
                     </GridPane>
 
                     <Label fx:id="lblErrorPrecio"
-                           text="⚠ Los precios no pueden ser negativos."
+                           text="Los precios no pueden ser negativos."
                            visible="false" managed="false"
-                           styleClass="field-error-label"/>
+                           styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic></Label>
 
                     <Separator/>
 
@@ -267,25 +295,25 @@
                     </GridPane>
 
                     <Label fx:id="lblErrorInventario"
-                           text="⚠ Las cantidades no pueden ser negativas."
+                           text="Las cantidades no pueden ser negativas."
                            visible="false" managed="false"
-                           styleClass="field-error-label"/>
+                           styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic></Label>
 
                     <Region minHeight="12"/>
 
                     <!-- ── BOTONES FINALES ─────────────────────── -->
                     <HBox spacing="12">
                         <Button fx:id="btnGuardar"
-                                text="✅ Guardar Producto"
+                                text="Guardar Producto"
                                 onAction="#onGuardarProducto"
                                 styleClass="button-success"
                                 HBox.hgrow="ALWAYS" maxWidth="Infinity"
-                                prefHeight="38"/>
+                                prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
                         <Button fx:id="btnCancelarForm"
-                                text="✖ Cancelar"
+                                text="Cancelar"
                                 onAction="#onCancelarFormulario"
                                 styleClass="button-danger"
-                                prefHeight="38"/>
+                                prefHeight="38"><graphic><Icono nombre="cerrar"/></graphic></Button>
                     </HBox>
 
                 </VBox>
@@ -303,8 +331,8 @@
         <top>
             <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
                 <padding><Insets topRightBottomLeft="10"/></padding>
-                <Button text="← Regresar"
-                        onAction="#onCancelarDepartamento"/>
+                <Button text="Regresar"
+                        onAction="#onCancelarDepartamento"><graphic><Icono nombre="izquierda"/></graphic></Button>
                 <Separator orientation="VERTICAL"/>
                 <!-- Titulo de la ventana -->
                 <Label  text="Departamentos"
@@ -323,7 +351,7 @@
                 <HBox spacing="8" alignment="CENTER_LEFT">
                     <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
 
-                    <Label text="🔍"/>
+                    <Label><graphic><Icono nombre="buscar"/></graphic></Label>
 
                     <TextField fx:id="txtBuscarDepartamento"
                                promptText="Buscar departamento..."
@@ -353,8 +381,8 @@
                             onAction="#onNuevoDepartamento"   styleClass="button-success"/>
 
              
-                    <Button fx:id="btnEliminarDepartamento"   text="🗑 Eliminar"
-                            onAction="#onEliminarDepartamento" styleClass="button-danger"/>
+                    <Button fx:id="btnEliminarDepartamento"   text="Eliminar"
+                            onAction="#onEliminarDepartamento" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
                     
                 </HBox>
 
@@ -374,9 +402,9 @@
                     </TextField>
     
                     <Label fx:id="lblErrorDepartamento"
-                            text="⚠ El nombre no puede estar vacío."
+                            text="El nombre no puede estar vacío."
                             visible="false" managed="false"
-                            styleClass="field-error-label">
+                            styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic>
                         <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
                     </Label>
 
@@ -387,8 +415,8 @@
                     <Button fx:id="btnGuardarDepartamento"      text="+ Guardar Departamento"
                             onAction="#onGuardarDepartamento"   styleClass="button-success"/>
 
-                    <Button fx:id="btnCancelarDepartamento"   text="✖ Cancelar"
-                            onAction="#onCancelarDepartamento" styleClass="button-danger"/>
+                    <Button fx:id="btnCancelarDepartamento"   text="Cancelar"
+                            onAction="#onCancelarDepartamento" styleClass="button-danger"><graphic><Icono nombre="cerrar"/></graphic></Button>
                 </HBox>
             
             </VBox>

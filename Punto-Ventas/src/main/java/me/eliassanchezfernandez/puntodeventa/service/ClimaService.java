@@ -104,16 +104,16 @@ public class ClimaService {
         return LLUVIA.equals(categoria) || TORMENTA.equals(categoria);
     }
 
-    /** Ícono para la pantalla */
+    /** Nombre del icono (util/Iconos) para la pantalla */
     public static String iconoDe(String categoria) {
-        if (categoria == null) return "☁";
+        if (categoria == null) return "nube";
         return switch (categoria) {
-            case DESPEJADO -> "☀";
-            case LLUVIA    -> "🌧";
-            case TORMENTA  -> "⛈";
-            case NIEBLA    -> "🌫";
-            case NIEVE     -> "❄";
-            default        -> "☁";
+            case DESPEJADO -> "sol";
+            case LLUVIA    -> "lluvia";
+            case TORMENTA  -> "tormenta";
+            case NIEBLA    -> "niebla";
+            case NIEVE     -> "nieve";
+            default        -> "nube";
         };
     }
 
@@ -268,16 +268,21 @@ public class ClimaService {
     @EventListener(ApplicationReadyEvent.class)
     public void alArrancar() {
         if (!trabajosActivos) return;
-        Thread t = new Thread(() -> {
-            try {
-                self.registrarAhora();
-            } catch (RuntimeException e) {
-                System.err.println("Clima: no se pudo registrar al arrancar (" + e.getMessage() + ").");
-            }
-        }, "clima-arranque");
-        t.setDaemon(true);
-        t.start();
+        // Hilo propio (la consulta a internet puede tardar) que se lanza desde el hilo diferido, con la ventana ya dibujada
+        arranqueDiferido.ejecutar("clima", () -> {
+            Thread t = new Thread(() -> {
+                try {
+                    self.registrarAhora();
+                } catch (RuntimeException e) {
+                    System.err.println("Clima: no se pudo registrar al arrancar (" + e.getMessage() + ").");
+                }
+            }, "clima-arranque");
+            t.setDaemon(true);
+            t.start();
+        });
     }
+
+    @Autowired private me.eliassanchezfernandez.puntodeventa.config.ArranqueDiferido arranqueDiferido;
 
     private Configuracion configuracion() {
         return configuracionRepo.findById(Configuracion.ID_UNICO).orElseGet(Configuracion::new);

@@ -58,7 +58,6 @@ public class MainController implements Initializable {
 
     @FXML private TabPane tabPane;
     @FXML private Tab     tabVentas;
-    @FXML private Tab     tabClientes;
     @FXML private Tab     tabProductos;
     @FXML private Tab     tabInventario;
     @FXML private Tab     tabConfig;
@@ -195,7 +194,7 @@ public class MainController implements Initializable {
 
     private void mostrarAvisoDeActualizacion(ActualizacionService.Actualizacion a) {
         actualizacionDisponible = a;
-        lnkActualizacion.setText("⬆ Nueva versión " + a.version() + (a.prelanzamiento() ? " (prueba)" : "") + " disponible");
+        lnkActualizacion.setText("Nueva versión " + a.version() + (a.prelanzamiento() ? " (prueba)" : "") + " disponible");
         lnkActualizacion.setVisible(true);
         lnkActualizacion.setManaged(true);
     }
@@ -223,7 +222,6 @@ public class MainController implements Initializable {
         // fx:id → pestaña, solo las que este usuario conserva (aplicarPermisos quita las demás)
         java.util.Map<String, Tab> todas = new java.util.LinkedHashMap<>();
         todas.put("tabVentas", tabVentas);
-        todas.put("tabClientes", tabClientes);
         todas.put("tabProductos", tabProductos);
         todas.put("tabInventario", tabInventario);
         todas.put("tabEstadisticas", tabEstadisticas);
@@ -364,7 +362,7 @@ public class MainController implements Initializable {
     /** Texto corto de la barra de estado: las pestañas y lo esencial de Ventas */
     static String resumenAtajos(boolean mac) {
         StringBuilder sb = new StringBuilder();
-        for (Atajo a : java.util.List.of(Atajo.IR_VENTAS, Atajo.IR_CLIENTES, Atajo.IR_PRODUCTOS, Atajo.IR_INVENTARIO,
+        for (Atajo a : java.util.List.of(Atajo.IR_VENTAS, Atajo.IR_PRODUCTOS, Atajo.IR_INVENTARIO,
                 Atajo.IR_ESTADISTICAS, Atajo.BUSCAR_PRODUCTO, Atajo.PONER_EN_ESPERA, Atajo.COBRAR)) {
             if (sb.length() > 0) sb.append("  ·  ");
             sb.append(a.etiquetaCorta(mac)).append(' ').append(nombreCorto(a));
@@ -375,7 +373,6 @@ public class MainController implements Initializable {
     private static String nombreCorto(Atajo a) {
         return switch (a) {
             case IR_VENTAS -> "Ventas";
-            case IR_CLIENTES -> "Clientes";
             case IR_PRODUCTOS -> "Productos";
             case IR_INVENTARIO -> "Inventario";
             case IR_ESTADISTICAS -> "Estadísticas";
@@ -425,7 +422,6 @@ public class MainController implements Initializable {
     private void ejecutarGlobal(Atajo atajo) {
         switch (atajo) {
             case IR_VENTAS       -> tabPane.getSelectionModel().select(tabVentas);
-            case IR_CLIENTES     -> seleccionarSiExiste(tabClientes);
             case IR_PRODUCTOS    -> seleccionarSiExiste(tabProductos);
             case IR_INVENTARIO   -> seleccionarSiExiste(tabInventario);
             case IR_ESTADISTICAS -> seleccionarSiExiste(tabEstadisticas);
@@ -461,7 +457,7 @@ public class MainController implements Initializable {
 
     /** FXML de cada pestaña que se carga al abrirla por primera vez */
     private String fxmlDe(Tab tab) {
-        if (tab == tabClientes)     return "/fxml/clientes.fxml";
+        // Clientes (F2) se agregará aquí cuando exista el módulo: "/fxml/clientes.fxml"
         if (tab == tabProductos)    return "/fxml/productos.fxml";
         if (tab == tabInventario)   return "/fxml/inventario.fxml";
         if (tab == tabConfig)       return "/fxml/configuracion.fxml";

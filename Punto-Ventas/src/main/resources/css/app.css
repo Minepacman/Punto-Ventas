@@ -114,8 +114,8 @@
     -pos-shadow-2:        rgba(27, 35, 46, 0.12);
 
     /* Radios */
-    -pos-radius:          6;
-    -pos-radius-lg:       10;
+    -pos-radius:          6px;
+    -pos-radius-lg:       10px;
 
     /* ---------- PUENTE AL TEMA (variables AtlantaFX -> paleta) -------- */
 
@@ -1516,6 +1516,35 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-subtle;
 }
 
+/* Imagen del producto: zona para arrastrar/soltar en el formulario y marco del detalle */
+.imagen-zona {
+    -fx-background-color: -pos-surface-alt;
+    -fx-background-radius: -pos-radius-lg;
+    -fx-border-color: -pos-border-strong;
+    -fx-border-style: dashed;
+    -fx-border-width: 2;
+    -fx-border-radius: -pos-radius-lg;
+    -fx-alignment: center;
+    -fx-cursor: hand;
+}
+.imagen-zona:hover {
+    -fx-border-color: -pos-accent;
+}
+.imagen-zona-activa {
+    -fx-background-color: -pos-accent-subtle;
+    -fx-border-color: -pos-accent;
+    -fx-border-style: solid;
+}
+.imagen-marco {
+    -fx-background-color: -pos-surface;
+    -fx-background-radius: -pos-radius;
+    -fx-border-color: -pos-border;
+    -fx-border-width: 1;
+    -fx-border-radius: -pos-radius;
+    -fx-alignment: center;
+    -fx-padding: 4;
+}
+
 /* Mensaje de validación en línea */
 .field-error-label {
     -fx-font-size: 11px;
@@ -1940,3 +1969,15 @@ TilePane > .button:armed,
     -fx-font-weight: bold;
     -fx-text-fill: -pos-success-text;
 }
+
+/* Ventana de arranque ("Abriendo la tienda…", fxml/arranque.fxml) */
+.arranque {
+    -fx-background-color: -pos-bg-app;
+}
+.arranque-titulo {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+}
+
+/* Iconos Lucide (util/Icono): el color del trazo sigue al texto del control que los contiene */
+.icono { -fx-background-color: transparent; }

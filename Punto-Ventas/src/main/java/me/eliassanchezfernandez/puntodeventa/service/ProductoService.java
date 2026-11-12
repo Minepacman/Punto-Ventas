@@ -54,6 +54,7 @@ public class ProductoService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProveedorRepository proveedorRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.OrdenCompraRepository ordenCompraRepo;
     @Autowired private IdentidadCaja                  identidadCaja;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProductoImagenRepository imagenRepo;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
@@ -75,6 +76,25 @@ public class ProductoService {
     }
 
     /** Igual que buscar() pero solo productos activos (para la pantalla de Ventas) */
+    /**
+     * Mismo criterio que {@link #buscar} (código o descripción que contengan el texto, sin
+     * distinguir mayúsculas) sobre una lista ya cargada: el buscador F6 consulta la base una vez
+     * y filtra en memoria con cada tecla.
+     */
+    public static List<Producto> filtrar(List<Producto> productos, String texto) {
+        String t = texto == null ? "" : texto.trim().toLowerCase(java.util.Locale.ROOT);
+        if (t.isEmpty()) return new java.util.ArrayList<>(productos);
+        List<Producto> resultado = new java.util.ArrayList<>();
+        for (Producto p : productos) {
+            String codigo = p.getCodigoBarras(), descripcion = p.getDescripcion();
+            if ((codigo != null && codigo.toLowerCase(java.util.Locale.ROOT).contains(t))
+                    || (descripcion != null && descripcion.toLowerCase(java.util.Locale.ROOT).contains(t))) {
+                resultado.add(p);
+            }
+        }
+        return resultado;
+    }
+
     public List<Producto> buscarParaVenta(String texto) {
         return buscar(texto).stream().filter(Producto::isActivo).toList();
     }
@@ -136,6 +156,10 @@ public class ProductoService {
         validar(producto);
         if (producto.getId() == null) {
             if (producto.getActivo() == null) producto.setActivo(true);
+            // La existencia inicial es inventario que "aparece": exige el mismo permiso que una entrada
+            if (producto.isUsaInventario() && producto.getCantidadActual() > 0) {
+                sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO);
+            }
             Producto guardado = productoRepo.save(producto);
             if (guardado.isUsaInventario() && guardado.getCantidadActual() > 0) {
                 registrarMovimiento(guardado, MovimientoInventario.Tipo.ALTA_INICIAL,
@@ -232,6 +256,7 @@ public class ProductoService {
                     "No se puede eliminar \"" + p.getDescripcion() + "\": está en un ticket pendiente de cobrar.");
         }
         promocionRepo.deleteByProductoId(id);
+        if (imagenRepo.existsById(id)) imagenRepo.deleteById(id);   // su foto se va con él
         productoRepo.delete(p);
         auditoriaService.registrar(sesionService.getCajeroActual(), "PRODUCTO_ELIMINADO",
                 p.getCodigoBarras() + " " + p.getDescripcion(), (Cajero) null);
@@ -250,7 +275,7 @@ public class ProductoService {
         if (proveedor == null || proveedor.isBlank()) {
             throw new NegocioException("Indica el proveedor de la entrada.");
         }
-        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones);
+        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones, true);
     }
 
     /**
@@ -269,11 +294,33 @@ public class ProductoService {
             throw new NegocioException("El proveedor \"" + proveedor.getNombre() + "\" está desactivado.");
         }
         return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
-                costoUnitario, autorizaciones);
+                costoUnitario, autorizaciones, true);
     }
 
+    /**
+     * Una línea de una orden de compra que se está recibiendo. A diferencia de
+     * {@link #registrarEntradaDeProveedor} NO consume la autorización (la orden
+     * tiene varias líneas y una sola autorización debe cubrirlas todas: la
+     * consume {@link OrdenCompraService#recibir} al terminar) y tolera que el
+     * proveedor se haya desactivado después de hacer el pedido.
+     */
+    @Transactional
+    public Producto registrarEntradaDeOrden(Long productoId, double cantidad, Proveedor proveedor,
+                                            String motivo, double costoUnitario,
+                                            Collection<Autorizacion> autorizaciones) {
+        if (proveedor == null) throw new NegocioException("La orden no tiene proveedor.");
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
+                costoUnitario, autorizaciones, false);
+    }
+
+    /**
+     * @param consumirAutorizacion true cuando esta entrada es la acción completa que se autorizó
+     *        (la autorización de un solo uso se gasta aquí); false cuando forma parte de una
+     *        operación mayor que la consumirá al final.
+     */
     private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Long proveedorId,
-                                    String motivo, double costoUnitario, Collection<Autorizacion> autorizaciones) {
+                                    String motivo, double costoUnitario, Collection<Autorizacion> autorizaciones,
+                                    boolean consumirAutorizacion) {
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         if (!Double.isFinite(cantidad) || cantidad <= 0) {
             throw new NegocioException("La cantidad a agregar debe ser mayor a cero.");
@@ -283,6 +330,9 @@ public class ProductoService {
         }
 
         Producto p = obtenerConInventario(productoId);
+        if (!p.isActivo()) {
+            throw new NegocioException("\"" + p.getDescripcion() + "\" está desactivado: actívalo en Productos antes de darle entrada.");
+        }
         validarDecimales(p, cantidad);
         if (costoUnitario > 0 && Math.abs(costoUnitario - p.getPrecioCosto()) > 0.0001) {
             registrarCambioPrecio(p, "COSTO", p.getPrecioCosto(), costoUnitario);
@@ -302,7 +352,7 @@ public class ProductoService {
             m.setProveedorId(proveedorId);
             movimientoRepo.save(m);
         }
-        auditarSiAutorizado("ENTRADA_INVENTARIO", guardado, aut);
+        auditarSiAutorizado("ENTRADA_INVENTARIO", guardado, aut, consumirAutorizacion);
         return guardado;
     }
 
@@ -330,7 +380,7 @@ public class ProductoService {
         Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         registrarMovimiento(guardado, MovimientoInventario.Tipo.AJUSTE, nuevaCantidad - antes, antes,
                 nuevaCantidad, motivo.trim(), null, null, null, aut);
-        auditarSiAutorizado("AJUSTE_INVENTARIO", guardado, aut);
+        auditarSiAutorizado("AJUSTE_INVENTARIO", guardado, aut, true);
         return guardado;
     }
 
@@ -438,13 +488,32 @@ public class ProductoService {
         historialPrecioRepo.save(new HistorialPrecio(p, campo, anterior, nuevo, sesionService.getCajeroActual()));
     }
 
-    /** Si la acción se hizo con autorización de admin: queda en bitácora y la autorización se consume */
-    private void auditarSiAutorizado(String accion, Producto p, Autorizacion aut) {
+    /**
+     * Si la acción se hizo con autorización de admin: queda en bitácora y, si esta
+     * acción era la operación completa, la autorización se consume (una orden de
+     * compra de varias líneas la consume al final, no en cada línea).
+     */
+    private void auditarSiAutorizado(String accion, Producto p, Autorizacion aut, boolean consumir) {
         if (aut != null) {
             auditoriaService.registrar(sesionService.getCajeroActual(), accion,
                     p.getCodigoBarras() + " " + p.getDescripcion(), aut);
-            aut.consumir();
+            if (consumir) aut.consumir();
         }
+    }
+
+    /**
+     * Aviso (no bloqueo, decisión del dueño) cuando el precio de mayoreo es mayor
+     * que el precio normal: la pantalla lo muestra y el usuario puede confirmar.
+     * @return el texto del aviso, o vacío si no hay nada raro
+     */
+    public static Optional<String> advertenciaMayoreo(Producto p) {
+        if (p == null || p.getPrecioMayoreo() <= 0 || p.getPrecioMayoreo() <= p.getPrecioVenta() + 0.0001) {
+            return Optional.empty();
+        }
+        return Optional.of(String.format("El precio de mayoreo (%s) es MAYOR que el precio de venta (%s): "
+                + "quien compre por mayoreo pagará más caro. ¿Guardar de todos modos?",
+                me.eliassanchezfernandez.puntodeventa.util.Moneda.formato(p.getPrecioMayoreo()),
+                me.eliassanchezfernandez.puntodeventa.util.Moneda.formato(p.getPrecioVenta())));
     }
 
     // ── Validación ────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -46,6 +47,8 @@ public class InventarioController implements Initializable {
 
     // ── FXML – formulario ─────────────────────────────────────────────────
     @FXML private Label     lblTituloForm;
+    @FXML private javafx.scene.layout.StackPane marcoImagen;
+    @FXML private javafx.scene.image.ImageView  imgProducto;
     @FXML private TextField txtCodigo;
     @FXML private TextField txtCantidad;
     @FXML private Label     labelDescripcion;
@@ -72,6 +75,7 @@ public class InventarioController implements Initializable {
     @FXML private TableColumn<Producto, String> colEstado;
 
     @Autowired private ProductoService     productoService;
+    @Autowired private ImagenProductoCache imagenes;
     @Autowired private ProveedorService    proveedorService;
     @Autowired private SesionService       sesionService;
     @Autowired private AutorizacionService autorizacionService;
@@ -232,7 +236,8 @@ public class InventarioController implements Initializable {
 
         double cantidad;
         try {
-            cantidad = Double.parseDouble(txtCantidad.getText().trim().replace(",", "."));
+            cantidad = CalculoCobro.parsearNumero(txtCantidad.getText());
+            if (Double.isNaN(cantidad)) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             alerta(Alert.AlertType.WARNING, "Cantidad inválida",
                     "Escribe un número válido (ej: 12 o 2.5).");
@@ -252,8 +257,8 @@ public class InventarioController implements Initializable {
                 return;
             }
             try {
-                costo = txtCosto.getText().isBlank() ? 0
-                        : Double.parseDouble(txtCosto.getText().trim().replace("$", "").replace(",", ""));
+                costo = txtCosto.getText().isBlank() ? 0 : CalculoCobro.parsearNumero(txtCosto.getText());
+                if (Double.isNaN(costo)) throw new NumberFormatException();
             } catch (NumberFormatException e) {
                 alerta(Alert.AlertType.WARNING, "Costo inválido", "Escribe el costo unitario como número (ej: 12.50).");
                 txtCosto.requestFocus();
@@ -324,11 +329,13 @@ public class InventarioController implements Initializable {
         if (entrada) {
             lblTituloForm.setText("ENTRADA DE MERCANCÍA");
             lblEtiquetaCantidad.setText("Cantidad que entra:");
-            btnAplicar.setText("✅ Registrar entrada");
+            btnAplicar.setText("Registrar entrada");
+            btnAplicar.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("listo"));
         } else {
             lblTituloForm.setText("AJUSTE DE INVENTARIO");
             lblEtiquetaCantidad.setText("Nueva existencia (conteo físico):");
-            btnAplicar.setText("⚖ Fijar existencia");
+            btnAplicar.setText("Fijar existencia");
+            btnAplicar.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("bascula"));
         }
     }
 
@@ -336,6 +343,7 @@ public class InventarioController implements Initializable {
         productoSeleccionado = p;
         txtCodigo.setText(p.getCodigoBarras());
         labelDescripcion.setText(p.getDescripcion());
+        mostrarImagen(p);
         labelCantidadActual.setText(formatoCantidad(p.getCantidadActual())
                 + "   (mínimo: " + formatoCantidad(p.getCantidadMinima())
                 + ", costo: $" + String.format("%.2f", p.getPrecioCosto()) + ")");
@@ -348,8 +356,23 @@ public class InventarioController implements Initializable {
         productoSeleccionado = null;
         txtCodigo.clear();
         txtCantidad.clear();
+        mostrarImagen(null);
         labelDescripcion.setText("—");
         labelCantidadActual.setText("0.00");
+    }
+
+    /** Foto del producto seleccionado (asíncrona; el marco se oculta si no tiene) */
+    private void mostrarImagen(Producto p) {
+        imgProducto.setImage(null);
+        marcoImagen.setVisible(false);
+        marcoImagen.setManaged(false);
+        if (p == null) return;
+        imagenes.imagen(p.getId(), img -> {
+            if (productoSeleccionado != p || img == null) return;
+            imgProducto.setImage(img);
+            marcoImagen.setVisible(true);
+            marcoImagen.setManaged(true);
+        });
     }
 
     private void configurarColumnas() {

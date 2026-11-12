@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -17,11 +18,11 @@
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Button fx:id="btnNueva"    text="+ Nueva"     onAction="#onNueva"    styleClass="button-success"/>
-            <Button fx:id="btnEliminar" text="🗑 Eliminar" onAction="#onEliminar" styleClass="button-danger"/>
+            <Button fx:id="btnEliminar" text="Eliminar" onAction="#onEliminar" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
             <Label fx:id="lblSoloLectura" text="Solo consulta: no tienes permiso para crear o editar promociones."
                    visible="false" managed="false" styleClass="badge, badge-warning"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Label text="⭐ Promociones" styleClass="form-section-title"/>
+            <Label text="Promociones" styleClass="form-section-title"><graphic><Icono nombre="estrella"/></graphic></Label>
         </HBox>
     </top>
 
@@ -146,9 +147,9 @@
                     <Region minHeight="8"/>
 
                     <HBox spacing="12">
-                        <Button fx:id="btnGuardar" text="✅ Guardar" onAction="#onGuardar"
+                        <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar"
                                 styleClass="button-success"
-                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
                         <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
                     </HBox>
                 </VBox>

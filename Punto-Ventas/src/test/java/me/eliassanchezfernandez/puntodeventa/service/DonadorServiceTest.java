@@ -50,12 +50,14 @@ class DonadorServiceTest extends BaseServicioTest {
     void verificadorDePruebas() {
         donadorService.usarVerificadorParaPruebas(new ClaveDonador(par.getPublic()));
         donadorService.usarRelojParaPruebas(null);
+        BienvenidaService.clabeConfiguradaParaPruebas = true;   // el flujo de donación supone CLABE configurada
     }
 
     @AfterEach
     void verificadorOficial() {
         donadorService.usarVerificadorParaPruebas(null);
         donadorService.usarRelojParaPruebas(null);
+        BienvenidaService.clabeConfiguradaParaPruebas = null;
     }
 
     /** PDV1 (formato anterior, sin vencimiento) */
@@ -262,10 +264,12 @@ class DonadorServiceTest extends BaseServicioTest {
 
     @Test
     void elOrdenDeBienvenidaOmiteLaDonacionParaDonadores() {
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true, true)).isEmpty();
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, false, true)).containsExactly(TUTORIAL_GENERAL);
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true, false)).containsExactly(DONACION);
-        assertThat(BienvenidaService.pasos(Cajero.Rol.CAJERO, true, true, true)).isEmpty();
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true, true, true)).isEmpty();
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, false, true, true)).containsExactly(TUTORIAL_GENERAL);
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true, false, true)).containsExactly(DONACION);
+        assertThat(BienvenidaService.pasos(Cajero.Rol.CAJERO, true, true, true, true)).isEmpty();
+        // Sin CLABE configurada no hay a dónde donar: la ventana no se muestra aunque no sea donador
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true, false, false)).isEmpty();
     }
 
     @Test

@@ -162,6 +162,7 @@ public class VentasController implements Initializable {
     @Autowired private BasculaService         basculaService;
     @Autowired private DispositivosService    dispositivosService;
     @Autowired private DispositivosDialogos   dispositivosDialogos;
+    @Autowired private ImagenProductoCache    imagenes;
     @Autowired private FacturacionDialogos    facturacionDialogos;
 
     private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
@@ -202,7 +203,7 @@ public class VentasController implements Initializable {
         aplicarConfiguracion();
         tablaProductos.setItems(itemsTicket);
         tablaProductos.setPlaceholder(new Label(
-                "Escanea un código o usa 🔍 Buscar para agregar productos."));
+                "Escanea un código o usa Buscar para agregar productos."));
 
         // Los montos se recalculan al cambiar el texto (también al pegar con el ratón)
         camposPago.values().forEach(c -> c.textProperty().addListener((o, a, b) -> actualizarCambio()));
@@ -223,12 +224,12 @@ public class VentasController implements Initializable {
     /** Texto de cada botón con su tecla (Cmd en Mac) y tooltip con la alternativa */
     private void etiquetarBotones() {
         boolean mac = Atajo.esMac();
-        etiquetar(btnBuscar,     "🔍 Buscar",     Atajo.BUSCAR_PRODUCTO, mac);
+        etiquetar(btnBuscar,     "Buscar",        Atajo.BUSCAR_PRODUCTO, mac);
         etiquetar(btnCantidad,   "Cantidad",      Atajo.CANTIDAD, mac);
-        etiquetar(btnQuitar,     "🗑 Quitar",     Atajo.QUITAR_RENGLON, mac);
+        etiquetar(btnQuitar,     "Quitar",        Atajo.QUITAR_RENGLON, mac);
         etiquetar(btnDescuento,  "Descuento",     Atajo.DESCUENTO_MANUAL, mac);
         etiquetar(btnMayoreo,    "Mayoreo",       Atajo.MAYOREO, mac);
-        etiquetar(btnEnEspera,   "⏸ En espera",   Atajo.PONER_EN_ESPERA, mac);
+        etiquetar(btnEnEspera,   "En espera",      Atajo.PONER_EN_ESPERA, mac);
         etiquetar(btnCobrar,     "Cobrar",        Atajo.COBRAR, mac);
         // Combinaciones con Ctrl/Cmd: la tecla va solo en el tooltip (caben en 1024 px)
         soloTooltip(btnLeerPeso,   Atajo.LEER_PESO, mac);
@@ -403,7 +404,7 @@ public class VentasController implements Initializable {
         if (encontrado.isEmpty()) {
             alerta(Alert.AlertType.WARNING, "Producto no encontrado",
                     "No existe un producto activo con el código \"" + codigo + "\".\n" +
-                    "Usa 🔍 Buscar (F6) para localizarlo por nombre.");
+                    "Usa Buscar (F6) para localizarlo por nombre.");
             txtCodigo.selectAll();
             return;
         }
@@ -427,6 +428,14 @@ public class VentasController implements Initializable {
 
         TableView<Producto> tabla = new TableView<>();
         tabla.setPrefSize(640, 320);
+        TableColumn<Producto, Long> cImg = new TableColumn<>("");
+        cImg.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue().getId()));
+        cImg.setCellFactory(col -> imagenes.celdaMiniatura(col, 30));
+        cImg.setPrefWidth(44);
+        cImg.setMinWidth(44);
+        cImg.setMaxWidth(44);
+        cImg.setSortable(false);
+        cImg.setResizable(false);
         TableColumn<Producto, String> cCod = new TableColumn<>("Código");
         cCod.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getCodigoBarras()));
         cCod.setPrefWidth(130);
@@ -441,17 +450,47 @@ public class VentasController implements Initializable {
         cStock.setCellValueFactory(c -> new SimpleStringProperty(
                 c.getValue().isUsaInventario() ? formatoCantidad(c.getValue().getCantidadActual()) : "—"));
         cStock.getStyleClass().add("align-right");
+        tabla.getColumns().add(cImg);
         tabla.getColumns().add(cCod);
         tabla.getColumns().add(cDesc);
         tabla.getColumns().add(cPrecio);
         tabla.getColumns().add(cStock);
         tabla.setPlaceholder(new Label("Sin resultados"));
 
-        Runnable filtrar = () -> tabla.getItems().setAll(productoService.buscarParaVenta(txtFiltro.getText()));
+        // El catálogo activo se lee UNA vez al abrir el buscador y cada tecla filtra en memoria: antes
+        // cada tecla consultaba la base (5 000 productos + sus departamentos) en el hilo de JavaFX
+        List<Producto> catalogo = productoService.buscarParaVenta("");
+        Runnable filtrar = () -> tabla.getItems().setAll(ProductoService.filtrar(catalogo, txtFiltro.getText()));
         txtFiltro.textProperty().addListener((o, a, b) -> filtrar.run());
         filtrar.run();
 
-        VBox contenido = new VBox(8, txtFiltro, tabla);
+        // Detalle del producto elegido: foto grande y nombre (se carga fuera del hilo de JavaFX)
+        javafx.scene.image.ImageView imgDetalle = new javafx.scene.image.ImageView();
+        imgDetalle.setFitWidth(150);
+        imgDetalle.setFitHeight(150);
+        imgDetalle.setPreserveRatio(true);
+        imgDetalle.setSmooth(true);
+        javafx.scene.layout.StackPane marco = new javafx.scene.layout.StackPane(imgDetalle);
+        marco.getStyleClass().add("imagen-marco");
+        marco.setMinSize(160, 160);
+        marco.setMaxSize(160, 160);
+        Label lblDetalle = new Label("");
+        lblDetalle.setWrapText(true);
+        lblDetalle.setMaxWidth(160);
+        lblDetalle.getStyleClass().add("hint");
+        VBox detalle = new VBox(6, marco, lblDetalle);
+        tabla.getSelectionModel().selectedItemProperty().addListener((o, a, p) -> {
+            imgDetalle.setImage(null);
+            lblDetalle.setText(p == null ? "" : p.getDescripcion());
+            if (p == null) return;
+            imagenes.imagen(p.getId(), img -> {
+                if (tabla.getSelectionModel().getSelectedItem() == p) imgDetalle.setImage(img);
+            });
+        });
+
+        HBox cuerpo = new HBox(10, tabla, detalle);
+        HBox.setHgrow(tabla, javafx.scene.layout.Priority.ALWAYS);
+        VBox contenido = new VBox(8, txtFiltro, cuerpo);
         contenido.setPadding(new Insets(10));
         dialogo.getDialogPane().setContent(contenido);
         dialogo.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -1015,7 +1054,7 @@ public class VentasController implements Initializable {
             List<DetalleVenta> detalles = ticketPendienteService.recuperarEnEspera(elegido.id());
             ticketPendienteService.descartarDelCajeroActual();
             limpiarTicket();
-            int omitidos = 0;
+            int omitidos = elegido.omitidos();   // productos desactivados mientras el ticket esperaba
             for (DetalleVenta d : detalles) {
                 try {
                     ventaService.recalcularPrecio(d);
@@ -1050,7 +1089,7 @@ public class VentasController implements Initializable {
         } catch (RuntimeException e) {
             n = 0;
         }
-        btnRecuperar.setText("▶ Recuperar" + (n > 0 ? " (" + n + ")" : ""));
+        btnRecuperar.setText("Recuperar" + (n > 0 ? " (" + n + ")" : ""));
         labelEnEspera.setText(n == 0 ? "" : n + " en espera");
         labelEnEspera.setVisible(n > 0);
         labelEnEspera.setManaged(n > 0);
@@ -1275,7 +1314,14 @@ public class VentasController implements Initializable {
         } catch (NegocioException e) {
             alerta(Alert.AlertType.ERROR, "No se puede cambiar la cantidad", e.getMessage());
         }
+        Double descuentoImporte = d.getDescuentoManualImporte();
         recalcularTodo();
+        if (descuentoImporte != null && descuentoImporte > 0 && !d.tieneDescuentoManual()) {
+            // VentaService lo quitó porque ya no cabe en el renglón (no deja renglones en $0)
+            alerta(Alert.AlertType.WARNING, "Descuento quitado", String.format(
+                    "El descuento de %s era mayor que el importe del renglón con la nueva cantidad, así que se quitó. "
+                    + "Vuelve a aplicarlo (F8) si hace falta.", Moneda.formato(descuentoImporte)));
+        }
     }
 
     /** Sin existencia: permiso propio (con confirmación) o autorización de administrador (INV-08) */

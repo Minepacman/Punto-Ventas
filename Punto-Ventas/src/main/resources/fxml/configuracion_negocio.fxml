@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -53,8 +54,8 @@
                 <Region minHeight="8"/>
 
                 <HBox spacing="12">
-                    <Button text="✅ Guardar" onAction="#onGuardar" styleClass="button-success"
-                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                    <Button text="Guardar" onAction="#onGuardar" styleClass="button-success"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
                     <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
                 </HBox>
             </VBox>

@@ -167,10 +167,14 @@ public class CajeroService {
         c.setNombreCompleto(nombreCompleto);
         c.setRol(rol);
         c.setActivo(activo);
+        Cajero enSesion = sesionService.getCajeroActual();
+        boolean esElMismo = enSesion != null && enSesion.getId().equals(c.getId());
         if (cambiaContrasena) {
             c.setContrasenaHash(passwordEncoder.encode(nuevaContrasena));
-            c.setDebeCambiarContrasena(true);   // la definió el admin: debe cambiarla al entrar
-            cambios += ", contraseña restablecida";
+            // La definió el admin para OTRO usuario: ese usuario debe cambiarla al entrar.
+            // Si el admin cambia la SUYA, la eligió él mismo: su sesión sigue y no se le vuelve a pedir.
+            c.setDebeCambiarContrasena(!esElMismo);
+            cambios += esElMismo ? ", contraseña propia cambiada" : ", contraseña restablecida";
         }
         if (permisosEfectivos != null) {
             aplicarPermisos(c, permisosEfectivos);

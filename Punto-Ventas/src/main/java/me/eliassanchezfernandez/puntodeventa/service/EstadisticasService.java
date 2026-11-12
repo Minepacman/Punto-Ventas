@@ -70,7 +70,7 @@ public class EstadisticasService {
 
     /** Nivel según la fecha de la primera venta registrada; SIN_DATOS si no hay ventas */
     public NivelDatos nivelDatosActual() {
-        return ventaRepository.findFirstByOrderByFechaAsc()
+        return ventaRepository.findPrimeraActiva()
                 .map(v -> nivelDatos(ChronoUnit.DAYS.between(v.getFecha().toLocalDate(), LocalDate.now(reloj))))
                 .orElse(NivelDatos.SIN_DATOS);
     }
@@ -127,7 +127,7 @@ public class EstadisticasService {
     /** Madurez actual: lectura de la primera venta, de resumen_diario y de "hoy" en vivo. No requiere permiso. */
     @Transactional(readOnly = true)
     public MadurezDatos madurezActual() {
-        Optional<Venta> primera = ventaRepository.findFirstByOrderByFechaAsc();
+        Optional<Venta> primera = ventaRepository.findPrimeraActiva();
         if (primera.isEmpty()) return MadurezDatos.SIN_DATOS;
         LocalDate hoy = hoy();
         long dias = Math.max(0, ChronoUnit.DAYS.between(primera.get().getFecha().toLocalDate(), hoy));

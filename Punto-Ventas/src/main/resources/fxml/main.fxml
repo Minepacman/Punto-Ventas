@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -48,28 +49,28 @@
             <!-- Las pestañas distintas de Ventas se cargan al seleccionarlas por primera vez (MainController.cargarPestanaPerezosa):
                  en PCs lentas evita construir 6 pantallas y consultar la base de datos al iniciar sesión. -->
             <!-- F1 – Ventas -->
-            <Tab fx:id="tabVentas" text="F1 · Ventas">
+            <Tab fx:id="tabVentas" text="F1 · Ventas"><graphic><Icono nombre="tienda"/></graphic>
                 <fx:include source="ventas.fxml"
                             fx:id="ventasView"/>
             </Tab>
 
-            <!-- F2 – Clientes -->
-            <Tab fx:id="tabClientes" text="F2 · Clientes"/>
+            <!-- La pestaña "Clientes" (F2) se mostrará cuando exista el módulo: clientes.fxml y
+                 ClientesController se conservan; F2 queda sin asignar. -->
 
             <!-- F3 – Productos -->
-            <Tab fx:id="tabProductos" text="F3 · Productos"/>
+            <Tab fx:id="tabProductos" text="F3 · Productos"><graphic><Icono nombre="etiqueta"/></graphic></Tab>
 
             <!-- F4 – Inventario -->
-            <Tab fx:id="tabInventario" text="F4 · Inventario"/>
+            <Tab fx:id="tabInventario" text="F4 · Inventario"><graphic><Icono nombre="paquete"/></graphic></Tab>
 
             <!-- Configuración (solo ADMIN; MainController la quita para cajeros) -->
-            <Tab fx:id="tabConfig" text="⚙ Configuración"/>
+            <Tab fx:id="tabConfig" text="Configuración"><graphic><Icono nombre="ajustes"/></graphic></Tab>
 
             <!-- Corte (solo ADMIN) -->
-            <Tab fx:id="tabCorte" text="✂ Corte"/>
+            <Tab fx:id="tabCorte" text="Corte"><graphic><Icono nombre="tijeras"/></graphic></Tab>
 
             <!-- Estadísticas (solo quien tiene VER_HISTORIAL; MainController la quita para los demás) -->
-            <Tab fx:id="tabEstadisticas" text="📊 Estadísticas"/>
+            <Tab fx:id="tabEstadisticas" text="Estadísticas"><graphic><Icono nombre="grafica"/></graphic></Tab>
 
         </TabPane>
     </center>
@@ -80,7 +81,7 @@
             <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
             <Region HBox.hgrow="ALWAYS"/>
             <!-- El texto lo arma MainController desde el catálogo util/Atajo -->
-            <Label fx:id="labelAtajos" text="F1 Ventas · F2 Clientes · F3 Productos · F4 Inventario · F5 Estadísticas · F6 Buscar · F11 En espera · F12 Cobrar"/>
+            <Label fx:id="labelAtajos" text="F1 Ventas · F3 Productos · F4 Inventario · F5 Estadísticas · F6 Buscar · F11 En espera · F12 Cobrar"/>
             <Hyperlink fx:id="lnkAtajos" text="Atajos F10" onAction="#onAtajos" focusTraversable="false"/>
             <!-- Vuelve a mostrar el recorrido por las pestañas (TutorialGeneralDialogo) -->
             <Hyperlink fx:id="lnkTutorial" text="Tutorial" onAction="#onTutorial" focusTraversable="false">
@@ -88,8 +89,8 @@
             </Hyperlink>
             <Region HBox.hgrow="ALWAYS"/>
             <!-- Se enciende solo cuando el buscador de actualizaciones encontró una versión nueva -->
-            <Hyperlink fx:id="lnkActualizacion" text="⬆ Nueva versión disponible" onAction="#onActualizacion"
-                       focusTraversable="false" styleClass="status-actualizacion" visible="false" managed="false"/>
+            <Hyperlink fx:id="lnkActualizacion" text="Nueva versión disponible" onAction="#onActualizacion"
+                       focusTraversable="false" styleClass="status-actualizacion" visible="false" managed="false"><graphic><Icono nombre="nuevaVersion"/></graphic></Hyperlink>
             <Hyperlink fx:id="lnkAcercaDe" text="Acerca de" onAction="#onAcercaDe" focusTraversable="false">
                 <tooltip><Tooltip text="Versión, donador, soporte técnico y actualizaciones"/></tooltip>
             </Hyperlink>

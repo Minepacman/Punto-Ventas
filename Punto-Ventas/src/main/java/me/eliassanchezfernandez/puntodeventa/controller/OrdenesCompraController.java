@@ -385,6 +385,8 @@ public class OrdenesCompraController implements Initializable {
     /** Suma todas las líneas al inventario de una sola vez (AJUSTAR_INVENTARIO o autorización) */
     @FXML private void onRecibir() {
         if (actual == null) return;
+        // Lo editado en la tabla (cantidades, costos) se recibe tal como se ve: primero se guarda
+        if (actual.esEditable() && !guardar(false)) return;
         if (!Ventanas.confirmar("Recibir mercancía", String.format(
                 "¿Recibir la orden #%d de %s?\nSe sumarán %d producto(s) al inventario y el costo de cada uno se actualizará.",
                 actual.getId(), actual.getProveedor().getNombre(), actual.getLineas().size()))) {
@@ -485,12 +487,8 @@ public class OrdenesCompraController implements Initializable {
 
     private static double numero(String texto) {
         if (texto == null) return Double.NaN;
-        try {
-            double v = Double.parseDouble(texto.trim().replace("$", "").replace(",", ""));
-            return Double.isFinite(v) && v >= 0 ? v : Double.NaN;
-        } catch (NumberFormatException e) {
-            return Double.NaN;
-        }
+        double v = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(texto);
+        return Double.isFinite(v) && v >= 0 ? v : Double.NaN;
     }
 
     private static String cantidad(double v) {

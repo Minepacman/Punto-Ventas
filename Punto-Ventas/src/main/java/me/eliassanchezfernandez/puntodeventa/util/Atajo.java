@@ -28,7 +28,7 @@ public enum Atajo {
 
     // ── Globales (ventana principal) ────────────────────────────────────
     IR_VENTAS      (Ambito.GLOBAL, Tecla.de(KeyCode.F1), Tecla.atajo(KeyCode.DIGIT1), "Ir a Ventas", null),
-    IR_CLIENTES    (Ambito.GLOBAL, Tecla.de(KeyCode.F2), Tecla.atajo(KeyCode.DIGIT2), "Ir a Clientes", null),
+    // F2 / Ctrl+2 quedan libres para "Ir a Clientes" cuando exista ese módulo
     IR_PRODUCTOS   (Ambito.GLOBAL, Tecla.de(KeyCode.F3), Tecla.atajo(KeyCode.DIGIT3), "Ir a Productos", null),
     IR_INVENTARIO  (Ambito.GLOBAL, Tecla.de(KeyCode.F4), Tecla.atajo(KeyCode.DIGIT4), "Ir a Inventario", null),
     IR_ESTADISTICAS(Ambito.GLOBAL, Tecla.de(KeyCode.F5), Tecla.atajo(KeyCode.DIGIT5), "Ir a Estadísticas", Permiso.VER_HISTORIAL),

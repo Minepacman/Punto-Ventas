@@ -83,6 +83,14 @@ public class Cajero {
     @Column(name = "tutorial_general_visto")
     private Boolean tutorialGeneralVisto;
 
+    /**
+     * true = este usuario ya vio el recorrido guiado de la página MÓVIL (se
+     * muestra la primera vez que entra desde un teléfono; ServidorMovilService).
+     * Nullable por la misma razón (null = no visto).
+     */
+    @Column(name = "tutorial_movil_visto")
+    private Boolean tutorialMovilVisto;
+
     /** Permisos agregados a los del rol */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "cajero_permisos", joinColumns = @JoinColumn(name = "cajero_id"))
@@ -115,6 +123,10 @@ public class Cajero {
 
     public boolean isTutorialGeneralVisto() {
         return Boolean.TRUE.equals(tutorialGeneralVisto);
+    }
+
+    public boolean isTutorialMovilVisto() {
+        return Boolean.TRUE.equals(tutorialMovilVisto);
     }
 
     /** Permisos efectivos = (por defecto del rol ∪ concedidos) − revocados. ADMIN: todos. */

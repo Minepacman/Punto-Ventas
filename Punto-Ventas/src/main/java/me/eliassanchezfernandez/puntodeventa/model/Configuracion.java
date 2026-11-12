@@ -227,6 +227,14 @@ public class Configuracion {
     @Column(name = "revocaciones_apoyo", length = 65536)
     private String revocacionesApoyo;
 
+    /**
+     * Versión del programa que dejó el esquema al día (ddl-auto=update, migraciones de SQLite y de
+     * proveedores). Si coincide con la versión instalada, el siguiente arranque se salta ese trabajo
+     * (ver Launcher y ArranqueDiferido). Null = nunca o versión anterior.
+     */
+    @Column(name = "version_esquema", length = 30)
+    private String versionEsquema;
+
     public boolean isActualizacionesAuto() { return actualizacionesAuto == null || actualizacionesAuto; }
     public boolean tieneClaveDonador()     { return claveDonador != null && !claveDonador.isBlank(); }
 

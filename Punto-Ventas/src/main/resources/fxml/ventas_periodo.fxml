@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -23,18 +24,18 @@
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
             <Label text="Hasta:"/>
             <DatePicker fx:id="dpHasta" prefWidth="140"/>
-            <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
+            <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
             <Button text="Hoy"         onAction="#onHoy"/>
             <Button text="Esta semana" onAction="#onEstaSemana"/>
             <Button text="Este mes"    onAction="#onEsteMes"/>
             <Separator orientation="VERTICAL"/>
-            <Button fx:id="btnCancelarVenta" text="⛔ Cancelar venta" onAction="#onCancelarVenta"
-                    styleClass="button-danger"/>
-            <Button fx:id="btnReimprimir" text="🖨 Reimprimir ticket" onAction="#onReimprimir"/>
-            <Button fx:id="btnFacturar" text="🧾 Facturar" onAction="#onFacturar"/>
-            <Button fx:id="btnFacturas" text="📄 Facturas…" onAction="#onFacturas"/>
-            <Button text="📤 Exportar…" onAction="#onExportar"/>
+            <Button fx:id="btnCancelarVenta" text="Cancelar venta" onAction="#onCancelarVenta"
+                    styleClass="button-danger"><graphic><Icono nombre="prohibido"/></graphic></Button>
+            <Button fx:id="btnReimprimir" text="Reimprimir ticket" onAction="#onReimprimir"><graphic><Icono nombre="impresora"/></graphic></Button>
+            <Button fx:id="btnFacturar" text="Facturar" onAction="#onFacturar"><graphic><Icono nombre="recibo"/></graphic></Button>
+            <Button fx:id="btnFacturas" text="Facturas…" onAction="#onFacturas"><graphic><Icono nombre="documento"/></graphic></Button>
+            <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>

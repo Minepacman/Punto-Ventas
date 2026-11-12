@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
+<?import javafx.scene.image.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -15,18 +17,18 @@
         <VBox>
         <HBox styleClass="section-toolbar" spacing="8">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button text="➕ Entrada de mercancía"   onAction="#onAgregar"
-                    styleClass="button-success"/>
-            <Button text="⚖ Ajustes"                onAction="#onAjustes"/>
-            <ToggleButton fx:id="btnSoloBajos" text="⚠ Productos Bajos"
-                          onAction="#onProductosBajos"/>
+            <Button text="Entrada de mercancía"   onAction="#onAgregar"
+                    styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
+            <Button text="Ajustes"                onAction="#onAjustes"><graphic><Icono nombre="bascula"/></graphic></Button>
+            <ToggleButton fx:id="btnSoloBajos" text="Productos Bajos"
+                          onAction="#onProductosBajos"><graphic><Icono nombre="alerta"/></graphic></ToggleButton>
             <Separator orientation="VERTICAL"/>
-            <Button text="📊 Reporte de Inventario"  onAction="#onReporteInventario"/>
-            <Button text="📋 Movimientos"            onAction="#onReporteMovimientos"/>
-            <Button text="📤 Exportar…"              onAction="#onExportar"/>
+            <!-- "Reporte de inventario" (PDF) se mostrará cuando exista; "Exportar…" ya saca CSV/xlsx/PDF -->
+            <Button text="Movimientos"            onAction="#onReporteMovimientos"><graphic><Icono nombre="lista"/></graphic></Button>
+            <Button text="Exportar…"              onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
-            <Button fx:id="btnProveedores" text="🏭 Proveedores"     onAction="#onProveedores"/>
-            <Button fx:id="btnOrdenes"     text="🧾 Órdenes de compra" onAction="#onOrdenesCompra"/>
+            <Button fx:id="btnProveedores" text="Proveedores"     onAction="#onProveedores"><graphic><Icono nombre="fabrica"/></graphic></Button>
+            <Button fx:id="btnOrdenes"     text="Órdenes de compra" onAction="#onOrdenesCompra"><graphic><Icono nombre="recibo"/></graphic></Button>
         </HBox>
         <Label fx:id="lblVisitanHoy" text="" wrapText="true" styleClass="hint">
             <padding><Insets top="6" right="12" bottom="0" left="12"/></padding>
@@ -52,6 +54,11 @@
 
                 <Label text="Descripción:"/>
                 <Label fx:id="labelDescripcion" text="—" styleClass="info-label" wrapText="true"/>
+                <!-- Foto del producto (solo se muestra si tiene) -->
+                <StackPane fx:id="marcoImagen" styleClass="imagen-marco" visible="false" managed="false"
+                           maxWidth="128" maxHeight="128" minHeight="128">
+                    <ImageView fx:id="imgProducto" fitWidth="120" fitHeight="120" preserveRatio="true" smooth="true"/>
+                </StackPane>
 
                 <Label text="Cantidad Actual:"/>
                 <Label fx:id="labelCantidadActual" text="0.00" styleClass="info-label"/>
@@ -79,10 +86,10 @@
                 </VBox>
 
                 <Button fx:id="btnAplicar"
-                        text="✅ Registrar entrada"
+                        text="Registrar entrada"
                         onAction="#onAgregarCantidad"
                         styleClass="button-success"
-                        maxWidth="Infinity"/>
+                        maxWidth="Infinity"><graphic><Icono nombre="listo"/></graphic></Button>
 
                 <Label text="Las filas en amarillo están en o por debajo del mínimo; en rojo, agotadas. Todo movimiento queda registrado."
                        wrapText="true" styleClass="hint"/>

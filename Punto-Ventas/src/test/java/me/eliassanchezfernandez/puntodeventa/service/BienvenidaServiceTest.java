@@ -21,6 +21,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class BienvenidaServiceTest extends BaseServicioTest {
 
+    /** Estas pruebas describen el flujo CON CLABE configurada (sin CLABE no hay paso DONACION: QaConfiguracionTest) */
+    @org.junit.jupiter.api.BeforeEach
+    void conClabe() { BienvenidaService.clabeConfiguradaParaPruebas = true; }
+
+    @org.junit.jupiter.api.AfterEach
+    void sinForzarClabe() { BienvenidaService.clabeConfiguradaParaPruebas = null; }
+
     @Autowired private BienvenidaService     bienvenidaService;
     @Autowired private ConfiguracionService  configuracionService;
     @Autowired private AuditoriaService      auditoriaService;
@@ -29,15 +36,17 @@ class BienvenidaServiceTest extends BaseServicioTest {
 
     @Test
     void elAdminLaPrimeraVezPasaPorAsistenteTutorialYDonacionEnEseOrden() {
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, false, false))
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, false, false, false, true))
                 .containsExactly(ASISTENTE_INICIAL, TUTORIAL_GENERAL, DONACION);
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, false, false, false, false))
+                .containsExactly(ASISTENTE_INICIAL, TUTORIAL_GENERAL);
     }
 
     @Test
     void elAdminConTodoHechoSoloVeLaDonacion() {
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true)).containsExactly(DONACION);
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, false)).containsExactly(TUTORIAL_GENERAL, DONACION);
-        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, false, true)).containsExactly(ASISTENTE_INICIAL, DONACION);
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, true, false, true)).containsExactly(DONACION);
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, true, false, false, true)).containsExactly(TUTORIAL_GENERAL, DONACION);
+        assertThat(BienvenidaService.pasos(Cajero.Rol.ADMIN, false, true, false, true)).containsExactly(ASISTENTE_INICIAL, DONACION);
     }
 
     @Test

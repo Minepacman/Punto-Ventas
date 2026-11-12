@@ -164,7 +164,8 @@ public class ProveedoresController implements Initializable {
         if (seleccionado == null) return;
         boolean desactivar = seleccionado.isActivo();
         if (desactivar && !Ventanas.confirmar("Desactivar proveedor", "¿Desactivar a \"" + seleccionado.getNombre()
-                + "\"? Ya no se ofrecerá en entradas ni órdenes nuevas; su historial se conserva.")) {
+                + "\"? Ya no se ofrecerá en entradas ni órdenes nuevas; su historial se conserva y las órdenes "
+                + "que ya estén en borrador o enviadas se pueden seguir recibiendo.")) {
             return;
         }
         try {

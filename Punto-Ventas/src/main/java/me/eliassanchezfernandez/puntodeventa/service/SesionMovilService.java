@@ -156,13 +156,14 @@ public class SesionMovilService {
 
     /**
      * "¿Mantener la sesión siempre abierta?" contestado DESPUÉS de entrar:
-     * Sí = permanente; No = 48 h contadas desde que se creó la sesión.
+     * Sí = permanente; No = 48 h contadas desde AHORA (si se contaran desde que se
+     * creó la sesión, apagar el interruptor tras más de 48 h la cerraría al instante).
      */
     @Transactional
     public SesionMovil fijarPermanente(Long sesionId, boolean permanente) {
         SesionMovil s = sesionRepo.findById(sesionId).orElseThrow(() -> new NegocioException("La sesión no existe."));
         if (s.isRevocada()) throw new NegocioException("La sesión ya fue cerrada.");
-        s.setExpira(permanente ? null : s.getCreada().plus(VIGENCIA_TEMPORAL));
+        s.setExpira(permanente ? null : ahora().plus(VIGENCIA_TEMPORAL));
         return sesionRepo.save(s);
     }
 

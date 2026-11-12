@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/** @BatchSize: al cargar listas de productos, los departamentos se traen de 100 en 100 (no uno por uno) */
 @Entity @Table(name = "departamentos") @Data @NoArgsConstructor
+@org.hibernate.annotations.BatchSize(size = 100)
 public class Departamento {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

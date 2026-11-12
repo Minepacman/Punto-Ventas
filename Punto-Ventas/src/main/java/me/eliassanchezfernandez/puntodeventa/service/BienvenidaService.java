@@ -4,6 +4,7 @@ import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ConfiguracionRepository;
+import me.eliassanchezfernandez.puntodeventa.util.Donacion;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,11 +49,29 @@ public class BienvenidaService {
      * GERENTE y CAJERO: solo el tutorial la primera vez.
      */
     public static List<Paso> pasos(Cajero.Rol rol, boolean asistenteHecho, boolean tutorialVisto, boolean donador) {
+        return pasos(rol, asistenteHecho, tutorialVisto, donador, clabeConfigurada());
+    }
+
+    /** Solo para pruebas: fuerza el resultado de "¿hay CLABE?" (null = leer donacion.properties) */
+    static volatile Boolean clabeConfiguradaParaPruebas = null;
+
+    /** ¿Hay a dónde donar? (donacion.properties con CLABE real) */
+    static boolean clabeConfigurada() {
+        Boolean forzada = clabeConfiguradaParaPruebas;
+        return forzada != null ? forzada : Donacion.cargar().clabeConfigurada();
+    }
+
+    /**
+     * @param clabeConfigurada false mientras donacion.properties siga en PENDIENTE: sin CLABE no hay
+     *        a dónde donar, así que no se bloquea la caja pidiendo un donativo imposible
+     */
+    public static List<Paso> pasos(Cajero.Rol rol, boolean asistenteHecho, boolean tutorialVisto, boolean donador,
+                                   boolean clabeConfigurada) {
         List<Paso> lista = new ArrayList<>();
         boolean admin = rol == Cajero.Rol.ADMIN;
         if (admin && !asistenteHecho) lista.add(Paso.ASISTENTE_INICIAL);
         if (!tutorialVisto) lista.add(Paso.TUTORIAL_GENERAL);
-        if (admin && !donador) lista.add(Paso.DONACION);
+        if (admin && !donador && clabeConfigurada) lista.add(Paso.DONACION);
         return lista;
     }
 
@@ -67,7 +86,7 @@ public class BienvenidaService {
         Cajero actual = sesionService.getCajeroActual();
         if (actual == null || actual.isDebeCambiarContrasena()) return List.of();
         return pasos(actual.getRol(), configuracionService.obtener().isAsistenteInicialHecho(), tutorialGeneralVisto(),
-                donadorService.esDonador());
+                donadorService.esDonador(), clabeConfigurada());
     }
 
     // ── Asistente inicial (por instalación, solo ADMIN) ──────────────────
@@ -149,8 +168,8 @@ public class BienvenidaService {
 
     // ── Donación ─────────────────────────────────────────────────────────
 
-    /** La ventana de donación la ve solo el administrador (en cada inicio de sesión) y nunca un negocio donador */
+    /** La ventana de donación la ve solo el administrador (en cada inicio de sesión), nunca un negocio donador ni sin CLABE */
     public boolean mostrarDonacion() {
-        return sesionService.esAdmin() && !donadorService.esDonador();
+        return sesionService.esAdmin() && !donadorService.esDonador() && clabeConfigurada();
     }
 }

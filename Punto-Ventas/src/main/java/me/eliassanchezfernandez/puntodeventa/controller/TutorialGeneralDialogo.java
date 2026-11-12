@@ -77,7 +77,7 @@ public final class TutorialGeneralDialogo {
 
         Button btnSaltar    = new Button("Saltar (Esc)");
         btnSaltar.getStyleClass().add("button-ghost");
-        Button btnAnterior  = new Button("← Anterior");
+        Button btnAnterior  = new Button("Anterior", me.eliassanchezfernandez.puntodeventa.util.Iconos.de("izquierda"));
         Button btnSiguiente = new Button();
         btnSiguiente.getStyleClass().add("button-primary");
         btnSiguiente.setDefaultButton(true);
@@ -117,7 +117,9 @@ public final class TutorialGeneralDialogo {
             lblAtajos.setManaged(!atajos.isEmpty());
             boolean ultimo = indice[0] == pasos.size() - 1;
             btnAnterior.setDisable(indice[0] == 0);
-            btnSiguiente.setText(ultimo ? "Terminar" : "Siguiente →");
+            btnSiguiente.setText(ultimo ? "Terminar" : "Siguiente");
+            btnSiguiente.setGraphic(ultimo ? null : me.eliassanchezfernandez.puntodeventa.util.Iconos.de("derecha"));
+            btnSiguiente.setContentDisplay(javafx.scene.control.ContentDisplay.RIGHT);
             btnSaltar.setVisible(!ultimo);
             btnSaltar.setManaged(!ultimo);
             stage.sizeToScene();

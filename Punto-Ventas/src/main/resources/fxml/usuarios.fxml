@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -17,9 +18,9 @@
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Button fx:id="btnNuevo"       text="+ Nuevo"        onAction="#onNuevo"   styleClass="button-success"/>
-            <Button fx:id="btnEstado"      text="⛔ Desactivar"   onAction="#onCambiarEstado"/>
-            <Button fx:id="btnDesbloquear" text="🔓 Desbloquear"  onAction="#onDesbloquear"/>
-            <Button fx:id="btnEliminar"    text="🗑 Eliminar"     onAction="#onEliminar" styleClass="button-danger"/>
+            <Button fx:id="btnEstado"      text="Desactivar"   onAction="#onCambiarEstado"><graphic><Icono nombre="prohibido"/></graphic></Button>
+            <Button fx:id="btnDesbloquear" text="Desbloquear"  onAction="#onDesbloquear"><graphic><Icono nombre="desbloquear"/></graphic></Button>
+            <Button fx:id="btnEliminar"    text="Eliminar"     onAction="#onEliminar" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
             <Region HBox.hgrow="ALWAYS"/>
             <Label text="Usuarios del sistema" styleClass="form-section-title"/>
         </HBox>
@@ -32,7 +33,7 @@
             <CheckBox fx:id="chkMostrarEnLogin" text="Mostrar la lista de usuarios en el inicio de sesión" onAction="#onMostrarEnLogin"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="lblCodigoEstado" text=""/>
-            <Button fx:id="btnCodigoRecuperacion" text="🔑 Código de recuperación…" onAction="#onCodigoRecuperacion"/>
+            <Button fx:id="btnCodigoRecuperacion" text="Código de recuperación…" onAction="#onCodigoRecuperacion"><graphic><Icono nombre="llave"/></graphic></Button>
         </HBox>
     </bottom>
 
@@ -96,9 +97,9 @@
                     <Region minHeight="8"/>
 
                     <HBox spacing="12">
-                        <Button fx:id="btnGuardar" text="✅ Guardar" onAction="#onGuardar"
+                        <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar"
                                 styleClass="button-success"
-                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
                         <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
                     </HBox>
                 </VBox>

@@ -49,4 +49,39 @@ public class TutorialesService {
         });
         actual.setTutorialEstadisticasVisto(false);
     }
+
+    // ── Recorrido de la página móvil (por usuario; lo consulta ServidorMovilService) ──
+
+    /**
+     * ¿El usuario de la sesión ya vio el recorrido de la página móvil? Dentro de
+     * {@code SesionService.ejecutarComo} "la sesión" es el usuario del teléfono.
+     */
+    @Transactional(readOnly = true)
+    public boolean movilVisto() {
+        Cajero actual = sesionService.requerirSesion();
+        return cajeroRepo.findById(actual.getId()).map(Cajero::isTutorialMovilVisto)
+                .orElse(actual.isTutorialMovilVisto());
+    }
+
+    /** Idempotente; también se marca si el usuario lo omitió (puede reabrirlo con el botón Ayuda) */
+    @Transactional
+    public void marcarMovilVisto() {
+        cambiarMovil(true);
+    }
+
+    @Transactional
+    public void reiniciarMovil() {
+        cambiarMovil(false);
+    }
+
+    private void cambiarMovil(boolean visto) {
+        Cajero actual = sesionService.requerirSesion();
+        cajeroRepo.findById(actual.getId()).ifPresent(c -> {
+            if (c.isTutorialMovilVisto() != visto) {
+                c.setTutorialMovilVisto(visto);
+                cajeroRepo.save(c);
+            }
+        });
+        actual.setTutorialMovilVisto(visto);
+    }
 }

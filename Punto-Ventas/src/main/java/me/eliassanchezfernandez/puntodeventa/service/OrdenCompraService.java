@@ -219,10 +219,14 @@ public class OrdenCompraService {
         if (o.getEstado() == Estado.CANCELADA) throw new NegocioException("La orden #" + ordenId + " está cancelada.");
         if (o.getLineas().isEmpty()) throw new NegocioException("La orden no tiene productos.");
 
+        // Una sola autorización cubre TODAS las líneas: cada entrada la usa sin consumirla
+        // y se consume aquí al final (si se consumiera en la primera línea, la segunda fallaría).
+        // El proveedor pudo desactivarse después de hacer el pedido: lo ya pedido se puede recibir.
+        Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         for (OrdenCompraLinea l : o.getLineas()) {
             try {
-                productoService.registrarEntradaDeProveedor(l.getProducto().getId(), l.getCantidad(),
-                        o.getProveedor().getId(), "Orden de compra #" + o.getId(), l.getCostoUnitario(), autorizaciones);
+                productoService.registrarEntradaDeOrden(l.getProducto().getId(), l.getCantidad(),
+                        o.getProveedor(), "Orden de compra #" + o.getId(), l.getCostoUnitario(), autorizaciones);
             } catch (PermisoRequeridoException e) {
                 throw e;
             } catch (NegocioException e) {
@@ -235,10 +239,10 @@ public class OrdenCompraService {
         o.setFechaRecepcion(LocalDateTime.now());
         o.setRecibidaPor(sesionService.getNombreCajero());
         OrdenCompra g = ordenRepo.save(o);
-        Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         auditoriaService.registrar(sesionService.getCajeroActual(), "ORDEN_COMPRA_RECIBIDA",
                 "Orden #" + g.getId() + " de " + g.getProveedor().getNombre() + ": " + g.getLineas().size()
                         + " línea(s), " + g.getTotal() + " en compras", aut);
+        if (aut != null) aut.consumir();   // la operación completa ya se hizo: autorización de un solo uso
         return g;
     }
 

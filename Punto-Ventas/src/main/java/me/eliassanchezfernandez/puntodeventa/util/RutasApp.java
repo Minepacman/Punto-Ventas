@@ -195,6 +195,16 @@ public class RutasApp {
         return hermano(archivoBd(), SUFIJO_RESTAURAR);
     }
 
+    /** ¿Hay un respaldo esperando al reinicio? (false en modo servidor o con BD en memoria) */
+    public boolean hayRestauracionPendiente() {
+        if (!esSqlite()) return false;
+        try {
+            return Files.isRegularFile(archivoRestauracionPendiente());
+        } catch (IllegalStateException enMemoria) {
+            return false;
+        }
+    }
+
     /** datos.db + sufijo, en la misma carpeta (copias de seguridad, pendiente) */
     public static Path hermano(Path bd, String sufijo) {
         return bd.resolveSibling(bd.getFileName() + sufijo);
@@ -258,6 +268,19 @@ public class RutasApp {
             return false;
         }
         try {
+            // Copia de seguridad de la base que se va a reemplazar, tomada AQUÍ (al aplicar), para que
+            // lo registrado entre "Restaurar" y el reinicio (ventas, entradas...) no se pierda sin copia.
+            if (Files.isRegularFile(bd)) {
+                String marca = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
+                Path seguridad = hermano(bd, ".antes-de-aplicar-" + marca);
+                Files.copy(bd, seguridad, StandardCopyOption.REPLACE_EXISTING);
+                // Con el programa cerrado el -wal ya está volcado; si quedara uno, se guarda junto a la copia
+                Path wal = hermano(bd, "-wal");
+                if (Files.isRegularFile(wal) && Files.size(wal) > 0) {
+                    Files.copy(wal, hermano(seguridad, "-wal"), StandardCopyOption.REPLACE_EXISTING);
+                }
+                System.out.println("ℹ️  Copia de seguridad antes de aplicar el respaldo: " + seguridad);
+            }
             // Un -wal o -journal viejo no debe mezclarse con la base restaurada
             for (String sufijo : new String[] {"-wal", "-shm", "-journal"}) {
                 Files.deleteIfExists(hermano(bd, sufijo));

@@ -48,7 +48,7 @@ public class ConfiguracionNegocioController implements Initializable {
         double iva;
         int plazo;
         try {
-            iva = Double.parseDouble(txtIva.getText().trim().replace("%", "").replace(",", "."));
+            iva = Double.parseDouble(me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.normalizarNumero(txtIva.getText()));
             plazo = Integer.parseInt(txtPlazo.getText().trim());
         } catch (NumberFormatException e) {
             Ventanas.alerta(Alert.AlertType.WARNING, "Datos inválidos",

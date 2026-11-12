@@ -46,6 +46,21 @@ public interface MovimientoInventarioRepository extends JpaRepository<Movimiento
     boolean existsByProveedorId(Long proveedorId);
 
     /**
+     * Todas las entradas con proveedor, de la más reciente a la más antigua: [productoId,
+     * proveedorId (puede ser null), proveedor (texto)]. Quien la lee se queda con la primera
+     * fila de cada producto cuyo proveedor exista en el catálogo (una entrada "No indicado
+     * (móvil)" no debe quitarle al producto su proveedor real).
+     */
+    @Query("SELECT m.producto.id, m.proveedorId, m.proveedor FROM MovimientoInventario m " +
+           "WHERE m.tipo = :tipo AND (m.proveedorId IS NOT NULL OR (m.proveedor IS NOT NULL AND TRIM(m.proveedor) <> '')) " +
+           "ORDER BY m.producto.id, m.id DESC")
+    List<Object[]> entradasConProveedorRecientesPrimero(MovimientoInventario.Tipo tipo);
+
+    /** Primer movimiento de cada producto [productoId, fecha]: desde cuándo existe en el inventario */
+    @Query("SELECT m.producto.id, MIN(m.fecha) FROM MovimientoInventario m GROUP BY m.producto.id")
+    List<Object[]> primerMovimientoPorProducto();
+
+    /**
      * La ÚLTIMA entrada con proveedor de cada producto: [productoId, proveedorId (puede ser null),
      * proveedor (texto)]. Una fila por producto; sirve para saber quién surte cada producto.
      */

@@ -153,7 +153,7 @@ public class ConfiguracionImpresoraController implements Initializable {
 
     private boolean guardar() {
         try {
-            spCopias.commitValue();   // toma lo escrito a mano en el campo
+            Ventanas.confirmarSpinner(spCopias, "Copias");   // lo escrito a mano en el campo
             dispositivosService.guardarImpresora(cmbModo.getValue(), cmbImpresora.getValue(),
                     cmbCodePage.getValue() != null ? cmbCodePage.getValue().name() : null,
                     chkAutomatico.isSelected(), spCopias.getValue(), chkCajon.isSelected(),

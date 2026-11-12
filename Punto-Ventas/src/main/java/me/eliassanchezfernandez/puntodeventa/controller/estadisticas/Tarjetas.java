@@ -70,9 +70,11 @@ public final class Tarjetas {
         tabla.setPrefHeight(Math.max(minimo, Math.min(maximo, alto)));
     }
 
+    /** "3", "2.5", "0.125": sin residuos de coma flotante ("3." por 3.0000000000000004) */
     public static String cantidad(double v) {
-        if (v == Math.floor(v)) return String.valueOf((long) v);
-        return String.format("%.3f", v).replaceAll("0+$", "");
+        double r = Math.round(v * 1000.0) / 1000.0;
+        if (r == Math.floor(r)) return String.valueOf((long) r);
+        return String.format(java.util.Locale.US, "%.3f", r).replaceAll("0+$", "").replaceAll("\\.$", "");
     }
 
     public static String dias(Double d) {

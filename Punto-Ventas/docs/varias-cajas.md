@@ -133,6 +133,12 @@ demás cajas solo se configuran como en el punto 4.
   restauración del archivo local quedan deshabilitados.
 - **Configuración del negocio**: cada caja la relee cada 30 segundos, así que un
   cambio (IVA, formas de pago…) tarda hasta medio minuto en verse en las demás.
+- **Fotos de productos**: se guardan en la base de datos (tabla
+  `producto_imagen`, columnas `bytea`; en SQLite, `blob`), ya reducidas a 512 px
+  (JPEG) más una miniatura de 96 px, así que todas las cajas ven la misma foto,
+  viajan con `pg_dump`/el respaldo del archivo y la migración SQLite → servidor
+  las copia como cualquier otra tabla. Las listas de productos nunca cargan los
+  bytes: se piden aparte y bajo demanda.
 
 ## Si el servidor no responde
 

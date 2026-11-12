@@ -50,13 +50,11 @@ public class CorteController implements Initializable {
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.IdentidadCaja identidadCaja;
 
     // Entradas de efectivo
-    @FXML private Label lblEntradaCambio;
     @FXML private Label lblDineroInicial;
     @FXML private Label lblTotalEntradas;
     // Dinero en caja
     @FXML private Label lblVentasEfectivo;
     @FXML private Label lblEntradas;
-    @FXML private Label lblPagoProveedores;
     @FXML private Label lblTotalCaja;
     // Pagos de contado
     @FXML private Label lblEfectivo;
@@ -143,7 +141,7 @@ public class CorteController implements Initializable {
         btnCorteGeneral.setVisible(general);
         btnCorteGeneral.setManaged(general);
         lblCaja.setText(identidadCaja.nombre() + (identidadCaja.esMultiCaja() ? " (caja " + identidadCaja.numero() + ")" : ""));
-        btnHacerCorte.setText(identidadCaja.esMultiCaja() ? "✂ Hacer corte de esta caja" : "✂ Hacer Corte de Hoy");
+        btnHacerCorte.setText(identidadCaja.esMultiCaja() ? "Hacer corte de esta caja" : "Hacer Corte de Hoy");
 
         // main.fxml incluye esta vista para todos; sin permiso no hay nada que calcular
         // (MainController quita la pestaña) y no debe aparecer ningún aviso.
@@ -178,7 +176,8 @@ public class CorteController implements Initializable {
         if (res.isEmpty()) return;
         double monto;
         try {
-            monto = Double.parseDouble(res.get()[0].trim().replace("$", "").replace(",", ""));
+            monto = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(res.get()[0]);
+            if (Double.isNaN(monto)) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             Ventanas.alerta(Alert.AlertType.WARNING, "Monto inválido", "Escribe el fondo como número (ej: 500).");
             return;
@@ -220,7 +219,8 @@ public class CorteController implements Initializable {
         if (res.isEmpty()) return;
         double contado;
         try {
-            contado = Double.parseDouble(res.get()[0].trim().replace("$", "").replace(",", ""));
+            contado = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(res.get()[0]);
+            if (Double.isNaN(contado)) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             Ventanas.alerta(Alert.AlertType.WARNING, "Monto inválido", "Escribe el efectivo contado como número (ej: 1250.50).");
             return;
@@ -286,7 +286,8 @@ public class CorteController implements Initializable {
         if (res.isEmpty()) return;
         double contado;
         try {
-            contado = Double.parseDouble(res.get()[0].trim().replace("$", "").replace(",", ""));
+            contado = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(res.get()[0]);
+            if (Double.isNaN(contado)) throw new NumberFormatException();
         } catch (NumberFormatException e) {
             Ventanas.alerta(Alert.AlertType.WARNING, "Monto inválido", "Escribe el efectivo contado como número (ej: 1250.50).");
             return;
@@ -338,13 +339,11 @@ public class CorteController implements Initializable {
             return;
         }
 
-        lblEntradaCambio.setText(moneda(0));
         lblDineroInicial.setText(moneda(dineroInicial));
         lblTotalEntradas.setText(moneda(dineroInicial));
 
         lblVentasEfectivo.setText(moneda(r.efectivo));
-        lblEntradas.setText(moneda(dineroInicial));
-        lblPagoProveedores.setText(moneda(0));
+        lblEntradas.setText(moneda(dineroInicial));   // fondo inicial (también en "Dinero en caja")
         lblTotalCaja.setText(moneda(r.efectivo + dineroInicial));
 
         lblEfectivo.setText(moneda(r.efectivo));
