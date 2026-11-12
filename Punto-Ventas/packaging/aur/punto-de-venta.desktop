@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Punto de Venta
-Comment=Punto de venta para abarrotes
+Name=Caja Libre
+Comment=Caja Libre: punto de venta para abarrotes
 Exec=/opt/punto-de-venta/bin/PuntoDeVenta
 Icon=punto-de-venta
 Terminal=false

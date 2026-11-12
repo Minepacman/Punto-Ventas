@@ -102,6 +102,40 @@ revocado), anti-retroceso (una lista con fecha anterior a la guardada se
 ignora) y `RevocadasPublicadasTest` comprueba que el archivo del repo esté
 firmado con la llave oficial. Revoca solo claves claramente compartidas.
 
+## Datos de donación firmados (`claves/donacion.pdvd`)
+
+Contra la suplantación (una copia del programa con otra CLABE, un sitio falso): los datos
+de `donacion.properties` (CLABE, banco, beneficiario, WhatsApp, correo) se publican **firmados
+con la misma llave** en `claves/donacion.pdvd` (`PDVD1.<json>.<firma>`, `util/DatosDonacionFirmados`).
+El programa lo baja con la consulta diaria de versiones
+(`raw.githubusercontent.com/Minepacman/Punto-Ventas/main/claves/donacion.pdvd`), lo guarda en
+`configuracion.datos_donacion_firmados` (fail-open, anti-retroceso por fecha) y lo coteja con lo
+incrustado. Lo que ve el usuario en la ventana de donación y en «Acerca de»:
+
+| Estado | Cuándo | Qué muestra |
+|---|---|---|
+| Datos verificados ✔ | coinciden CLABE, banco y beneficiario | la cuenta, con la fecha de la firma |
+| Datos de donación aún no publicados | el archivo firmado dice `pendiente` y el programa tampoco trae CLABE | «CLABE no configurada» |
+| Sin verificar | nunca se pudo bajar el archivo | la cuenta incrustada + «compara con el sitio oficial» |
+| ⚠ NO coinciden | firma válida pero otra cuenta (copia modificada) | oculta la CLABE y el botón Copiar; «no dones a esta cuenta» |
+
+Siempre, además: «dona solo a la cuenta oficial… revisa que tu banco muestre como beneficiario a
+**Elias Oziel Sánchez Fernández**» (`Marca.AVISO_DONACION`) y el mensaje «Ya doné» incluye «Vi como
+beneficiario: …» para que detectes de inmediato un pago a una cuenta ajena. El sitio lee el mismo
+archivo firmado y lo verifica en el navegador (WebCrypto Ed25519) cuando el navegador lo permite.
+
+**Cada vez que cambies `donacion.properties`** (la CLABE real, el banco, el beneficiario tal como lo
+muestra el banco, o el contacto):
+
+```bash
+./gradlew firmarDatosDonacion        # escribe claves/donacion.pdvd con la llave de ~/.puntodeventa-desarrollador
+git add Punto-Ventas/src/main/resources/donacion.properties claves/donacion.pdvd && git commit && git push
+```
+
+`DonacionPublicadaTest` falla si el archivo firmado no coincide con `donacion.properties`; así no se
+publica una versión que se marque a sí misma como «no coincide». Mientras la CLABE siga PENDIENTE,
+el archivo se publica como `pendiente` (sin CLABE) y la ventana dice «aún no publicados».
+
 ## Archivos del desarrollador (`~/.puntodeventa-desarrollador/`, fuera del repo)
 
 - `donadores.key` — privada (PKCS#8, Base64). **Respáldala en dos sitios
@@ -121,8 +155,10 @@ firmado con la llave oficial. Revoca solo claves claramente compartidas.
   empaqueta en el instalador) y se puede apuntar a otra carpeta con
   `-Dpuntodeventa.desarrollador.carpeta=…` (así la prueban los tests).
 - Donativos a una persona física son ingreso: consulta a un contador sobre
-  el ISR antes de publicar la CLABE. `donacion.properties` sigue PENDIENTE
-  (CLABE, banco, beneficiario, WhatsApp, correo).
+  el ISR antes de publicar la CLABE. En `donacion.properties` ya están el WhatsApp
+  (282 141 6799) y el correo (elias.osiel@hotmail.com); siguen PENDIENTE la CLABE,
+  el banco y el beneficiario (escríbelo tal como lo muestra el banco al transferir).
+  Después de llenarlos: `./gradlew firmarDatosDonacion` y commit.
 
 ## Para el desarrollo
 

@@ -60,6 +60,57 @@
   });
   $$('[data-comando]').forEach(el => { el.textContent = D.homebrew || ''; });
 
+  // ── 1b. Datos de donación FIRMADOS por el autor (claves/donacion.pdvd del repositorio) ──
+  // Mismo archivo que coteja el programa. Formato: PDVD1.<base64url(json)>.<base64url(firma Ed25519)>.
+  // Si el navegador tiene WebCrypto con Ed25519 (Chrome 137+, Firefox, Safari 17+) se verifica la firma y se
+  // dice «verificados»; si no, solo se muestran los datos del archivo. Si no se puede leer, quedan los de datos.js.
+  const DONACION_URL = 'https://raw.githubusercontent.com/' + repo.usuario + '/' + repo.nombre + '/' + (repo.rama || 'main') + '/claves/donacion.pdvd';
+  function b64urlABytes(t) {
+    const b64 = t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4);
+    const bin = atob(b64); const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function pintarDonacion(d, verificada) {
+    const estado = $('#donacion-estado');
+    const poner = (clave, v) => $$('[data-dato="donacion.' + clave + '"]').forEach(el => {
+      if (pendiente(v)) { el.textContent = el.dataset.pendiente || 'Por confirmar'; el.classList.add('pendiente'); }
+      else { el.textContent = v; el.classList.remove('pendiente'); }
+    });
+    if (d.pendiente) {
+      poner('clabe', ''); poner('banco', ''); poner('beneficiario', '');
+      if (estado) estado.textContent = 'El autor todavía no publica su cuenta de donación (archivo firmado del ' + d.emitido + '). Mientras tanto no dones a ninguna cuenta que diga ser de Caja Libre.';
+      return;
+    }
+    const clabe = String(d.clabe || '').replace(/\D/g, '');
+    poner('clabe', clabe.length === 18 ? clabe.slice(0, 3) + ' ' + clabe.slice(3, 6) + ' ' + clabe.slice(6, 17) + ' ' + clabe.slice(17) : clabe);
+    poner('banco', d.banco); poner('beneficiario', d.beneficiario);
+    if (estado) estado.textContent = verificada
+      ? 'Datos verificados: firmados por el autor el ' + d.emitido + ' (firma Ed25519 comprobada en tu navegador).'
+      : 'Datos publicados por el autor el ' + d.emitido + ' (archivo firmado claves/donacion.pdvd del repositorio).';
+  }
+  async function verificarFirma(carga, firma) {
+    try {
+      if (!(window.crypto && crypto.subtle) || pendiente(D.llavePublica)) return false;
+      const spki = b64urlABytes(String(D.llavePublica).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+      const llave = await crypto.subtle.importKey('spki', spki, { name: 'Ed25519' }, false, ['verify']);
+      return await crypto.subtle.verify({ name: 'Ed25519' }, llave, firma, carga);
+    } catch (e) { return false; }   // navegador sin Ed25519: se muestran los datos sin la marca «verificados»
+  }
+  if (window.fetch) {
+    fetch(DONACION_URL, { cache: 'no-cache' })
+      .then(r => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then(async texto => {
+        const partes = texto.trim().split('.');
+        if (partes.length !== 3 || partes[0] !== 'PDVD1') throw new Error('formato');
+        const carga = b64urlABytes(partes[1]), firma = b64urlABytes(partes[2]);
+        const d = JSON.parse(new TextDecoder().decode(carga));
+        if (d.v !== 1) throw new Error('versión');
+        pintarDonacion(d, await verificarFirma(carga, firma));
+      })
+      .catch(() => { /* sin red o archivo: quedan los datos de datos.js y el texto base */ });
+  }
+
   // ── 2. Sistema operativo del visitante ─────────────────────────────
   function detectarSO() {
     const ua = navigator.userAgent || '';

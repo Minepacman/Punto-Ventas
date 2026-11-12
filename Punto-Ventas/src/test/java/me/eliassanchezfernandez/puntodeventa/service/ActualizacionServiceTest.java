@@ -106,6 +106,13 @@ class ActualizacionServiceTest {
         assertThat(ActualizacionService.elegirActivo(activos, "Linux", "amd64")).isEmpty();
 
         // Solo hay x64 para Windows: la JVM de 32 bits no lo acepta; la de 64 sí
+        // El prefijo del archivo no importa (así una release con nombre nuevo sirve a las versiones ya instaladas)
+        List<String> nuevoNombre = List.of("CajaLibre-1.1.0-windows-x64.exe", "CajaLibre-1.1.0-windows-x86.exe",
+                "CajaLibre-1.1.0-macos-arm64.dmg", "CajaLibre-1.1.0-macos-x64.dmg");
+        assertThat(ActualizacionService.elegirActivo(nuevoNombre, "Windows 11", "amd64")).contains("CajaLibre-1.1.0-windows-x64.exe");
+        assertThat(ActualizacionService.elegirActivo(nuevoNombre, "Windows 10", "x86")).contains("CajaLibre-1.1.0-windows-x86.exe");
+        assertThat(ActualizacionService.elegirActivo(nuevoNombre, "Mac OS X", "aarch64")).contains("CajaLibre-1.1.0-macos-arm64.dmg");
+        assertThat(ActualizacionService.elegirActivo(nuevoNombre, "Mac OS X", "x86_64")).contains("CajaLibre-1.1.0-macos-x64.dmg");
         List<String> soloX64 = List.of("PuntoDeVenta-1.1.0.exe");
         assertThat(ActualizacionService.elegirActivo(soloX64, "Windows 10", "amd64")).contains("PuntoDeVenta-1.1.0.exe");
         assertThat(ActualizacionService.elegirActivo(soloX64, "Windows 10", "x86")).isEmpty();

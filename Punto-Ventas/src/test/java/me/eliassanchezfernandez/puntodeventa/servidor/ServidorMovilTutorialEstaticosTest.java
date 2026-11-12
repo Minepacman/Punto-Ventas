@@ -192,7 +192,7 @@ class ServidorMovilTutorialEstaticosTest {
         assertThat(r.headers().firstValue("Content-Type")).hasValue("application/manifest+json");
         assertThat(r.headers().firstValue("Cache-Control")).hasValue("public, max-age=86400");
         JsonNode m = JSON.readTree(r.body());
-        assertThat(m.get("name").asText()).isEqualTo("Punto de Venta");
+        assertThat(m.get("name").asText()).isEqualTo("Caja Libre");
         assertThat(m.get("theme_color").asText()).isEqualTo("#2A4566");
         assertThat(m.get("background_color").asText()).isEqualTo("#2A4566");
         assertThat(m.get("display").asText()).isEqualTo("standalone");

@@ -11,7 +11,7 @@
     <padding>
         <Insets top="28" right="36" bottom="28" left="36"/>
     </padding>
-    <Label text="Punto de Venta" styleClass="arranque-titulo"/>
+    <Label text="Caja Libre" styleClass="arranque-titulo"/>
     <Label text="Abriendo la tienda…" styleClass="hint"/>
     <ProgressIndicator prefWidth="36" prefHeight="36" maxWidth="36" maxHeight="36"/>
 </VBox>

@@ -1,5 +1,5 @@
 /*
- * app.css  -  Punto de Venta
+ * app.css  -  Caja Libre (punto de venta)
  *
  * Hoja de autor sobre el tema de agente AtlantaFX NordLight (ver
  * PuntoDeVentaApp.start()). Se adjunta con el atributo `stylesheets` de
@@ -1944,6 +1944,19 @@ TilePane > .button:armed,
 .donacion-nota {
     -fx-font-size: 12px;
     -fx-text-fill: -pos-text-muted;
+}
+
+/* Estado de los datos de donación cotejados con los firmados por el autor */
+.donacion-verificado {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-success-text;
+}
+
+.donacion-alerta {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-danger-text;
 }
 
 /* "Acerca de" */

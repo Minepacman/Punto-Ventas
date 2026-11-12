@@ -280,7 +280,7 @@ public class BaseDatosService {
                 while (rs.next()) tablas.add(rs.getString(1));
             }
             if (!tablas.containsAll(TABLAS_REQUERIDAS)) {
-                throw new NegocioException("El archivo es una base SQLite, pero no es un respaldo de este Punto de Venta.");
+                throw new NegocioException("El archivo es una base SQLite, pero no es un respaldo de Caja Libre.");
             }
             // Este programa no crea disparadores ni vistas: un respaldo que los traiga es ajeno (o manipulado)
             // y se ejecutarían solos al escribir en la base restaurada.

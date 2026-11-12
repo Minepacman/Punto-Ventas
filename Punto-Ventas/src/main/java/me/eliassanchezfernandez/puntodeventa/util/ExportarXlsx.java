@@ -37,7 +37,7 @@ public final class ExportarXlsx {
             throws IOException {
         if (filas.size() > MAX_FILAS) throw new IOException("Hay demasiadas filas para una hoja de Excel.");
         try (OutputStream salida = Files.newOutputStream(destino)) {
-            Workbook libro = new Workbook(salida, "Punto de Venta", "1.0");
+            Workbook libro = new Workbook(salida, "Caja Libre", "1.0");
             Worksheet hoja = libro.newWorksheet(nombreHojaValido(nombreHoja));
 
             int[] ancho = new int[encabezados.size()];

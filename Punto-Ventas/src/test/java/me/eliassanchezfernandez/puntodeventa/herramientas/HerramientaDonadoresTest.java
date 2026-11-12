@@ -133,7 +133,7 @@ class HerramientaDonadoresTest {
         assertThat(texto()).contains("Nada en el libro");
 
         // Mensaje de soporte como lo arma el programa
-        String mensaje = "Soporte Punto de Venta\nVersión: v1.0.3 (Windows 10 amd64)\nClave de apoyo: " + d.id()
+        String mensaje = "Soporte Caja Libre\nVersión: v1.0.3 (Windows 10 amd64)\nClave de apoyo: " + d.id()
                 + " · Abarrotes Lupita · vigente hasta 12/11/2027 · firma " + huella + "\nInstalación: 7F3A-91C2 · una caja\nProblema: no imprime";
         salida.reset();
         Optional<HerramientaDonadores.Registro> r = h.verificar(null, mensaje);

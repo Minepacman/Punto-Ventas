@@ -186,7 +186,7 @@ public class LoginController implements Initializable {
 
     /** Nombre del negocio, lista de usuarios y código de recuperación: datos sin permiso, fuera del hilo de JavaFX */
     private void cargarDatosEnSegundoPlano() {
-        lblNombreTienda.setText("Punto de Venta");
+        lblNombreTienda.setText("Caja Libre");
         Thread t = new Thread(() -> {
             String nombre;
             try {
@@ -799,7 +799,7 @@ public class LoginController implements Initializable {
     private void abrirVentanaPrincipal(Cajero cajero, double fondoCaja) {
         try {
             Stage stage = (Stage) btnLogin.getScene().getWindow();
-            String titulo = "Punto de Venta  —  " + identidadCaja.nombre() + "  —  " + cajero.getNombreCompleto()
+            String titulo = "Caja Libre  —  " + identidadCaja.nombre() + "  —  " + cajero.getNombreCompleto()
                     + "  |  Fondo: " + Moneda.formato(fondoCaja);
             detenerMonitor();
             contrasenaCapturada = null;

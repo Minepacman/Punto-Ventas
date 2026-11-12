@@ -11,7 +11,7 @@
 
     <top>
         <ToolBar fx:id="toolbar" styleClass="main-toolbar">
-            <Label text="Punto de Venta" styleClass="brand-label"/>
+            <Label text="Caja Libre" styleClass="brand-label"/>
             <Region HBox.hgrow="ALWAYS"/>
 
             <VBox alignment="CENTER_RIGHT" styleClass="reloj-box">

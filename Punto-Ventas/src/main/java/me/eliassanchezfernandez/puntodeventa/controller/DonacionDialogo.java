@@ -31,6 +31,7 @@ import me.eliassanchezfernandez.puntodeventa.PuntoDeVentaApp;
 import me.eliassanchezfernandez.puntodeventa.service.DonadorService;
 import me.eliassanchezfernandez.puntodeventa.util.ClaveDonador;
 import me.eliassanchezfernandez.puntodeventa.util.Donacion;
+import me.eliassanchezfernandez.puntodeventa.util.Marca;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 
 import java.time.LocalDate;
@@ -80,7 +81,7 @@ public final class DonacionDialogo {
         Ventanas.aplicarIcono(stage);
         stage.setResizable(false);
 
-        Label titulo = new Label("Este Punto de Venta es software libre");
+        Label titulo = new Label(Marca.NOMBRE + " es software libre");
         titulo.getStyleClass().add("title");
         Label texto = new Label("Lo puedes usar, copiar y compartir sin pagar licencias, y nada se bloquea nunca. Lo desarrolla "
                 + "una sola persona en su tiempo libre; si te sirve, un donativo —del monto que tú decidas— ayuda "
@@ -102,9 +103,14 @@ public final class DonacionDialogo {
             ventajas.getChildren().add(l);
         }
 
-        // Cuenta
-        boolean configurada = datos.clabeConfigurada();
-        Label lblClabe = new Label(configurada ? Donacion.formatear(datos.clabe()) : "CLABE no configurada");
+        // Cuenta. Se coteja con los datos firmados por el autor (claves/donacion.pdvd, bajados a diario):
+        // si NO coinciden, esta copia del programa fue modificada y no se debe donar a esa cuenta.
+        DonadorService.EstadoDonacion verificacion = donadorService == null
+                ? new DonadorService.EstadoDonacion(DonadorService.VerificacionDonacion.SIN_VERIFICAR, Optional.empty())
+                : donadorService.verificarDatosDonacion(datos);
+        boolean configurada = datos.clabeConfigurada() && !verificacion.alerta();
+        Label lblClabe = new Label(verificacion.alerta() ? "No dones a esta cuenta"
+                : configurada ? Donacion.formatear(datos.clabe()) : "CLABE no configurada");
         lblClabe.getStyleClass().add(configurada ? "donacion-clabe" : "donacion-clabe-pendiente");
         Button btnCopiar = new Button("Copiar CLABE");
         btnCopiar.setDisable(!configurada);
@@ -120,11 +126,12 @@ public final class DonacionDialogo {
         cuenta.setHgap(12);
         cuenta.setVgap(6);
         cuenta.addRow(0, etiqueta("CLABE:"), filaClabe);
-        cuenta.addRow(1, etiqueta("Banco:"), valor(datos.banco()));
-        cuenta.addRow(2, etiqueta("Beneficiario:"), valor(datos.beneficiario()));
+        cuenta.addRow(1, etiqueta("Banco:"), valor(verificacion.alerta() ? "—" : datos.banco()));
+        cuenta.addRow(2, etiqueta("Beneficiario:"), valor(verificacion.alerta() ? "—" : datos.beneficiario()));
         cuenta.addRow(3, etiqueta("Concepto:"), valor("PDV + el nombre de tu negocio (así se identifica tu abono)"));
         VBox cajaCuenta = new VBox(cuenta);
         cajaCuenta.getStyleClass().add("donacion-cuenta");
+        cajaCuenta.getChildren().add(avisoOficial(verificacion));
 
         // Cómo recibir la clave
         VBox comoRecibir = new VBox(4);
@@ -227,6 +234,8 @@ public final class DonacionDialogo {
         TextField fecha = new TextField(LocalDate.now().getDayOfMonth() + "/" + LocalDate.now().getMonthValue() + "/" + LocalDate.now().getYear());
         TextField rastreo = new TextField();
         rastreo.setPromptText("Opcional: la trae el comprobante del SPEI");
+        TextField beneficiario = new TextField();
+        beneficiario.setPromptText("El nombre que te mostró tu banco al transferir (debe ser " + Marca.AUTOR + ")");
         GridPane g = new GridPane();
         g.setHgap(10);
         g.setVgap(8);
@@ -234,14 +243,15 @@ public final class DonacionDialogo {
         g.addRow(1, etiqueta("Monto:"), monto);
         g.addRow(2, etiqueta("Fecha:"), fecha);
         g.addRow(3, etiqueta("Clave de rastreo:"), rastreo);
+        g.addRow(4, etiqueta("Vi como beneficiario:"), beneficiario);
         TextArea vista = new TextArea();
         vista.setEditable(false);
         vista.setWrapText(true);
         vista.setPrefRowCount(6);
         vista.getStyleClass().add("text-mono");
         Runnable refrescar = () -> vista.setText(donadorService.mensajeDonacion(negocio.getText(), monto.getText(),
-                fecha.getText(), rastreo.getText()));
-        for (TextField t : new TextField[] {negocio, monto, fecha, rastreo}) t.textProperty().addListener((o, a, b) -> refrescar.run());
+                fecha.getText(), rastreo.getText(), beneficiario.getText()));
+        for (TextField t : new TextField[] {negocio, monto, fecha, rastreo, beneficiario}) t.textProperty().addListener((o, a, b) -> refrescar.run());
         refrescar.run();
         Label nota = new Label("Tus datos solo se usan para emitir tu clave y atender tu soporte. Revisa el mensaje antes de enviarlo.");
         nota.setWrapText(true);
@@ -260,7 +270,7 @@ public final class DonacionDialogo {
         dlg.showAndWait().ifPresent(b -> {
             String mensaje = vista.getText();
             if (b == wa) PuntoDeVentaApp.abrirEnlace(Donacion.whatsappUrl(datos.soporteWhatsapp(), mensaje));
-            else if (b == correo) PuntoDeVentaApp.abrirEnlace(Donacion.correoUrl(datos.soporteCorreo(), "Donación al Punto de Venta", mensaje));
+            else if (b == correo) PuntoDeVentaApp.abrirEnlace(Donacion.correoUrl(datos.soporteCorreo(), "Donación a Caja Libre", mensaje));
             else if (b == copiar) {
                 ClipboardContent contenido = new ClipboardContent();
                 contenido.putString(mensaje);
@@ -289,7 +299,7 @@ public final class DonacionDialogo {
         }
         if (datos.correoConfigurado()) {
             Hyperlink correo = new Hyperlink(datos.soporteCorreo());
-            correo.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(Donacion.correoUrl(datos.soporteCorreo(), "Donación al Punto de Venta")));
+            correo.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(Donacion.correoUrl(datos.soporteCorreo(), "Donación a Caja Libre")));
             fila.getChildren().add(correo);
         }
         return fila;
@@ -297,6 +307,34 @@ public final class DonacionDialogo {
 
     static String textoContador(int segundos) {
         return "Podrás cerrar en " + segundos + " s";
+    }
+
+    /**
+     * «Dona solo a la cuenta oficial»: el sitio oficial, el beneficiario que debe mostrar el banco,
+     * que el programa es gratuito y el estado de la verificación (también lo usa «Acerca de»).
+     */
+    static VBox avisoOficial(DonadorService.EstadoDonacion verificacion) {
+        Label estado = new Label(verificacion.texto());
+        estado.setWrapText(true);
+        estado.setMaxWidth(520);
+        estado.getStyleClass().add(switch (verificacion.verificacion()) {
+            case VERIFICADOS -> "donacion-verificado";
+            case NO_COINCIDEN -> "donacion-alerta";
+            default -> "donacion-nota";
+        });
+        Label oficial = new Label(Marca.AVISO_DONACION);
+        oficial.setWrapText(true);
+        oficial.setMaxWidth(520);
+        oficial.getStyleClass().add("donacion-nota");
+        Label gratuito = new Label(Marca.AVISO_GRATUITO + " El único que emite claves de apoyo es el autor; nadie más las vende.");
+        gratuito.setWrapText(true);
+        gratuito.setMaxWidth(520);
+        gratuito.getStyleClass().add("donacion-nota");
+        Hyperlink sitio = new Hyperlink("Sitio oficial: " + Marca.SITIO_OFICIAL);
+        sitio.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(Marca.SITIO_OFICIAL));
+        VBox caja = new VBox(4, estado, oficial, gratuito, sitio);
+        caja.setPadding(new Insets(8, 0, 0, 0));
+        return caja;
     }
 
     private static Label etiqueta(String texto) {

@@ -7,26 +7,34 @@
  */
 window.DATOS_SITIO = {
   // ── Quién hace el programa ──────────────────────────────────────────
+  // Nombre del producto: «Caja Libre» (los nombres técnicos —repositorio, carpeta, app— no cambian)
+  producto: 'Caja Libre',
+
   autor: {
-    nombre: 'Elias Oziel Sánchez Fernández',   // REVISAR: ortografía del nombre (en git aparece "Oziel")
+    nombre: 'Elias Oziel Sánchez Fernández',   // también es el beneficiario que debe mostrar el banco al donar
     ocupacion: 'PENDIENTE',                    // REVISAR: p. ej. "Desarrollador de software"
     ciudad: 'PENDIENTE',                       // opcional: "Ciudad de México"
   },
 
   // ── Contacto (los ve todo el mundo en la sección Contacto y Donaciones) ──
   contacto: {
-    correo: 'PENDIENTE',       // p. ej. "hola@ejemplo.com"
-    whatsapp: 'PENDIENTE',     // 10 dígitos de México, p. ej. "5512345678" (el sitio antepone +52)
-    telefonoTexto: 'PENDIENTE' // cómo mostrar el número, p. ej. "55 1234 5678"
+    correo: 'elias.osiel@hotmail.com',
+    whatsapp: '2821416799',        // 10 dígitos de México (el sitio antepone +52)
+    telefonoTexto: '282 141 6799'  // cómo mostrar el número
   },
 
-  // ── Donaciones: misma cuenta que Punto-Ventas/src/main/resources/donacion.properties ──
+  // ── Donaciones: valores de RESPALDO. La fuente de verdad es el archivo FIRMADO del repositorio
+  //    (claves/donacion.pdvd, generado con `./gradlew firmarDatosDonacion` a partir de donacion.properties):
+  //    sitio.js lo descarga, verifica la firma Ed25519 del autor cuando el navegador puede y pone esos datos
+  //    aquí. Estos solo se muestran si el archivo no se pudo leer.
   donacion: {
     clabe: 'PENDIENTE',        // 18 dígitos
     banco: 'PENDIENTE',
-    beneficiario: 'PENDIENTE',
+    beneficiario: 'PENDIENTE', // tal como lo muestra el banco al transferir
     concepto: 'PDV + nombre de tu negocio'   // lo que el donador escribe en el concepto de la transferencia
   },
+  // Llave pública Ed25519 del autor (la misma de ClaveDonador.CLAVE_PUBLICA_OFICIAL, kid 0d2a501a)
+  llavePublica: 'MCowBQYDK2VwAyEAt8n1iOJpkwZQDteDtvp7WNUvSpUopLbVrZG7PtzEABM=',
 
   // ── Repositorio (no hace falta cambiarlo) ──────────────────────────
   repo: {

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import me.eliassanchezfernandez.puntodeventa.util.ClaveDonador;
+import me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados;
+import me.eliassanchezfernandez.puntodeventa.util.Donacion;
 import me.eliassanchezfernandez.puntodeventa.util.RevocacionesApoyo;
 
 import java.io.IOException;
@@ -46,6 +48,7 @@ import java.util.regex.Pattern;
  *   ./gradlew renovarClaveDonador  -Pid=ABCD2345 [-Pmeses=12] [-Pmonto=…] [-PfechaPago=…]
  *   ./gradlew revocarClaveDonador  -Pid=ABCD2345 -Pmotivo="clave publicada en un foro"
  *   ./gradlew publicarRevocaciones            → escribe claves/revocadas.pdvr (firmado) para hacer commit
+ *   ./gradlew firmarDatosDonacion             → escribe claves/donacion.pdvd (donacion.properties firmado) para hacer commit
  *   ./gradlew buscarDonador        -Ptexto="Lupita" | -Pid=ABCD2345 | -Pinstalacion=7F3A-91C2
  *   ./gradlew verificarClaveDonador -Pclave="PDV2.…"  o  -Ptexto="<mensaje de soporte pegado>"
  *   ./gradlew registrarSoporte     -Pid=ABCD2345 -Pinstalacion=7F3A-91C2 -Pversion=1.0.3 -Pnota="…"
@@ -104,7 +107,7 @@ public final class HerramientaDonadores {
     }
 
     private static void uso() {
-        System.err.println("Uso: crear-llaves | emitir | renovar | revocar | publicar-revocaciones | buscar | verificar | registrar-soporte");
+        System.err.println("Uso: crear-llaves | emitir | renovar | revocar | publicar-revocaciones | publicar-donacion | buscar | verificar | registrar-soporte");
         System.err.println("     (cada comando toma pares --nombre valor; ver docs/donadores.md)");
     }
 
@@ -119,6 +122,7 @@ public final class HerramientaDonadores {
                     a.get("fecha-pago"), a.get("rastreo"));
             case "revocar" -> revocar(a.get("id"), a.get("motivo"));
             case "publicar-revocaciones" -> publicarRevocaciones(a.get("salida") == null ? null : Path.of(a.get("salida")));
+            case "publicar-donacion" -> publicarDonacion(a.get("salida") == null ? null : Path.of(a.get("salida")));
             case "buscar" -> buscar(a.get("texto"), a.get("id"), a.get("instalacion"));
             case "verificar" -> verificar(a.get("clave"), a.get("texto"));
             case "registrar-soporte" -> registrarSoporte(a.get("id"), a.get("instalacion"), a.get("version"), a.get("nota"));
@@ -320,6 +324,34 @@ public final class HerramientaDonadores {
             Files.writeString(salida, texto + System.lineSeparator(), StandardCharsets.US_ASCII);
             out.println("Lista de revocación firmada (" + revocadas.size() + " clave(s), emitida " + lista.emitido()
                     + ") escrita en " + salida + ". Haz commit y push para publicarla.");
+        } else {
+            out.println(texto);
+        }
+        return texto;
+    }
+
+    /**
+     * Firma los datos de donación incrustados en el programa ({@code donacion.properties}: CLABE,
+     * banco, beneficiario, contacto) y los escribe en {@code salida} ({@code claves/donacion.pdvd}).
+     * Mientras la CLABE siga PENDIENTE se publica como "pendiente" (sin CLABE): el programa dirá
+     * «Datos de donación aún no publicados». Después de cambiar donacion.properties hay que volver
+     * a correrlo (DonacionPublicadaTest lo recuerda) y hacer commit de los dos archivos.
+     */
+    public String publicarDonacion(Path salida) throws IOException, GeneralSecurityException {
+        Donacion.Datos incrustados = Donacion.cargar();
+        DatosDonacionFirmados.Datos datos = DatosDonacionFirmados.Datos.de(incrustados, LocalDate.now());
+        PrivateKey priv = leerPrivada();
+        PublicKey pub = leerPublica();
+        avisarSiNoEsLaOficial(pub);
+        String texto = DatosDonacionFirmados.emitir(datos, priv);
+        DatosDonacionFirmados.Datos leidos = DatosDonacionFirmados.verificar(texto, new ClaveDonador(pub));
+        if (!leidos.coincideCon(incrustados)) throw new IllegalStateException("Lo firmado no coincide con donacion.properties.");
+        if (salida != null) {
+            Files.createDirectories(salida.toAbsolutePath().getParent());
+            Files.writeString(salida, texto + System.lineSeparator(), StandardCharsets.US_ASCII);
+            out.println("Datos de donación firmados (" + (datos.pendiente() ? "PENDIENTES: sin CLABE todavía"
+                    : "CLABE " + Donacion.formatear(datos.clabe()) + " · " + datos.banco() + " · " + datos.beneficiario())
+                    + ", emitidos " + datos.emitido() + ") escritos en " + salida + ". Haz commit y push para publicarlos.");
         } else {
             out.println(texto);
         }

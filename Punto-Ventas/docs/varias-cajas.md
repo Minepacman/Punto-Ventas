@@ -1,6 +1,6 @@
 # Varias cajas con un servidor PostgreSQL
 
-El Punto de Venta trabaja de dos formas:
+Caja Libre trabaja de dos formas:
 
 | Modo | Dónde viven los datos | Cuándo usarlo |
 |------|-----------------------|---------------|
@@ -19,7 +19,7 @@ La contraseña del servidor se guarda **ofuscada** (AES con una clave aleatoria 
 `clave.local`, en la misma carpeta). No es un cifrado seguro: quien pueda leer
 los dos archivos puede recuperarla. Lo que la protege de verdad son los permisos
 de la carpeta del usuario y que el usuario de PostgreSQL solo tenga acceso a la
-base del Punto de Venta.
+base de Caja Libre.
 
 ## 1. Instalar PostgreSQL en el equipo servidor
 
@@ -81,7 +81,7 @@ que una caja se conecta (o el asistente de migración, ver abajo).
 
 ## 4. Configurar cada caja
 
-En cada computadora con el Punto de Venta:
+En cada computadora con Caja Libre:
 
 1. Abre **Configuración → Base de datos** como administrador (o elige "Varias
    cajas" la primera vez que se abre el programa).

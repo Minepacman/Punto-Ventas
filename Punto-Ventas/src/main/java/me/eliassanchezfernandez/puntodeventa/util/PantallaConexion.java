@@ -61,7 +61,7 @@ public final class PantallaConexion {
      */
     public static ConexionLocal elegirPrimeraVez(Stage owner, java.nio.file.Path carpeta) {
         Dialog<ConexionLocal> dlg = new Dialog<>();
-        dlg.setTitle("Punto de Venta · primera vez");
+        dlg.setTitle("Caja Libre · primera vez");
         dlg.setHeaderText("¿Cómo se usará esta caja?");
         if (owner != null && owner.isShowing()) dlg.initOwner(owner);
         Ventanas.estilizar(dlg);
@@ -179,7 +179,7 @@ public final class PantallaConexion {
         stage.setFullScreen(false);
         stage.setMaximized(false);
         stage.setScene(scene);
-        stage.setTitle("Punto de Venta · sin conexión");
+        stage.setTitle("Caja Libre · sin conexión");
         stage.setResizable(true);
         stage.sizeToScene();
         stage.centerOnScreen();
