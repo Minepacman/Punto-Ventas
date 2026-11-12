@@ -573,17 +573,26 @@ public class LoginController implements Initializable {
     }
 
     /** Después de autenticar (y de cambiar contraseña si tocaba): fondo o principal */
+    /** Espera antes del respaldo del día tras iniciar sesión (ver continuarTrasAutenticar) */
+    static final long RESPALDO_DEMORA_MS = Long.getLong("app.respaldo.demora-ms", 45_000L);
+
     private void continuarTrasAutenticar() {
         // Respaldo automático del día (si está activo); nunca detiene el inicio de sesión.
         // En un hilo aparte: en un disco duro lento no debe congelar la pantalla.
         Thread respaldo = new Thread(() -> {
             try {
+                // Se espera a que la ventana principal ya esté dibujada: el VACUUM INTO de una base grande
+                // pone el disco duro al 100 % y competiría con la carga de la pantalla de ventas
+                Thread.sleep(RESPALDO_DEMORA_MS);
                 baseDatosService.respaldoAutomaticoDelDia();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 System.err.println("Respaldo automático del día: " + e.getMessage());
             }
         }, "respaldo-inicio-sesion");
         respaldo.setDaemon(true);
+        respaldo.setPriority(Thread.MIN_PRIORITY);
         respaldo.start();
 
         boolean requiereFondo;
@@ -753,8 +762,7 @@ public class LoginController implements Initializable {
     @FXML
     private void onAceptarDineroCaja() {
         if (cargando || paso != Paso.FONDO) return;
-        String texto = txtDineroCaja.getText().trim()
-                .replace("$", "").replace(",", "").replace(" ", "");
+        String texto = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.normalizarNumero(txtDineroCaja.getText());
 
         double fondoCaja;
         try {

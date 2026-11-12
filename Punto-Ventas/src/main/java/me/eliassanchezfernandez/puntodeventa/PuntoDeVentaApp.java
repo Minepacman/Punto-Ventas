@@ -1,14 +1,13 @@
 package me.eliassanchezfernandez.puntodeventa;
 
 
-import atlantafx.base.theme.CupertinoLight;
-import atlantafx.base.theme.Dracula;
-import atlantafx.base.theme.PrimerDark;
 import atlantafx.base.theme.NordLight;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
+import me.eliassanchezfernandez.puntodeventa.config.ArranqueDiferido;
 import me.eliassanchezfernandez.puntodeventa.service.BaseDatosService;
+import me.eliassanchezfernandez.puntodeventa.util.CalentadorCds;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
 import me.eliassanchezfernandez.puntodeventa.util.PantallaConexion;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
@@ -25,10 +24,16 @@ import java.nio.file.Path;
 
 public class PuntoDeVentaApp extends Application {
 
-    private ConfigurableApplicationContext springContext;
+    /** Cuánto esperar tras el login para generar el archivo CDS (no competir con el inicio de sesión) */
+    static final long DEMORA_CDS_MS = Long.getLong("app.cds.demora-ms", 60_000L);
+
+    private volatile ConfigurableApplicationContext springContext;
 
     /** Por qué no arrancó Spring (p. ej. el servidor PostgreSQL no respondió); null si arrancó */
     private Throwable errorArranque;
+
+    /** El usuario cerró la ventana mientras Spring arrancaba: al terminar se cierra el contexto y listo */
+    private boolean cerrando;
 
     /** true cuando no existe conexion.properties: la primera vez se pregunta cómo se usará esta caja */
     private static volatile boolean primeraVez;
@@ -49,27 +54,39 @@ public class PuntoDeVentaApp extends Application {
         if (servicios != null) servicios.showDocument(url);
     }
 
-    // ── Spring Boot: arranque antes de JavaFX ─────────────────────────────
+    // ── Arranque ─────────────────────────────────────────────────────────
     public static void main(String[] args) {
         launch(args); // delega a JavaFX que llama a init() → start()
     }
 
+    /**
+     * Spring NO arranca aquí. Antes lo hacía (en el hilo JavaFX-Launcher, antes de start()) y el
+     * usuario no veía ninguna ventana durante todo el arranque (3 s en un equipo rápido, 10-15 s en
+     * una PC vieja con disco duro). Ahora start() muestra una ventana ligera de inmediato y Spring
+     * arranca en un hilo aparte (arrancarEnSegundoPlano), igual que ya se hacía la primera vez.
+     */
     @Override
     public void init() {
-        // Se ejecuta en el hilo de JavaFX Launcher, ANTES de start().
-        // La primera vez todavía no se sabe contra qué base trabajar: se pregunta en start().
-        if (primeraVez) return;
-        arrancarSpring();
+        // nada
     }
 
     /**
      * Arranca el contexto. Si falla (lo normal: el servidor no responde) no se
-     * relanza: se guarda la causa y start() muestra la pantalla de error con
-     * "Reintentar", en lugar de un programa que se cierra sin explicación.
+     * relanza: se guarda la causa y la pantalla de error ofrece "Reintentar",
+     * en lugar de un programa que se cierra sin explicación.
      */
     private void arrancarSpring() {
         try {
-            springContext = SpringApplication.run(PuntoDeVentaApp.class);
+            ConfigurableApplicationContext ctx = SpringApplication.run(PuntoDeVentaApp.class);
+            boolean cerrar;
+            synchronized (this) {
+                cerrar = cerrando;
+                if (!cerrar) springContext = ctx;
+            }
+            if (cerrar) {
+                ctx.close();         // la ventana se cerró mientras arrancaba
+                return;
+            }
             errorArranque = null;
         } catch (Throwable t) {
             springContext = null;
@@ -98,15 +115,27 @@ public class PuntoDeVentaApp extends Application {
             arrancarEnSegundoPlano(primaryStage);
             return;
         }
-        mostrarSegunArranque(primaryStage);
+        // Ventana inmediata ("Abriendo la tienda…") mientras Spring arranca en segundo plano
+        Ventanas.mostrarArranque(primaryStage);
+        primaryStage.setOnCloseRequest(e -> {
+            synchronized (this) { cerrando = true; }
+            Platform.exit();
+        });
+        // Mientras tanto el hilo de JavaFX precalienta los controles y las hojas de estilo del login
+        Platform.runLater(Ventanas::precalentar);
+        arrancarEnSegundoPlano(primaryStage);
     }
 
     /** Login si Spring arrancó; si no, la pantalla de "sin conexión" */
     private void mostrarSegunArranque(Stage stage) throws Exception {
+        stage.setOnCloseRequest(null);
         if (springContext != null) {
             // La pantalla de login se abre con el contexto de Spring como
             // fábrica de controladores (ver Ventanas)
             Ventanas.mostrarLogin(stage, springContext);
+            // Con la ventana dibujada arrancan las tareas diferidas (acceso móvil, migraciones, clima)
+            Platform.runLater(ArranqueDiferido::senalarVentanaLista);
+            CalentadorCds.programar(DEMORA_CDS_MS);
             return;
         }
         ConexionLocal conexion = ConexionLocal.cargar(RutasApp.carpetaAplicacion());
@@ -134,6 +163,9 @@ public class PuntoDeVentaApp extends Application {
         Platform.setImplicitExit(false);
         Thread t = new Thread(() -> {
             arrancarSpring();
+            synchronized (this) {
+                if (cerrando) return;
+            }
             Platform.runLater(() -> {
                 try {
                     mostrarSegunArranque(stage);
@@ -153,6 +185,7 @@ public class PuntoDeVentaApp extends Application {
     // ── Cierre limpio ─────────────────────────────────────────────────────
     @Override
     public void stop() {
+        synchronized (this) { cerrando = true; }
         // Guardar el ticket sin cobrar también al cerrar con la X o Cmd+Q (USR-15)
         Ventanas.ejecutarAccionAlCerrar();
         // Primero se oculta la ventana: el respaldo de cierre puede tardar en un disco lento
@@ -162,15 +195,16 @@ public class PuntoDeVentaApp extends Application {
         } catch (RuntimeException e) {
             System.err.println("No se pudieron ocultar las ventanas al cerrar: " + e.getMessage());
         }
-        if (springContext == null) return;
+        ConfigurableApplicationContext ctx = springContext;
+        if (ctx == null) return;   // Spring aún no terminó: arrancarSpring() cerrará el contexto al acabar
         // Respaldo automático al cerrar (si está activo); un fallo no impide cerrar
         try {
-            springContext.getBean(BaseDatosService.class).respaldoAutomaticoAlCerrar();
+            ctx.getBean(BaseDatosService.class).respaldoAutomaticoAlCerrar();
         } catch (Exception e) {
             System.err.println("Respaldo al cerrar: " + e.getMessage());
         }
         // stop() ya corre dentro del cierre de JavaFX: volver a llamar Platform.exit()
         // aquí provocaba un SIGSEGV en libglass (macOS) al cerrar la ventana.
-        springContext.close();
+        ctx.close();
     }
 }

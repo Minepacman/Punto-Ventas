@@ -54,6 +54,7 @@ public class MigracionSqlite implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() throws Exception {
+        if (VersionEsquema.alDia(dataSource)) return;   // misma versión que el último arranque completo
         migrar(dataSource);
     }
 

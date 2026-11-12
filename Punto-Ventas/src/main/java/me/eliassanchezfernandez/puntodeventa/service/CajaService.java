@@ -207,6 +207,8 @@ public class CajaService {
         c.setFondoInicial(fondo);
         c.setVentasEfectivo(r.efectivo);
         c.setVentasTarjeta(r.tarjeta);
+        c.setVentasTransferencia(r.transferencia);
+        c.setVentasVales(r.vales);
         c.setVentasTotales(r.ventasTotales);
         c.setNumVentas(r.numVentas);
         c.setNumCanceladas(r.numCanceladas);

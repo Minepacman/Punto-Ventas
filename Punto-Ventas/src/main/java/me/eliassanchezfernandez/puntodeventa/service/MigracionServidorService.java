@@ -359,8 +359,22 @@ public class MigracionServidorService {
             case Types.DOUBLE, Types.FLOAT, Types.REAL, Types.NUMERIC, Types.DECIMAL ->
                     ps.setDouble(i, ((Number) aNumero(valor)).doubleValue());
             case Types.VARCHAR, Types.CHAR, Types.LONGVARCHAR, Types.CLOB -> ps.setString(i, String.valueOf(valor));
+            // blob de SQLite (byte[]) → bytea de PostgreSQL: imágenes de productos
+            case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> ps.setBytes(i, aBytes(valor));
             default -> ps.setObject(i, valor);
         }
+    }
+
+    private static byte[] aBytes(Object v) {
+        if (v instanceof byte[] b) return b;
+        if (v instanceof java.sql.Blob blob) {
+            try {
+                return blob.getBytes(1, (int) blob.length());
+            } catch (SQLException e) {
+                throw new IllegalArgumentException("blob ilegible: " + e.getMessage(), e);
+            }
+        }
+        return String.valueOf(v).getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static boolean aBooleano(Object v) {

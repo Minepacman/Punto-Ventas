@@ -182,9 +182,11 @@ class SesionMovilServiceTest extends BaseServicioTest {
         reloj.avanzar(Duration.ofDays(30));
         assertThat(sesionMovilService.validar(e.token())).isPresent();
 
-        // Volver a "No": 48 h contadas desde que se creó la sesión (ya pasaron), así que vence ya
+        // Volver a "No": 48 h contadas desde AHORA (no desde que se creó: eso la cerraría al instante)
         sesionMovilService.fijarPermanente(id, false);
-        assertThat(sesionRepo.findById(id).orElseThrow().getExpira()).isEqualTo(e.sesion().getCreada().plusHours(48));
+        assertThat(sesionRepo.findById(id).orElseThrow().getExpira()).isEqualTo(e.sesion().getCreada().plusDays(30).plusHours(48));
+        assertThat(sesionMovilService.validar(e.token())).isPresent();
+        reloj.avanzar(Duration.ofHours(49));
         assertThat(sesionMovilService.validar(e.token())).isEmpty();
     }
 

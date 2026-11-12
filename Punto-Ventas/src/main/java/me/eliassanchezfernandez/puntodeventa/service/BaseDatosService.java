@@ -154,7 +154,7 @@ public class BaseDatosService {
         exigirSqlite();
         if (destino == null) throw new NegocioException("Elige dónde guardar el respaldo.");
         destino = destino.toAbsolutePath();
-        if (destino.equals(rutas.archivoBd())) {
+        if (esLaBaseEnUso(destino)) {
             throw new NegocioException("El respaldo no puede sobrescribir la base de datos en uso.");
         }
         if (!destino.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".db")) {
@@ -166,10 +166,37 @@ public class BaseDatosService {
         if (Files.exists(destino) && !esArchivoSqlite(destino)) {
             throw new NegocioException("Ese archivo ya existe y no es una base de datos SQLite; no se sobrescribe.");
         }
-        copiarBase(destino);
+        copiarBaseSeguro(destino);
         auditoriaService.registrar(sesionService.getCajeroActual(), "RESPALDO_MANUAL",
                 destino.toString(), (Cajero) null);
         return destino;
+    }
+
+    /**
+     * ¿La ruta es la base de datos abierta (o uno de sus archivos auxiliares -wal/-shm/
+     * .restaurar)? En macOS y Windows el sistema de archivos no distingue mayúsculas:
+     * "DATOS.DB" ES "datos.db", así que se compara con {@code Files.isSameFile} cuando el
+     * destino existe y, si no, por nombre sin distinguir mayúsculas dentro de la misma carpeta.
+     */
+    boolean esLaBaseEnUso(Path destino) {
+        Path bd = rutas.archivoBd().toAbsolutePath();
+        if (destino.equals(bd)) return true;
+        try {
+            if (Files.exists(destino) && Files.exists(bd) && Files.isSameFile(destino, bd)) return true;
+        } catch (IOException ignorada) { /* se sigue con la comparación por nombre */ }
+        Path carpetaDestino = destino.getParent(), carpetaBd = bd.getParent();
+        boolean mismaCarpeta = carpetaDestino != null && carpetaBd != null && (carpetaDestino.equals(carpetaBd)
+                || carpetaDestino.toString().equalsIgnoreCase(carpetaBd.toString()));
+        if (!mismaCarpeta) {
+            try {
+                mismaCarpeta = carpetaDestino != null && carpetaBd != null && Files.exists(carpetaDestino)
+                        && Files.isSameFile(carpetaDestino, carpetaBd);
+            } catch (IOException ignorada) { /* carpetas distintas */ }
+        }
+        if (!mismaCarpeta) return false;
+        String nombre = destino.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        String nombreBd = bd.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        return nombre.equals(nombreBd) || nombre.startsWith(nombreBd + "-") || nombre.startsWith(nombreBd + ".");
     }
 
     /** ¿Empieza con la cabecera "SQLite format 3"? (un respaldo anterior sí se puede reemplazar) */
@@ -202,7 +229,7 @@ public class BaseDatosService {
         }
         if (respaldo == null) throw new NegocioException("Elige el archivo de respaldo.");
         respaldo = respaldo.toAbsolutePath();
-        if (respaldo.equals(rutas.archivoBd())) {
+        if (esLaBaseEnUso(respaldo)) {
             throw new NegocioException("Elige un respaldo distinto de la base de datos en uso.");
         }
         validarRespaldo(respaldo);
@@ -221,7 +248,7 @@ public class BaseDatosService {
 
     /** ¿Hay una restauración esperando al reinicio? */
     public boolean hayRestauracionPendiente() {
-        return rutas.esSqlite() && Files.isRegularFile(rutas.archivoRestauracionPendiente());
+        return rutas.hayRestauracionPendiente();
     }
 
     /**
@@ -336,6 +363,19 @@ public class BaseDatosService {
     }
 
     // ── Copia con VACUUM INTO ─────────────────────────────────────────────
+
+    /** VACUUM INTO a un archivo temporal junto al destino y luego move: el destino nunca queda a medias */
+    private void copiarBaseSeguro(Path destino) {
+        Path temporal = destino.resolveSibling(destino.getFileName() + ".tmp");
+        try {
+            copiarBase(temporal);
+            Files.move(temporal, destino, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            throw new NegocioException("No se pudo crear el respaldo: " + e.getMessage());
+        } finally {
+            try { Files.deleteIfExists(temporal); } catch (IOException ignorada) { /* ya se movió */ }
+        }
+    }
 
     private void copiarBase(Path destino) {
         try {

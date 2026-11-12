@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.layout.VBox?>
+
+<!-- Ventana ligera que aparece de inmediato mientras Spring arranca en segundo plano (sin controlador) -->
+<VBox xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1"
+      alignment="CENTER" spacing="14" prefWidth="380" prefHeight="220" styleClass="arranque">
+    <padding>
+        <Insets top="28" right="36" bottom="28" left="36"/>
+    </padding>
+    <Label text="Punto de Venta" styleClass="arranque-titulo"/>
+    <Label text="Abriendo la tienda…" styleClass="hint"/>
+    <ProgressIndicator prefWidth="36" prefHeight="36" maxWidth="36" maxHeight="36"/>
+</VBox>

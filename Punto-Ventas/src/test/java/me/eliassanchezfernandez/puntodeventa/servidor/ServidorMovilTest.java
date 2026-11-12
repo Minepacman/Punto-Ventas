@@ -534,11 +534,13 @@ class ServidorMovilTest {
         s = sesion(login(inv, CLAVE, false).cuerpo().get("token").asText()).cuerpo().get("secciones");
         assertThat(s.get("estadisticas").asBoolean()).isFalse();
         assertThat(s.get("inventarioAjustar").asBoolean()).isTrue();
-        assertThat(s.get("escanearTicket").asBoolean()).isTrue();
+        // "Escanear ticket" (demo de OCR) está apagado hasta tener OCR real; con AJUSTAR_INVENTARIO sigue la bandera
+        assertThat(s.get("escanearTicket").asBoolean()).isEqualTo(ServidorMovilService.ESCANEAR_TICKET_HABILITADO);
 
-        // El admin lo ve todo
+        // El admin lo ve todo (salvo la demo de "Escanear", que sigue la bandera)
         s = sesion(login("admin", "admin123", false).cuerpo().get("token").asText()).cuerpo().get("secciones");
-        s.fields().forEachRemaining(e -> assertThat(e.getValue().asBoolean()).as(e.getKey()).isTrue());
+        s.fields().forEachRemaining(e -> assertThat(e.getValue().asBoolean()).as(e.getKey())
+                .isEqualTo(!e.getKey().equals("escanearTicket") || ServidorMovilService.ESCANEAR_TICKET_HABILITADO));
     }
 
     @Test

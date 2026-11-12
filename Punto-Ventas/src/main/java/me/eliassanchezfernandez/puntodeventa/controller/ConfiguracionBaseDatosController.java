@@ -321,9 +321,21 @@ public class ConfiguracionBaseDatosController implements Initializable {
             Path seguridad = baseDatosService.restaurar(origen.toPath(), clave.get());
             lblPendiente.setVisible(true);
             lblPendiente.setManaged(true);
-            Ventanas.alerta(Alert.AlertType.INFORMATION, "Respaldo listo para restaurar",
-                    "Cierra y vuelve a abrir el programa para terminar la restauración.\n\n"
-                    + "Copia de seguridad de los datos actuales:\n" + seguridad);
+            // Hasta reiniciar no se puede cobrar (VentaService lo rechaza): lo mejor es cerrar ya
+            Alert a = new Alert(Alert.AlertType.INFORMATION,
+                    "La restauración se aplica al volver a abrir el programa. Mientras tanto NO se puede vender "
+                    + "(lo que se registrara ahora no quedaría en la base restaurada).\n\n"
+                    + "Copia de seguridad de los datos actuales:\n" + seguridad + "\n\n¿Cerrar el programa ahora?",
+                    new ButtonType("Cerrar ahora", javafx.scene.control.ButtonBar.ButtonData.OK_DONE),
+                    new ButtonType("Después", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE));
+            a.setTitle("Respaldo listo para restaurar");
+            a.setHeaderText(null);
+            Ventanas.estilizar(a);
+            boolean cerrar = a.showAndWait().filter(b -> b.getButtonData() == javafx.scene.control.ButtonBar.ButtonData.OK_DONE).isPresent();
+            if (cerrar) {
+                ((Stage) raiz.getScene().getWindow()).close();
+                Platform.exit();   // PuntoDeVentaApp.stop() cierra Spring; Launcher aplica el respaldo al abrir
+            }
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo restaurar", e.getMessage());
         }

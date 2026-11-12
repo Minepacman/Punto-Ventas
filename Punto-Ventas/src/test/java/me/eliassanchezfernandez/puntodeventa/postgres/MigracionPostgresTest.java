@@ -68,9 +68,19 @@ class MigracionPostgresTest extends BasePostgresTest {
             st.execute("INSERT INTO fondos_caja (id, fecha, cajero_id, cajero_nombre, monto, registrado_en) "
                     + "VALUES (1, " + ahora + ", 1, 'Administrador', 500, " + ahora + ")");
             st.execute("INSERT INTO auditoria (id, fecha, usuario_login, accion, detalle) VALUES (1, " + ahora + ", 'admin', 'PRUEBA', 'migración')");
+            // foto de producto: blob de SQLite → bytea de PostgreSQL
+            try (java.sql.PreparedStatement ps = c.prepareStatement("INSERT INTO producto_imagen (producto_id, imagen, miniatura, mime, sha256, ancho, alto, actualizado) "
+                    + "VALUES (1, ?, ?, 'image/jpeg', 'abc', 2, 1, " + ahora + ")")) {
+                ps.setBytes(1, IMAGEN_MUESTRA);
+                ps.setBytes(2, new byte[] {9, 8, 7});
+                ps.executeUpdate();
+            }
         }
         return bd;
     }
+
+    /** Bytes "raros" (0x00, 0xFF, 0x27) para comprobar que el blob viaja intacto */
+    private static final byte[] IMAGEN_MUESTRA = {(byte) 0xFF, (byte) 0xD8, 0, 0x27, (byte) 0x80, 0x7F, 0, (byte) 0xD9};
 
     private static long contar(String url, String usuario, String clave, String tabla) throws Exception {
         try (Connection c = DriverManager.getConnection(url, usuario, clave); Statement st = c.createStatement();
@@ -92,7 +102,7 @@ class MigracionPostgresTest extends BasePostgresTest {
         MigracionServidorService.Resultado r = migracion.copiar("jdbc:sqlite:" + bd, destino, avances::add);
 
         assertThat(r.tablas()).isGreaterThanOrEqualTo(20);
-        assertThat(r.filas()).isEqualTo(12);
+        assertThat(r.filas()).isEqualTo(13);
         assertThat(r.omitidas()).isEmpty();
         assertThat(avances).isNotEmpty();
         assertThat(avances.get(avances.size() - 1).mensaje()).contains("terminada");
@@ -125,6 +135,12 @@ class MigracionPostgresTest extends BasePostgresTest {
             try (ResultSet rs = st.executeQuery("SELECT fecha = current_date FROM fondos_caja WHERE id = 1")) {
                 rs.next();
                 assertThat(rs.getBoolean(1)).isTrue();
+            }
+            try (ResultSet rs = st.executeQuery("SELECT imagen, miniatura, mime FROM producto_imagen WHERE producto_id = 1")) {
+                rs.next();
+                assertThat(rs.getBytes(1)).isEqualTo(IMAGEN_MUESTRA);
+                assertThat(rs.getBytes(2)).isEqualTo(new byte[] {9, 8, 7});
+                assertThat(rs.getString(3)).isEqualTo("image/jpeg");
             }
             // Las secuencias siguen después del mayor id copiado: la próxima venta no choca con las migradas
             st.execute("INSERT INTO ventas (fecha, forma_pago, total, pago_con, cambio) VALUES (now(), 'EFECTIVO', 1, 1, 0)");

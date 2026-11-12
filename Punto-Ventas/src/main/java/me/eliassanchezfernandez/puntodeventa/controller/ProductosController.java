@@ -7,16 +7,27 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
+import javafx.application.Platform;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
+import javafx.stage.FileChooser;
 import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
+import me.eliassanchezfernandez.puntodeventa.service.ProductoImagenService;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.UnidadService;
@@ -27,10 +38,12 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
 import java.net.URL;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.function.Supplier;
 
 /**
  * Controlador de la pantalla de Productos (F3).
@@ -57,6 +70,7 @@ public class ProductosController implements Initializable {
 
     // ── FXML – Tabla ─────────────────────────────────────────────────────
     @FXML private TableView<Producto>           tablaProductos;
+    @FXML private TableColumn<Producto, Long>   colImagen;
     @FXML private TableColumn<Producto, String> colCodigo;
     @FXML private TableColumn<Producto, String> colDescripcion;
     @FXML private TableColumn<Producto, Double> colPrecioCosto;
@@ -88,6 +102,11 @@ public class ProductosController implements Initializable {
     @FXML private HBox        hboxYaExiste;
     @FXML private Label       lblProductoExistente;
     @FXML private TextField   txtDescripcion;
+    @FXML private StackPane   zonaImagen;
+    @FXML private ImageView   imgProducto;
+    @FXML private Label       lblSinImagen;
+    @FXML private Button      btnQuitarImagen;
+    @FXML private Label       lblImagenEstado;
     @FXML private ToggleGroup toggleTipoVenta;
     @FXML private RadioButton rbUnidad;
     @FXML private RadioButton rbGranel;
@@ -112,6 +131,8 @@ public class ProductosController implements Initializable {
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private ProductoService    productoService;
+    @Autowired private ProductoImagenService productoImagenService;
+    @Autowired private ImagenProductoCache   imagenes;
     @Autowired private SesionService      sesionService;
     @Autowired private UnidadService      unidadService;
     @Autowired private ApplicationContext springContext;
@@ -126,6 +147,18 @@ public class ProductosController implements Initializable {
     private Producto productoEnEdicion = null;
     private Departamento departamentoEnEdicion = null;
 
+    // ── Imagen del formulario ────────────────────────────────────────────
+    /** Imagen elegida y ya normalizada, pendiente de guardarse con el producto (null = sin cambio) */
+    private ProductoImagenService.Normalizada imagenPendiente;
+    private String origenImagen;
+    /** true = al guardar se quita la imagen que el producto tenía */
+    private boolean quitarImagen;
+    /** true = el producto en edición tiene imagen guardada en la base */
+    private boolean imagenGuardada;
+    /** Cuenta de peticiones de imagen: una respuesta tardía de otro producto no pisa la actual */
+    private int secuenciaImagen;
+    private static final String AYUDA_IMAGEN = "JPG o PNG hasta 10 MB. Se guarda reducida (512 px) en la base de datos.";
+
     // ─────────────────────────────────────────────────────────────────────
     //  INICIALIZACIÓN
     // ─────────────────────────────────────────────────────────────────────
@@ -137,6 +170,7 @@ public class ProductosController implements Initializable {
         configurarColumnasDepartamentos();
         configurarComboDepartamento();
         configurarComboUnidad();
+        configurarZonaImagen();
         cargarProductos();
         cargarDepartamentos();
 
@@ -183,7 +217,7 @@ public class ProductosController implements Initializable {
         txtPrecioCosto.setEditable(true);
         txtPrecioVenta.setEditable(true);
         txtPrecioMayoreo.setEditable(true);
-        lblErrorPrecio.setText("⚠ Los precios no pueden ser negativos.");
+        lblErrorPrecio.setText("Los precios no pueden ser negativos.");
         mostrarVistas(false, true, false);
         txtCodigoBarras.requestFocus();
     }
@@ -296,7 +330,10 @@ public class ProductosController implements Initializable {
             return;
         }
 
-        Departamento d = (departamentoEnEdicion != null) ? departamentoEnEdicion : new Departamento();
+        // Objeto nuevo (con el mismo id si es edición): si el servicio rechaza el nombre, la fila
+        // de la tabla y el combo siguen mostrando el nombre real, no el que se intentó
+        Departamento d = new Departamento();
+        if (departamentoEnEdicion != null) d.setId(departamentoEnEdicion.getId());
         d.setNombre(nombre);
         try {
             productoService.guardarDepartamento(d);
@@ -514,20 +551,206 @@ public class ProductosController implements Initializable {
             p.setCantidadMinima(cantMinima);
             p.setActivo(productoEnEdicion != null ? productoEnEdicion.isActivo() : Boolean.TRUE);
 
+            // Mayoreo más caro que el precio normal: se avisa, no se bloquea (decisión del dueño)
+            Optional<String> avisoMayoreo = ProductoService.advertenciaMayoreo(p);
+            if (avisoMayoreo.isPresent() && !Ventanas.confirmar("Precio de mayoreo", avisoMayoreo.get())) return;
+
             // El servicio valida precios, cantidades y código duplicado
-            productoService.guardar(p);
+            Producto guardado = productoService.guardar(p);
+            String avisoImagen = aplicarImagen(guardado.getId());
 
             // ← Regresar a la tabla con datos actualizados
             cargarProductos();
             onBuscar();
             mostrarVista(false);
 
-            alerta(Alert.AlertType.INFORMATION, "Producto guardado",
-                    "\"" + p.getDescripcion() + "\" se guardó correctamente.");
+            if (avisoImagen != null) {
+                alerta(Alert.AlertType.WARNING, "Producto guardado, imagen no",
+                        "\"" + p.getDescripcion() + "\" se guardó, pero la imagen no: " + avisoImagen);
+            } else {
+                alerta(Alert.AlertType.INFORMATION, "Producto guardado",
+                        "\"" + p.getDescripcion() + "\" se guardó correctamente.");
+            }
 
         } catch (NegocioException e) {
             alerta(Alert.AlertType.ERROR, "Datos inválidos", e.getMessage());
         }
+    }
+
+    /** Guarda o quita la imagen elegida en el formulario; devuelve el mensaje de error o null si todo fue bien */
+    private String aplicarImagen(Long productoId) {
+        try {
+            if (imagenPendiente != null) {
+                productoImagenService.guardar(productoId, imagenPendiente, origenImagen);
+            } else if (quitarImagen && productoEnEdicion != null) {
+                productoImagenService.quitar(productoId);
+            } else {
+                return null;
+            }
+            imagenes.invalidar(productoId);
+            return null;
+        } catch (NegocioException e) {
+            return e.getMessage();
+        } finally {
+            imagenPendiente = null;
+            quitarImagen = false;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  IMAGEN DEL PRODUCTO (archivo, arrastrar, portapapeles, URL)
+    // ─────────────────────────────────────────────────────────────────────
+
+    private void configurarZonaImagen() {
+        zonaImagen.setOnDragOver(e -> {
+            Dragboard db = e.getDragboard();
+            if (e.getGestureSource() != zonaImagen && (db.hasFiles() || db.hasImage() || db.hasUrl())) {
+                e.acceptTransferModes(TransferMode.COPY);
+                if (!zonaImagen.getStyleClass().contains("imagen-zona-activa")) {
+                    zonaImagen.getStyleClass().add("imagen-zona-activa");
+                }
+            }
+            e.consume();
+        });
+        zonaImagen.setOnDragExited(e -> zonaImagen.getStyleClass().remove("imagen-zona-activa"));
+        zonaImagen.setOnDragDropped(this::onImagenSoltada);
+        zonaImagen.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) onElegirImagen();
+        });
+    }
+
+    private void onImagenSoltada(DragEvent e) {
+        Dragboard db = e.getDragboard();
+        boolean tomado = false;
+        if (db.hasFiles() && !db.getFiles().isEmpty()) {
+            File f = db.getFiles().get(0);
+            procesarImagen(() -> ProductoImagenService.leerArchivo(f.toPath()), "archivo " + f.getName());
+            tomado = true;
+        } else if (db.hasImage()) {
+            Image img = db.getImage();
+            procesarImagen(() -> bytesDeImagen(img), "imagen arrastrada");
+            tomado = true;
+        } else if (db.hasUrl() && db.getUrl() != null && db.getUrl().startsWith("http")) {
+            String url = db.getUrl();
+            procesarImagen(() -> productoImagenService.descargarDesdeUrl(url), "URL " + url);
+            tomado = true;
+        }
+        e.setDropCompleted(tomado);
+        e.consume();
+    }
+
+    @FXML
+    private void onElegirImagen() {
+        FileChooser fc = new FileChooser();
+        fc.setTitle("Elegir imagen del producto");
+        fc.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Imágenes (PNG, JPG, GIF, BMP)", ProductoImagenService.extensiones()),
+                new FileChooser.ExtensionFilter("Todos los archivos", "*.*"));
+        File f = fc.showOpenDialog(zonaImagen.getScene().getWindow());
+        if (f == null) return;
+        procesarImagen(() -> ProductoImagenService.leerArchivo(f.toPath()), "archivo " + f.getName());
+    }
+
+    @FXML
+    private void onPegarImagen() {
+        Clipboard cb = Clipboard.getSystemClipboard();
+        if (cb.hasFiles() && !cb.getFiles().isEmpty()) {
+            File f = cb.getFiles().get(0);
+            procesarImagen(() -> ProductoImagenService.leerArchivo(f.toPath()), "archivo " + f.getName());
+        } else if (cb.hasImage()) {
+            Image img = cb.getImage();
+            procesarImagen(() -> bytesDeImagen(img), "portapapeles");
+        } else if (cb.hasString() && cb.getString() != null && cb.getString().trim().startsWith("http")) {
+            String url = cb.getString().trim();
+            procesarImagen(() -> productoImagenService.descargarDesdeUrl(url), "URL " + url);
+        } else {
+            alerta(Alert.AlertType.INFORMATION, "Portapapeles vacío",
+                    "Copia primero una imagen, un archivo de imagen o la dirección (URL) de una imagen.");
+        }
+    }
+
+    @FXML
+    private void onImagenDesdeUrl() {
+        Optional<String> url = Ventanas.pedirTexto("Imagen desde internet",
+                "Pega la dirección (URL) de la imagen", "https://...");
+        if (url.isEmpty() || url.get().isBlank()) return;
+        String u = url.get().trim();
+        procesarImagen(() -> productoImagenService.descargarDesdeUrl(u), "URL " + u);
+    }
+
+    @FXML
+    private void onQuitarImagen() {
+        secuenciaImagen++;
+        imagenPendiente = null;
+        quitarImagen = productoEnEdicion != null && imagenGuardada;
+        mostrarVistaPrevia(null);
+        lblImagenEstado.setText(quitarImagen ? "La imagen se quitará al guardar." : AYUDA_IMAGEN);
+    }
+
+    private static byte[] bytesDeImagen(Image img) {
+        byte[] b = ImagenProductoCache.aPng(img);
+        if (b == null) throw new NegocioException("No se pudo leer la imagen del portapapeles.");
+        return b;
+    }
+
+    /**
+     * Lee/descarga y normaliza la imagen FUERA del hilo de JavaFX (una foto de 5 MB tarda
+     * un par de segundos en una PC vieja) y deja la vista previa lista. Nada se guarda
+     * hasta "Guardar Producto".
+     */
+    private void procesarImagen(Supplier<byte[]> fuente, String origen) {
+        int mia = ++secuenciaImagen;
+        lblImagenEstado.setText("Procesando imagen…");
+        Thread t = new Thread(() -> {
+            ProductoImagenService.Normalizada n;
+            try {
+                n = ProductoImagenService.normalizar(fuente.get());
+            } catch (NegocioException e) {
+                Platform.runLater(() -> {
+                    if (mia != secuenciaImagen) return;
+                    lblImagenEstado.setText(AYUDA_IMAGEN);
+                    alerta(Alert.AlertType.ERROR, "Imagen no válida", e.getMessage());
+                });
+                return;
+            } catch (RuntimeException e) {
+                Platform.runLater(() -> {
+                    if (mia != secuenciaImagen) return;
+                    lblImagenEstado.setText(AYUDA_IMAGEN);
+                    alerta(Alert.AlertType.ERROR, "Imagen no válida", "No se pudo procesar la imagen: " + e.getMessage());
+                });
+                return;
+            }
+            Image vista = ImagenProductoCache.decodificar(n.imagen(), 0);
+            Platform.runLater(() -> {
+                if (mia != secuenciaImagen) return;
+                imagenPendiente = n;
+                origenImagen = origen;
+                quitarImagen = false;
+                mostrarVistaPrevia(vista);
+                lblImagenEstado.setText(n.ancho() + " × " + n.alto() + " px · " + Math.max(1, n.imagen().length / 1024)
+                        + " KB · se guarda con el producto");
+            });
+        }, "imagen-producto-formulario");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void mostrarVistaPrevia(Image img) {
+        imgProducto.setImage(img);
+        lblSinImagen.setVisible(img == null);
+        lblSinImagen.setManaged(img == null);
+        btnQuitarImagen.setDisable(img == null);
+    }
+
+    /** Carga la imagen actual del producto en edición (asíncrono) */
+    private void cargarImagenActual(Producto p) {
+        int mia = ++secuenciaImagen;
+        imagenes.imagen(p.getId(), img -> {
+            if (mia != secuenciaImagen) return;
+            imagenGuardada = img != null;
+            mostrarVistaPrevia(img);
+            lblImagenEstado.setText(img == null ? AYUDA_IMAGEN : "Imagen guardada. Elige otra para reemplazarla.");
+        });
     }
 
     @FXML
@@ -556,7 +779,7 @@ public class ProductosController implements Initializable {
         txtPrecioCosto.setEditable(puedePrecios);
         txtPrecioVenta.setEditable(puedePrecios);
         txtPrecioMayoreo.setEditable(puedePrecios);
-        lblErrorPrecio.setText(puedePrecios ? "⚠ Los precios no pueden ser negativos."
+        lblErrorPrecio.setText(puedePrecios ? "Los precios no pueden ser negativos."
                 : "Solo un usuario con permiso de cambiar precios puede modificarlos.");
         lblErrorPrecio.setVisible(!puedePrecios);
         lblErrorPrecio.setManaged(!puedePrecios);
@@ -574,6 +797,10 @@ public class ProductosController implements Initializable {
     }
 
     private void configurarColumnas() {
+        colImagen.setCellValueFactory(c -> new SimpleObjectProperty<>(c.getValue().getId()));
+        colImagen.setCellFactory(col -> imagenes.celdaMiniatura(col, 30));
+        colImagen.setSortable(false);
+        colImagen.setUserData(me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas.SIN_EXPORTAR);
         colCodigo.setCellValueFactory(c ->
                 new SimpleStringProperty(c.getValue().getCodigoBarras()));
         colDescripcion.setCellValueFactory(c ->
@@ -703,6 +930,7 @@ public class ProductosController implements Initializable {
         limpiarFormulario();
         txtCodigoBarras.setText(p.getCodigoBarras());
         txtDescripcion.setText(p.getDescripcion());
+        cargarImagenActual(p);
         switch (p.getTipoVenta()) {
             case GRANEL  -> rbGranel.setSelected(true);
             case PAQUETE -> rbPaquete.setSelected(true);
@@ -735,6 +963,13 @@ public class ProductosController implements Initializable {
     private void limpiarFormulario() {
         txtCodigoBarras.clear();
         txtDescripcion.clear();
+        secuenciaImagen++;
+        imagenPendiente = null;
+        origenImagen = null;
+        quitarImagen = false;
+        imagenGuardada = false;
+        mostrarVistaPrevia(null);
+        lblImagenEstado.setText(AYUDA_IMAGEN);
         rbUnidad.setSelected(true);
         txtPrecioCosto.clear();
         txtPrecioVenta.clear();
@@ -775,7 +1010,7 @@ public class ProductosController implements Initializable {
         comboDepartamento.setDisable(bloquear);
         comboUnidad.setDisable(bloquear);
         chkUsaInventario.setDisable(bloquear);
-        gridInventario.setDisable(bloquear);
+        gridInventario.setDisable(bloquear || !chkUsaInventario.isSelected());
         btnGuardar.setDisable(bloquear);
     }
 
@@ -791,17 +1026,15 @@ public class ProductosController implements Initializable {
      */
     private double parsear(String txt, String campo) {
         if (txt == null || txt.trim().isEmpty()) return 0;
-        try {
-            return Double.parseDouble(txt.trim().replace(",", ".").replace("$", ""));
-        } catch (NumberFormatException e) {
-            throw new NegocioException("\"" + campo + "\" debe ser un número válido (ej: 12.50).");
-        }
+        double v = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(txt);
+        if (Double.isNaN(v)) throw new NegocioException("\"" + campo + "\" debe ser un número válido (ej: 12.50).");
+        return v;
     }
 
     private boolean esNegativo(String txt) {
         if (txt == null || txt.trim().isEmpty()) return false;
-        try { return Double.parseDouble(txt.trim().replace(",", ".")) < 0; }
-        catch (NumberFormatException e) { return false; }
+        double v = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(txt);
+        return !Double.isNaN(v) && v < 0;
     }
 
     private void alerta(Alert.AlertType tipo, String titulo, String msg) {

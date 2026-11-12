@@ -45,8 +45,8 @@ public final class TutorialEstadisticasDialogo {
         if (owner != null) dlg.initOwner(owner);
         Ventanas.estilizar(dlg);
 
-        ButtonType anterior  = new ButtonType("← Anterior", ButtonBar.ButtonData.BACK_PREVIOUS);
-        ButtonType siguiente = new ButtonType("Siguiente →", ButtonBar.ButtonData.OK_DONE);
+        ButtonType anterior  = new ButtonType("Anterior", ButtonBar.ButtonData.BACK_PREVIOUS);
+        ButtonType siguiente = new ButtonType("Siguiente", ButtonBar.ButtonData.OK_DONE);
         ButtonType cerrar    = new ButtonType("Cerrar", ButtonBar.ButtonData.CANCEL_CLOSE);
         DialogPane pane = dlg.getDialogPane();
         pane.getButtonTypes().addAll(anterior, siguiente, cerrar);
@@ -80,6 +80,7 @@ public final class TutorialEstadisticasDialogo {
         Button btnAnterior  = (Button) pane.lookupButton(anterior);
         Button btnSiguiente = (Button) pane.lookupButton(siguiente);
         btnSiguiente.setDefaultButton(true);
+        btnAnterior.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("izquierda"));
         int[] indice = {0};
         Runnable pintar = () -> {
             Pagina p = paginas.get(indice[0]);
@@ -94,7 +95,9 @@ public final class TutorialEstadisticasDialogo {
             }
             boolean ultima = indice[0] == paginas.size() - 1;
             btnAnterior.setDisable(indice[0] == 0);
-            btnSiguiente.setText(ultima ? "Terminar" : "Siguiente →");
+            btnSiguiente.setText(ultima ? "Terminar" : "Siguiente");
+            btnSiguiente.setGraphic(ultima ? null : me.eliassanchezfernandez.puntodeventa.util.Iconos.de("derecha"));
+            btnSiguiente.setContentDisplay(javafx.scene.control.ContentDisplay.RIGHT);
             scroll.setVvalue(0);
         };
         // Anterior / Siguiente NO cierran el diálogo (se consume el evento), salvo "Terminar"

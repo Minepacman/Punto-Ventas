@@ -671,7 +671,10 @@ public class EstadisticasController implements Initializable {
             if (pct == null) {
                 badge.setText("Sin referencia");
             } else {
-                badge.setText(String.format("%s %.1f %%", pct >= 0 ? "▲" : "▼", Math.abs(pct)));
+                badge.setText(String.format("%.1f %%", Math.abs(pct)));
+                badge.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de(pct >= 0 ? "sube" : "baja", 12));
+                badge.setContentDisplay(javafx.scene.control.ContentDisplay.LEFT);
+                badge.setGraphicTextGap(4);
                 badge.getStyleClass().add(pct >= 0 ? "badge-success" : "badge-danger");
             }
             Label montos = new Label(Moneda.formato(c.actual().total()) + "  vs  " + Moneda.formato(c.anterior().total()));
@@ -862,12 +865,12 @@ public class EstadisticasController implements Initializable {
             lblClimaCiudad.setText("Ciudad: " + (c.getCiudad() != null ? c.getCiudad() : "—"));
             if (clima.isPresent()) {
                 ClimaRegistro r = clima.get();
-                lblClimaIcono.setText(ClimaService.iconoDe(r.getCategoria()));
+                lblClimaIcono.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de(ClimaService.iconoDe(r.getCategoria()), 36));
                 lblClimaTemperatura.setText(Math.round(r.getTemperatura()) + " °C");
                 lblClimaCondicion.setText(r.getCategoria() + " · " + r.getBanda());
                 lblClimaActualizado.setText("Registrado: " + r.getFechaHora().format(FMT_HORA));
             } else {
-                lblClimaIcono.setText("☁");
+                lblClimaIcono.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("nube", 36));
                 lblClimaTemperatura.setText("—");
                 lblClimaCondicion.setText("Sin datos de clima");
                 lblClimaActualizado.setText(c.isClimaActivo()

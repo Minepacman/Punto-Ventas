@@ -1,0 +1,34 @@
+# Maintainer: Minepacman <142938186+Minepacman@users.noreply.github.com>
+#
+# Paquete binario para Arch Linux / Manjaro (AUR) a partir del .tar.gz portable de cada release.
+# NO está publicado en el AUR todavía (ver docs/publicar.md). Para subirlo:
+#   1. Subir pkgver a la versión publicada (solo finales: el AUR no acepta "-beta.1" en pkgver).
+#   2. updpkgsums          (rellena sha256sums con la suma real del .tar.gz y del .desktop)
+#   3. makepkg --printsrcinfo > .SRCINFO ; makepkg -si para probar en una máquina Arch
+#   4. git push al repositorio ssh://aur@aur.archlinux.org/punto-de-venta-bin.git (requiere cuenta en el AUR)
+pkgname=punto-de-venta-bin
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Punto de venta de escritorio para tiendas de abarrotes (binario oficial, con su propio runtime de Java)"
+arch=('x86_64')
+url="https://github.com/Minepacman/Punto-Ventas"
+license=('GPL-3.0-or-later')
+# Lo que necesita el runtime de Java 17 + JavaFX 17 empaquetado: GTK 3, X11/XTest, OpenGL, ALSA, fuentes
+depends=('gtk3' 'libxtst' 'libxxf86vm' 'libgl' 'alsa-lib' 'freetype2' 'fontconfig' 'hicolor-icon-theme')
+optdepends=('xdg-utils: abrir enlaces y la página de descargas en el navegador')
+provides=('punto-de-venta')
+conflicts=('punto-de-venta')
+options=('!strip')
+source=("$url/releases/download/v$pkgver/PuntoDeVenta-$pkgver-linux-x64.tar.gz"
+        'punto-de-venta.desktop')
+sha256sums=('SKIP'   # ← sustituir con updpkgsums antes de publicar
+            'SKIP')
+
+package() {
+  install -d "$pkgdir/opt/punto-de-venta" "$pkgdir/usr/bin"
+  cp -a "$srcdir/PuntoDeVenta/." "$pkgdir/opt/punto-de-venta/"
+  ln -s /opt/punto-de-venta/bin/PuntoDeVenta "$pkgdir/usr/bin/punto-de-venta"
+  install -Dm644 "$srcdir/PuntoDeVenta/lib/PuntoDeVenta.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/punto-de-venta.png"
+  install -Dm644 "$srcdir/punto-de-venta.desktop" "$pkgdir/usr/share/applications/punto-de-venta.desktop"
+  install -Dm644 "$srcdir/PuntoDeVenta/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

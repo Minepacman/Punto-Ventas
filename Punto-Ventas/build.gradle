@@ -11,7 +11,7 @@ group = 'me.eliassanchezfernandez'
 // ÚNICA fuente de verdad de la versión: de aquí salen version.properties (util/VersionApp, lo que ve el
 // usuario y el User-Agent del buscador de actualizaciones), el manifiesto del jar y --app-version de
 // jpackage. Para publicar: subir este número, hacer commit y etiquetar "v" + versión (ver docs/publicar.md).
-version = '1.0.0'
+version = '1.0.1'
 description = 'Punto-de-venta'
 ext.repositorioUrl = 'https://github.com/Minepacman/Punto-Ventas'
 
@@ -65,6 +65,12 @@ dependencies {
     // Spring Boot dependencies
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter'
+    // No hay aspectos (@Aspect) en el proyecto: sin aspectjweaver (2 MB) Spring usa sus proxies normales
+    // para @Transactional y arranca con menos clases. spring-aspects solo sirve con AspectJ.
+    configurations.all {
+        exclude group: 'org.aspectj', module: 'aspectjweaver'
+        exclude group: 'org.springframework', module: 'spring-aspects'
+    }
 
     // Seguridad: solo usamos BCrypt para las contraseñas (login propio en JavaFX,
     // no hace falta el starter web de Spring Security)
@@ -182,12 +188,17 @@ tasks.register('publicarRevocaciones', JavaExec) {
     args 'publicar-revocaciones', '--salida', rootProject.file('../claves/revocadas.pdvr').absolutePath
 }
 
-// Opciones de la JVM pensadas para PCs de 2-4 GB de RAM y disco duro (también las usa jpackage)
+// Opciones de la JVM pensadas para PCs de 2-4 GB de RAM y disco duro (también las usa jpackage).
+// Medido (2 núcleos, Spring+JavaFX): TieredStopAtLevel=1 ahorra 0.3-0.5 s; Serial vs G1 igual pero con menos
+// memoria. El archivo CDS de la aplicación (pos.jsa) lo crea el propio programa en su carpeta tras el primer
+// arranque (util/CalentadorCds): si no existe o quedó viejo la JVM lo ignora en silencio (-Xshare:auto).
+// jpackage sustituye $APPDIR por la carpeta "app" del instalador; en `gradlew run` queda literal y se ignora.
 def jvmOpciones = [
         '-Xms64m', '-Xmx384m',
         '-XX:+UseSerialGC',
         '-XX:TieredStopAtLevel=1',
         '-XX:MaxMetaspaceSize=128m',
+        '-XX:SharedArchiveFile=$APPDIR/pos.jsa',
         '-Dfile.encoding=UTF-8',
         // límites del servidor web local (acceso móvil)
         '-Dsun.net.httpserver.maxReqTime=10',
@@ -243,7 +254,12 @@ tasks.register('testPostgres', Test) {
 //   macOS:    ./gradlew jpackageTask            -> build/installer/PuntoDeVenta-1.0.0.dmg
 //   Windows:  gradlew.bat jpackageTask          -> build/installer/PuntoDeVenta-1.0.0.exe
 //             gradlew.bat jpackageTask -PwinType=msi
-// jpackage SOLO construye para el sistema donde corre; en Windows hace falta WiX Toolset 3.x en el PATH.
+//   Linux:    ./gradlew jpackageTask            -> build/installer/punto-de-venta_1.0.0_amd64.deb
+//             ./gradlew jpackageTask -PlinuxType=rpm     -> punto-de-venta-1.0.0-1.x86_64.rpm
+//             ./gradlew jpackageTask -PlinuxType=tar.gz  -> PuntoDeVenta-1.0.0-linux.tar.gz (portable, cualquier distro)
+// jpackage SOLO construye para el sistema donde corre; en Windows hace falta WiX Toolset 3.x en el PATH;
+// en Linux, fakeroot (deb) o rpmbuild (rpm). El plugin de JavaFX elige solo el clasificador de la máquina
+// (linux x64 o linux-aarch64); el instalador de Linux publicado es x64 (docs/publicar.md).
 // Los iconos salen de packaging/icono (los genera packaging/icono/GeneradorIcono.java).
 // El UUID de actualización de Windows es FIJO: así una versión nueva reemplaza a la anterior en vez de
 // instalarse al lado. No cambiarlo nunca.
@@ -269,8 +285,14 @@ tasks.register('jpackageTask') {
 
         // jpackage exige x.y.z numérico: "1.1.0-beta.1" → "1.1.0"
         def versionNumerica = (project.version.toString() =~ /^\d+\.\d+\.\d+/)[0]
-        def icono = file(esMac ? 'packaging/icono/PuntoDeVenta.icns' : 'packaging/icono/PuntoDeVenta.ico')
+        def icono = file(esMac ? 'packaging/icono/PuntoDeVenta.icns'
+                : esWindows ? 'packaging/icono/PuntoDeVenta.ico' : 'packaging/icono/icono-512.png')
         def licencia = rootProject.file('../LICENSE')
+        // Linux: deb (por defecto), rpm o tar.gz (app-image comprimido, para cualquier distribución)
+        def linuxType = (project.findProperty('linuxType') ?: 'deb').toString()
+        if (!esMac && !esWindows && !(linuxType in ['deb', 'rpm', 'tar.gz'])) {
+            throw new GradleException("-PlinuxType debe ser deb, rpm o tar.gz (recibido: $linuxType)")
+        }
 
         def args = [jpackage,
                 '--input', lib.absolutePath,
@@ -281,10 +303,12 @@ tasks.register('jpackageTask') {
                 '--app-version', versionNumerica,
                 '--vendor', 'Elias Sanchez',
                 '--copyright', '2026 Elias Oziel Sanchez Fernandez - GPLv3',
-                '--description', 'Punto de venta para abarrotes',
-                '--about-url', repositorioUrl]
+                '--description', 'Punto de venta para abarrotes']
+        // jpackage rechaza las opciones "de instalador" (--about-url, --license-file, --linux-*, --win-*) con --type app-image
+        def esAppImage = !esMac && !esWindows && linuxType == 'tar.gz'
+        if (!esAppImage) args += ['--about-url', repositorioUrl]
         if (icono.exists()) args += ['--icon', icono.absolutePath]
-        if (licencia.exists()) args += ['--license-file', licencia.absolutePath]
+        if (licencia.exists() && !esAppImage) args += ['--license-file', licencia.absolutePath]
         jvmOpciones.each { args += ['--java-options', it] }
         if (esMac) {
             args += ['--type', 'dmg', '--mac-package-identifier', 'me.eliassanchezfernandez.puntodeventa',
@@ -294,10 +318,34 @@ tasks.register('jpackageTask') {
                      '--win-menu', '--win-shortcut', '--win-per-user-install', '--win-dir-chooser',
                      '--win-upgrade-uuid', winUpgradeUuid]
         } else {
-            args += ['--type', 'app-image']
+            // Linux. Nombre de paquete en minúsculas (lo exigen dpkg/rpm); se instala en /opt/punto-de-venta.
+            // deb necesita fakeroot + dpkg-deb; rpm necesita rpmbuild (paquete "rpm"); tar.gz solo "tar".
+            // Las dependencias del .deb las detecta jpackage con ldd/dpkg -S en el sistema donde se construye.
+            if (esAppImage) {
+                args += ['--type', 'app-image']
+            } else {
+                args += ['--type', linuxType,
+                         '--linux-package-name', 'punto-de-venta',
+                         '--linux-shortcut',
+                         '--linux-menu-group', 'Office;Finance',
+                         '--linux-deb-maintainer', '142938186+Minepacman@users.noreply.github.com',
+                         '--linux-rpm-license-type', 'GPLv3',
+                         '--linux-app-category', (linuxType == 'rpm' ? 'Applications/Productivity' : 'misc')]
+            }
         }
         logger.lifecycle("jpackage: " + args.join(' '))
         def proceso = new ProcessBuilder(args).inheritIO().start()
-        if (proceso.waitFor() != 0) throw new GradleException('jpackage falló (en Windows revisa que WiX 3.x esté en el PATH)')
+        if (proceso.waitFor() != 0) throw new GradleException('jpackage falló (en Windows revisa que WiX 3.x esté en el PATH; en Linux que estén fakeroot y, para rpm, rpmbuild)')
+
+        // Linux portable: build/installer/PuntoDeVenta/ (bin/PuntoDeVenta + lib/runtime) → PuntoDeVenta-<versión>-linux.tar.gz
+        if (esAppImage) {
+            if (licencia.exists()) new File(destino, 'PuntoDeVenta/LICENSE').bytes = licencia.bytes
+            def tar = new File(destino, "PuntoDeVenta-${versionNumerica}-linux.tar.gz")
+            def tarProceso = new ProcessBuilder(['tar', '-czf', tar.absolutePath, '-C', destino.absolutePath, 'PuntoDeVenta'])
+                    .inheritIO().start()
+            if (tarProceso.waitFor() != 0) throw new GradleException('tar falló al comprimir la app-image de Linux')
+            new File(destino, 'PuntoDeVenta').deleteDir()
+            logger.lifecycle("Portable Linux: " + tar.absolutePath)
+        }
     }
 }

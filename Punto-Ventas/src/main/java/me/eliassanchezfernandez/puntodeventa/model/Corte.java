@@ -49,6 +49,16 @@ public class Corte {
     @Column(name = "ventas_tarjeta", nullable = false)
     private double ventasTarjeta;
 
+    /** Transferencias y vales del día (null en cortes anteriores a esta columna = 0) */
+    @Column(name = "ventas_transferencia")
+    private Double ventasTransferencia;
+
+    @Column(name = "ventas_vales")
+    private Double ventasVales;
+
+    public double getVentasTransferenciaOCero() { return ventasTransferencia == null ? 0 : ventasTransferencia; }
+    public double getVentasValesOCero()         { return ventasVales == null ? 0 : ventasVales; }
+
     @Column(name = "ventas_totales", nullable = false)
     private double ventasTotales;
 

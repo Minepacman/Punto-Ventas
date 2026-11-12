@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -15,9 +16,9 @@
                 <Button text="Estado de Cuenta" onAction="#onEstadoCuenta"/>
                 <Button text="+ Nuevo Cliente"  onAction="#onNuevoCliente"
                         styleClass="button-success"/>
-                <Button text="✏ Modificar"       onAction="#onModificar"/>
-                <Button text="🗑 Eliminar"        onAction="#onEliminar"
-                        styleClass="button-danger"/>
+                <Button text="Modificar"       onAction="#onModificar"><graphic><Icono nombre="editar"/></graphic></Button>
+                <Button text="Eliminar"        onAction="#onEliminar"
+                        styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Button text="Reporte de Saldos" onAction="#onReporteSaldos"/>
             </HBox>
@@ -25,7 +26,7 @@
             <!-- Barra de búsqueda -->
             <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">
                 <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
-                <Label text="🔍"/>
+                <Label><graphic><Icono nombre="buscar"/></graphic></Label>
                 <TextField fx:id="txtBuscar" promptText="Buscar por nombre o número..."
                            HBox.hgrow="ALWAYS" onKeyReleased="#onBuscar"/>
             </HBox>

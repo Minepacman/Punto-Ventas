@@ -41,8 +41,16 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.id = :id")
     Optional<Venta> findConDetallesById(Long id);
 
-    /** Primera venta registrada (para el nivel de datos de Estadísticas) */
+    /** Primera venta registrada (cancelada o no; para recalcular agregados desde el inicio) */
     Optional<Venta> findFirstByOrderByFechaAsc();
+
+    /** Primera venta ACTIVA (para la madurez de datos de Estadísticas: una venta cancelada no es una venta) */
+    @Query("SELECT v FROM Venta v WHERE v.cancelada IS NULL OR v.cancelada = false ORDER BY v.fecha ASC, v.id ASC")
+    List<Venta> findPrimerasActivas(org.springframework.data.domain.Pageable pagina);
+
+    default Optional<Venta> findPrimeraActiva() {
+        return findPrimerasActivas(org.springframework.data.domain.PageRequest.of(0, 1)).stream().findFirst();
+    }
 
     /** Última venta cobrada en una caja (cancelada o no), para reimprimir el último ticket */
     @Query("SELECT v FROM Venta v WHERE COALESCE(v.caja, 1) = :caja ORDER BY v.id DESC")

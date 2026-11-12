@@ -37,7 +37,11 @@ public final class ActualizacionDialogo {
         notas.setEditable(false);
         notas.setWrapText(true);
         notas.setPrefSize(560, 260);
-        Label como = new Label(a.urlDescarga().isPresent()
+        boolean portable = a.urlDescarga().map(u -> u.toLowerCase().endsWith(".tar.gz")).orElse(false);
+        Label como = new Label(portable
+                ? "«Descargar» baja la versión portable (.tar.gz). Cierra el programa, descomprime y reemplaza la carpeta "
+                  + "PuntoDeVenta: tus datos y tu configuración se conservan (viven en ~/.puntodeventa)."
+                : a.urlDescarga().isPresent()
                 ? "«Descargar» abre el instalador en tu navegador. Cierra el programa, ejecuta el instalador y listo: "
                   + "tus datos y tu configuración se conservan."
                 : "No hay instalador para este equipo en esa versión; «Ver en GitHub» abre la página de la versión.");

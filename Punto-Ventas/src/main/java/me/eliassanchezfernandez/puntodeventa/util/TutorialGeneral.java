@@ -47,10 +47,6 @@ public final class TutorialGeneral {
                 + "de productos que suelen comprarse juntos.",
                 List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
                         Atajo.RECUPERAR_ESPERA, Atajo.COBRAR)));
-        p.add(new Paso("tabClientes", "Clientes",
-                "Aquí vivirá el directorio de clientes con crédito y estado de cuenta. En esta versión el "
-                + "módulo todavía no está disponible: los botones solo lo avisan.",
-                List.of(Atajo.IR_CLIENTES)));
         p.add(new Paso("tabProductos", "Productos",
                 "Tu catálogo: códigos de barras, descripción, precio de costo y de venta, departamento, "
                 + "unidad, venta a granel y precio de mayoreo. También las promociones (NxM, por departamento, "

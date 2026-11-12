@@ -80,9 +80,19 @@ public class TicketPendienteService {
 
     // ── Tickets en espera (F11 / Shift+F11) ──────────────────────────────
 
-    /** Resumen de un ticket en espera para la lista de "Recuperar" */
+    /**
+     * Resumen de un ticket en espera para la lista de "Recuperar".
+     * @param renglones los que dejó el cliente (incluye los que ya no se pueden vender)
+     * @param omitidos  renglones cuyo producto se desactivó mientras tanto: no vienen en {@code detalles}
+     */
     public record EnEspera(Long id, java.time.LocalDateTime guardadoEn, String nota, String cajero,
-                           int renglones, double piezas, List<DetalleVenta> detalles) { }
+                           int renglones, double piezas, List<DetalleVenta> detalles, int omitidos) {
+        /** Compatibilidad: sin renglones omitidos */
+        public EnEspera(Long id, java.time.LocalDateTime guardadoEn, String nota, String cajero,
+                        int renglones, double piezas, List<DetalleVenta> detalles) {
+            this(id, guardadoEn, nota, cajero, renglones, piezas, detalles, 0);
+        }
+    }
 
     /**
      * Aparta el ticket en captura con una nota opcional. Requiere sesión; no
@@ -141,8 +151,10 @@ public class TicketPendienteService {
     private static EnEspera resumen(TicketPendiente t) {
         List<DetalleVenta> detalles = aDetalles(t);
         double piezas = detalles.stream().mapToDouble(DetalleVenta::getCantidad).sum();
+        int total = t.getLineas().size();
         return new EnEspera(t.getId(), t.getGuardadoEn(), t.getNota(),
-                t.getCajero() != null ? t.getCajero().getNombreCompleto() : "", detalles.size(), piezas, detalles);
+                t.getCajero() != null ? t.getCajero().getNombreCompleto() : "", total, piezas, detalles,
+                total - detalles.size());
     }
 
     /**

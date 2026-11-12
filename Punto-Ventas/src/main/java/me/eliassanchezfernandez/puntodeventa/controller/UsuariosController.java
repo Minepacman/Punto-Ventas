@@ -256,9 +256,13 @@ public class UsuariosController implements Initializable {
                         contrasena.isEmpty() ? null : contrasena, permisos);
                 recargar();
                 seleccionar(id);
+                Cajero enSesion = sesionService.getCajeroActual();
+                boolean esElMismo = enSesion != null && enSesion.getId().equals(id);
                 alerta(Alert.AlertType.INFORMATION, "Usuario actualizado",
                         "Los cambios se guardaron correctamente."
-                        + (contrasena.isEmpty() ? "" : "\nLa contraseña fue restablecida; deberá cambiarla al entrar."));
+                        + (contrasena.isEmpty() ? "" : esElMismo
+                            ? "\nTu contraseña cambió: úsala la próxima vez que entres (tu sesión sigue abierta)."
+                            : "\nLa contraseña fue restablecida; deberá cambiarla al entrar."));
             }
             txtContrasena.clear();
         } catch (NegocioException e) {
@@ -370,7 +374,8 @@ public class UsuariosController implements Initializable {
         boolean gerentePuedeDesactivar = sesionService.esGerente() && c.isActivo()
                 && c.getRol() != Cajero.Rol.ADMIN;
         btnEstado.setDisable(!(admin || gerentePuedeDesactivar));
-        btnEstado.setText(c.isActivo() ? "⛔ Desactivar" : "✅ Activar");
+        btnEstado.setText(c.isActivo() ? "Desactivar" : "Activar");
+        btnEstado.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de(c.isActivo() ? "prohibido" : "listo"));
         btnDesbloquear.setDisable(!c.isBloqueado());
     }
 

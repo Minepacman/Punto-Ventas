@@ -47,6 +47,7 @@ class ReabastecimientoServiceTest extends BaseServicioTest {
     @Autowired private ProveedorService proveedorService;
     @Autowired private OrdenCompraService ordenCompraService;
     @Autowired private VentaRepository ventaRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.MovimientoInventarioRepository movimientoRepo;
 
     private final LocalDate hoy = LocalDate.now();
     private Proveedor bimbo;
@@ -68,9 +69,13 @@ class ReabastecimientoServiceTest extends BaseServicioTest {
         leche.setCantidadMinima(5);
         productoRepo.save(leche);
 
-        chicles = producto("Chicles", 5, 200);          // nunca se vende
+        chicles = producto("Chicles", 5, 200);          // nunca se vende; está en inventario desde el primer día
         chicles.setCantidadMinima(2);
         productoRepo.save(chicles);
+        for (var m : movimientoRepo.findByProductoIdOrderByFechaDesc(chicles.getId())) {
+            m.setFecha(hoy.minusDays(9).atTime(9, 0));   // alta inicial el mismo día que la primera venta
+            movimientoRepo.save(m);
+        }
 
         sal = producto("Sal 1 kg", 12, 1000);           // se vendió 1 vez: rotación bajísima
         sal.setCantidadMinima(1);
@@ -222,7 +227,8 @@ class ReabastecimientoServiceTest extends BaseServicioTest {
         assertThat(r.conCostos()).isTrue();
         assertThat(r.totalValorCosto()).isCloseTo(6000, within(0.001));
 
-        // Con umbral 5 entran también los chicles (nunca vendidos: cuentan desde la primera venta de la tienda)
+        // Con umbral 5 entran también los chicles (nunca vendidos: cuentan desde la primera venta de la tienda,
+        // o desde su alta si es posterior; ver unProductoRecienDadoDeAltaNoEsRezagado en QaMovilYEstadisticasTest)
         Rezagados r5 = reabastecimientoService.productosRezagados(5);
         assertThat(r5.productos()).extracting(x -> x.producto().getId()).containsExactlyInAnyOrder(sal.getId(), chicles.getId());
         ProductoRezagado c = r5.productos().stream().filter(x -> x.producto().getId().equals(chicles.getId())).findFirst().orElseThrow();

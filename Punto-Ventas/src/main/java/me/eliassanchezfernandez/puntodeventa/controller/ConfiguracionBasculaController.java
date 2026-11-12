@@ -163,7 +163,7 @@ public class ConfiguracionBasculaController implements Initializable {
     }
 
     private ConfiguracionDispositivos leerFormulario() {
-        spEspera.commitValue();
+        Ventanas.confirmarSpinner(spEspera, "Espera (ms)");
         ConfiguracionDispositivos c = new ConfiguracionDispositivos();
         c.setBasculaActiva(chkActiva.isSelected());
         String puerto = cmbPuerto.getEditor().getText();

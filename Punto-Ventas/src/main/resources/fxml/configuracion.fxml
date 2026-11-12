@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -19,22 +20,22 @@
                 <!-- ── General ──────────────────────────────────── -->
                 <Label text="General" styleClass="config-section-title"/>
                 <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="⚙ Opciones&#10;Habilitadas"   onAction="#onOpciones"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="👤 Cajeros"                  onAction="#onCajeros"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🗄 Base de Datos"            onAction="#onBaseDatos"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="📦 Artículos&#10;Precargados"   onAction="#onArticulosPrec"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🧾 Facturación"              onAction="#onFacturacion"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🔢 Modificar&#10;Folios"        onAction="#onFolios"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🌦 Ubicación&#10;y Clima"        onAction="#onClima"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="📱 Acceso&#10;móvil"             onAction="#onAccesoMovil"
-                            prefWidth="110" prefHeight="80"/>
+                    <Button text="Opciones&#10;Habilitadas"   onAction="#onOpciones"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="ajustes"/></graphic></Button>
+                    <Button text="Cajeros"                  onAction="#onCajeros"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="usuario"/></graphic></Button>
+                    <Button text="Base de Datos"            onAction="#onBaseDatos"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="baseDatos"/></graphic></Button>
+                    <Button text="Artículos&#10;Precargados"   onAction="#onArticulosPrec"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="paquete"/></graphic></Button>
+                    <Button text="Facturación"              onAction="#onFacturacion"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="recibo"/></graphic></Button>
+                    <Button text="Modificar&#10;Folios"        onAction="#onFolios"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="numeros"/></graphic></Button>
+                    <Button text="Ubicación&#10;y Clima"        onAction="#onClima"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="climaSol"/></graphic></Button>
+                    <Button text="Acceso&#10;móvil"             onAction="#onAccesoMovil"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="celular"/></graphic></Button>
                 </TilePane>
 
                 <Separator/>
@@ -42,18 +43,18 @@
                 <!-- ── Personalización ──────────────────────────── -->
                 <Label text="Personalización" styleClass="config-section-title"/>
                 <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="🖼 Logotipo"                  onAction="#onLogotipo"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🎫 Ticket"                    onAction="#onTicket"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="💳 Formas de&#10;Pago"           onAction="#onFormasPago"
-                            prefWidth="110" prefHeight="80"/>
+                    <Button text="Logotipo"                  onAction="#onLogotipo"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="imagen"/></graphic></Button>
+                    <Button text="Ticket"                    onAction="#onTicket"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="boleto"/></graphic></Button>
+                    <Button text="Formas de&#10;Pago"           onAction="#onFormasPago"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="tarjeta"/></graphic></Button>
                     <Button text="(%) Impuestos"                  onAction="#onImpuestos"
                             prefWidth="110" prefHeight="80"/>
                     <Button text="($) Moneda"                     onAction="#onMoneda"
                             prefWidth="110" prefHeight="80"/>
-                    <Button text="📐 Unidades de&#10;Medida"       onAction="#onUnidades"
-                            prefWidth="110" prefHeight="80"/>
+                    <Button text="Unidades de&#10;Medida"       onAction="#onUnidades"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="regla"/></graphic></Button>
                 </TilePane>
 
                 <Separator/>
@@ -61,16 +62,16 @@
                 <!-- ── Dispositivos ──────────────────────────────── -->
                 <Label text="Dispositivos" styleClass="config-section-title"/>
                 <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="🖨 Impresora&#10;de Tickets"     onAction="#onImpresora"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="📷 Lector de&#10;Códigos"        onAction="#onLector"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="💰 Cajón de&#10;Dinero"          onAction="#onCajon"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="⚖ Báscula"                    onAction="#onBascula"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="💳 Terminal&#10;Bancaria"        onAction="#onTerminalBancaria"
-                            prefWidth="110" prefHeight="80"/>
+                    <Button text="Impresora&#10;de Tickets"     onAction="#onImpresora"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="impresora"/></graphic></Button>
+                    <Button text="Lector de&#10;Códigos"        onAction="#onLector"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="camara"/></graphic></Button>
+                    <Button text="Cajón de&#10;Dinero"          onAction="#onCajon"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="efectivo"/></graphic></Button>
+                    <Button text="Báscula"                    onAction="#onBascula"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="bascula"/></graphic></Button>
+                    <Button text="Terminal&#10;Bancaria"        onAction="#onTerminalBancaria"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="tarjeta"/></graphic></Button>
                 </TilePane>
 
                 <Separator/>
@@ -78,14 +79,14 @@
                 <!-- ── Mantenimiento ─────────────────────────────── -->
                 <Label text="Mantenimiento" styleClass="config-section-title"/>
                 <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="💾 Respaldo&#10;Automático"       onAction="#onRespaldo"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🔑 Licencia"                   onAction="#onLicencia"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="🔄 Actualizaciones"            onAction="#onActualizaciones"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="♥ Donador y&#10;soporte"        onAction="#onDonador"
-                            prefWidth="110" prefHeight="80"/>
+                    <Button text="Respaldo&#10;Automático"       onAction="#onRespaldo"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="guardar"/></graphic></Button>
+                    <Button text="Licencia"                   onAction="#onLicencia"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="llave"/></graphic></Button>
+                    <Button text="Actualizaciones"            onAction="#onActualizaciones"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="actualizar"/></graphic></Button>
+                    <Button text="Donador y&#10;soporte"        onAction="#onDonador"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="corazon"/></graphic></Button>
                 </TilePane>
 
             </VBox>

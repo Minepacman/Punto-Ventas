@@ -3,8 +3,10 @@ package me.eliassanchezfernandez.puntodeventa.service;
 import me.eliassanchezfernandez.puntodeventa.util.VersionSemantica;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -112,6 +114,53 @@ class ActualizacionServiceTest {
         // Un solo dmg sin arquitectura en el nombre sirve para cualquier Mac
         assertThat(ActualizacionService.elegirActivo(List.of("PuntoDeVenta-1.1.0.dmg"), "Mac OS X", "aarch64")).contains("PuntoDeVenta-1.1.0.dmg");
         assertThat(ActualizacionService.elegirActivo(List.of(), "Mac OS X", "aarch64")).isEmpty();
+    }
+
+    @Test
+    void enLinuxEligeDebRpmOPortableSegunElGestorDePaquetes() {
+        List<String> activos = List.of("PuntoDeVenta-1.1.0-windows-x64.exe", "PuntoDeVenta-1.1.0-macos-arm64.dmg",
+                "PuntoDeVenta-1.1.0-linux-x64.deb", "PuntoDeVenta-1.1.0-linux-x64.rpm", "PuntoDeVenta-1.1.0-linux-x64.tar.gz",
+                "SHA256SUMS.txt");
+        Set<ActualizacionService.GestorPaquetes> dpkg = EnumSet.of(ActualizacionService.GestorPaquetes.DPKG);
+        Set<ActualizacionService.GestorPaquetes> rpm = EnumSet.of(ActualizacionService.GestorPaquetes.RPM);
+        Set<ActualizacionService.GestorPaquetes> ambos = EnumSet.allOf(ActualizacionService.GestorPaquetes.class);
+        Set<ActualizacionService.GestorPaquetes> ninguno = EnumSet.noneOf(ActualizacionService.GestorPaquetes.class);
+
+        assertThat(ActualizacionService.elegirActivo(activos, "Linux", "amd64", dpkg)).contains("PuntoDeVenta-1.1.0-linux-x64.deb");
+        assertThat(ActualizacionService.elegirActivo(activos, "Linux", "amd64", rpm)).contains("PuntoDeVenta-1.1.0-linux-x64.rpm");
+        // Ubuntu con el paquete "rpm" instalado sigue siendo Debian: gana el .deb
+        assertThat(ActualizacionService.elegirActivo(activos, "Linux", "amd64", ambos)).contains("PuntoDeVenta-1.1.0-linux-x64.deb");
+        assertThat(ActualizacionService.elegirActivo(activos, "Linux", "x86_64", ninguno)).contains("PuntoDeVenta-1.1.0-linux-x64.tar.gz");
+        // Solo hay x64: en un Linux ARM no se ofrece nada (página de la versión)
+        assertThat(ActualizacionService.elegirActivo(activos, "Linux", "aarch64", dpkg)).isEmpty();
+        assertThat(ActualizacionService.elegirActivo(List.of("PuntoDeVenta-1.1.0-linux-arm64.deb"), "Linux", "aarch64", dpkg))
+                .contains("PuntoDeVenta-1.1.0-linux-arm64.deb");
+        // Un paquete sin arquitectura en el nombre, si es el único, se ofrece
+        assertThat(ActualizacionService.elegirActivo(List.of("punto-de-venta_1.1.0.deb"), "Linux", "amd64", dpkg)).contains("punto-de-venta_1.1.0.deb");
+        // Con dpkg pero sin .deb publicado se cae al portable, nunca al .rpm
+        assertThat(ActualizacionService.elegirActivo(List.of("PuntoDeVenta-1.1.0-linux-x64.rpm", "PuntoDeVenta-1.1.0-linux-x64.tar.gz"),
+                "Linux", "amd64", dpkg)).contains("PuntoDeVenta-1.1.0-linux-x64.tar.gz");
+        // Los instaladores de Windows/macOS no se ofrecen en Linux
+        assertThat(ActualizacionService.elegirActivo(List.of("PuntoDeVenta-1.1.0-windows-x64.exe", "PuntoDeVenta-1.1.0-macos-x64.dmg"),
+                "Linux", "amd64", ambos)).isEmpty();
+        // Los gestores de paquetes no influyen fuera de Linux
+        assertThat(ActualizacionService.elegirActivo(activos, "Windows 10", "amd64", dpkg)).contains("PuntoDeVenta-1.1.0-windows-x64.exe");
+        assertThat(ActualizacionService.gestoresInstalados()).isNotNull();
+
+        String json = """
+            [{"tag_name": "v1.1.0", "name": "1.1.0", "draft": false, "prerelease": false,
+              "html_url": "https://github.com/Minepacman/Punto-Ventas/releases/tag/v1.1.0", "body": "",
+              "assets": [
+                {"name": "PuntoDeVenta-1.1.0-linux-x64.deb", "browser_download_url": "https://github.com/Minepacman/Punto-Ventas/releases/download/v1.1.0/PuntoDeVenta-1.1.0-linux-x64.deb"},
+                {"name": "PuntoDeVenta-1.1.0-linux-x64.tar.gz", "browser_download_url": "https://github.com/Minepacman/Punto-Ventas/releases/download/v1.1.0/PuntoDeVenta-1.1.0-linux-x64.tar.gz"}
+              ]}]
+            """;
+        // analizar usa los gestores del equipo donde corre la prueba: en Linux con dpkg ofrece el .deb; en los demás el portable
+        Optional<ActualizacionService.Actualizacion> a = ActualizacionService.analizar(json, v("1.0.0"), false, "Linux", "amd64");
+        assertThat(a).isPresent();
+        String esperado = ActualizacionService.gestoresInstalados().contains(ActualizacionService.GestorPaquetes.DPKG)
+                ? "PuntoDeVenta-1.1.0-linux-x64.deb" : "PuntoDeVenta-1.1.0-linux-x64.tar.gz";
+        assertThat(a.get().urlDescarga()).contains("https://github.com/Minepacman/Punto-Ventas/releases/download/v1.1.0/" + esperado);
     }
 
     @Test

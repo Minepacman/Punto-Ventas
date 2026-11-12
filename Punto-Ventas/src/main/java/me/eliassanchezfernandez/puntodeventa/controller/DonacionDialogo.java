@@ -94,7 +94,8 @@ public final class DonacionDialogo {
         subVentajas.getStyleClass().add("donacion-subtitulo");
         VBox ventajas = new VBox(4, subVentajas);
         for (String v : VENTAJAS) {
-            Label l = new Label("✓  " + v);
+            Label l = new Label(v);
+            l.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("listo", 14));
             l.setWrapText(true);
             l.setMaxWidth(520);
             l.getStyleClass().add("donacion-ventaja");

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -16,9 +17,9 @@
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <TextField fx:id="txtBuscar" promptText="Buscar por RFC o nombre…" prefWidth="280"/>
-            <Button text="➕ Nuevo" onAction="#onNuevo" styleClass="button-primary"/>
-            <Button text="✏ Editar" onAction="#onEditar"/>
-            <Button text="🗑 Eliminar" onAction="#onEliminar" styleClass="button-danger"/>
+            <Button text="Nuevo" onAction="#onNuevo" styleClass="button-primary"><graphic><Icono nombre="mas"/></graphic></Button>
+            <Button text="Editar" onAction="#onEditar"><graphic><Icono nombre="editar"/></graphic></Button>
+            <Button text="Eliminar" onAction="#onEliminar" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>

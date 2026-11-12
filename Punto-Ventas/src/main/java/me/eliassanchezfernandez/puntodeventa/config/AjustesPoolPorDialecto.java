@@ -47,6 +47,8 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
             propiedadSiFalta(ds, "busy_timeout", "10000");
             propiedadSiFalta(ds, "cache_size", "-8000");
             propiedadSiFalta(ds, "temp_store", "MEMORY");
+            // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro
+            propiedadSiFalta(ds, "mmap_size", "67108864");
             propiedadSiFalta(ds, "foreign_keys", "true");
         } else {
             if (ds.getConnectionTimeout() == 30_000L) ds.setConnectionTimeout(5_000L);

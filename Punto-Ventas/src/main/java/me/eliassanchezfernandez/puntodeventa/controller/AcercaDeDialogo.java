@@ -113,10 +113,11 @@ public class AcercaDeDialogo {
         if (apoyo.isPresent()) {
             DonadorService.Apoyo a = apoyo.get();
             ClaveDonador.Datos d = a.datos();
-            Label estado = new Label((a.vigente() ? "♥  Negocio donador: " : "Apoyo: ") + a.resumen()
+            Label estado = new Label((a.vigente() ? "Negocio donador: " : "Apoyo: ") + a.resumen()
                     + (d.esPdv2() ? "  ·  nivel " + d.nivelApoyo().etiqueta() : d.tieneNivel() ? "  ·  nivel " + d.nivel() : "")
                     + "  ·  id " + d.id());
             estado.setWrapText(true);
+            if (a.vigente()) estado.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("corazon"));
             estado.getStyleClass().add(a.vigente() ? "acerca-donador" : "text-bold");
             caja.getChildren().add(estado);
             if (a.vigente()) {
@@ -124,7 +125,8 @@ public class AcercaDeDialogo {
                 gracias.getStyleClass().add("text-bold");
                 caja.getChildren().add(gracias);
                 for (String v : DonacionDialogo.VENTAJAS) {
-                    Label l = new Label("✓  " + v);
+                    Label l = new Label(v);
+                    l.setGraphic(me.eliassanchezfernandez.puntodeventa.util.Iconos.de("listo", 14));
                     l.setWrapText(true);
                     caja.getChildren().add(l);
                 }

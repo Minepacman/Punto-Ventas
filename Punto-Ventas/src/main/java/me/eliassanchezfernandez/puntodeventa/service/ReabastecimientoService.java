@@ -290,12 +290,22 @@ public class ReabastecimientoService {
         }
 
         boolean conCostos = puedeVerCostos();
+        Map<Long, LocalDate> primerMovimiento = primerMovimientoPorProducto();
         List<ProductoRezagado> lista = new ArrayList<>();
         double totalVenta = 0, totalCosto = 0;
         for (Producto p : productoRepo.findByUsaInventarioTrueOrderByDescripcionAsc()) {
             if (!p.isActivo() || p.getCantidadActual() <= 0) continue;
             LocalDate ultima = ultimaVenta.get(p.getId());
-            long dias = ultima != null ? ChronoUnit.DAYS.between(ultima, hoy) : madurez.diasDesdePrimeraVenta();
+            long dias;
+            if (ultima != null) {
+                dias = ChronoUnit.DAYS.between(ultima, hoy);
+            } else {
+                // Nunca vendido: cuenta desde la primera venta de la tienda, pero nunca desde antes de que
+                // el producto existiera (uno dado de alta hoy no lleva "N días sin venderse")
+                dias = madurez.diasDesdePrimeraVenta();
+                LocalDate alta = primerMovimiento.get(p.getId());
+                if (alta != null) dias = Math.min(dias, Math.max(0, ChronoUnit.DAYS.between(alta, hoy)));
+            }
             double enVentana = piezas.getOrDefault(p.getId(), 0.0);
             double ventaDiaria = enVentana / Math.max(1, diasVentana);
             Double cobertura = ventaDiaria > 0 ? p.getCantidadActual() / ventaDiaria : null;
@@ -357,17 +367,32 @@ public class ReabastecimientoService {
         return r;
     }
 
-    /** Proveedor de cada producto según su última entrada (por id, o por nombre en entradas antiguas) */
+    /**
+     * Proveedor de cada producto: el de su entrada más reciente que corresponda a un proveedor
+     * del catálogo (por id, o por nombre en entradas antiguas). Las entradas con un texto que no
+     * es un proveedor ("No indicado (móvil)") se saltan: no le quitan al producto su proveedor.
+     */
     private Map<Long, Proveedor> proveedorPorProducto(Map<Long, Proveedor> proveedores) {
         Map<String, Proveedor> porNombre = new HashMap<>();
         for (Proveedor p : proveedores.values()) porNombre.put(p.getNombre().trim().toLowerCase(Locale.ROOT), p);
         Map<Long, Proveedor> r = new HashMap<>();
-        for (Object[] f : movimientoRepo.ultimoProveedorPorProducto(MovimientoInventario.Tipo.ENTRADA)) {
+        for (Object[] f : movimientoRepo.entradasConProveedorRecientesPrimero(MovimientoInventario.Tipo.ENTRADA)) {
             long productoId = ((Number) f[0]).longValue();
+            if (r.containsKey(productoId)) continue;   // ya se encontró la entrada más reciente con proveedor real
             Proveedor prov = null;
             if (f[1] != null) prov = proveedores.get(((Number) f[1]).longValue());
             if (prov == null && f[2] != null) prov = porNombre.get(((String) f[2]).trim().toLowerCase(Locale.ROOT));
             if (prov != null) r.put(productoId, prov);
+        }
+        return r;
+    }
+
+    /** Desde cuándo existe cada producto en el inventario (su primer movimiento: alta inicial o entrada) */
+    private Map<Long, LocalDate> primerMovimientoPorProducto() {
+        Map<Long, LocalDate> r = new HashMap<>();
+        for (Object[] f : movimientoRepo.primerMovimientoPorProducto()) {
+            if (f[0] == null || f[1] == null) continue;
+            r.put(((Number) f[0]).longValue(), aFecha(f[1]));
         }
         return r;
     }
@@ -383,6 +408,8 @@ public class ReabastecimientoService {
 
     private static LocalDate aFecha(Object o) {
         if (o instanceof LocalDate d) return d;
+        if (o instanceof java.time.LocalDateTime d) return d.toLocalDate();
+        if (o instanceof java.sql.Timestamp d) return d.toLocalDateTime().toLocalDate();
         if (o instanceof java.sql.Date d) return d.toLocalDate();
         if (o instanceof java.util.Date d) return d.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
         return LocalDate.parse(String.valueOf(o).substring(0, 10));

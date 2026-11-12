@@ -3,9 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2F6CAD">
+<meta name="theme-color" content="#2A4566">
 <meta name="color-scheme" content="light dark">
+<meta name="application-name" content="Punto de Venta">
+<meta name="apple-mobile-web-app-title" content="Punto de Venta">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Punto de Venta Móvil</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icono-32.png">
+<link rel="icon" type="image/png" sizes="256x256" href="/icono-256.png">
+<link rel="apple-touch-icon" sizes="256x256" href="/icono-256.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <!--
   ============================================================================
   Punto de Venta - Interfaz web MÓVIL (archivo único: HTML + CSS + JS)
@@ -109,6 +117,14 @@ h1, h2, h3, p { margin: 0; }
   display: flex; align-items: center; gap: .75rem;
 }
 .cabecera h1 { font-size: 1.15rem; flex: 1; }
+.cab-logo { width: 32px; height: 32px; border-radius: 9px; flex: none; display: block; }
+.cab-titulos { flex: 1; min-width: 0; display: grid; }
+.cab-titulos h1 { flex: none; }
+.cab-negocio { font-size: .74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.btn-icono-cab { width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px; background: none; color: var(--accent-text); display: grid; place-items: center; cursor: pointer; }
+.btn-icono-cab:hover { background: var(--accent-subtle); }
+/* Iconos SVG en línea (ver ICONOS en el script): heredan el color del texto */
+.ico-svg { display: block; flex: none; }
 .pastilla {
   font-size: .7rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap;
   padding: .2rem .55rem; border-radius: 999px; background: var(--warning-subtle); color: var(--warning-text);
@@ -126,9 +142,11 @@ h1, h2, h3, p { margin: 0; }
   display: grid; place-items: center; align-content: center; gap: 2px;
   font-size: .72rem; font-weight: 600; color: var(--muted);
 }
-.nav button .ico { font-size: 1.4rem; line-height: 1; }
+.nav button .ico { display: grid; place-items: center; line-height: 1; }
+.nav button .ico svg { width: 24px; height: 24px; }
 .nav button[aria-current="page"] { color: var(--accent-text); }
 .nav button[aria-current="page"] .ico { transform: translateY(-1px); }
+.nav button[aria-current="page"] .ico svg { stroke-width: 2.4; }
 
 /* ===== Tarjetas, listas, etiquetas ===== */
 .tarjeta { background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
@@ -142,7 +160,7 @@ h1, h2, h3, p { margin: 0; }
 .kpi.grande { grid-column: 1 / -1; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .kpi.grande .e { color: inherit; opacity: .85; }
 .kpi.grande .v { font-size: 2rem; }
-.var { font-size: .8rem; font-weight: 700; margin-top: .15rem; }
+.var { font-size: .8rem; font-weight: 700; margin-top: .15rem; display: inline-flex; align-items: center; gap: .3rem; }
 .var.sube { color: var(--success-text); } .var.baja { color: var(--danger-text); }
 .kpi.grande .var { color: inherit; opacity: .95; }
 .segmentos { display: flex; background: var(--inset); border-radius: 14px; padding: 4px; gap: 4px; }
@@ -154,6 +172,8 @@ h1, h2, h3, p { margin: 0; }
 .fila .t { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fila .d { font-size: .82rem; color: var(--muted); }
 .fila .der { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.fila .miniatura { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 10px; object-fit: contain; background: #fff; border: 1px solid var(--border-subtle); }
+.foto-detalle { display: block; width: min(60vw, 220px); height: min(60vw, 220px); margin: 0 auto .5rem; object-fit: contain; background: #fff; border: 1px solid var(--border-subtle); border-radius: var(--radius); }
 .insignia { display: inline-block; font-size: .7rem; font-weight: 700; padding: .15rem .55rem; border-radius: 999px; background: var(--inset); color: var(--muted); }
 .insignia.ok { background: var(--success-subtle); color: var(--success-text); }
 .insignia.aviso { background: var(--warning-subtle); color: var(--warning-text); }
@@ -180,7 +200,7 @@ h1, h2, h3, p { margin: 0; }
 /* ===== Login ===== */
 .login { flex: 1; display: grid; place-items: center; padding: 1.5rem 1rem; }
 .login-caja { width: 100%; max-width: 420px; display: grid; gap: 1.1rem; }
-.logo { width: 72px; height: 72px; border-radius: 22px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 2.2rem; margin: 0 auto; box-shadow: var(--shadow); }
+.logo { display: block; width: 72px; height: 72px; border-radius: 18px; margin: 0 auto; box-shadow: var(--shadow); }
 .login h1 { text-align: center; font-size: 1.6rem; }
 .login .sub { text-align: center; }
 
@@ -213,10 +233,30 @@ h1, h2, h3, p { margin: 0; }
 
 /* ===== Escaneo de ticket ===== */
 .tomar { display: grid; place-items: center; gap: .6rem; text-align: center; padding: 2rem 1rem; border: 2px dashed var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
-.tomar .grande { font-size: 2.6rem; }
+.tomar .grande { color: var(--accent-text); }
 .previa { width: 100%; max-height: 340px; object-fit: contain; border-radius: 14px; background: var(--inset); }
 .entrada-oculta { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .paso { display: flex; align-items: center; gap: .6rem; color: var(--muted); font-weight: 600; }
+
+/* ===== Recorrido guiado (tutorial) ===== */
+.tuto-velo { position: fixed; inset: 0; z-index: 40; }
+.tuto-foco { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(10,16,24,.62); outline: 2px solid var(--accent); outline-offset: 3px; transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease; pointer-events: none; }
+.tuto-foco.sin { outline: 0; }
+.tuto-tarjeta { position: fixed; left: 12px; right: 12px; max-width: 440px; margin: 0 auto; background: var(--surface); color: var(--text);
+  border-radius: 20px; padding: 1rem 1rem .9rem; box-shadow: 0 12px 40px rgba(0,0,0,.35); display: grid; gap: .75rem; max-height: calc(100dvh - 24px); overflow: auto; }
+.tuto-tarjeta.centro { top: 50%; transform: translateY(-50%); }
+.tuto-cab { display: flex; align-items: center; gap: .6rem; }
+.tuto-cab .tuto-ico { width: 40px; height: 40px; border-radius: 12px; background: var(--accent-subtle); color: var(--accent-text); display: grid; place-items: center; flex: none; }
+.tuto-cab h2 { flex: 1; font-size: 1.1rem; min-width: 0; }
+.tuto-cerrar { width: 40px; height: 40px; flex: none; border: 0; background: none; color: var(--muted); border-radius: 10px; display: grid; place-items: center; cursor: pointer; }
+.tuto-texto { color: var(--muted); font-size: .95rem; }
+.tuto-pie { display: flex; align-items: center; gap: .5rem; }
+.tuto-paso { flex: 1; font-size: .78rem; color: var(--subtle); display: grid; gap: .3rem; }
+.tuto-puntos { display: flex; gap: 4px; }
+.tuto-puntos i { width: 6px; height: 6px; border-radius: 3px; background: var(--border); transition: width .2s; }
+.tuto-puntos i.act { background: var(--accent); width: 16px; }
+.tuto-pie .btn { min-height: 44px; padding: 0 .9rem; }
+@media (min-width: 1024px) { .tuto-tarjeta { left: calc(232px + 12px); } }
 
 /* ===== Aviso emergente ===== */
 .toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30; max-width: 92vw;
@@ -250,13 +290,13 @@ html, body { overflow-x: clip; }
 /* Teléfono apaisado: poca altura, se compacta barra y modales */
 @media (orientation: landscape) and (max-height: 520px) {
   .nav button { min-height: 48px; grid-auto-flow: column; gap: .4rem; font-size: .8rem; }
-  .nav button .ico { font-size: 1.15rem; }
+  .nav button .ico svg { width: 20px; height: 20px; }
   .vista { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
   .cabecera { padding-top: calc(env(safe-area-inset-top) + .3rem); padding-bottom: .3rem; }
   .hoja { max-height: 96dvh; padding-top: .9rem; }
   .login { align-items: start; padding: .75rem 1rem; }
   .login-caja { gap: .7rem; }
-  .logo { width: 48px; height: 48px; font-size: 1.5rem; border-radius: 14px; }
+  .logo { width: 48px; height: 48px; border-radius: 12px; }
   .toast { bottom: calc(70px + env(safe-area-inset-bottom)); }
   .previa { max-height: 60dvh; }
 }
@@ -287,7 +327,8 @@ html, body { overflow-x: clip; }
   .nav-int { flex-direction: column; max-width: none; gap: .25rem; }
   .nav button { flex: none; display: flex; justify-content: flex-start; align-items: center; gap: .75rem;
     min-height: 48px; padding: 0 1rem; border-radius: 12px; font-size: .95rem; text-align: left; }
-  .nav button .ico { font-size: 1.25rem; width: 1.6rem; text-align: center; }
+  .nav button .ico { width: 1.6rem; }
+  .nav button .ico svg { width: 22px; height: 22px; }
   .nav button[aria-current="page"] { background: var(--accent-subtle); }
   .nav button[aria-current="page"] .ico { transform: none; }
   .vista { max-width: 1180px; padding-bottom: 2rem; padding-left: 2rem; padding-right: 2rem; }
@@ -362,6 +403,70 @@ function anexar(el, hijos) {
   return el;
 }
 function vaciar(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+
+/* ----------------------------------------------------------------------------
+   ICONOS: trazos de Lucide (https://lucide.dev), licencia ISC:
+   Copyright (c) 2022 Lucide Contributors. Se permite usar, copiar, modificar y
+   distribuir con o sin cambios, con este aviso. Solo se incluyen los iconos que
+   usa la página (viewBox 0 0 24 24, trazo 2, extremos redondeados). Los
+   círculos están convertidos a trazos ("M cx-r cy a r r 0 1 0 2r 0 ...").
+   Se crean con createElementNS (nunca innerHTML) y van en línea: sin CDN ni
+   fuentes externas, así funcionan sin internet y con la CSP estricta.
+   ---------------------------------------------------------------------------- */
+const ICONOS = {
+  grafica:    ['M3 3v16a2 2 0 0 0 2 2h16', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
+  recibo:     ['M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z', 'M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8', 'M12 17.5v-11'],
+  paquete:    ['M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z', 'M12 22V12', 'm3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7', 'm7.5 4.27 9 5.15'],
+  camara:     ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z', 'M9 13a3 3 0 1 0 6 0a3 3 0 1 0-6 0'],
+  ajustes:    ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z', 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0'],
+  ojo:        ['M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0', 'M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0'],
+  ojoCerrado: ['M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49', 'M14.084 14.158a3 3 0 0 1-4.242-4.242', 'M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143', 'm2 2 20 20'],
+  ayuda:      ['M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0', 'M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3', 'M12 17h.01'],
+  izquierda:  ['m15 18-6-6 6-6'],
+  derecha:    ['m9 18 6-6-6-6'],
+  cerrar:     ['M18 6 6 18', 'm6 6 12 12'],
+  listo:      ['M20 6 9 17l-5-5'],
+  sube:       ['M22 7 13.5 15.5 8.5 10.5 2 17', 'M16 7h6v6'],
+  baja:       ['M22 17 13.5 8.5 8.5 13.5 2 7', 'M16 17h6v-6'],
+  salir:      ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
+  tienda:     ['m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7', 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8', 'M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4', 'M2 7h20'],
+};
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/**
+ * Icono SVG en línea. Decorativo por defecto (aria-hidden); con `etiqueta` es
+ * un icono con significado propio (role="img" + <title>), p. ej. solo en un botón.
+ */
+function icono(nombre, { tamano = 24, etiqueta = null, clase = '' } = {}) {
+  const trazos = ICONOS[nombre] || [];
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(tamano));
+  svg.setAttribute('height', String(tamano));
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('class', 'ico-svg' + (clase ? ' ' + clase : ''));
+  svg.setAttribute('focusable', 'false');
+  if (etiqueta) {
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', etiqueta);
+    const t = document.createElementNS(SVG_NS, 'title');
+    t.textContent = etiqueta;
+    svg.append(t);
+  } else {
+    svg.setAttribute('aria-hidden', 'true');
+  }
+  for (const d of trazos) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', d);
+    svg.append(p);
+  }
+  return svg;
+}
+/** Imagen del icono oficial de la aplicación (la sirve el servidor; es el mismo del instalador) */
+const logoApp = (clase, tamano) => h('img', { class: clase, src: '/icono-256.png', alt: '', width: tamano, height: tamano, decoding: 'async' });
 
 const MXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 const dinero = n => MXN.format(n || 0);
@@ -484,6 +589,10 @@ const api = {
   recordar: (recordar, contrasena) => peticion('POST', '/api/sesion/recordar', { recordar, contrasena }),
   logout: () => peticion('POST', '/api/logout', {}),
 
+  /* ---------- Recorrido guiado: la marca "ya lo vi" vive en la BD, por usuario ---------- */
+  tutorial: () => peticion('GET', '/api/tutorial'),                              // -> { visto }
+  tutorialVisto: (visto = true) => peticion('POST', '/api/tutorial/visto', { visto }),
+
   /* ---------- Datos de negocio (REALES) ---------- */
 
   /** periodo: 'dia' | 'semana' | 'mes'. Devuelve totales, comparación, top y franjas del día. */
@@ -505,7 +614,9 @@ const api = {
     const r = d.ventas.map(v => ({
       id: v.id, folio: v.folio || String(v.id), fecha: new Date(v.fecha), cajero: v.cajero, pago: v.formaPago,
       cancelada: v.cancelada, total: v.total,
-      lineas: v.lineas.map(l => ({ nombre: l.descripcion, unidad: l.unidad || 'pza', cantidad: l.cantidad, precio: l.precio })),
+      // `importe` ya trae descuento/promoción/mayoreo aplicados (cantidad × precio no cuadraría con el total)
+      lineas: v.lineas.map(l => ({ nombre: l.descripcion, unidad: l.unidad || 'pza', cantidad: l.cantidad, precio: l.precio,
+        importe: l.importe != null ? l.importe : l.cantidad * l.precio })),
     }));
     r.truncado = d.truncado; r.totalReal = d.total;
     return r;
@@ -516,10 +627,32 @@ const api = {
     const r = d.productos.map(p => ({
       id: p.id, codigo: p.codigo || '', nombre: p.descripcion, depto: p.departamento || '',
       precio: p.precio, costo: p.costo, stock: p.existencia, minimo: p.minimo, unidad: p.unidad,
+      imagen: !!p.imagen,
     }));
     r.truncado = d.truncado; r.totalReal = d.total;
     return r;
   },
+
+  /**
+   * Foto del producto (o su miniatura) como URL de objeto (blob:). Las imágenes van con el
+   * mismo token Bearer que el resto de la API, así que no se pueden poner directo en <img src>;
+   * se bajan con fetch y se recuerdan en memoria. Devuelve null si no tiene o falla.
+   */
+  async imagenUrl(id, mini = false) {
+    const clave = id + (mini ? ':m' : ':g');
+    if (api._imagenes.has(clave)) return api._imagenes.get(clave);
+    const s = sesionLocal.leer();
+    let url = null;
+    try {
+      const r = await fetch('/api/productos/' + encodeURIComponent(id) + '/imagen' + (mini ? '?mini=1' : ''),
+        { headers: s && s.token ? { 'Authorization': 'Bearer ' + s.token } : {} });
+      if (r.ok) url = URL.createObjectURL(await r.blob());
+    } catch (e) { /* sin red: sin foto */ }
+    if (api._imagenes.size > 300) api._imagenes.clear();
+    api._imagenes.set(clave, url);
+    return url;
+  },
+  _imagenes: new Map(),
 
   /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
   async ajustarStock({ id, tipo, cantidad, motivo, proveedor }) {
@@ -584,7 +717,8 @@ function cerrarLocal(mensaje) {
   sesionLocal.borrar();
   E.sesion = null;
   clearInterval(E.temporizador);
-  document.querySelectorAll('.velo').forEach(v => v.remove());
+  E.tutorialComprobado = false;
+  document.querySelectorAll('.velo, .tuto-velo').forEach(v => v.remove());
   pantallaLogin(mensaje);
 }
 
@@ -623,14 +757,17 @@ function pantallaLogin(mensaje) {
   const usuario = h('input', { class: 'entrada', id: 'usuario', type: 'text', enterkeyhint: 'next', autocomplete: 'username',
     autocapitalize: 'none', autocorrect: 'off', spellcheck: 'false', required: true });
   const clave = h('input', { class: 'entrada', id: 'clave', type: 'password', enterkeyhint: 'go', autocomplete: 'current-password', required: true });
-  const ver = h('button', { class: 'btn icono-btn', type: 'button', 'aria-label': 'Mostrar contraseña' }, '👁');
+  const ver = h('button', { class: 'btn icono-btn', type: 'button', 'aria-label': 'Mostrar contraseña', 'aria-pressed': 'false' }, icono('ojo'));
   ver.addEventListener('click', () => {
-    clave.type = clave.type === 'password' ? 'text' : 'password';
-    ver.setAttribute('aria-label', clave.type === 'password' ? 'Mostrar contraseña' : 'Ocultar contraseña');
+    const visible = clave.type === 'password';
+    clave.type = visible ? 'text' : 'password';
+    ver.setAttribute('aria-label', visible ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    ver.setAttribute('aria-pressed', String(visible));
+    ver.replaceChildren(icono(visible ? 'ojoCerrado' : 'ojo'));
   });
   const entrar = h('button', { class: 'btn btn-primario btn-block', type: 'submit' }, 'Entrar');
   const form = h('form', { class: 'login-caja', novalidate: true },
-    h('div', { class: 'logo', 'aria-hidden': 'true' }, '🛒'),
+    logoApp('logo', 72),
     h('div', null, h('h1', null, 'Punto de Venta'), h('p', { class: 'sub' }, 'Acceso móvil · inicia sesión con tu usuario')),
     error,
     h('div', { class: 'campo' }, h('label', { for: 'usuario' }, 'Usuario'), usuario),
@@ -686,28 +823,34 @@ function preguntarMantener(claveUsada) {
    6. ESTRUCTURA PRINCIPAL (cabecera + vistas + menú inferior)
    ============================================================================ */
 const SECCIONES = [   // `permiso` = clave de `secciones` que devuelve el servidor
-  { id: 'estadisticas', etiqueta: 'Inicio',     icono: '📊', permiso: 'estadisticas', vista: vistaEstadisticas },
-  { id: 'historial',    etiqueta: 'Ventas',     icono: '🧾', permiso: 'historial',    vista: vistaHistorial },
-  { id: 'inventario',   etiqueta: 'Inventario', icono: '📦', permiso: 'inventario',   vista: vistaInventario },
-  { id: 'escanear',     etiqueta: 'Escanear',   icono: '📷', permiso: 'escanearTicket', vista: vistaEscanear },
-  { id: 'config',       etiqueta: 'Ajustes',    icono: '⚙️', permiso: 'configuracion', vista: vistaConfig },
+  { id: 'estadisticas', etiqueta: 'Inicio',     icono: 'grafica', permiso: 'estadisticas',   vista: vistaEstadisticas, titulo: 'Estadísticas' },
+  { id: 'historial',    etiqueta: 'Ventas',     icono: 'recibo',  permiso: 'historial',      vista: vistaHistorial,    titulo: 'Historial de ventas' },
+  { id: 'inventario',   etiqueta: 'Inventario', icono: 'paquete', permiso: 'inventario',     vista: vistaInventario,   titulo: 'Inventario' },
+  { id: 'escanear',     etiqueta: 'Escanear',   icono: 'camara',  permiso: 'escanearTicket', vista: vistaEscanear,     titulo: 'Escanear ticket' },
+  { id: 'config',       etiqueta: 'Ajustes',    icono: 'ajustes', permiso: 'configuracion',  vista: vistaConfig,       titulo: 'Configuración' },
 ];
 const permitidas = () => SECCIONES.filter(s => E.sesion && E.sesion.secciones && E.sesion.secciones[s.permiso]);
 
-let contVista, contNav, tituloCab;
+let contVista, contNav, tituloCab, botonAyuda;
 
 function entrarAlSistema() {
   tituloCab = h('h1');
   contVista = h('main', { class: 'vista', id: 'vista', tabindex: '-1' });
   contNav = h('div', { class: 'nav-int' });
+  botonAyuda = h('button', { class: 'btn-icono-cab', type: 'button', id: 'ayuda', 'aria-label': 'Ayuda: recorrido por la página',
+    title: 'Ayuda', onclick: () => tutorial.abrir() }, icono('ayuda', { tamano: 26 }));
+  const negocio = (E.sesion.negocio || '').trim();
   raiz.replaceChildren(
-    h('header', { class: 'cabecera' }, tituloCab),
+    h('header', { class: 'cabecera' },
+      logoApp('cab-logo', 32),
+      h('div', { class: 'cab-titulos' }, tituloCab, negocio ? h('div', { class: 'cab-negocio' }, negocio) : null),
+      botonAyuda),
     contVista,
     h('nav', { class: 'nav', 'aria-label': 'Secciones' }, contNav));
   const ok = permitidas();
   if (!ok.length) { cerrarLocal('Tu usuario no tiene secciones disponibles.'); return; }
   const inicial = location.hash.replace('#/', '');
-  irA(ok.some(s => s.id === inicial) ? inicial : ok[0].id);
+  irA(ok.some(s => s.id === inicial) ? inicial : ok[0].id).then(tutorial.siEsLaPrimeraVez);
   clearInterval(E.temporizador);
   E.temporizador = setInterval(vigilar, 60000);   // revalida cada minuto
 }
@@ -730,8 +873,8 @@ async function vigilar() {
 function pintarNav() {
   vaciar(contNav);
   for (const s of permitidas()) {
-    contNav.append(h('button', { type: 'button', 'aria-current': s.id === E.vista ? 'page' : null, onclick: () => irA(s.id) },
-      h('span', { class: 'ico', 'aria-hidden': 'true' }, s.icono), s.etiqueta));
+    contNav.append(h('button', { type: 'button', 'data-id': s.id, 'aria-current': s.id === E.vista ? 'page' : null, onclick: () => irA(s.id) },
+      h('span', { class: 'ico', 'aria-hidden': 'true' }, icono(s.icono)), s.etiqueta));
   }
 }
 
@@ -746,7 +889,7 @@ async function irA(id) {
   }
   E.vista = id;
   history.replaceState(null, '', '#/' + id);
-  tituloCab.textContent = s.etiqueta === 'Inicio' ? 'Estadísticas' : s.etiqueta === 'Ventas' ? 'Historial de ventas' : s.etiqueta === 'Ajustes' ? 'Configuración' : s.etiqueta === 'Escanear' ? 'Escanear ticket' : s.etiqueta;
+  tituloCab.textContent = s.titulo;
   pintarNav();
   try {
     contVista.replaceChildren(await s.vista());
@@ -784,7 +927,8 @@ async function vistaEstadisticas() {
       const pico = d.franjas.reduce((a, b) => b.total > a.total ? b : a, d.franjas[0]);
       const variacion = d.variacion == null ? null :
         h('div', { class: 'var ' + (d.variacion >= 0 ? 'sube' : 'baja') },
-          (d.variacion >= 0 ? '▲ ' : '▼ ') + Math.abs(d.variacion * 100).toFixed(0) + '% vs. periodo anterior');
+          icono(d.variacion >= 0 ? 'sube' : 'baja', { tamano: 16, etiqueta: d.variacion >= 0 ? 'Subió' : 'Bajó' }),
+          Math.abs(d.variacion * 100).toFixed(0) + '% vs. periodo anterior');
       cuerpo.replaceChildren(
         h('div', { class: 'rejilla' },
           h('div', { class: 'kpi grande' }, h('div', { class: 'e' }, 'Ventas · ' + nombres[E.periodo]), h('div', { class: 'v' }, dinero(d.total)), variacion),
@@ -867,7 +1011,7 @@ function detalleVenta(v) {
     h('p', { class: 'sub' }, fechaLarga(v.fecha) + ' ' + hora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero + (v.cancelada ? ' · CANCELADA' : '')),
     h('div', null, v.lineas.map(l => h('div', { class: 'linea' },
       h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio))),
-      h('div', null, dinero(l.cantidad * l.precio))))),
+      h('div', null, dinero(l.importe != null ? l.importe : l.cantidad * l.precio))))),
     h('div', { class: 'total-fila' }, h('span', null, 'Total'), h('span', null, dinero(v.total))),
     h('button', { class: 'btn btn-block', type: 'button', onclick: () => h2.cerrar() }, 'Cerrar'),
   ]);
@@ -876,6 +1020,22 @@ function detalleVenta(v) {
 /* ============================================================================
    9. VISTA: INVENTARIO  (ver: todos · ajustar: AJUSTAR_INVENTARIO)
    ============================================================================ */
+/** Miniatura de la lista: se baja solo cuando la fila entra en pantalla (hasta 200 filas por búsqueda) */
+const observadorMiniaturas = ('IntersectionObserver' in window) ? new IntersectionObserver(entradas => {
+  for (const e of entradas) {
+    if (!e.isIntersecting) continue;
+    observadorMiniaturas.unobserve(e.target);
+    cargarMiniatura(e.target);
+  }
+}, { rootMargin: '200px' }) : null;
+function cargarMiniatura(img) {
+  api.imagenUrl(img.dataset.id, true).then(u => { if (u) img.src = u; else img.remove(); });
+}
+function miniaturaProducto(id) {
+  const img = h('img', { class: 'miniatura', alt: '', 'data-id': id });
+  if (observadorMiniaturas) observadorMiniaturas.observe(img); else cargarMiniatura(img);
+  return img;
+}
 async function vistaInventario() {
   let productos = await api.inventario('');
   let filtro = 'todos', texto = '', pendiente = null, secuencia = 0;
@@ -896,6 +1056,7 @@ async function vistaInventario() {
     for (const p of vis) {
       const [et, clase] = estado(p);
       lista.append(h('button', { class: 'fila', type: 'button', onclick: () => hojaAjuste(p, pintar) },
+        p.imagen ? miniaturaProducto(p.id) : null,
         h('div', { class: 'cuerpo' }, h('div', { class: 't' }, p.nombre), h('div', { class: 'd' }, p.depto + ' · mín. ' + num(p.minimo))),
         h('div', { class: 'der' }, num(p.stock) + ' ' + p.unidad, h('div', null, h('span', { class: 'insignia ' + clase }, et)))));
     }
@@ -919,8 +1080,11 @@ async function vistaInventario() {
 function hojaAjuste(producto, alGuardar) {
   const puede = E.sesion.secciones.inventarioAjustar;
   const [tit] = [producto.nombre];
+  const foto = producto.imagen ? h('img', { class: 'foto-detalle', alt: '' }) : null;
+  if (foto) api.imagenUrl(producto.id).then(u => { if (u) foto.src = u; else foto.remove(); });
   const info = [
     h('h2', null, tit),
+    foto,
     h('p', { class: 'sub' }, producto.depto + ' · código ' + producto.codigo),
     h('div', { class: 'rejilla' },
       h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Existencia'), h('div', { class: 'v' }, num(producto.stock) + ' ' + producto.unidad)),
@@ -983,7 +1147,7 @@ async function vistaEscanear() {
     caja.replaceChildren(
       h('p', { class: 'sub' }, 'Toma una foto del ticket o factura del proveedor para dar entrada a la mercancía en el inventario.'),
       h('label', { class: 'tomar', for: 'foto' },
-        h('div', { class: 'grande', 'aria-hidden': 'true' }, '📷'),
+        h('div', { class: 'grande', 'aria-hidden': 'true' }, icono('camara', { tamano: 48 })),
         h('div', { class: 'titulo' }, 'Tomar foto del ticket'),
         h('div', { class: 'sub' }, 'Se abrirá la cámara del teléfono')),
       entrada,
@@ -1076,7 +1240,7 @@ async function vistaConfig() {
   };
   pintarTema();
 
-  const cerrar = h('button', { class: 'btn btn-peligro btn-block', type: 'button' }, 'Cerrar sesión');
+  const cerrar = h('button', { class: 'btn btn-peligro btn-block', type: 'button' }, icono('salir', { tamano: 20 }), 'Cerrar sesión');
   cerrar.addEventListener('click', () => {
     const q = hoja([h('h2', null, '¿Cerrar sesión?'), h('p', { class: 'sub' }, 'Tendrás que escribir tu usuario y contraseña para volver a entrar.'),
       h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => q.cerrar() }, 'Cancelar'),
@@ -1106,10 +1270,149 @@ async function vistaConfig() {
         h('div', null, h('div', { class: 't' }, 'Texto grande'), h('div', { class: 'd' }, 'Aumenta el tamaño de letra de toda la página.')),
         interruptor(almacen.get('pv.texto') === 'grande', v => { if (v) almacen.set('pv.texto', 'grande'); else almacen.del('pv.texto'); aplicarPreferencias(); }, 'Texto grande'))),
     h('section', { class: 'tarjeta' },
+      h('div', { class: 'seccion-t' }, 'Ayuda'),
+      h('div', { class: 'fila-conf' },
+        h('div', null, h('div', { class: 't' }, 'Recorrido por la página'), h('div', { class: 'd' }, 'Vuelve a ver qué hace cada sección.')),
+        h('button', { class: 'btn btn-suave', type: 'button', onclick: () => tutorial.abrir() }, icono('ayuda', { tamano: 20 }), 'Ver'))),
+    h('section', { class: 'tarjeta' },
       h('div', { class: 'seccion-t' }, 'Acerca de'),
-      h('p', { class: 'sub' }, 'Interfaz móvil del Punto de Venta. Las ventas, el inventario y las estadísticas vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.')),
+      h('div', { style: 'display:flex;gap:.75rem;align-items:center' }, logoApp('cab-logo', 32),
+        h('p', { class: 'sub' }, 'Interfaz móvil del Punto de Venta. Las ventas, el inventario y las estadísticas vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.'))),
     cerrar);
 }
+
+/* ============================================================================
+   12. RECORRIDO GUIADO (tutorial): una vez por usuario, se repite con "Ayuda"
+       - Solo incluye las secciones que el usuario puede ver (permitidas()).
+       - Resalta el botón de la sección en el menú y coloca la tarjeta junto a él.
+       - "Ya lo vi" se guarda EN EL SERVIDOR por usuario (/api/tutorial); si no
+         hay red se recuerda en el teléfono y se vuelve a intentar la próxima vez.
+   ============================================================================ */
+const tutorial = {
+  abierto: null,
+  claveLocal: () => 'pv.tutorial.' + (E.sesion ? E.sesion.usuario : ''),
+
+  pasos() {
+    const sec = E.sesion.secciones || {};
+    const verGanancia = (E.sesion.permisos || []).includes('VER_GANANCIAS');
+    const textos = {
+      estadisticas: 'Ventas de hoy, de la semana o del mes, con la comparación contra el periodo anterior, los productos más vendidos y las franjas del día con más movimiento.'
+        + (verGanancia ? ' Como puedes ver costos, también aparece la ganancia estimada.' : ''),
+      historial: 'Busca los tickets por rango de fechas (hasta 93 días) con atajos para hoy, ayer, los últimos 7 días o este mes. Toca una venta para ver sus productos, la forma de pago y quién la cobró.',
+      inventario: 'Busca productos por nombre o código y filtra los de stock bajo o agotados. Toca un producto para ver su existencia, precio y foto.'
+        + (sec.inventarioAjustar ? ' Tienes permiso para registrar entradas, mermas y conteos: cada ajuste queda en la bitácora con tu usuario.'
+                                 : ' Tu usuario solo consulta; los ajustes de inventario se hacen desde el programa de escritorio.'),
+      escanear: 'Permite tomar una foto del ticket del proveedor para dar entrada a la mercancía. Importante: por ahora la lectura de la foto es una DEMOSTRACIÓN, las líneas que aparecen son de ejemplo y nada cambia en el inventario hasta que marques y confirmes cada una.',
+      config: 'Aquí decides si la sesión se mantiene abierta en este teléfono, eliges el tema claro u oscuro y el texto grande, y cierras sesión. También puedes volver a ver este recorrido.',
+    };
+    const lista = [{ icono: 'tienda', titulo: 'Bienvenido al acceso móvil',
+      texto: 'Desde tu teléfono puedes consultar el negocio estando en la misma red Wi-Fi que la computadora. Este recorrido dura un minuto y explica qué hace cada sección; puedes repetirlo cuando quieras.' }];
+    for (const s of permitidas()) lista.push({ icono: s.icono, titulo: s.titulo, texto: textos[s.id] || '', foco: () => contNav.querySelector('[data-id="' + s.id + '"]') });
+    lista.push({ icono: 'ayuda', titulo: '¿Dudas después?', texto: 'Toca el botón de ayuda de la parte superior para repetir este recorrido en cualquier momento. ¡Listo para empezar!', foco: () => botonAyuda });
+    return lista;
+  },
+
+  /** Al entrar: pregunta al servidor si este usuario ya lo vio; sin red, usa lo que recuerde el teléfono */
+  async siEsLaPrimeraVez() {
+    if (!E.sesion || E.tutorialComprobado) return;
+    E.tutorialComprobado = true;
+    let visto;
+    try { visto = !!(await api.tutorial()).visto; }
+    catch (e) { if (e.estado === 401) return; visto = almacen.get(tutorial.claveLocal()) === '1'; }
+    if (!visto && E.sesion) tutorial.abrir({ primeraVez: true });
+  },
+
+  async marcarVisto() {
+    almacen.set(tutorial.claveLocal(), '1');
+    try { await api.tutorialVisto(true); } catch (e) { /* sin red: queda la marca local y se reintenta la próxima vez */ }
+  },
+
+  abrir({ primeraVez = false } = {}) {
+    if (!E.sesion || !contNav) return;
+    if (tutorial.abierto) tutorial.abierto.cerrar();
+    const pasos = tutorial.pasos();
+    const previo = document.activeElement;
+    let i = 0;
+    const foco = h('div', { class: 'tuto-foco sin' });
+    const ico = h('div', { class: 'tuto-ico', 'aria-hidden': 'true' });
+    const titulo = h('h2', { id: 'tuto-titulo' });
+    const texto = h('p', { class: 'tuto-texto', id: 'tuto-texto' });
+    const contador = h('span');
+    const puntos = h('div', { class: 'tuto-puntos', 'aria-hidden': 'true' });
+    const anterior = h('button', { class: 'btn', type: 'button', onclick: () => ir(i - 1) }, icono('izquierda', { tamano: 20 }), 'Anterior');
+    const siguiente = h('button', { class: 'btn btn-primario', type: 'button', onclick: () => i >= pasos.length - 1 ? terminar() : ir(i + 1) });
+    const omitir = h('button', { class: 'tuto-cerrar', type: 'button', 'aria-label': 'Omitir recorrido', title: 'Omitir', onclick: terminar }, icono('cerrar'));
+    const tarjeta = h('div', { class: 'tuto-tarjeta centro', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tuto-titulo', 'aria-describedby': 'tuto-texto', tabindex: '-1' },
+      h('div', { class: 'tuto-cab' }, ico, titulo, omitir),
+      texto,
+      h('div', { class: 'tuto-pie' }, h('div', { class: 'tuto-paso' }, contador, puntos), anterior, siguiente));
+    const velo = h('div', { class: 'tuto-velo' }, foco, tarjeta);
+    velo.addEventListener('click', e => { if (e.target === velo) terminar(); });
+
+    function colocar() {
+      const p = pasos[i];
+      const el = p.foco ? p.foco() : null;
+      const r = el && el.isConnected ? el.getBoundingClientRect() : null;
+      if (r && r.width) {
+        foco.className = 'tuto-foco';
+        Object.assign(foco.style, { left: (r.left - 6) + 'px', top: (r.top - 6) + 'px', width: (r.width + 12) + 'px', height: (r.height + 12) + 'px' });
+      } else {
+        foco.className = 'tuto-foco sin';
+        Object.assign(foco.style, { left: '50%', top: '50%', width: '0', height: '0' });
+      }
+      tarjeta.classList.remove('centro');
+      Object.assign(tarjeta.style, { top: '', bottom: '' });
+      const ancho = window.innerWidth >= 1024;          // barra lateral: la tarjeta va centrada
+      if (!r || !r.width || ancho) tarjeta.classList.add('centro');
+      else if (r.top > window.innerHeight / 2) tarjeta.style.bottom = (window.innerHeight - r.top + 14) + 'px';   // el menú está abajo
+      else tarjeta.style.top = (r.bottom + 14) + 'px';                                                          // el botón de ayuda, arriba
+    }
+    function ir(n) {
+      i = Math.max(0, Math.min(pasos.length - 1, n));
+      const p = pasos[i];
+      ico.replaceChildren(icono(p.icono, { tamano: 22 }));
+      titulo.textContent = p.titulo;
+      texto.textContent = p.texto;
+      contador.textContent = 'Paso ' + (i + 1) + ' de ' + pasos.length;
+      puntos.replaceChildren(...pasos.map((x, k) => h('i', { class: k === i ? 'act' : null })));
+      anterior.disabled = i === 0;
+      const ultimo = i === pasos.length - 1;
+      siguiente.replaceChildren(ultimo ? 'Listo' : 'Siguiente', icono(ultimo ? 'listo' : 'derecha', { tamano: 20 }));
+      colocar();
+      tarjeta.focus({ preventScroll: true });
+    }
+    const alTecla = e => {
+      if (e.key === 'Escape') { e.preventDefault(); terminar(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); siguiente.click(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); if (i > 0) ir(i - 1); }
+      else if (e.key === 'Tab') {   // el foco se queda dentro de la tarjeta
+        const f = [...tarjeta.querySelectorAll('button:not([disabled])')];
+        if (!f.length) return;
+        if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+      }
+    };
+    function cerrar() {
+      velo.remove();
+      document.removeEventListener('keydown', alTecla);
+      window.removeEventListener('resize', colocar);
+      window.removeEventListener('orientationchange', colocar);
+      tutorial.abierto = null;
+      if (previo && previo.focus && previo.isConnected) previo.focus();
+    }
+    function terminar() {   // "Omitir" también cuenta como visto: se puede reabrir con Ayuda
+      cerrar();
+      tutorial.marcarVisto();
+      if (primeraVez) avisar('Puedes repetir el recorrido con el botón de ayuda.');
+    }
+    document.addEventListener('keydown', alTecla);
+    window.addEventListener('resize', colocar);
+    window.addEventListener('orientationchange', colocar);
+    document.body.append(velo);
+    tutorial.abierto = { cerrar };
+    ir(0);
+  },
+};
 
 arrancar();
 })();

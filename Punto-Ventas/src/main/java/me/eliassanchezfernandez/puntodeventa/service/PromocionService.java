@@ -70,6 +70,11 @@ public class PromocionService {
         sesionService.verificarPermiso(Permiso.CREAR_PROMOCIONES);
         validar(promo);
         boolean nueva = promo.getId() == null;
+        if (!nueva) {
+            // El contador "piezas usadas" lo mueven las ventas (quizá de otra caja) mientras la
+            // pantalla estaba abierta: se conserva el de la base, nunca el que traía el formulario
+            promocionRepo.findById(promo.getId()).ifPresent(enBd -> promo.setPiezasUsadas(enBd.getPiezasUsadas()));
+        }
         Promocion guardada = promocionRepo.save(promo);
         auditoriaService.registrar(sesionService.getCajeroActual(),
                 nueva ? "PROMOCION_CREADA" : "PROMOCION_MODIFICADA", guardada.getNombre(), (Cajero) null);

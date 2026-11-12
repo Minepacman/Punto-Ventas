@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -15,7 +16,7 @@
     <top>
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button text="➕ Nuevo proveedor" onAction="#onNuevo" styleClass="button-success"/>
+            <Button text="Nuevo proveedor" onAction="#onNuevo" styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
             <CheckBox fx:id="chkVerInactivos" text="Mostrar desactivados" onAction="#onFiltro"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="lblAviso" text="" styleClass="hint"/>
@@ -67,8 +68,8 @@
                               promptText="ej: pedidos antes de las 5 pm"/>
 
                     <HBox spacing="10">
-                        <Button fx:id="btnGuardar" text="💾 Guardar" onAction="#onGuardar" styleClass="button-primary"
-                                HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar" styleClass="button-primary"
+                                HBox.hgrow="ALWAYS" maxWidth="Infinity"><graphic><Icono nombre="guardar"/></graphic></Button>
                         <Button fx:id="btnActivo" text="Desactivar" onAction="#onCambiarActivo"/>
                     </HBox>
                     <Label text="Un proveedor no se borra: se desactiva y deja de ofrecerse en las entradas y órdenes nuevas, pero su historial se conserva."

@@ -62,6 +62,7 @@ public class VentaService {
     @Autowired private AuditoriaService          auditoriaService;
     @Autowired private DispositivosService       dispositivosService;
     @Autowired private IdentidadCaja             identidadCaja;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FacturaRepository facturaRepo;
 
@@ -141,12 +142,20 @@ public class VentaService {
         if (d.tieneDescuentoManual()) {
             d.setPrecioVenta(lista);
             double bruto = lista * d.getCantidad();
-            double descuento = d.getDescuentoManualPct() != null && d.getDescuentoManualPct() > 0
-                    ? bruto * Math.min(100, d.getDescuentoManualPct()) / 100.0
-                    : Math.min(bruto, d.getDescuentoManualImporte() != null ? d.getDescuentoManualImporte() : 0);
-            d.setDescuento(redondear(Math.max(0, descuento)));
-            d.setTipoDescuento(DetalleVenta.TipoDescuento.MANUAL);
-            return;
+            boolean porImporte = d.getDescuentoManualPct() == null || d.getDescuentoManualPct() <= 0;
+            double importe = d.getDescuentoManualImporte() != null ? d.getDescuentoManualImporte() : 0;
+            if (porImporte && importe >= bruto - 0.001) {
+                // El descuento fijo ya no cabe en el renglón (se redujo la cantidad): se quita en vez
+                // de dejar el renglón en $0; la pantalla avisa (descuentoManualQuitado)
+                d.limpiarDescuentoManual();
+            } else {
+                double descuento = !porImporte
+                        ? bruto * Math.min(100, d.getDescuentoManualPct()) / 100.0
+                        : importe;
+                d.setDescuento(redondear(Math.max(0, descuento)));
+                d.setTipoDescuento(DetalleVenta.TipoDescuento.MANUAL);
+                return;
+            }
         }
 
         if (d.isMayoreo() && p.getPrecioMayoreo() > 0) {
@@ -289,6 +298,11 @@ public class VentaService {
 
         if (detalles == null || detalles.isEmpty()) {
             throw new NegocioException("El ticket está vacío.");
+        }
+        if (rutas.hayRestauracionPendiente()) {
+            // Al reiniciar, el respaldo restaurado reemplaza la base: una venta cobrada ahora no quedaría en ella
+            throw new NegocioException("Hay un respaldo pendiente de restaurar: cierra y vuelve a abrir el programa "
+                    + "antes de seguir vendiendo (lo que se cobre ahora no quedaría en la base restaurada).");
         }
         Cajero cajeroSesion = sesionService.requerirSesion();
         Configuracion config = configuracionService.obtener();

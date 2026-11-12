@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -15,7 +16,7 @@
     <top>
         <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button text="➕ Nueva orden" onAction="#onNueva" styleClass="button-success"/>
+            <Button text="Nueva orden" onAction="#onNueva" styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="lblAviso" text="" styleClass="hint"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
@@ -51,14 +52,14 @@
                     <ComboBox fx:id="cmbProveedor" prefWidth="260" promptText="Elige el proveedor"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <ComboBox fx:id="cmbModoSugerencia" prefWidth="290"/>
-                    <Button fx:id="btnSugerir" text="💡 Sugerir pedido" onAction="#onSugerir"/>
+                    <Button fx:id="btnSugerir" text="Sugerir pedido" onAction="#onSugerir"><graphic><Icono nombre="idea"/></graphic></Button>
                 </HBox>
 
                 <HBox spacing="8" alignment="CENTER_LEFT">
                     <TextField fx:id="txtProducto" HBox.hgrow="ALWAYS" promptText="Código o nombre del producto a pedir"
                                onAction="#onAgregarProducto"/>
-                    <Button fx:id="btnAgregar" text="↵ Agregar" onAction="#onAgregarProducto"/>
-                    <Button fx:id="btnQuitar" text="🗑 Quitar" onAction="#onQuitarLinea" styleClass="button-danger"/>
+                    <Button fx:id="btnAgregar" text="Agregar" onAction="#onAgregarProducto"><graphic><Icono nombre="intro"/></graphic></Button>
+                    <Button fx:id="btnQuitar" text="Quitar" onAction="#onQuitarLinea" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
                 </HBox>
 
                 <TableView fx:id="tablaLineas" editable="true" VBox.vgrow="ALWAYS">
@@ -83,12 +84,12 @@
                 </HBox>
 
                 <FlowPane hgap="8" vgap="8">
-                    <Button fx:id="btnGuardar"  text="💾 Guardar borrador"    onAction="#onGuardar" styleClass="button-primary"/>
-                    <Button fx:id="btnEnviada"  text="📤 Marcar como enviada" onAction="#onEnviar"/>
-                    <Button fx:id="btnRecibir"  text="📥 Recibir mercancía"   onAction="#onRecibir" styleClass="button-success"/>
-                    <Button fx:id="btnCancelarOrden" text="⛔ Cancelar orden" onAction="#onCancelarOrden" styleClass="button-danger"/>
+                    <Button fx:id="btnGuardar"  text="Guardar borrador"    onAction="#onGuardar" styleClass="button-primary"><graphic><Icono nombre="guardar"/></graphic></Button>
+                    <Button fx:id="btnEnviada"  text="Marcar como enviada" onAction="#onEnviar"><graphic><Icono nombre="subir"/></graphic></Button>
+                    <Button fx:id="btnRecibir"  text="Recibir mercancía"   onAction="#onRecibir" styleClass="button-success"><graphic><Icono nombre="bajar"/></graphic></Button>
+                    <Button fx:id="btnCancelarOrden" text="Cancelar orden" onAction="#onCancelarOrden" styleClass="button-danger"><graphic><Icono nombre="prohibido"/></graphic></Button>
                     <Separator orientation="VERTICAL"/>
-                    <Button fx:id="btnImprimir" text="🖨 Imprimir"            onAction="#onImprimir"/>
+                    <Button fx:id="btnImprimir" text="Imprimir"            onAction="#onImprimir"><graphic><Icono nombre="impresora"/></graphic></Button>
                     <Button fx:id="btnCsv"      text="CSV"                    onAction="#onExportarCsv"/>
                     <Button fx:id="btnXlsx"     text="Excel"                  onAction="#onExportarXlsx"/>
                     <Button fx:id="btnPdf"      text="PDF"                    onAction="#onExportarPdf"/>

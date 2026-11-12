@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -18,26 +19,26 @@
                 <TextField fx:id="txtCodigo" promptText="Escanea o escribe el código (o cantidad*código)"
                            HBox.hgrow="ALWAYS"
                            onAction="#onAgregarProducto"/>
-                <Button fx:id="btnAgregar" text="↵ Agregar"
+                <Button fx:id="btnAgregar" text="Agregar"
                         onAction="#onAgregarProducto"
-                        styleClass="button-success" focusTraversable="false"/>
-                <Button fx:id="btnBuscar"    text="🔍 Buscar  F6"   onAction="#onBuscar" focusTraversable="false"/>
+                        styleClass="button-success" focusTraversable="false"><graphic><Icono nombre="intro"/></graphic></Button>
+                <Button fx:id="btnBuscar"    text="Buscar  F6"   onAction="#onBuscar" focusTraversable="false"><graphic><Icono nombre="buscar"/></graphic></Button>
             </HBox>
             <HBox spacing="6" alignment="CENTER_LEFT">
                 <Button fx:id="btnCantidad"  text="Cantidad  F7"      onAction="#onCambiarCantidad" styleClass="button-sm" focusTraversable="false"/>
-                <Button fx:id="btnQuitar"    text="🗑 Quitar  Supr"   onAction="#onQuitarLinea"
-                        styleClass="button-danger, button-sm" focusTraversable="false"/>
+                <Button fx:id="btnQuitar"    text="Quitar  Supr"   onAction="#onQuitarLinea"
+                        styleClass="button-danger, button-sm" focusTraversable="false"><graphic><Icono nombre="eliminar"/></graphic></Button>
                 <Button fx:id="btnDescuento" text="Descuento  F8"     onAction="#onDescuentoManual" styleClass="button-sm" focusTraversable="false"/>
                 <Button fx:id="btnMayoreo"   text="Mayoreo  F9"       onAction="#onMayoreo" styleClass="button-sm" focusTraversable="false"/>
-                <Button fx:id="btnLeerPeso"  text="⚖ Peso"            onAction="#onLeerPeso"
-                        visible="false" managed="false" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnLeerPeso"  text="Peso"            onAction="#onLeerPeso"
+                        visible="false" managed="false" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="bascula"/></graphic></Button>
                 <Separator orientation="VERTICAL"/>
-                <Button fx:id="btnEnEspera"  text="⏸ En espera  F11"  onAction="#onPonerEnEspera" styleClass="button-sm" focusTraversable="false"/>
-                <Button fx:id="btnRecuperar" text="▶ Recuperar"       onAction="#onRecuperarEspera" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnEnEspera"  text="En espera  F11"  onAction="#onPonerEnEspera" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="pausa"/></graphic></Button>
+                <Button fx:id="btnRecuperar" text="Recuperar"       onAction="#onRecuperarEspera" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="reanudar"/></graphic></Button>
                 <Separator orientation="VERTICAL"/>
-                <Button fx:id="btnReimprimir" text="🖨 Reimprimir"    onAction="#onReimprimirUltimo" styleClass="button-sm" focusTraversable="false"/>
-                <Button fx:id="btnAbrirCajon" text="💰 Cajón"         onAction="#onAbrirCajon"
-                        visible="false" managed="false" styleClass="button-sm" focusTraversable="false"/>
+                <Button fx:id="btnReimprimir" text="Reimprimir"    onAction="#onReimprimirUltimo" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="impresora"/></graphic></Button>
+                <Button fx:id="btnAbrirCajon" text="Cajón"         onAction="#onAbrirCajon"
+                        visible="false" managed="false" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="efectivo"/></graphic></Button>
             </HBox>
         </VBox>
     </top>
@@ -45,16 +46,19 @@
     <!-- ── TABLA DE PRODUCTOS EN TICKET + SUGERENCIAS ── -->
     <center>
         <VBox spacing="0">
+            <!-- CONSTRAINED: las columnas se reparten el ancho disponible (a 1024 px la tabla recibe ~700 px);
+                 Descripción es la que crece. Sin esto "Importe" y "Existencia" quedaban fuera de vista. -->
             <TableView fx:id="tablaProductos" styleClass="ticket-table" VBox.vgrow="ALWAYS">
+                <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/></columnResizePolicy>
                 <columns>
-                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="120"/>
-                    <TableColumn fx:id="colDescripcion"   text="Descripción" prefWidth="260"/>
-                    <TableColumn fx:id="colPrecio"        text="Precio"      prefWidth="85"  styleClass="align-right"/>
-                    <TableColumn fx:id="colCantidad"      text="Cant."       prefWidth="70"  styleClass="align-right"/>
-                    <TableColumn fx:id="colDescuento"     text="Descuento"   prefWidth="85"  styleClass="align-right"/>
-                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="150"/>
-                    <TableColumn fx:id="colImporte"       text="Importe"     prefWidth="90"  styleClass="align-right"/>
-                    <TableColumn fx:id="colExistencia"    text="Existencia"  prefWidth="85"  styleClass="align-right"/>
+                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="95"  minWidth="60"/>
+                    <TableColumn fx:id="colDescripcion"   text="Descripción" prefWidth="200" minWidth="120"/>
+                    <TableColumn fx:id="colPrecio"        text="Precio"      prefWidth="75"  minWidth="60" styleClass="align-right"/>
+                    <TableColumn fx:id="colCantidad"      text="Cant."       prefWidth="55"  minWidth="45" styleClass="align-right"/>
+                    <TableColumn fx:id="colDescuento"     text="Descuento"   prefWidth="75"  minWidth="60" styleClass="align-right"/>
+                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="105" minWidth="70"/>
+                    <TableColumn fx:id="colImporte"       text="Importe"     prefWidth="85"  minWidth="70" styleClass="align-right"/>
+                    <TableColumn fx:id="colExistencia"    text="Existencia"  prefWidth="75"  minWidth="60" styleClass="align-right"/>
                 </columns>
             </TableView>
 

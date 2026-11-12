@@ -415,10 +415,8 @@ public class PromocionesController implements Initializable {
 
     private static Double numero(String txt) {
         if (txt == null || txt.isBlank()) return null;
-        try {
-            double v = Double.parseDouble(txt.trim().replace(",", ".").replace("%", "").replace("$", ""));
-            return Double.isFinite(v) ? v : null;
-        } catch (NumberFormatException e) { return null; }
+        double v = me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.parsearNumero(txt);
+        return Double.isNaN(v) ? null : v;
     }
 
     private static Integer entero(String txt) {

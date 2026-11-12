@@ -12,12 +12,15 @@ import me.eliassanchezfernandez.puntodeventa.model.Franja;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoImagen;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Periodo;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Totales;
 import me.eliassanchezfernandez.puntodeventa.service.PermisoRequeridoException;
+import me.eliassanchezfernandez.puntodeventa.service.ProductoImagenService;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.TutorialesService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.service.AuditoriaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
@@ -82,8 +85,14 @@ import java.util.function.Supplier;
  *   GET  /api/estadisticas?periodo=dia|semana|mes   (VER_HISTORIAL)
  *   GET  /api/ventas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (VER_HISTORIAL, máx. 93 días y 500 ventas)
  *   GET  /api/inventario?q=                          (cualquier usuario; costos solo con VER_GANANCIAS)
+ *   GET  /api/productos/{id}/imagen[?mini=1]         (cualquier usuario) -> JPEG con ETag; 404 si no tiene
  *   POST /api/inventario/ajuste {productoId, tipo: entrada|ajuste|merma, cantidad, motivo, proveedor?, costo?}
  *                                                    (AJUSTAR_INVENTARIO)
+ *   GET  /api/tutorial                                (cualquier usuario) -> {visto}: recorrido móvil ya visto por ESTE usuario
+ *   POST /api/tutorial/visto {visto: true|false}       (cualquier usuario) -> lo marca/reinicia (columna cajeros.tutorial_movil_visto)
+ *
+ * Archivos estáticos (lista cerrada, sin acceso al disco): /favicon.ico, /icono-32.png, /icono-256.png
+ * (icono oficial de resources/icono) y /manifest.webmanifest (generado) para "Agregar a pantalla de inicio".
  *
  * Cada endpoint de datos valida el token, relee al usuario de la BD y ejecuta el
  * servicio dentro de SesionService.ejecutarComo(usuarioMovil, ip, ...): los
@@ -98,6 +107,9 @@ import java.util.function.Supplier;
  */
 @Service
 public class ServidorMovilService {
+
+    /** La sección "Escanear ticket" del móvil (OCR) aún es una demostración: se oculta en producción */
+    static final boolean ESCANEAR_TICKET_HABILITADO = false;
 
     static final int MAX_CUERPO_BYTES = 4096;
     static final int MAX_FALLOS_POR_IP = 10;
@@ -127,7 +139,8 @@ public class ServidorMovilService {
     private static String csp(String hashScript) {
         return "default-src 'none'; script-src " + (hashScript == null ? "'none'" : "'" + hashScript + "'")
                 + "; style-src 'unsafe-inline'; "
-                + "img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+                + "img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; "
+                + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
     }
 
     @Autowired private SesionService        sesionService;
@@ -138,7 +151,9 @@ public class ServidorMovilService {
     @Autowired private EstadisticasService  estadisticasService;
     @Autowired private VentaService         ventaService;
     @Autowired private ProductoService      productoService;
+    @Autowired private ProductoImagenService productoImagenService;
     @Autowired private AnunciadorMdns       anunciador;
+    @Autowired private TutorialesService    tutorialesService;
 
     /** Puertos de respaldo (después del preferido) cuando el elegido está ocupado; 0 = lo asigna el sistema */
     static final List<Integer> PUERTOS_RESPALDO = candidatosRespaldo();
@@ -158,7 +173,19 @@ public class ServidorMovilService {
     @Value("${app.movil.autoarranque:true}")
     private boolean autoarranque;
 
-    private final ObjectMapper json = new ObjectMapper();
+    /** Jackson se carga al primer uso (unas 400 clases): no hace falta para arrancar */
+    private volatile ObjectMapper json;
+
+    private ObjectMapper json() {
+        ObjectMapper j = json;
+        if (j == null) {
+            synchronized (this) {
+                j = json;
+                if (j == null) json = j = new ObjectMapper();
+            }
+        }
+        return j;
+    }
     private volatile HttpServer servidor;
     private volatile ExecutorService hilos;
     private volatile LimitadorIntentos limitador;
@@ -171,10 +198,22 @@ public class ServidorMovilService {
 
     // ── Ciclo de vida ─────────────────────────────────────────────────────
 
-    /** Con el contexto listo: arranca si el administrador lo dejó activado. Nunca tumba la app. */
+    @Autowired private me.eliassanchezfernandez.puntodeventa.config.ArranqueDiferido arranqueDiferido;
+
+    /**
+     * Con el contexto listo: encola el arranque en el hilo diferido (corre en cuanto la primera
+     * ventana está dibujada, el primero de la cola). Antes abría el puerto, enumeraba las interfaces
+     * de red y escribía en la base ANTES de que apareciera el login.
+     */
     @EventListener(ApplicationReadyEvent.class)
+    @org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
     public void arrancarSiEstaActivo() {
         if (!autoarranque) return;
+        arranqueDiferido.ejecutar("acceso móvil", this::arrancarAhoraSiEstaActivo);
+    }
+
+    /** Arranca si el administrador lo dejó activado. Nunca tumba la app. */
+    public void arrancarAhoraSiEstaActivo() {
         try {
             Configuracion c = configuracionService.obtener();
             if (c.isMovilActivo()) {
@@ -388,6 +427,12 @@ public class ServidorMovilService {
             }
             String ruta = ex.getRequestURI().getPath();
             String metodo = ex.getRequestMethod();
+            Long productoImagenId = idDeRutaImagen(ruta);
+            if (productoImagenId != null) {
+                exigir(metodo, "GET");
+                imagenProducto(ex, productoImagenId);
+                return;
+            }
             switch (ruta) {
                 case "/", "/index.html" -> pagina(ex, metodo);
                 case "/api/login"           -> { exigir(metodo, "POST"); login(ex); }
@@ -398,6 +443,9 @@ public class ServidorMovilService {
                 case "/api/ventas"          -> { exigir(metodo, "GET");  ventas(ex); }
                 case "/api/inventario"      -> { exigir(metodo, "GET");  inventario(ex); }
                 case "/api/inventario/ajuste" -> { exigir(metodo, "POST"); ajusteInventario(ex); }
+                case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
+                case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
+                case "/favicon.ico", "/icono-32.png", "/icono-256.png", "/manifest.webmanifest" -> estatico(ex, metodo, ruta);
                 default -> error(ex, 404, "NO_ENCONTRADO", "No encontrado.");
             }
         } catch (MetodoNoPermitido e) {
@@ -492,6 +540,131 @@ public class ServidorMovilService {
         }
         ex.sendResponseHeaders(200, cuerpo.length);
         ex.getResponseBody().write(cuerpo);
+    }
+
+    // ── Archivos estáticos (icono y manifiesto) ───────────────────────────
+
+    /** Un archivo estático listo para servir: cuerpo, tipo y ETag (se calcula una vez) */
+    record Estatico(byte[] cuerpo, String tipo, String etag) { }
+
+    private final Map<String, Estatico> estaticosCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Lista CERRADA de rutas → recurso del classpath. Nunca se toca el disco ni se
+     * compone una ruta con lo que pida el cliente: una ruta fuera de la lista es 404.
+     */
+    private static final Map<String, String> RECURSOS_ESTATICOS = Map.of(
+            "/favicon.ico",   "/icono/icono-32.png",      // PNG servido como favicon: todos los navegadores lo aceptan
+            "/icono-32.png",  "/icono/icono-32.png",
+            "/icono-256.png", "/icono/icono-256.png");
+
+    /** Color de marca del icono oficial (packaging/icono/GeneradorIcono.MARINO_ARRIBA) */
+    static final String COLOR_TEMA = "#2A4566";
+
+    private Estatico cargarEstatico(String ruta) throws IOException {
+        Estatico e = estaticosCache.get(ruta);
+        if (e != null) return e;
+        byte[] cuerpo;
+        String tipo;
+        if ("/manifest.webmanifest".equals(ruta)) {
+            cuerpo = json().writeValueAsBytes(manifiesto());
+            tipo = "application/manifest+json";
+        } else {
+            String recurso = RECURSOS_ESTATICOS.get(ruta);
+            if (recurso == null) return null;
+            try (InputStream in = ServidorMovilService.class.getResourceAsStream(recurso)) {
+                if (in == null) return null;
+                cuerpo = in.readAllBytes();
+            }
+            tipo = "image/png";
+        }
+        String etag = "\"" + Base64.getUrlEncoder().withoutPadding().encodeToString(sha256(cuerpo)).substring(0, 22) + "\"";
+        e = new Estatico(cuerpo, tipo, etag);
+        estaticosCache.put(ruta, e);
+        return e;
+    }
+
+    /** Manifiesto mínimo para "Agregar a pantalla de inicio" (nombre, icono y color de la app) */
+    Map<String, Object> manifiesto() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("name", "Punto de Venta");
+        m.put("short_name", "Punto de Venta");
+        m.put("description", "Acceso móvil al punto de venta en la red local");
+        m.put("lang", "es");
+        m.put("start_url", "/");
+        m.put("scope", "/");
+        m.put("display", "standalone");
+        m.put("orientation", "any");
+        m.put("background_color", COLOR_TEMA);
+        m.put("theme_color", COLOR_TEMA);
+        List<Map<String, Object>> iconos = new ArrayList<>();
+        for (int t : new int[] { 32, 256 }) {
+            Map<String, Object> i = new LinkedHashMap<>();
+            i.put("src", "/icono-" + t + ".png");
+            i.put("sizes", t + "x" + t);
+            i.put("type", "image/png");
+            i.put("purpose", "any");
+            iconos.add(i);
+        }
+        m.put("icons", iconos);
+        return m;
+    }
+
+    private void estatico(HttpExchange ex, String metodo, String ruta) throws IOException {
+        if (!"GET".equals(metodo) && !"HEAD".equals(metodo)) throw new MetodoNoPermitido("GET, HEAD");
+        Estatico e = cargarEstatico(ruta);
+        if (e == null) { error(ex, 404, "NO_ENCONTRADO", "No encontrado."); return; }
+        var h = ex.getResponseHeaders();
+        h.set("Content-Type", e.tipo());
+        cabecerasComunes(ex);
+        // Públicos y casi inmutables: el teléfono los guarda un día y después revalida por ETag
+        h.set("Cache-Control", "public, max-age=86400");
+        h.set("ETag", e.etag());
+        String inm = ex.getRequestHeaders().getFirst("If-None-Match");
+        if (inm != null && inm.contains(e.etag())) {
+            ex.sendResponseHeaders(304, -1);
+            return;
+        }
+        if ("HEAD".equals(metodo)) {
+            ex.sendResponseHeaders(200, -1);
+            return;
+        }
+        ex.sendResponseHeaders(200, e.cuerpo().length);
+        ex.getResponseBody().write(e.cuerpo());
+    }
+
+    /** Nombre del negocio configurado en el escritorio (solo se entrega a quien ya tiene sesión) */
+    private String nombreNegocio() {
+        try {
+            String n = configuracionService.obtener().getNombreTienda();
+            return n == null ? "" : n.trim();
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    // ── Tutorial de la página móvil (marca por usuario en la BD) ──────────
+
+    private void tutorial(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("visto", tutorialesService.movilVisto());
+            return r;
+        });
+    }
+
+    private void tutorialVisto(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        boolean visto = !Boolean.FALSE.equals(cuerpo.get("visto"));   // sin campo = marcar como visto
+        protegido(ex, null, cajero -> {
+            if (visto) tutorialesService.marcarMovilVisto(); else tutorialesService.reiniciarMovil();
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("visto", visto);
+            return r;
+        });
     }
 
     // ── API ───────────────────────────────────────────────────────────────
@@ -620,6 +793,7 @@ public class ServidorMovilService {
         r.put("nombre", c.getNombreCompleto());
         r.put("rol", c.getRol().name());
         r.put("rolEtiqueta", c.getRol().getEtiqueta());
+        r.put("negocio", nombreNegocio());
         r.put("permisos", c.getPermisosEfectivos().stream().map(Enum::name).sorted().toList());
         Map<String, Object> secciones = new LinkedHashMap<>();
         boolean historial = c.tienePermiso(Permiso.VER_HISTORIAL);
@@ -628,7 +802,9 @@ public class ServidorMovilService {
         secciones.put("historial", historial);
         secciones.put("inventario", true);
         secciones.put("inventarioAjustar", ajustar);
-        secciones.put("escanearTicket", ajustar);
+        // "Escanear ticket" sigue siendo una DEMO (las líneas son de ejemplo): apagada hasta tener OCR real.
+        // Para probar la pantalla en desarrollo: cambiar a `ajustar`.
+        secciones.put("escanearTicket", ESCANEAR_TICKET_HABILITADO && ajustar);
         secciones.put("configuracion", true);
         r.put("secciones", secciones);
         r.put("permanente", v.sesion().isPermanente());
@@ -859,10 +1035,14 @@ public class ServidorMovilService {
                     .sorted(java.util.Comparator.comparing((Producto p) -> !ProductoService.tieneStockBajo(p))
                             .thenComparing(p -> p.getDescripcion() == null ? "" : p.getDescripcion().toLowerCase(Locale.ROOT)))
                     .toList();
+            List<Producto> pagina = encontrados.subList(0, Math.min(MAX_PRODUCTOS, encontrados.size()));
+            // Qué productos tienen foto (una consulta): la página solo pide la miniatura de esos
+            java.util.Set<Long> conImagen = productoImagenService.idsConImagen(pagina.stream().map(Producto::getId).toList());
             List<Map<String, Object>> lista = new ArrayList<>();
-            for (Producto p : encontrados) {
-                if (lista.size() >= MAX_PRODUCTOS) break;
-                lista.add(mapaProducto(p, ganancias));
+            for (Producto p : pagina) {
+                Map<String, Object> m = mapaProducto(p, ganancias);
+                m.put("imagen", conImagen.contains(p.getId()));
+                lista.add(m);
             }
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("productos", lista);
@@ -871,6 +1051,44 @@ public class ServidorMovilService {
             r.put("puedeAjustar", cajero.tienePermiso(Permiso.AJUSTAR_INVENTARIO));
             return r;
         });
+    }
+
+    private static final java.util.regex.Pattern RUTA_IMAGEN = java.util.regex.Pattern.compile("/api/productos/(\\d{1,18})/imagen");
+
+    /** id del producto si la ruta es /api/productos/{id}/imagen; null si no */
+    static Long idDeRutaImagen(String ruta) {
+        java.util.regex.Matcher m = RUTA_IMAGEN.matcher(ruta);
+        return m.matches() ? Long.valueOf(m.group(1)) : null;
+    }
+
+    /**
+     * Foto del producto (JPEG normalizado) o su miniatura con ?mini=1. Misma sesión que el
+     * resto de la API (Bearer); cualquier usuario con sesión puede verla. El ETag es el SHA-256
+     * de la imagen, así el teléfono la guarda un día y solo vuelve a bajarla si cambió.
+     */
+    private void imagenProducto(HttpExchange ex, long productoId) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        boolean mini = "1".equals(parametros(ex).get("mini"));
+        Optional<ProductoImagen> imagen = productoImagenService.obtener(productoId);
+        if (imagen.isEmpty()) { error(ex, 404, "SIN_IMAGEN", "El producto no tiene imagen."); return; }
+        ProductoImagen i = imagen.get();
+        String etag = "\"" + (mini ? "m-" : "i-") + i.getSha256().substring(0, 32) + "\"";
+        var h = ex.getResponseHeaders();
+        h.set("X-Content-Type-Options", "nosniff");
+        h.set("Referrer-Policy", "no-referrer");
+        h.set("X-Frame-Options", "DENY");
+        h.set("Cache-Control", "private, max-age=86400");
+        h.set("ETag", etag);
+        String inm = ex.getRequestHeaders().getFirst("If-None-Match");
+        if (inm != null && inm.contains(etag)) {
+            ex.sendResponseHeaders(304, -1);
+            return;
+        }
+        byte[] cuerpo = mini ? i.getMiniatura() : i.getImagen();
+        h.set("Content-Type", i.getMime());
+        ex.sendResponseHeaders(200, cuerpo.length);
+        ex.getResponseBody().write(cuerpo);
     }
 
     private static double numero(Object o, String campo) {
@@ -964,7 +1182,7 @@ public class ServidorMovilService {
         }
         try {
             if (buf.size() == 0) return new LinkedHashMap<>();
-            return json.readValue(buf.toByteArray(), new TypeReference<LinkedHashMap<String, Object>>() { });
+            return json().readValue(buf.toByteArray(), new TypeReference<LinkedHashMap<String, Object>>() { });
         } catch (IOException e) {
             throw new CuerpoInvalido(400, "JSON inválido.");
         }
@@ -990,7 +1208,7 @@ public class ServidorMovilService {
     }
 
     private void responder(HttpExchange ex, int estado, Object cuerpo) throws IOException {
-        byte[] bytes = json.writeValueAsBytes(cuerpo);
+        byte[] bytes = json().writeValueAsBytes(cuerpo);
         ex.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
         cabecerasComunes(ex);
         ex.sendResponseHeaders(estado, bytes.length);

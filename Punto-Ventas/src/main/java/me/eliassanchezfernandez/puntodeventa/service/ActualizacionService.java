@@ -15,11 +15,15 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -60,10 +64,25 @@ public class ActualizacionService {
 
     @Autowired private DonadorService donadorService;
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(TIEMPO_ESPERA)
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build();
+    /** Se crea al primer uso: construirlo inicializa SSL (decenas de ms en una PC vieja) y no hace falta al arrancar */
+    private volatile HttpClient http;
+
+    private HttpClient http() {
+        HttpClient h = http;
+        if (h == null) {
+            synchronized (this) {
+                h = http;
+                if (h == null) {
+                    h = HttpClient.newBuilder()
+                            .connectTimeout(TIEMPO_ESPERA)
+                            .followRedirects(HttpClient.Redirect.NEVER)
+                            .build();
+                    http = h;
+                }
+            }
+        }
+        return h;
+    }
 
     /** Una versión publicada más nueva que la instalada (todas sus URLs ya pasaron {@link #enlacePermitido}) */
     public record Actualizacion(VersionSemantica version, String etiqueta, String nombre, String notas,
@@ -141,7 +160,7 @@ public class ActualizacionService {
                 .header("Accept", accept)
                 .header("User-Agent", VersionApp.agenteUsuario())
                 .GET().build();
-        HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> resp = http().send(req, HttpResponse.BodyHandlers.ofInputStream());
         try (InputStream cuerpo = resp.body()) {
             if (resp.statusCode() != 200) throw new IOException("GitHub respondió " + resp.statusCode());
             byte[] bytes = cuerpo.readNBytes(maximoBytes + 1);
@@ -205,15 +224,50 @@ public class ActualizacionService {
         return Optional.ofNullable(mejor);
     }
 
+    /** Gestores de paquetes de Linux que decide el formato a ofrecer ({@link #elegirActivo}) */
+    public enum GestorPaquetes { DPKG, RPM }
+
+    /** Los gestores presentes en este equipo (Debian/Ubuntu tienen dpkg; Fedora/openSUSE, rpm; Ubuntu puede tener los dos) */
+    public static Set<GestorPaquetes> gestoresInstalados() {
+        Set<GestorPaquetes> g = EnumSet.noneOf(GestorPaquetes.class);
+        if (Files.isExecutable(Path.of("/usr/bin/dpkg")) || Files.isExecutable(Path.of("/bin/dpkg"))) g.add(GestorPaquetes.DPKG);
+        if (Files.isExecutable(Path.of("/usr/bin/rpm")) || Files.isExecutable(Path.of("/bin/rpm"))) g.add(GestorPaquetes.RPM);
+        return g;
+    }
+
+    /** {@link #elegirActivo(List, String, String, Set)} con los gestores de paquetes detectados en este equipo (solo cuentan en Linux) */
+    public static Optional<String> elegirActivo(List<String> nombres, String osName, String osArch) {
+        String os = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
+        Set<GestorPaquetes> gestores = os.contains("linux") ? gestoresInstalados() : EnumSet.noneOf(GestorPaquetes.class);
+        return elegirActivo(nombres, osName, osArch, gestores);
+    }
+
     /**
      * Nombre del instalador que corresponde al sistema:
      *  - macOS: .dmg; si hay varios, el de la arquitectura (arm64/aarch64 o x64/intel);
      *  - Windows: .exe (o .msi); con JVM de 32 bits exige "x86"; de 64 bits prefiere "x64" y nunca toma uno "x86";
+     *  - Linux: .deb si hay dpkg, si no .rpm si hay rpm, si no el .tar.gz portable; siempre de la arquitectura
+     *    de la JVM (x64/amd64 o arm64/aarch64);
      *  - otros sistemas: ninguno (se abre la página).
      */
-    public static Optional<String> elegirActivo(List<String> nombres, String osName, String osArch) {
+    public static Optional<String> elegirActivo(List<String> nombres, String osName, String osArch, Set<GestorPaquetes> gestores) {
         String os = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
         String arch = osArch == null ? "" : osArch.toLowerCase(Locale.ROOT);
+        if (os.contains("linux")) {
+            boolean arm = arch.contains("aarch64") || arch.contains("arm");
+            List<String> formatos = new ArrayList<>();
+            if (gestores.contains(GestorPaquetes.DPKG)) formatos.add(".deb");
+            if (gestores.contains(GestorPaquetes.RPM)) formatos.add(".rpm");
+            formatos.add(".tar.gz");
+            for (String formato : formatos) {
+                List<String> candidatos = nombres.stream().filter(n -> n.toLowerCase(Locale.ROOT).endsWith(formato)).toList();
+                Optional<String> exacto = candidatos.stream().filter(n -> arm ? esArm64(n) : esX64(n)).findFirst();
+                if (exacto.isPresent()) return exacto;
+                // Sin arquitectura en el nombre y es el único de ese formato: se ofrece
+                if (candidatos.size() == 1 && !esArm64(candidatos.get(0)) && !esX64(candidatos.get(0))) return Optional.of(candidatos.get(0));
+            }
+            return Optional.empty();
+        }
         if (os.contains("mac") || os.contains("darwin")) {
             List<String> dmg = nombres.stream().filter(n -> n.toLowerCase(Locale.ROOT).endsWith(".dmg")).toList();
             boolean arm = arch.contains("aarch64") || arch.contains("arm");
@@ -245,6 +299,16 @@ public class ActualizacionService {
             return exe.stream().filter(n -> !esX86(n.toLowerCase(Locale.ROOT))).findFirst();
         }
         return Optional.empty();
+    }
+
+    private static boolean esArm64(String nombre) {
+        String m = nombre.toLowerCase(Locale.ROOT);
+        return m.contains("arm64") || m.contains("aarch64");
+    }
+
+    private static boolean esX64(String nombre) {
+        String m = nombre.toLowerCase(Locale.ROOT);
+        return m.contains("x64") || m.contains("x86_64") || m.contains("x86-64") || m.contains("amd64");
     }
 
     /** "x86" como arquitectura de 32 bits (no "x86_64") */

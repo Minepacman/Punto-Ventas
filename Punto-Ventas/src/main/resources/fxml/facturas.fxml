@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -22,14 +23,14 @@
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
             <Label text="Hasta:"/>
             <DatePicker fx:id="dpHasta" prefWidth="140"/>
-            <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
+            <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
-            <Button text="📄 PDF / XML / correo" onAction="#onAcciones"/>
-            <Button text="🌐 Factura global…" onAction="#onGlobal"/>
-            <Button text="⛔ Cancelar factura" onAction="#onCancelarFactura" styleClass="button-danger"/>
+            <Button text="PDF / XML / correo" onAction="#onAcciones"><graphic><Icono nombre="documento"/></graphic></Button>
+            <Button text="Factura global…" onAction="#onGlobal"><graphic><Icono nombre="mundo"/></graphic></Button>
+            <Button text="Cancelar factura" onAction="#onCancelarFactura" styleClass="button-danger"><graphic><Icono nombre="prohibido"/></graphic></Button>
             <Button text="Resolver pendiente" onAction="#onResolverPendiente"/>
-            <Button text="👥 Clientes fiscales" onAction="#onClientes"/>
-            <Button text="📤 Exportar…" onAction="#onExportar"/>
+            <Button text="Clientes fiscales" onAction="#onClientes"><graphic><Icono nombre="usuarios"/></graphic></Button>
+            <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>

@@ -25,6 +25,9 @@ public final class ExportadorTablas {
 
     private ExportadorTablas() { }
 
+    /** userData de una columna que no debe exportarse (p. ej. miniaturas de imagen) */
+    public static final String SIN_EXPORTAR = "sin-exportar";
+
     /** Exporta las columnas visibles y TODAS las filas de la tabla */
     public static <T> void exportar(TableView<T> tabla, String nombreBase, String titulo) {
         if (tabla.getItems().isEmpty()) {
@@ -34,7 +37,7 @@ public final class ExportadorTablas {
         List<String> encabezados = new ArrayList<>();
         List<TableColumn<T, ?>> columnas = new ArrayList<>();
         for (TableColumn<T, ?> c : tabla.getColumns()) {
-            if (!c.isVisible()) continue;
+            if (!c.isVisible() || SIN_EXPORTAR.equals(c.getUserData())) continue;
             columnas.add(c);
             encabezados.add(c.getText());
         }

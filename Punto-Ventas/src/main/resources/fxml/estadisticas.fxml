@@ -4,6 +4,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 
 <!--
     estadisticas.fxml  –  Estadísticas y recomendaciones (CRT-10)
@@ -323,7 +324,7 @@
                         <VBox styleClass="card" spacing="8">
                             <Label text="Condiciones actuales" styleClass="card-title"/>
                             <HBox spacing="16" alignment="CENTER_LEFT">
-                                <Label fx:id="lblClimaIcono" text="☁" style="-fx-font-size: 36px;" styleClass="text-subtle"/>
+                                <Label fx:id="lblClimaIcono" styleClass="text-subtle"><graphic><Icono nombre="nube" tamano="36"/></graphic></Label>
                                 <VBox spacing="2">
                                     <Label fx:id="lblClimaTemperatura" text="—" styleClass="metric-value"/>
                                     <Label fx:id="lblClimaCondicion" text="Sin datos de clima" styleClass="text-muted"/>

@@ -99,19 +99,52 @@ public final class CalculoCobro {
 
     /**
      * Número de un campo de dinero; vacío = porDefecto; inválido/infinito/negativo = NaN.
-     * Admite "$", "%" y la coma como separador de miles ("1,500" = 1500), igual
-     * que en Login y Corte.
+     * Admite "$", "%" y la coma a la mexicana (ver {@link #normalizarNumero}), igual
+     * en Login, Corte, Inventario, Productos, Órdenes y Promociones.
      */
     public static double parsearMonto(String txt, double porDefecto) {
         if (txt == null) return porDefecto;
-        String t = txt.trim().replace("$", "").replace(",", "").replace("%", "").replace(" ", "");
+        String t = normalizarNumero(txt);
         if (t.isEmpty()) return porDefecto;
+        double v = parsearNumero(t);
+        return Double.isNaN(v) || v < 0 ? Double.NaN : v;
+    }
+
+    /**
+     * Número tal como se teclea en México; NaN si no es un número (vacío también es NaN).
+     * Acepta negativos: quien lo llama decide si los permite.
+     */
+    public static double parsearNumero(String txt) {
+        String t = normalizarNumero(txt);
+        if (t.isEmpty()) return Double.NaN;
         try {
             double v = Double.parseDouble(t);
-            return Double.isFinite(v) && v >= 0 ? v : Double.NaN;
+            return Double.isFinite(v) ? v : Double.NaN;
         } catch (NumberFormatException e) {
             return Double.NaN;
         }
+    }
+
+    /**
+     * Regla única para lo que se teclea en campos de dinero y cantidades:
+     * se quitan "$", "%" y espacios; si hay punto, las comas son de miles
+     * ("1,500.50" = 1500.50); si solo hay UNA coma seguida de 1, 2 o más de 3
+     * dígitos es coma decimal ("12,50" = 12.50, "2,5" = 2.5); una coma seguida
+     * de exactamente 3 dígitos, o varias comas, son separadores de miles
+     * ("1,500" = 1500, "1,250,000" = 1250000). Devuelve el texto listo para
+     * {@code Double.parseDouble} (o vacío).
+     */
+    public static String normalizarNumero(String txt) {
+        if (txt == null) return "";
+        String t = txt.trim().replace("$", "").replace("%", "").replace(" ", "").replace(" ", "");
+        if (t.isEmpty()) return "";
+        int comas = t.length() - t.replace(",", "").length();
+        if (t.contains(".") || comas == 0) return t.replace(",", "");
+        if (comas > 1) return t.replace(",", "");
+        String despues = t.substring(t.indexOf(',') + 1);
+        boolean soloDigitos = !despues.isEmpty() && despues.chars().allMatch(Character::isDigit);
+        if (soloDigitos && despues.length() == 3) return t.replace(",", "");   // "1,500" = miles
+        return t.replace(',', '.');
     }
 
     /** Texto para un campo de dinero ("150.00") */

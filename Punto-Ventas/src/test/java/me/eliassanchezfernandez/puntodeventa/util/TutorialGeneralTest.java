@@ -68,15 +68,15 @@ class TutorialGeneralTest {
 
     @Test
     void elFiltroPorPestanasVisiblesConservaElOrdenYLosPasosGenerales() {
-        List<TutorialGeneral.Paso> cajero = TutorialGeneral.pasosPara(List.of("tabVentas", "tabProductos", "tabInventario", "tabClientes"));
+        List<TutorialGeneral.Paso> cajero = TutorialGeneral.pasosPara(List.of("tabVentas", "tabProductos", "tabInventario"));
 
         assertThat(cajero).extracting(TutorialGeneral.Paso::tabId)
-                .containsExactly(null, "tabVentas", "tabClientes", "tabProductos", "tabInventario", null, null);
+                .containsExactly(null, "tabVentas", "tabProductos", "tabInventario", null, null);
         assertThat(cajero).extracting(TutorialGeneral.Paso::titulo)
                 .doesNotContain("Corte", "Configuración", "Estadísticas");
 
         List<TutorialGeneral.Paso> admin = TutorialGeneral.pasosPara(
-                List.of("tabVentas", "tabClientes", "tabProductos", "tabInventario", "tabEstadisticas", "tabCorte", "tabConfig"));
+                List.of("tabVentas", "tabProductos", "tabInventario", "tabEstadisticas", "tabCorte", "tabConfig"));
         assertThat(admin).hasSameSizeAs(TutorialGeneral.pasos());
     }
 }

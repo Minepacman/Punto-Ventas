@@ -82,6 +82,16 @@ public class ConfiguracionService {
         }
     }
 
+    /** Anota que el esquema quedó al día con esta versión del programa (ver config/VersionEsquema); sin bitácora */
+    @Transactional
+    public void marcarVersionEsquema(String version) {
+        if (version == null || version.isBlank()) return;
+        Configuracion c = obtenerParaEditar();
+        if (version.equals(c.getVersionEsquema())) return;
+        c.setVersionEsquema(version);
+        guardarConfig(c);
+    }
+
     /** Fila viva de la base de datos (la crea si no existe), para modificarla dentro de una transacción */
     @Transactional
     public Configuracion obtenerParaEditar() {

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -22,10 +23,10 @@
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
             <Label text="Hasta:"/>
             <DatePicker fx:id="dpHasta" prefWidth="140"/>
-            <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
+            <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
             <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." HBox.hgrow="ALWAYS"/>
-            <Button text="📤 Exportar…" onAction="#onExportar"/>
+            <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
         </ScrollPane>

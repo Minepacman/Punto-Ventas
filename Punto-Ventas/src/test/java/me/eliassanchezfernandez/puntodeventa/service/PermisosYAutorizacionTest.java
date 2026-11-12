@@ -147,7 +147,9 @@ class PermisosYAutorizacionTest extends BaseServicioTest {
         crearUsuario("encargado", Cajero.Rol.GERENTE, null);
         iniciarComo("encargado", CLAVE_PRUEBA);
 
-        assertThat(producto("Creado por gerente", 10, 1).getId()).isNotNull();
+        assertThat(producto("Creado por gerente", 10, 0).getId()).isNotNull();
+        // La existencia inicial es inventario que "aparece": exige AJUSTAR_INVENTARIO (QaCatalogosYComprasTest)
+        assertThatThrownBy(() -> producto("Con existencia", 10, 1)).isInstanceOf(PermisoRequeridoException.class);
         assertThatThrownBy(() -> ventaService.ventasEntre(null, null)).isInstanceOf(PermisoRequeridoException.class);
         assertThatThrownBy(() -> ventaService.resumenDelDia()).isInstanceOf(PermisoRequeridoException.class);
         Set<Permiso> efectivos = sesionService.getCajeroActual().getPermisosEfectivos();
