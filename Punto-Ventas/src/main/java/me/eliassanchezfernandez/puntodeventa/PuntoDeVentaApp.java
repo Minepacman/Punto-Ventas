@@ -9,6 +9,7 @@ import me.eliassanchezfernandez.puntodeventa.config.ArranqueDiferido;
 import me.eliassanchezfernandez.puntodeventa.service.BaseDatosService;
 import me.eliassanchezfernandez.puntodeventa.util.CalentadorCds;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
+import me.eliassanchezfernandez.puntodeventa.util.Navegador;
 import me.eliassanchezfernandez.puntodeventa.util.PantallaConexion;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -50,8 +51,32 @@ public class PuntoDeVentaApp extends Application {
     /** Para abrir enlaces en el navegador (Configuración → Actualizaciones) */
     private static volatile javafx.application.HostServices servicios;
 
+    /**
+     * Abre el enlace con el comando del sistema ({@link Navegador}); HostServices solo como respaldo, porque
+     * en el programa instalado en macOS no hace nada. Si nada funciona, muestra la dirección para copiarla.
+     */
     public static void abrirEnlace(String url) {
-        if (servicios != null) servicios.showDocument(url);
+        if (!Navegador.esSegura(url)) return;
+        if (Navegador.abrir(url)) return;
+        if (servicios != null) {
+            try {
+                servicios.showDocument(url);
+                return;
+            } catch (RuntimeException ignorada) {
+                // sigue: se muestra la dirección
+            }
+        }
+        Runnable aviso = () -> {
+            javafx.scene.control.TextField campo = new javafx.scene.control.TextField(url);
+            campo.setEditable(false);
+            campo.setPrefColumnCount(40);
+            javafx.scene.control.Alert a = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
+            a.setTitle("Abrir enlace");
+            a.setHeaderText("No se pudo abrir el navegador. Copia esta dirección y pégala en tu navegador:");
+            a.getDialogPane().setContent(campo);
+            a.show();
+        };
+        if (Platform.isFxApplicationThread()) aviso.run(); else Platform.runLater(aviso);
     }
 
     // ── Arranque ─────────────────────────────────────────────────────────
