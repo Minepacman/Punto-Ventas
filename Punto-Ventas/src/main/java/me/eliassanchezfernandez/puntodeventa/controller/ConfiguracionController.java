@@ -29,7 +29,6 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
@@ -63,9 +62,8 @@ public class ConfiguracionController implements Initializable {
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private ArticulosPrecargadosService articulosPrecargadosService;
     @Autowired private DispositivosDialogos dispositivosDialogos;
-
-    @Value("${app.version:1.0.0}")
-    private String version;
+    @Autowired private AcercaDeDialogo acercaDeDialogo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.ActualizacionService actualizacionService;
 
     @Override public void initialize(URL url, ResourceBundle rb) { }
 
@@ -215,18 +213,64 @@ public class ConfiguracionController implements Initializable {
         dlg.showAndWait();
     }
 
+    /** Búsqueda automática (una vez al día) y búsqueda manual; solo ADMIN cambia la opción */
     @FXML void onActualizaciones() {
-        Label actual = new Label("Versión instalada: " + version);
-        Hyperlink enlace = new Hyperlink(REPOSITORIO);
-        enlace.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(REPOSITORIO));
-        Label nota = new Label("El programa no se actualiza solo: consulta el repositorio para ver las versiones nuevas y descargarlas.");
+        Configuracion c = configuracionService.obtener();
+        Label actual = new Label("Versión instalada: " + me.eliassanchezfernandez.puntodeventa.util.VersionApp.etiqueta());
+        actual.getStyleClass().add("text-bold");
+        CheckBox auto = new CheckBox("Buscar versiones nuevas automáticamente (una vez al día, en segundo plano)");
+        auto.setSelected(c.isActualizacionesAuto());
+        auto.setWrapText(true);
+        auto.setDisable(!sesionService.esAdmin());
+        Label nota = new Label("Solo se consulta la lista pública de versiones en GitHub; el programa nunca descarga ni "
+                + "instala nada por su cuenta. Si hay una versión nueva aparece un enlace en la barra de estado.");
         nota.setWrapText(true);
-        nota.setPrefWidth(380);
+        nota.setPrefWidth(420);
         nota.getStyleClass().add("hint");
-        Dialog<ButtonType> dlg = dialogo("Actualizaciones", "Versión del programa",
-                new VBox(10, actual, new Label("Repositorio en GitHub:"), enlace, nota));
-        dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-        dlg.showAndWait();
+        Label resultado = new Label();
+        resultado.setWrapText(true);
+        resultado.setPrefWidth(420);
+        Button buscar = new Button("Buscar ahora");
+        Button ver = new Button("Ver y descargar");
+        ver.getStyleClass().add("button-primary");
+        ver.setVisible(false);
+        ver.setManaged(false);
+        HBox fila = new HBox(10, buscar, ver);
+        buscar.setOnAction(e -> {
+            buscar.setDisable(true);
+            resultado.setText("Buscando en GitHub…");
+            actualizacionService.buscarEnSegundoPlano().thenAccept(r -> javafx.application.Platform.runLater(() -> {
+                buscar.setDisable(false);
+                switch (r.estado()) {
+                    case ACTUALIZADO -> resultado.setText("Tienes la versión más reciente.");
+                    case DISPONIBLE -> {
+                        var a = r.actualizacion().orElseThrow();
+                        resultado.setText("Nueva versión disponible: v" + a.version() + (a.prelanzamiento() ? " (versión de prueba)" : ""));
+                        ver.setVisible(true);
+                        ver.setManaged(true);
+                        ver.setOnAction(ev -> ActualizacionDialogo.mostrar(raiz.getScene().getWindow(), a));
+                    }
+                    case SIN_CONEXION -> resultado.setText("No se pudo consultar GitHub (¿sin internet?).");
+                    case VERSION_DESCONOCIDA -> resultado.setText("Versión de desarrollo: no se compara con las publicadas.");
+                }
+            }));
+        });
+        Hyperlink enlace = new Hyperlink("Todas las versiones en GitHub");
+        enlace.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(REPOSITORIO + "/releases"));
+        VBox contenido = new VBox(10, actual, auto, nota, fila, resultado, enlace);
+        if (sesionService.esAdmin()) {
+            dialogoGuardar("Actualizaciones", "Versión del programa", contenido,
+                    () -> configuracionService.guardarActualizacionesAutomaticas(auto.isSelected()));
+        } else {
+            Dialog<ButtonType> dlg = dialogo("Actualizaciones", "Versión del programa", contenido);
+            dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+            dlg.showAndWait();
+        }
+    }
+
+    /** Estado de donador, clave y soporte técnico: lo mismo que "Acerca de" en la barra de estado */
+    @FXML void onDonador() {
+        acercaDeDialogo.mostrar(raiz.getScene().getWindow());
     }
 
     @FXML void onArticulosPrec() {

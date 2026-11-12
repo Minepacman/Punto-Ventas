@@ -32,3 +32,14 @@ datos.db-shm
 
 # Contexto local para Claude Code (no publicar)
 CLAUDE.md
+
+# Llaves del desarrollador (claves de donador): viven en ~/.puntodeventa-desarrollador, NUNCA en el repo
+.puntodeventa-desarrollador/
+donadores.key
+donadores.pub
+donadores-emitidos.csv
+*.key
+/Punto-Ventas/packaging/icono/PuntoDeVenta.iconset/
+
+# Libro del desarrollador (datos personales de donadores): nunca en el repo
+donadores.jsonl

@@ -127,6 +127,12 @@
             </HBox>
         </VBox>
 
+        <!-- Versión del programa (la pone LoginController desde util/VersionApp) -->
+        <HBox alignment="CENTER_RIGHT">
+            <padding><Insets bottom="6" left="12" right="12" top="0" /></padding>
+            <Label fx:id="lblVersion" styleClass="login-version" text="v1.0.0" />
+        </HBox>
+
     </VBox>
 
 </StackPane>

@@ -225,6 +225,10 @@ class ImpresionServiceTest extends BaseServicioTest {
         // Con la autorización de un administrador sí
         Autorizacion aut = autorizacionService.autorizar("admin", "admin123", Permiso.VER_HISTORIAL);
         impresionService.reimprimirUltimaVentaAsync(aut).get();
+        // La autorización es de un solo uso: la reimpresión la consume y no sirve para otra
+        assertThat(aut.isConsumida()).isTrue();
+        assertThatThrownBy(() -> impresionService.reimprimirUltimaVentaAsync(aut))
+                .isInstanceOf(PermisoRequeridoException.class);
 
         assertThat(auditoriaService.ultimas()).anyMatch(a -> "TICKET_REIMPRESO".equals(a.getAccion())
                 && a.getDetalle().contains("#" + ultima.getId()));

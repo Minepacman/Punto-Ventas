@@ -3,13 +3,17 @@ plugins {
     id 'application'
     id 'org.springframework.boot'       version '3.2.5'
     id 'io.spring.dependency-management' version '1.1.6'
-    id 'org.openjfx.javafxplugin'       version '0.1.0'
+    id 'org.openjfx.javafxplugin'       version '0.1.0' apply false
 }
 
 // Es buena práctica usar minúsculas para el group
 group = 'me.eliassanchezfernandez'
-version = '0.0.1-SNAPSHOT'
+// ÚNICA fuente de verdad de la versión: de aquí salen version.properties (util/VersionApp, lo que ve el
+// usuario y el User-Agent del buscador de actualizaciones), el manifiesto del jar y --app-version de
+// jpackage. Para publicar: subir este número, hacer commit y etiquetar "v" + versión (ver docs/publicar.md).
+version = '1.0.0'
 description = 'Punto-de-venta'
+ext.repositorioUrl = 'https://github.com/Minepacman/Punto-Ventas'
 
 java {
     toolchain {
@@ -23,12 +27,38 @@ repositories {
     mavenCentral()
 }
 
-javafx {
-    // Java 17 + JavaFX 17: la línea 17 es la última con soporte de Windows 10/11 de 32 bits en JavaFX.
-    // OJO: OpenJFX publicó el artefacto win-x86 SOLO hasta 17.0.2 y en 17.0.6-17.0.8; de 17.0.9 en
-    // adelante no existe. Para el instalador de 32 bits: -PjavafxVersion=17.0.8 y Gradle con un JDK 17 de 32 bits.
-    version = project.findProperty('javafxVersion') ?: '17.0.10'
-    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
+// Java 17 + JavaFX 17: la línea 17 es la última con soporte de Windows 10/11 de 32 bits en JavaFX.
+// OJO: OpenJFX publicó el artefacto win-x86 SOLO hasta 17.0.2 y en 17.0.6-17.0.8; de 17.0.9 en
+// adelante no existe. El plugin de JavaFX 0.1.0 no conoce la plataforma win-x86, así que para el
+// instalador de 32 bits se declaran los jars a mano:
+//   gradlew.bat jpackageTask -x test -PjavafxVersion=17.0.8 -PjavafxPlatform=win-x86 -PjdkJpackage=C:\ruta\jdk-17-x86
+// (Gradle corre con un JDK de 64 bits; el JDK 17 de 32 bits solo lo usa jpackage para el runtime).
+def javafxVersion = project.findProperty('javafxVersion') ?: '17.0.10'
+def javafxPlataforma = project.findProperty('javafxPlatform')
+if (javafxPlataforma) {
+    dependencies {
+        ['base', 'graphics', 'controls', 'fxml'].each {
+            implementation "org.openjfx:javafx-$it:$javafxVersion:$javafxPlataforma"
+        }
+    }
+} else {
+    apply plugin: 'org.openjfx.javafxplugin'
+    javafx {
+        version = javafxVersion
+        modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
+    }
+}
+
+// Herramientas del desarrollador (claves de donador): compilan contra main pero NO van en el jar ni en el instalador
+sourceSets {
+    herramientas {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+configurations {
+    herramientasImplementation.extendsFrom implementation
+    herramientasRuntimeOnly.extendsFrom runtimeOnly
 }
 
 dependencies {
@@ -77,6 +107,8 @@ dependencies {
 
     // Testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // La herramienta del desarrollador se prueba (libro, emisión, revocación) aunque no vaya en el instalador
+    testImplementation sourceSets.herramientas.output
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -92,6 +124,62 @@ dependencies {
 // (Java 17 usa cp1252 por defecto) corrompe los textos.
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// La versión llega al programa por version.properties (expandido aquí) y por el manifiesto del jar
+tasks.named('processResources') {
+    inputs.property('version', project.version)
+    filesMatching('version.properties') {
+        expand(version: project.version)
+    }
+}
+tasks.named('jar') {
+    manifest {
+        attributes('Implementation-Title': 'PuntoDeVenta', 'Implementation-Version': project.version)
+    }
+}
+
+// ── Claves de donador (solo el desarrollador; ver docs/donadores.md) ────────────────────────
+// Todas corren HerramientaDonadores (source set "herramientas", nunca en el instalador) y reciben sus
+// datos como propiedades -Pnombre=valor. El libro y las llaves viven en ~/.puntodeventa-desarrollador.
+def tareaDonadores = { String nombre, String comando, String descripcion, List<List<String>> propiedades ->
+    tasks.register(nombre, JavaExec) {
+        group = 'donadores'
+        description = descripcion
+        classpath = sourceSets.herramientas.runtimeClasspath
+        mainClass = 'me.eliassanchezfernandez.puntodeventa.herramientas.HerramientaDonadores'
+        def lista = [comando]
+        propiedades.each { par ->
+            def valor = project.findProperty(par[0])
+            if (valor != null && !valor.toString().isEmpty()) lista += ['--' + par[1], valor.toString()]
+        }
+        args lista
+    }
+}
+tareaDonadores('crearLlavesDonador', 'crear-llaves', 'Crea el par de llaves Ed25519 en ~/.puntodeventa-desarrollador (una sola vez)', [])
+tareaDonadores('emitirClaveDonador', 'emitir',
+        'Emite una clave PDV2 (vence en -Pmeses=12): -Pdonador="Abarrotes Lupita" [-Pnivel=basico|plus|patrocinador] [-Pmonto=300] [-PfechaPago=2026-11-12] [-Prastreo=…] [-Pcontacto=+52…]',
+        [['donador', 'donador'], ['nivel', 'nivel'], ['meses', 'meses'], ['monto', 'monto'], ['fechaPago', 'fecha-pago'],
+         ['rastreo', 'rastreo'], ['contacto', 'contacto']])
+tareaDonadores('generarClaveDonador', 'emitir', 'Alias de emitirClaveDonador',
+        [['donador', 'donador'], ['nivel', 'nivel'], ['meses', 'meses'], ['monto', 'monto'], ['fechaPago', 'fecha-pago'],
+         ['rastreo', 'rastreo'], ['contacto', 'contacto']])
+tareaDonadores('renovarClaveDonador', 'renovar', 'Renueva una clave (mismo id y nombre): -Pid=ABCD2345 [-Pmeses=12] [-Pnivel=…] [-Pmonto=…] [-PfechaPago=…] [-Prastreo=…]',
+        [['id', 'id'], ['meses', 'meses'], ['nivel', 'nivel'], ['monto', 'monto'], ['fechaPago', 'fecha-pago'], ['rastreo', 'rastreo']])
+tareaDonadores('revocarClaveDonador', 'revocar', 'Anota una clave como revocada en el libro: -Pid=ABCD2345 -Pmotivo="…" (luego publicarRevocaciones)',
+        [['id', 'id'], ['motivo', 'motivo']])
+tareaDonadores('buscarDonador', 'buscar', 'Busca en el libro: -Ptexto="Lupita" | -Pid=ABCD2345 | -Pinstalacion=7F3A-91C2 (sin nada: todo)',
+        [['texto', 'texto'], ['id', 'id'], ['instalacion', 'instalacion']])
+tareaDonadores('verificarClaveDonador', 'verificar', 'Coteja una clave o un mensaje de soporte pegado contra el libro: -Pclave="PDV2.…" | -Ptexto="…"',
+        [['clave', 'clave'], ['texto', 'texto']])
+tareaDonadores('registrarSoporte', 'registrar-soporte', 'Anota una atención: -Pid=ABCD2345 [-Pinstalacion=7F3A-91C2] [-Pversion=1.0.3] [-Pnota="…"]',
+        [['id', 'id'], ['instalacion', 'instalacion'], ['version', 'version'], ['nota', 'nota']])
+tasks.register('publicarRevocaciones', JavaExec) {
+    group = 'donadores'
+    description = 'Escribe claves/revocadas.pdvr (lista firmada de claves revocadas) en la raíz del repositorio; luego commit y push'
+    classpath = sourceSets.herramientas.runtimeClasspath
+    mainClass = 'me.eliassanchezfernandez.puntodeventa.herramientas.HerramientaDonadores'
+    args 'publicar-revocaciones', '--salida', rootProject.file('../claves/revocadas.pdvr').absolutePath
 }
 
 // Opciones de la JVM pensadas para PCs de 2-4 GB de RAM y disco duro (también las usa jpackage)
@@ -156,6 +244,10 @@ tasks.register('testPostgres', Test) {
 //   Windows:  gradlew.bat jpackageTask          -> build/installer/PuntoDeVenta-1.0.0.exe
 //             gradlew.bat jpackageTask -PwinType=msi
 // jpackage SOLO construye para el sistema donde corre; en Windows hace falta WiX Toolset 3.x en el PATH.
+// Los iconos salen de packaging/icono (los genera packaging/icono/GeneradorIcono.java).
+// El UUID de actualización de Windows es FIJO: así una versión nueva reemplaza a la anterior en vez de
+// instalarse al lado. No cambiarlo nunca.
+ext.winUpgradeUuid = '56ef728e-9b2b-48ab-909a-1687f6bfcf0a'
 tasks.register('jpackageTask') {
     group = 'distribution'
     description = 'Crea el instalador nativo del sistema actual con jpackage (dmg / exe / msi)'
@@ -169,8 +261,16 @@ tasks.register('jpackageTask') {
         def destino = layout.buildDirectory.dir('installer').get().asFile
         destino.deleteDir()
 
-        def jdk17 = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }.get()
-        def jpackage = jdk17.metadata.installationPath.file("bin/jpackage" + (esWindows ? '.exe' : '')).asFile.absolutePath
+        // jpackage del JDK 17 del toolchain, o del JDK que se indique (-PjdkJpackage=..., p. ej. uno de 32 bits)
+        def jdkJpackage = project.findProperty('jdkJpackage')
+        def jdkRuta = jdkJpackage ? file(jdkJpackage)
+                : javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }.get().metadata.installationPath.asFile
+        def jpackage = new File(jdkRuta, "bin/jpackage" + (esWindows ? '.exe' : '')).absolutePath
+
+        // jpackage exige x.y.z numérico: "1.1.0-beta.1" → "1.1.0"
+        def versionNumerica = (project.version.toString() =~ /^\d+\.\d+\.\d+/)[0]
+        def icono = file(esMac ? 'packaging/icono/PuntoDeVenta.icns' : 'packaging/icono/PuntoDeVenta.ico')
+        def licencia = rootProject.file('../LICENSE')
 
         def args = [jpackage,
                 '--input', lib.absolutePath,
@@ -178,15 +278,21 @@ tasks.register('jpackageTask') {
                 '--name', 'PuntoDeVenta',
                 '--main-jar', tasks.jar.archiveFileName.get(),
                 '--main-class', 'me.eliassanchezfernandez.puntodeventa.Launcher',
-                '--app-version', '1.0.0',
+                '--app-version', versionNumerica,
                 '--vendor', 'Elias Sanchez',
-                '--description', 'Punto de venta para abarrotes']
+                '--copyright', '2026 Elias Oziel Sanchez Fernandez - GPLv3',
+                '--description', 'Punto de venta para abarrotes',
+                '--about-url', repositorioUrl]
+        if (icono.exists()) args += ['--icon', icono.absolutePath]
+        if (licencia.exists()) args += ['--license-file', licencia.absolutePath]
         jvmOpciones.each { args += ['--java-options', it] }
         if (esMac) {
-            args += ['--type', 'dmg']
+            args += ['--type', 'dmg', '--mac-package-identifier', 'me.eliassanchezfernandez.puntodeventa',
+                     '--mac-package-name', 'PuntoDeVenta']
         } else if (esWindows) {
             args += ['--type', (project.findProperty('winType') ?: 'exe'),
-                     '--win-menu', '--win-shortcut', '--win-per-user-install', '--win-dir-chooser']
+                     '--win-menu', '--win-shortcut', '--win-per-user-install', '--win-dir-chooser',
+                     '--win-upgrade-uuid', winUpgradeUuid]
         } else {
             args += ['--type', 'app-image']
         }

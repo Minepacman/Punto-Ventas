@@ -42,10 +42,33 @@ public final class Ventanas {
 
     private static final String CSS_APP = "/css/app.css";
 
+    /** PNG del icono de la aplicación (los genera packaging/icono/GeneradorIcono.java) */
+    private static final int[] TAMANOS_ICONO = {16, 32, 64, 128, 256};
+    private static volatile java.util.List<javafx.scene.image.Image> iconos;
+
     /** Lo que hay que hacer antes de que la aplicación se cierre (guardar el ticket pendiente) */
     private static volatile Runnable accionAlCerrar;
 
     private Ventanas() { }
+
+    /** Icono de la aplicación en la barra de título / barra de tareas (en macOS lo da el paquete .app) */
+    public static void aplicarIcono(Stage stage) {
+        if (stage == null) return;
+        try {
+            java.util.List<javafx.scene.image.Image> lista = iconos;
+            if (lista == null) {
+                lista = new java.util.ArrayList<>();
+                for (int t : TAMANOS_ICONO) {
+                    URL url = Ventanas.class.getResource("/icono/icono-" + t + ".png");
+                    if (url != null) lista.add(new javafx.scene.image.Image(url.toExternalForm()));
+                }
+                iconos = lista;
+            }
+            if (!lista.isEmpty() && stage.getIcons().isEmpty()) stage.getIcons().setAll(lista);
+        } catch (RuntimeException e) {
+            // sin icono el programa funciona igual
+        }
+    }
 
     public static void setAccionAlCerrar(Runnable accion) {
         accionAlCerrar = accion;
@@ -79,6 +102,7 @@ public final class Ventanas {
         stage.setMinHeight(0);
         stage.setScene(new Scene(root));
         stage.setTitle("Punto de Venta");
+        aplicarIcono(stage);
         stage.setResizable(false);
         stage.sizeToScene();
         stage.centerOnScreen();
@@ -119,6 +143,7 @@ public final class Ventanas {
         stage.setTitle(titulo);
         stage.initModality(Modality.WINDOW_MODAL);
         if (owner != null) stage.initOwner(owner);
+        aplicarIcono(stage);
         Scene scene = new Scene(root, ancho, alto);
         aplicarCss(scene);
         stage.setScene(scene);
@@ -148,6 +173,8 @@ public final class Ventanas {
         if (css != null && !dialog.getDialogPane().getStylesheets().contains(css.toExternalForm())) {
             dialog.getDialogPane().getStylesheets().add(css.toExternalForm());
         }
+        Scene escena = dialog.getDialogPane().getScene();
+        if (escena != null && escena.getWindow() instanceof Stage s) aplicarIcono(s);
     }
 
     /** Alert simple (sin encabezado) con los estilos de la app */

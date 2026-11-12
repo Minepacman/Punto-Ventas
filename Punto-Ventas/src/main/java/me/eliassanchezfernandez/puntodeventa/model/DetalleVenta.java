@@ -90,8 +90,14 @@ public class DetalleVenta {
 
     // ── Lógica de dominio ────────────────────────────────────────────────
 
+    /**
+     * Importe del renglón redondeado a centavos. Se redondea AQUÍ (y no solo en
+     * el total) para que la suma de los renglones impresos en el ticket coincida
+     * siempre con el total: con granel (3 × $12.345) el total sobre importes sin
+     * redondear podía diferir un centavo de lo que ve el cliente.
+     */
     public double getImporte() {
-        return (precioVenta * cantidad) - descuento;
+        return Math.round(((precioVenta * cantidad) - descuento) * 100.0) / 100.0;
     }
 
     public boolean isMayoreo() {

@@ -43,6 +43,7 @@ public class CajeroService {
     @Autowired private AuditoriaService auditoriaService;
     @Autowired private SesionMovilService sesionMovilService;
     @Autowired private ConfiguracionService configuracionService;
+    @Autowired private ConexionService      conexionService;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -160,6 +161,8 @@ public class CajeroService {
         }
 
         String cambios = "rol " + c.getRol() + "→" + rol + ", activo " + c.isActivo() + "→" + activo;
+        String hashAntes = c.getContrasenaHash();
+        boolean eraAdmin = c.getRol() == Cajero.Rol.ADMIN;
         c.setUsuario(usuario);
         c.setNombreCompleto(nombreCompleto);
         c.setRol(rol);
@@ -177,6 +180,8 @@ public class CajeroService {
         if (!activo || cambiaContrasena) {
             sesionMovilService.revocarDeCajero(guardado.getId(), !activo ? "usuario desactivado" : "contraseña restablecida");
         }
+        // Su contraseña anterior ya no debe abrir la pantalla "sin conexión" de esta caja
+        if (eraAdmin && (!activo || cambiaContrasena || rol != Cajero.Rol.ADMIN)) conexionService.olvidarAdministradorSi(hashAntes);
 
         auditoriaService.registrar(sesionService.getCajeroActual(), "USUARIO_MODIFICADO",
                 guardado.getUsuario() + ": " + cambios, (Cajero) null);
@@ -190,10 +195,12 @@ public class CajeroService {
         Cajero c = obtener(id);
         PoliticaContrasena.validar(nuevaContrasena, c.getUsuario());
 
+        String hashAntes = c.getContrasenaHash();
         c.setContrasenaHash(passwordEncoder.encode(nuevaContrasena));
         c.setDebeCambiarContrasena(true);
         cajeroRepo.save(c);
         sesionMovilService.revocarDeCajero(c.getId(), "contraseña restablecida");
+        if (c.getRol() == Cajero.Rol.ADMIN) conexionService.olvidarAdministradorSi(hashAntes);
         auditoriaService.registrar(sesionService.getCajeroActual(), "CONTRASENA_RESTABLECIDA",
                 c.getUsuario(), (Cajero) null);
     }
@@ -229,6 +236,7 @@ public class CajeroService {
         }
         Cajero guardado = cajeroRepo.save(c);
         if (!activo) sesionMovilService.revocarDeCajero(c.getId(), "usuario desactivado");
+        if (!activo && c.getRol() == Cajero.Rol.ADMIN) conexionService.olvidarAdministradorSi(c.getContrasenaHash());
         auditoriaService.registrar(sesionService.getCajeroActual(),
                 activo ? "USUARIO_ACTIVADO" : "USUARIO_DESACTIVADO", c.getUsuario(), (Cajero) null);
         return guardado;
@@ -263,6 +271,7 @@ public class CajeroService {
         }
         cajeroRepo.delete(c);
         sesionMovilService.revocarDeCajero(c.getId(), "usuario eliminado");
+        if (c.getRol() == Cajero.Rol.ADMIN) conexionService.olvidarAdministradorSi(c.getContrasenaHash());
         auditoriaService.registrar(sesionService.getCajeroActual(), "USUARIO_ELIMINADO", c.getUsuario(), (Cajero) null);
     }
 

@@ -18,13 +18,18 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
+import me.eliassanchezfernandez.puntodeventa.service.ActualizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.BienvenidaService;
+import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
+import me.eliassanchezfernandez.puntodeventa.service.DonadorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Atajo;
 import me.eliassanchezfernandez.puntodeventa.util.Donacion;
+import me.eliassanchezfernandez.puntodeventa.util.PreferenciasActualizacion;
+import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
+import me.eliassanchezfernandez.puntodeventa.util.VersionApp;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
@@ -67,6 +72,8 @@ public class MainController implements Initializable {
     @FXML private Label   labelAtajos;
     @FXML private Hyperlink lnkAtajos;
     @FXML private Hyperlink lnkTutorial;
+    @FXML private Hyperlink lnkAcercaDe;
+    @FXML private Hyperlink lnkActualizacion;
 
     // Ventas se incluye en main.fxml (fx:id del include + "Controller"); el resto se carga la primera vez que se abre su pestaña
     @FXML private VentasController     ventasViewController;
@@ -79,9 +86,13 @@ public class MainController implements Initializable {
     @Autowired private BienvenidaService  bienvenidaService;
     @Autowired private ApplicationContext springContext;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.IdentidadCaja identidadCaja;
+    @Autowired private DonadorService       donadorService;
+    @Autowired private ActualizacionService actualizacionService;
+    @Autowired private ConfiguracionService configuracionService;
+    @Autowired private AcercaDeDialogo      acercaDeDialogo;
 
-    @Value("${app.version:1.0.0}")
-    private String version;
+    /** Versión nueva encontrada en segundo plano (la abre el enlace de la barra de estado) */
+    private ActualizacionService.Actualizacion actualizacionDisponible;
 
     private Timeline reloj;
 
@@ -99,7 +110,9 @@ public class MainController implements Initializable {
         labelUsuario.setText(cajero != null
                 ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol().getEtiqueta() + ")"
                 : "Usuario: —");
-        labelVersion.setText("v" + version);
+        labelVersion.setText(VersionApp.etiqueta());
+        lnkActualizacion.setVisible(false);
+        lnkActualizacion.setManaged(false);
         // Qué caja es esta instalación (con varias cajas, además el número si el nombre no lo dice)
         String caja = identidadCaja.nombre();
         if (identidadCaja.esMultiCaja() && !caja.contains(String.valueOf(identidadCaja.numero()))) {
@@ -131,6 +144,8 @@ public class MainController implements Initializable {
     private void flujoDeBienvenida() {
         Stage stage = ventana();
         if (stage == null || !stage.isShowing()) return;
+        // La búsqueda de versiones nuevas corre en segundo plano mientras se muestran los pasos
+        revisarActualizacionesEnSegundoPlano();
         java.util.List<BienvenidaService.Paso> pasos;
         try {
             pasos = bienvenidaService.pasosPendientes();
@@ -144,12 +159,55 @@ public class MainController implements Initializable {
                     case ASISTENTE_INICIAL -> Ventanas.abrirModal(springContext, "/fxml/asistente_inicial.fxml",
                             "Bienvenido al Punto de Venta", stage, 640, 700);
                     case TUTORIAL_GENERAL -> mostrarTutorial(true);
-                    case DONACION -> DonacionDialogo.mostrar(stage, Donacion.cargar());
+                    case DONACION -> DonacionDialogo.mostrar(stage, Donacion.cargar(), Donacion.SEGUNDOS_BLOQUEO,
+                            donadorService, sesionService.esAdmin());
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    // ── Actualizaciones y "Acerca de" ─────────────────────────────────────
+
+    /**
+     * A lo más una vez al día y solo si el administrador no lo apagó: consulta
+     * GitHub fuera del hilo de JavaFX y, si hay versión nueva, enciende un
+     * enlace discreto en la barra de estado (nada de ventanas emergentes).
+     * Solo para quien podría instalarla (ADMIN o GERENTE). Sin internet no pasa nada.
+     */
+    private void revisarActualizacionesEnSegundoPlano() {
+        if (!sesionService.esAdmin() && !sesionService.esGerente()) return;
+        try {
+            if (!configuracionService.isActualizacionesAuto()) return;
+        } catch (RuntimeException e) {
+            return;
+        }
+        java.nio.file.Path carpeta = RutasApp.carpetaAplicacion();
+        if (!PreferenciasActualizacion.tocaRevisar(carpeta, java.time.Instant.now())) return;
+        actualizacionService.buscarEnSegundoPlano().thenAccept(r -> {
+            if (r.estado() != ActualizacionService.Estado.SIN_CONEXION) {
+                PreferenciasActualizacion.anotarRevision(carpeta, java.time.Instant.now());
+            }
+            r.actualizacion().ifPresent(a -> Platform.runLater(() -> mostrarAvisoDeActualizacion(a)));
+        });
+    }
+
+    private void mostrarAvisoDeActualizacion(ActualizacionService.Actualizacion a) {
+        actualizacionDisponible = a;
+        lnkActualizacion.setText("⬆ Nueva versión " + a.version() + (a.prelanzamiento() ? " (prueba)" : "") + " disponible");
+        lnkActualizacion.setVisible(true);
+        lnkActualizacion.setManaged(true);
+    }
+
+    @FXML
+    private void onActualizacion() {
+        if (actualizacionDisponible != null) ActualizacionDialogo.mostrar(ventana(), actualizacionDisponible);
+    }
+
+    @FXML
+    private void onAcercaDe() {
+        acercaDeDialogo.mostrar(ventana());
     }
 
     /** «Tutorial» en la barra de estado: el mismo recorrido, las veces que se quiera */

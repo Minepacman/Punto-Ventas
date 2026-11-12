@@ -87,6 +87,12 @@
                 <tooltip><Tooltip text="Ver de nuevo el recorrido por las pestañas del programa"/></tooltip>
             </Hyperlink>
             <Region HBox.hgrow="ALWAYS"/>
+            <!-- Se enciende solo cuando el buscador de actualizaciones encontró una versión nueva -->
+            <Hyperlink fx:id="lnkActualizacion" text="⬆ Nueva versión disponible" onAction="#onActualizacion"
+                       focusTraversable="false" styleClass="status-actualizacion" visible="false" managed="false"/>
+            <Hyperlink fx:id="lnkAcercaDe" text="Acerca de" onAction="#onAcercaDe" focusTraversable="false">
+                <tooltip><Tooltip text="Versión, donador, soporte técnico y actualizaciones"/></tooltip>
+            </Hyperlink>
             <Label fx:id="labelVersion" text="v1.0.0"/>
         </HBox>
     </bottom>
