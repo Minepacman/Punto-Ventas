@@ -103,7 +103,7 @@ public final class Ventanas {
         stage.setMinWidth(0);
         stage.setMinHeight(0);
         stage.setScene(new Scene(root));
-        stage.setTitle("Punto de Venta");
+        stage.setTitle("Caja Libre");
         aplicarIcono(stage);
         stage.setResizable(false);
         stage.sizeToScene();
@@ -118,7 +118,7 @@ public final class Ventanas {
         Scene scene = new Scene(root);
         aplicarCss(scene);
         stage.setScene(scene);
-        stage.setTitle("Punto de Venta");
+        stage.setTitle("Caja Libre");
         aplicarIcono(stage);
         stage.setResizable(false);
         stage.sizeToScene();

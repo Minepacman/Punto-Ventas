@@ -49,7 +49,7 @@ public final class ExportarPdf {
         try (OutputStream salida = Files.newOutputStream(destino)) {
             PdfWriter.getInstance(documento, salida);
             documento.addTitle(titulo);
-            documento.addCreator("Punto de Venta");
+            documento.addCreator("Caja Libre");
             documento.open();
 
             Font fTitulo = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14);

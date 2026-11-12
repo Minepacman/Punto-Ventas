@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Punto de Venta">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Caja Libre">
   <!-- Mismo dibujo que packaging/icono/GeneradorIcono.java: canasta blanca con etiqueta verde sobre azul marino -->
   <defs><linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A4566"/><stop offset="1" stop-color="#213A58"/></linearGradient></defs>
   <rect width="100" height="100" rx="24" fill="url(#m)"/>

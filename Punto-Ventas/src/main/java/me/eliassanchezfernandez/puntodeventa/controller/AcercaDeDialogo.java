@@ -25,7 +25,9 @@ import me.eliassanchezfernandez.puntodeventa.service.DonadorService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.ClaveDonador;
+import me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados;
 import me.eliassanchezfernandez.puntodeventa.util.Donacion;
+import me.eliassanchezfernandez.puntodeventa.util.Marca;
 import me.eliassanchezfernandez.puntodeventa.util.PreferenciasActualizacion;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -57,7 +59,7 @@ public class AcercaDeDialogo {
 
     public void mostrar(Window owner) {
         Dialog<ButtonType> dlg = new Dialog<>();
-        dlg.setTitle("Acerca de Punto de Venta");
+        dlg.setTitle("Acerca de " + Marca.NOMBRE);
         dlg.setHeaderText(null);
         if (owner != null) dlg.initOwner(owner);
 
@@ -70,8 +72,68 @@ public class AcercaDeDialogo {
         Window propia = dlg.getDialogPane().getScene() != null && dlg.getDialogPane().getScene().getWindow() != null
                 ? dlg.getDialogPane().getScene().getWindow() : owner;
         raiz.getChildren().addAll(cabecera(), new Separator(), seccionApoyo(dlg, propia), new Separator(),
-                seccionActualizaciones(propia));
+                seccionOficial(propia), new Separator(), seccionActualizaciones(propia));
         dlg.getDialogPane().setContent(raiz);
+        dlg.showAndWait();
+    }
+
+    // ── Versión oficial, marca y avisos legales ───────────────────────────
+
+    /**
+     * Canales oficiales, «la versión oficial es gratuita», estado de los datos de donación
+     * (cotejados con los firmados por el autor) y los textos legales que viajan en el jar.
+     */
+    private VBox seccionOficial(Window owner) {
+        Label titulo = new Label("Versión oficial y canales");
+        titulo.getStyleClass().add("text-bold");
+        Label gratuito = new Label(Marca.AVISO_GRATUITO + " Canales oficiales: el sitio, el repositorio de GitHub (versiones con "
+                + "SHA256SUMS.txt y attestations) y el tap de Homebrew. " + Marca.AVISO_DONACION);
+        gratuito.setWrapText(true);
+        gratuito.getStyleClass().add("text-muted");
+        DonadorService.EstadoDonacion v = donadorService.verificarDatosDonacion(Donacion.cargar());
+        Label estado = new Label("Datos de donación: " + v.texto());
+        estado.setWrapText(true);
+        estado.getStyleClass().add(switch (v.verificacion()) {
+            case VERIFICADOS -> "donacion-verificado";
+            case NO_COINCIDEN -> "donacion-alerta";
+            default -> "text-muted";
+        });
+        Label llave = new Label("Llave pública del autor (claves de apoyo, revocaciones y datos de donación): kid "
+                + String.join(", ", ClaveDonador.oficial().kids()) + " · SHA-256 " + DatosDonacionFirmados.huellaLlaveOficial());
+        llave.setWrapText(true);
+        llave.getStyleClass().add("hint");
+        Button terceros = new Button("Licencias de terceros");
+        terceros.setOnAction(e -> mostrarTexto(owner, "Licencias de terceros", "/AVISOS-TERCEROS.md"));
+        Button marca = new Button("Marca y versiones modificadas");
+        marca.setOnAction(e -> mostrarTexto(owner, "Marca y términos adicionales (GPLv3 §7)", "/AVISOS-ADICIONALES.md", "/MARCA.md"));
+        HBox botones = new HBox(10, terceros, marca);
+        botones.setAlignment(Pos.CENTER_LEFT);
+        return new VBox(6, titulo, gratuito, estado, llave, botones);
+    }
+
+    /** Muestra uno o varios archivos de texto del jar, uno tras otro, en un cuadro de solo lectura */
+    private static void mostrarTexto(Window owner, String titulo, String... recursos) {
+        StringBuilder sb = new StringBuilder();
+        for (String r : recursos) {
+            try (java.io.InputStream in = AcercaDeDialogo.class.getResourceAsStream(r)) {
+                if (sb.length() > 0) sb.append("\n\n────────────────────────────────────────\n\n");
+                sb.append(in == null ? "(No se encontró " + r + " en esta compilación; consulta el repositorio.)"
+                        : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            } catch (java.io.IOException e) {
+                sb.append("(No se pudo leer ").append(r).append(')');
+            }
+        }
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle(titulo);
+        dlg.setHeaderText(null);
+        if (owner != null) dlg.initOwner(owner);
+        TextArea texto = new TextArea(sb.toString());
+        texto.setEditable(false);
+        texto.setWrapText(true);
+        texto.setPrefSize(640, 420);
+        dlg.getDialogPane().setContent(texto);
+        dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        Ventanas.estilizar(dlg);
         dlg.showAndWait();
     }
 
@@ -79,17 +141,19 @@ public class AcercaDeDialogo {
 
     private HBox cabecera() {
         VBox textos = new VBox(2);
-        Label nombre = new Label("Punto de Venta");
+        Label nombre = new Label(Marca.NOMBRE);
         nombre.getStyleClass().add("title");
-        Label version = new Label("Versión " + VersionApp.version() + "  ·  software libre (GNU GPL v3)");
+        Label version = new Label("Versión " + VersionApp.version() + "  ·  software libre (GNU GPL v3)  ·  " + Marca.COPYRIGHT);
         version.getStyleClass().add("acerca-version");
-        Label autor = new Label("Desarrollado por Elías Sánchez para tiendas de abarrotes de México. "
+        Label autor = new Label("Desarrollado por " + Marca.AUTOR + " para tiendas de abarrotes de México. "
                 + "Úsalo, cópialo y compártelo: nada del programa se bloquea nunca.");
         autor.setWrapText(true);
         autor.getStyleClass().add("text-muted");
+        Hyperlink sitio = new Hyperlink(Marca.SITIO_OFICIAL);
+        sitio.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(Marca.SITIO_OFICIAL));
         Hyperlink repo = new Hyperlink(REPOSITORIO);
         repo.setOnAction(e -> PuntoDeVentaApp.abrirEnlace(REPOSITORIO));
-        textos.getChildren().addAll(nombre, version, autor, repo);
+        textos.getChildren().addAll(nombre, version, autor, sitio, repo);
         HBox fila = new HBox(16, textos);
         fila.setAlignment(Pos.CENTER_LEFT);
         URL icono = AcercaDeDialogo.class.getResource("/icono/icono-128.png");
@@ -252,7 +316,7 @@ public class AcercaDeDialogo {
         dlg.showAndWait().ifPresent(b -> {
             String mensaje = donadorService.mensajeSoporte(problema.getText());
             if (b == wa) PuntoDeVentaApp.abrirEnlace(Donacion.whatsappUrl(datos.soporteWhatsapp(), mensaje));
-            else if (b == correo) PuntoDeVentaApp.abrirEnlace(Donacion.correoUrl(datos.soporteCorreo(), "Soporte Punto de Venta", mensaje));
+            else if (b == correo) PuntoDeVentaApp.abrirEnlace(Donacion.correoUrl(datos.soporteCorreo(), "Soporte Caja Libre", mensaje));
             else if (b == copiar) {
                 ClipboardContent contenido = new ClipboardContent();
                 contenido.putString(mensaje);

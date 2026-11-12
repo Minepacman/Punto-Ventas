@@ -2,6 +2,7 @@ package me.eliassanchezfernandez.puntodeventa.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados;
 import me.eliassanchezfernandez.puntodeventa.util.RevocacionesApoyo;
 import me.eliassanchezfernandez.puntodeventa.util.VersionApp;
 import me.eliassanchezfernandez.puntodeventa.util.VersionSemantica;
@@ -54,6 +55,8 @@ public class ActualizacionService {
     public static final String API_RELEASES = "https://api.github.com/repos/Minepacman/Punto-Ventas/releases?per_page=10";
     public static final String PAGINA_RELEASES = REPOSITORIO + "/releases";
     public static final String URL_REVOCACIONES = "https://raw.githubusercontent.com/Minepacman/Punto-Ventas/main/claves/revocadas.pdvr";
+    /** Datos de donación del autor firmados (util/DatosDonacionFirmados); se bajan con la misma consulta diaria */
+    public static final String URL_DONACION = "https://raw.githubusercontent.com/Minepacman/Punto-Ventas/main/claves/donacion.pdvd";
     public static final Duration TIEMPO_ESPERA = Duration.ofSeconds(6);
     /** Tope de la respuesta de GitHub (10 releases con notas largas caben de sobra) */
     public static final int RESPUESTA_MAXIMA = 1024 * 1024;
@@ -116,8 +119,10 @@ public class ActualizacionService {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             return Resultado.sinConexion(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
-        // Hubo internet: aprovechar para refrescar la lista de revocación (si falla, no pasa nada)
+        // Hubo internet: aprovechar para refrescar la lista de revocación y los datos de donación firmados
+        // (si cualquiera falla, no pasa nada)
         actualizarRevocaciones();
+        actualizarDatosDonacion();
         try {
             return analizar(json, actual.get(), prelanzamientos, System.getProperty("os.name"), System.getProperty("os.arch"))
                     .map(Resultado::disponible).orElse(Resultado.actualizado());
@@ -148,6 +153,18 @@ public class ActualizacionService {
             donadorService.actualizarRevocaciones(texto);
         } catch (IOException | RuntimeException e) {
             // sin lista (404 mientras no exista, sin internet, firma mala): se conserva la copia local
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Baja los datos de donación firmados (claves/donacion.pdvd) y se los pasa a DonadorService. Silencioso: fail-open. */
+    void actualizarDatosDonacion() {
+        try {
+            String texto = descargar(URL_DONACION, DatosDonacionFirmados.TAMANO_MAXIMO, "text/plain");
+            donadorService.actualizarDatosDonacion(texto);
+        } catch (IOException | RuntimeException e) {
+            // sin archivo (404 mientras no exista), sin internet o firma mala: se conserva la copia local
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -243,7 +260,9 @@ public class ActualizacionService {
     }
 
     /**
-     * Nombre del instalador que corresponde al sistema:
+     * Nombre del instalador que corresponde al sistema. Solo cuentan la extensión y la arquitectura
+     * que trae el nombre, NO el prefijo: {@code PuntoDeVenta-1.2.0-windows-x64.exe} (convención actual)
+     * y {@code CajaLibre-1.2.0-windows-x64.exe} valen igual, también para las versiones ya instaladas.
      *  - macOS: .dmg; si hay varios, el de la arquitectura (arm64/aarch64 o x64/intel);
      *  - Windows: .exe (o .msi); con JVM de 32 bits exige "x86"; de 64 bits prefiere "x64" y nunca toma uno "x86";
      *  - Linux: .deb si hay dpkg, si no .rpm si hay rpm, si no el .tar.gz portable; siempre de la arquitectura

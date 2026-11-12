@@ -228,6 +228,14 @@ public class Configuracion {
     private String revocacionesApoyo;
 
     /**
+     * Últimos datos de donación del autor descargados del repositorio (texto firmado PDVD1,
+     * util/DatosDonacionFirmados). Se comparan con donacion.properties para decir «Datos
+     * verificados» o avisar que no coinciden. Sin copia: «sin verificar» (fail-open).
+     */
+    @Column(name = "datos_donacion_firmados", length = 8192)
+    private String datosDonacionFirmados;
+
+    /**
      * Versión del programa que dejó el esquema al día (ddl-auto=update, migraciones de SQLite y de
      * proveedores). Si coincide con la versión instalada, el siguiente arranque se salta ese trabajo
      * (ver Launcher y ArranqueDiferido). Null = nunca o versión anterior.

@@ -186,6 +186,61 @@ class DonadorServiceTest extends BaseServicioTest {
     }
 
     @Test
+    void losDatosDeDonacionFirmadosSeCotejanConLosIncrustados() throws Exception {
+        me.eliassanchezfernandez.puntodeventa.util.Donacion.Datos incrustados = me.eliassanchezfernandez.puntodeventa.util.Donacion.cargar();
+        // Sin copia local: sin verificar (fail-open), nunca alerta
+        DonadorService.EstadoDonacion e = donadorService.verificarDatosDonacion(incrustados);
+        assertThat(e.verificacion()).isEqualTo(DonadorService.VerificacionDonacion.SIN_VERIFICAR);
+        assertThat(e.alerta()).isFalse();
+        assertThat(e.texto()).contains("Sin verificar");
+
+        // Basura o firma ajena: se ignora
+        assertThat(donadorService.actualizarDatosDonacion("hola")).isFalse();
+        KeyPair otro = KeyPairGenerator.getInstance(ClaveDonador.ALGORITMO).generateKeyPair();
+        var propios = me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.Datos.de(incrustados, LocalDate.now());
+        assertThat(donadorService.actualizarDatosDonacion(
+                me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.emitir(propios, otro.getPrivate()))).isFalse();
+        assertThat(donadorService.verificarDatosDonacion(incrustados).verificacion()).isEqualTo(DonadorService.VerificacionDonacion.SIN_VERIFICAR);
+
+        // Los mismos datos del programa, firmados: verificados (o pendientes mientras no haya CLABE)
+        String firmados = me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.emitir(propios, par.getPrivate());
+        assertThat(donadorService.actualizarDatosDonacion(firmados)).isTrue();
+        assertThat(donadorService.actualizarDatosDonacion(firmados)).isFalse();
+        assertThat(configuracionService.obtener().getDatosDonacionFirmados()).startsWith("PDVD1.");
+        e = donadorService.verificarDatosDonacion(incrustados);
+        assertThat(e.verificacion()).isEqualTo(incrustados.clabeConfigurada()
+                ? DonadorService.VerificacionDonacion.VERIFICADOS : DonadorService.VerificacionDonacion.PENDIENTES);
+        assertThat(e.alerta()).isFalse();
+        assertThat(auditoriaService.ultimas()).anyMatch(a -> "DATOS_DONACION_ACTUALIZADOS".equals(a.getAccion()));
+
+        // El autor publica otra cuenta: lo incrustado ya no coincide → alerta
+        var otraCuenta = new me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.Datos(LocalDate.now(), false,
+                "032180000118359719", "BBVA", "Elias Oziel Sánchez Fernández", "", "", "");
+        assertThat(donadorService.actualizarDatosDonacion(
+                me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.emitir(otraCuenta, par.getPrivate()))).isTrue();
+        e = donadorService.verificarDatosDonacion(incrustados);
+        assertThat(e.verificacion()).isEqualTo(DonadorService.VerificacionDonacion.NO_COINCIDEN);
+        assertThat(e.alerta()).isTrue();
+        assertThat(e.texto()).contains("NO coinciden");
+        // Un programa cuyo donacion.properties sí trae esa cuenta queda verificado
+        var coincide = new me.eliassanchezfernandez.puntodeventa.util.Donacion.Datos("032 180 00011835971 9", "bbva", "ELIAS OZIEL SÁNCHEZ FERNÁNDEZ");
+        assertThat(donadorService.verificarDatosDonacion(coincide).verificacion()).isEqualTo(DonadorService.VerificacionDonacion.VERIFICADOS);
+
+        // Anti-retroceso y fecha del futuro: no se aceptan
+        var vieja = new me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.Datos(LocalDate.now().minusDays(10), true, "", "", "", "", "", "");
+        assertThat(donadorService.actualizarDatosDonacion(
+                me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.emitir(vieja, par.getPrivate()))).isFalse();
+        var futura = new me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.Datos(LocalDate.now().plusDays(30), true, "", "", "", "", "", "");
+        assertThat(donadorService.actualizarDatosDonacion(
+                me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados.emitir(futura, par.getPrivate()))).isFalse();
+        assertThat(donadorService.verificarDatosDonacion(incrustados).alerta()).isTrue();
+
+        // El mensaje "ya doné" lleva el beneficiario que vio el donador
+        assertThat(donadorService.mensajeDonacion("Lupita", "300", "12/11/2026", null, "Fulano Pérez"))
+                .contains("Vi como beneficiario: Fulano Pérez");
+    }
+
+    @Test
     void laListaDeRevocacionSeAplicaConFailOpenYAntiRetroceso() throws Exception {
         iniciarComoAdmin();
         String id = ClaveDonador.nuevoId();
@@ -248,7 +303,7 @@ class DonadorServiceTest extends BaseServicioTest {
     void elMensajeDeSoporteTraeLoQueElDesarrolladorNecesita() throws Exception {
         iniciarComoAdmin();
         String sin = donadorService.mensajeSoporte("no imprime");
-        assertThat(sin).startsWith("Soporte Punto de Venta\n").contains("Versión: ", "Clave de apoyo: ninguna", "Instalación: ", "Problema: no imprime");
+        assertThat(sin).startsWith("Soporte Caja Libre\n").contains("Versión: ", "Clave de apoyo: ninguna", "Instalación: ", "Problema: no imprime");
 
         String id = ClaveDonador.nuevoId();
         String clave = claveV2(id, "Abarrotes Lupita", LocalDate.of(2027, 11, 12), List.of());

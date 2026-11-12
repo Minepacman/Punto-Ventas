@@ -201,7 +201,7 @@ public class ConfiguracionController implements Initializable {
     }
 
     @FXML void onLicencia() {
-        Label abierto = new Label("Este Punto de Venta es software de código abierto, publicado bajo la licencia GNU GPL v3.");
+        Label abierto = new Label("Caja Libre es software libre, publicado bajo la licencia GNU GPL v3. El texto completo está abajo; los avisos de terceros, la marca y los canales oficiales se ven en «Acerca de».");
         abierto.setWrapText(true);
         abierto.getStyleClass().addAll("callout", "callout-info");
         TextArea texto = new TextArea(leerLicencia());

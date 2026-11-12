@@ -587,9 +587,9 @@ public class ServidorMovilService {
     /** Manifiesto mínimo para "Agregar a pantalla de inicio" (nombre, icono y color de la app) */
     Map<String, Object> manifiesto() {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", "Punto de Venta");
-        m.put("short_name", "Punto de Venta");
-        m.put("description", "Acceso móvil al punto de venta en la red local");
+        m.put("name", "Caja Libre");
+        m.put("short_name", "Caja Libre");
+        m.put("description", "Acceso móvil a Caja Libre (punto de venta) en la red local");
         m.put("lang", "es");
         m.put("start_url", "/");
         m.put("scope", "/");

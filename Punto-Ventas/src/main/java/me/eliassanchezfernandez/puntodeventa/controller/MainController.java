@@ -156,7 +156,7 @@ public class MainController implements Initializable {
             try {
                 switch (paso) {
                     case ASISTENTE_INICIAL -> Ventanas.abrirModal(springContext, "/fxml/asistente_inicial.fxml",
-                            "Bienvenido al Punto de Venta", stage, 640, 700);
+                            "Bienvenido a Caja Libre", stage, 640, 700);
                     case TUTORIAL_GENERAL -> mostrarTutorial(true);
                     case DONACION -> DonacionDialogo.mostrar(stage, Donacion.cargar(), Donacion.SEGUNDOS_BLOQUEO,
                             donadorService, sesionService.esAdmin());
@@ -307,7 +307,7 @@ public class MainController implements Initializable {
 
     @FXML
     private void onSalir() {
-        if (Ventanas.confirmar("Salir", "¿Salir del Punto de Venta?")) {
+        if (Ventanas.confirmar("Salir", "¿Salir de Caja Libre?")) {
             guardarTicketPendiente();
             Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();

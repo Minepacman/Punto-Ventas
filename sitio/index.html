@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Punto de Venta — punto de venta gratis para tu tienda</title>
-<meta name="description" content="Programa de punto de venta gratuito y de código abierto para abarrotes, verdulerías y misceláneas en México. Vende con lector de códigos, controla tu inventario, haz tu corte y entiende tus ventas. Funciona sin internet, en PCs viejas, Windows, Mac y Linux.">
-<meta name="theme-color" content="#0A1322">
+<title>Caja Libre — punto de venta gratis para tiendas de abarrotes</title>
+<meta name="description" content="Caja Libre es un programa de punto de venta gratuito y de código abierto para abarrotes, verdulerías y misceláneas de México. Cobra con lector de códigos, lleva inventario, haz tu corte y entiende tus ventas. Funciona sin internet, en Windows, Mac y Linux.">
+<meta name="theme-color" content="#2A4566">
 <link rel="icon" type="image/svg+xml" href="img/icono.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="img/icono-32.png">
 <link rel="apple-touch-icon" href="img/icono-256.png">
 <link rel="canonical" href="https://minepacman.github.io/Punto-Ventas/">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="es_MX">
-<meta property="og:title" content="Punto de Venta — punto de venta gratis para tu tienda">
-<meta property="og:description" content="Vende, controla tu inventario, haz tu corte y entiende tus ventas. Gratis, de código abierto y funciona sin internet.">
+<meta property="og:title" content="Caja Libre — punto de venta gratis para tiendas de abarrotes">
+<meta property="og:description" content="Cobra con lector, lleva inventario, haz tu corte y entiende tus ventas. Gratis, de código abierto y sin internet.">
 <meta property="og:url" content="https://minepacman.github.io/Punto-Ventas/">
 <meta property="og:image" content="https://minepacman.github.io/Punto-Ventas/img/og.png">
 <meta property="og:image:width" content="1200">
@@ -21,706 +21,97 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="estilos.css">
 <!--
-  Sitio estático de Punto de Venta (GPLv3). Carpeta sitio/ del repositorio Minepacman/Punto-Ventas.
+  Sitio estático de Caja Libre (GPLv3). Carpeta sitio/ del repositorio Minepacman/Punto-Ventas.
   Datos editables (contacto, CLABE, nombre): datos.js. Capturas reales del programa en img/capturas/.
-  Iconos: trazos de Lucide (https://lucide.dev), licencia ISC — Copyright (c) 2022 Lucide Contributors.
-  Se permite usar, copiar, modificar y distribuir con o sin cambios conservando este aviso.
+  Icono de descarga: Lucide (https://lucide.dev), licencia ISC.
 -->
 </head>
 <body>
-<a class="saltar" href="#inicio">Ir al contenido</a>
-
-<svg style="display:none" aria-hidden="true">
-  <symbol id="i-descargar" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
-  <symbol id="i-flecha" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
-  <symbol id="i-abajo" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
-  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
-  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 7v10"/><path d="M12 7v10"/><path d="M17 7v10"/></symbol>
-  <symbol id="i-teclado" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></symbol>
-  <symbol id="i-dividir" viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></symbol>
-  <symbol id="i-reloj" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
-  <symbol id="i-porcentaje" viewBox="0 0 24 24"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
-  <symbol id="i-paquete" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></symbol>
-  <symbol id="i-camion" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
-  <symbol id="i-tijeras" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
-  <symbol id="i-grafica" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
-  <symbol id="i-clima" viewBox="0 0 24 24"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></symbol>
-  <symbol id="i-imagen" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
-  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
-  <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></symbol>
-  <symbol id="i-servidor" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></symbol>
-  <symbol id="i-telefono" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
-  <symbol id="i-factura" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
-  <symbol id="i-impresora" viewBox="0 0 24 24"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
-  <symbol id="i-sin-wifi" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
-  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></symbol>
-  <symbol id="i-actualizar" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
-  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
-  <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
-  <symbol id="i-correo" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
-  <symbol id="i-llamada" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
-  <symbol id="i-corazon" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
-  <symbol id="i-escudo" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
-  <symbol id="i-bd" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
-  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></symbol>
-  <symbol id="i-copiar" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
-  <symbol id="i-candado" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
-  <symbol id="i-calendario" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></symbol>
-  <symbol id="i-usuarios" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
-  <symbol id="i-chispas" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
-  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
-  <symbol id="i-estrella" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
-  <symbol id="i-regalo" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></symbol>
-  <symbol id="i-bascula" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
-  <symbol id="i-foco" viewBox="0 0 24 24"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1.3.5 2.6 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
-  <symbol id="i-tienda" viewBox="0 0 24 24"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></symbol>
-  <symbol id="i-rayo" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
-  <symbol id="i-externo" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
-  <symbol id="i-ayuda" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
-  <symbol id="i-recibo" viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></symbol>
-</svg>
+<a class="saltar" href="#contenido">Ir al contenido</a>
+<svg style="display:none" aria-hidden="true"><symbol id="i-descargar" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol></svg>
 
 <header class="cabecera">
-  <div class="contenedor">
-    <a class="marca" href="#inicio"><img src="img/icono.svg" alt="" width="34" height="34">Punto de Venta</a>
-    <nav class="nav" aria-label="Secciones">
-      <a href="#historia">Por qué existe</a>
-      <a href="#funciones">Funciones</a>
-      <a href="#pantallas">Pantallas</a>
-      <a href="#requisitos">Requisitos</a>
-      <a href="#tutorial">Cómo empezar</a>
-      <a href="#donaciones">Apoyar</a>
-      <a href="#faq">Preguntas</a>
+  <div class="contenedor cabecera-fila">
+    <a class="marca" href="./"><img src="img/icono.svg" alt="" width="30" height="30">Caja Libre</a>
+    <nav class="nav" aria-label="Páginas">
+      <a href="./" aria-current="page">Inicio</a>
+      <a href="funciones.html">Funciones</a>
+      <a href="empezar.html">Cómo empezar</a>
+      <a href="apoyar.html">Apoyar</a>
+      <a href="acerca.html">Quién lo hace</a>
+      <a href="preguntas.html">Preguntas</a>
+      <a href="descargar.html" class="nav-descargar">Descargar</a>
     </nav>
-    <a class="btn btn-primario btn-chico" href="#descargas"><svg class="icono"><use href="#i-descargar"/></svg>Descargar</a>
-    <button class="menu-boton" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="nav-movil"><svg class="icono"><use href="#i-menu"/></svg></button>
+    <details class="menu">
+      <summary>Menú</summary>
+      <nav aria-label="Páginas">
+        <a href="./" aria-current="page">Inicio</a>
+        <a href="funciones.html">Funciones</a>
+        <a href="descargar.html">Descargar</a>
+        <a href="empezar.html">Cómo empezar</a>
+        <a href="apoyar.html">Apoyar el proyecto</a>
+        <a href="acerca.html">Quién lo hace</a>
+        <a href="preguntas.html">Preguntas frecuentes</a>
+      </nav>
+    </details>
   </div>
-  <nav class="nav-movil" id="nav-movil" aria-label="Secciones (móvil)">
-    <a href="#historia">Por qué existe</a>
-    <a href="#funciones">Funciones</a>
-    <a href="#pantallas">Pantallas</a>
-    <a href="#descargas">Descargas</a>
-    <a href="#requisitos">Requisitos del equipo</a>
-    <a href="#tutorial">Cómo empezar</a>
-    <a href="#donaciones">Apoyar el proyecto</a>
-    <a href="#contacto">Contacto</a>
-    <a href="#faq">Preguntas frecuentes</a>
-  </nav>
 </header>
 
-<main id="inicio">
-  <!-- ═══════════════════ HERO ═══════════════════ -->
-  <section class="hero" aria-labelledby="titulo-hero">
-    <div class="hero-fondo"></div>
-    <div class="hero-glow"></div>
-    <canvas id="estrellas" aria-hidden="true"></canvas>
-    <div class="contenedor">
-      <div class="hero-texto">
-        <span class="pastilla"><span class="punto"></span>Gratis y de código abierto · GPLv3</span>
-        <h1 id="titulo-hero">El punto de venta <span class="resalte">gratis</span> para tu tienda</h1>
-        <p class="bajada">Cobra rápido con lector de códigos, lleva tu inventario, haz tu corte y entiende en qué días vendes más. Sin mensualidades, sin internet y en la computadora que ya tienes.</p>
-        <div class="hero-acciones">
-          <a class="btn btn-primario btn-grande" id="btn-descarga-principal" href="#descargas">
-            <svg class="icono"><use href="#i-descargar"/></svg>
-            <span>Descargar gratis<span class="sub">Windows · Mac · Linux</span></span>
-          </a>
-          <a class="btn btn-secundario btn-grande" href="#pantallas">Ver cómo funciona<svg class="icono"><use href="#i-flecha"/></svg></a>
-        </div>
-        <p class="hero-nota">Para abarrotes, verdulerías, misceláneas, papelerías y cualquier negocio de mostrador. <a href="#requisitos">Funciona en PCs viejas</a>.</p>
-      </div>
-      <div class="hero-visual reveal retraso-1">
-        <div class="ventana">
-          <div class="ventana-barra"><i></i><i></i><i></i><span>Punto de Venta — Abarrotes Doña Lupita</span></div>
-          <img src="img/capturas/ventas.webp" alt="Pantalla de Ventas del programa: ticket con productos escaneados, total de $256.00 y botón Cobrar F12" width="1600" height="867" fetchpriority="high">
-        </div>
-        <div class="flotante" aria-hidden="true">
-          <div class="t">VENDIDO ESTA SEMANA</div>
-          <div class="m"><span data-contar="8225.50" data-decimales="2" data-prefijo="$">$0.00</span></div>
-          <div class="d">77 tickets · promedio $106.82</div>
-        </div>
+<main id="contenido">
+  <div class="contenedor portada">
+    <div class="intro">
+      <h1>Un punto de venta gratis para la tienda de abarrotes</h1>
+      <p>Caja Libre es un programa para la computadora de tu tienda: cobras con lector de códigos, llevas el inventario, haces el corte y, con el tiempo, ves qué días y qué productos te dejan más. Sirve para abarrotes, verdulerías, misceláneas, papelerías y cualquier negocio de mostrador.</p>
+      <p>Es gratis, de código abierto y funciona sin internet. Tus datos se quedan en tu computadora. Lo hago yo, Elias, y lo puedes usar en todas las cajas que quieras.</p>
+      <div class="botones">
+        <a class="btn btn-grande" id="btn-descarga-principal" href="descargar.html"><svg class="icono"><use href="#i-descargar"/></svg><span>Descargar gratis<span class="detalle">Windows · Mac · Linux</span></span></a>
+        <a class="btn btn-sec btn-grande" href="funciones.html">Ver qué hace</a>
       </div>
     </div>
-  </section>
 
-  <!-- ═══════════════════ AUTOR ═══════════════════ -->
-  <!-- REVISAR: ortografía del nombre (en el historial de git aparece "Elias Oziel Sánchez Fernández") -->
-  <div class="autor-franja">
-    <div class="contenedor">
-      <span>Un proyecto independiente de <strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong></span>
-      <span class="sep" aria-hidden="true">·</span>
-      <span>Hecho en México, en español y pensando en tiendas de barrio</span>
-      <div class="chips">
-        <span class="chip verde"><svg class="icono"><use href="#i-check"/></svg>Sin costo</span>
-        <span class="chip azul"><svg class="icono"><use href="#i-github"/></svg>Código abierto</span>
-        <span class="chip"><svg class="icono"><use href="#i-sin-wifi"/></svg>Sin internet</span>
-      </div>
+    <figure class="captura">
+      <img src="img/capturas/ventas.webp" alt="Pantalla de Ventas de Caja Libre: ticket con ocho productos, total de $256.00 a la derecha y botón Cobrar F12" width="1600" height="867" fetchpriority="high">
+      <figcaption>La pantalla de Ventas, con una tienda de ejemplo («Abarrotes Doña Lupita»). Captura real del programa, sin retoques.</figcaption>
+    </figure>
+
+    <ul class="puntos">
+      <li><b>Gratis de verdad</b><span>Sin mensualidad, sin límite de productos, ventas ni cajas, y ninguna función bloqueada. Es software libre (licencia GPLv3): lo puedes usar, copiar y regalar.</span></li>
+      <li><b>Funciona sin internet</b><span>Todo vive en tu computadora. La red solo se usa, si quieres, para buscar actualizaciones, consultar el clima y facturar.</span></li>
+      <li><b>Corre en la PC que ya tienes</b><span>Windows 10 y 11, Mac y Linux. Con 2 GB de RAM, disco duro normal y pantalla de 1024×768 alcanza.</span></li>
+      <li><b>Te dice cómo va la tienda</b><span>Después de un mes de ventas, las estadísticas ya son confiables: días y horas fuertes, qué pedirle a cada proveedor y qué productos solo ocupan espacio.</span></li>
+    </ul>
+
+    <p>Si quieres ver más: <a href="funciones.html">qué hace, con pantallas</a> · <a href="empezar.html">cómo empezar en ocho pasos</a> · <a href="preguntas.html">preguntas frecuentes</a>.</p>
+
+    <div class="quien">
+      <img src="img/elias.webp" alt="Foto de Elias Oziel Sánchez Fernández" width="64" height="64" loading="lazy">
+      <p><b>Lo hace una sola persona.</b> Me llamo <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span> y hice Caja Libre después de ver lo que cuesta un sistema de cobro cuando apenas estás abriendo una tienda. <a href="acerca.html">Aquí cuento por qué</a> y cómo contactarme.</p>
     </div>
   </div>
-
-  <!-- ═══════════════════ CIFRAS ═══════════════════ -->
-  <section class="cifras-banda" aria-label="En pocas cifras">
-    <div class="contenedor">
-      <div class="cifra-grande reveal"><b>$0</b><strong>al mes, para siempre</strong><span>Sin licencias ni límites de productos, ventas o cajas.</span></div>
-      <div class="cifra-grande reveal retraso-1"><b>2 GB</b><strong>de RAM bastan</strong><span>Pensado para la PC vieja del mostrador, con disco duro normal.</span></div>
-      <div class="cifra-grande reveal retraso-2"><b>100 %</b><strong>de tus datos en tu PC</strong><span>Nada se sube a ninguna nube. Tú tienes el archivo y los respaldos.</span></div>
-      <div class="cifra-grande reveal retraso-3"><b>F12</b><strong>y está cobrado</strong><span>Todo se hace con el teclado: escanear, cobrar, siguiente cliente.</span></div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ HISTORIA ═══════════════════ -->
-  <section class="seccion" id="historia" aria-labelledby="titulo-historia">
-    <div class="contenedor">
-      <div class="encabezado izq reveal">
-        <span class="sobretitulo">Por qué existe</span>
-        <h2 class="titulo" id="titulo-historia">Empezar un negocio ya cuesta bastante. El programa no debería costar más.</h2>
-      </div>
-      <div class="historia">
-        <div class="prosa reveal">
-          <p>Quien ha abierto una tienda sabe lo que es: juntar para la renta, el primer surtido, el refrigerador… y cuando por fin buscas un sistema para cobrar, te encuentras con <strong>mensualidades, licencias y equipos especiales</strong> que, al empezar, simplemente no se pueden pagar. Entonces se cobra con libreta y calculadora, y así se queda por años.</p>
-          <p>Pero el dinero no es lo único que se va. También se va la tranquilidad. ¿Cuánto le toca hoy al de los refrescos y cuánto al del pan? ¿Me alcanza para pagarle a todos los repartidores esta semana? ¿Qué día puedo abrir un poco más tarde, cerrar temprano o tomarme un domingo sin que me pese? <strong>Casi nadie lo sabe con certeza</strong>, porque nadie tiene tiempo de sentarse a sacar cuentas al final de un día de doce horas.</p>
-          <p>De esa incertidumbre nació la parte de <strong>estadísticas y análisis de ventas</strong> de este programa. La idea es sencilla: que la misma caja que usas para cobrar te vaya diciendo, con tus propios números, cuánto estás ganando, qué días se vende más, qué horas son fuertes, qué te conviene pedirle a cada proveedor y qué productos solo ocupan espacio. Para que el tendero tenga una imagen más clara de su negocio y pueda decidir con calma en qué días relajarse y en cuáles ponerse las pilas.</p>
-          <div class="cita">
-            <p>“No es un sistema para grandes cadenas. Es para la tienda de la esquina, hecho por alguien que entiende lo que cuesta sostenerla.”</p>
-            <footer>Punto de Venta es software libre: puedes usarlo, copiarlo y regalarlo a quien quieras.</footer>
-          </div>
-        </div>
-        <aside class="panel-aprende reveal retraso-1" aria-labelledby="titulo-aprende">
-          <h3 id="titulo-aprende"><svg class="icono"><use href="#i-foco"/></svg>Las proyecciones se hacen con <em>tus</em> ventas</h3>
-          <p class="texto-grande" style="margin-top:0;font-size:1rem">El programa no inventa números: aprende del ritmo real de tu tienda. Por eso necesita tiempo. Así de honesto:</p>
-          <ol class="linea-tiempo">
-            <li><span class="d">Día 1</span><span class="q"><b>Sin datos.</b> Cobras normal; el programa solo observa y guarda.</span></li>
-            <li><span class="d">Semana 1–2</span><span class="q"><b>Entrenamiento.</b> Ya hay cuentas del día y comparativos sencillos, pero las recomendaciones todavía son tímidas.</span></li>
-            <li><span class="d">Semana 3–4</span><span class="q"><b>Datos parciales.</b> Empieza a ver tus días y horas fuertes y qué se vende junto.</span></li>
-            <li><span class="d">~1 mes</span><span class="q"><b>Datos suficientes.</b> Las proyecciones, los pedidos sugeridos por proveedor y la lista de productos rezagados ya son confiables.</span></li>
-          </ol>
-          <div class="barra-madurez" aria-hidden="true"><i></i></div>
-          <small>Cada pantalla de Estadísticas te dice en qué nivel vas y qué tan confiable es lo que muestra.</small>
-        </aside>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ FUNCIONES ═══════════════════ -->
-  <section class="seccion seccion-alt" id="funciones" aria-labelledby="titulo-funciones">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Qué hace</span>
-        <h2 class="titulo" id="titulo-funciones">Todo lo que necesita una tienda, nada que te estorbe</h2>
-        <p>Cada función está pensada para usarse con el teclado y sin soltar al cliente. Todo lo que ves aquí ya existe en el programa.</p>
-      </div>
-      <div class="rejilla">
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-scan"/></svg></div><h3>Ventas rápidas con lector</h3><p>Escanea el código y listo. Escribe <code>3*código</code> para tres piezas, pesa a granel, busca por nombre con <kbd>F6</kbd> y cobra con <kbd>F12</kbd>.</p></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico"><svg class="icono"><use href="#i-dividir"/></svg></div><h3>Pago dividido y cambio exacto</h3><p>Efectivo, tarjeta, transferencia o vales, o una mezcla. Billetes rápidos (<kbd>F1</kbd>–<kbd>F5</kbd>) y el cambio en grande para que no haya errores.</p></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico"><svg class="icono"><use href="#i-reloj"/></svg></div><h3>Tickets en espera</h3><p>¿El cliente olvidó algo? Pon el ticket en espera con <kbd>F11</kbd>, atiende al siguiente y recupéralo después. Varios a la vez por caja.</p></article>
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-porcentaje"/></svg></div><h3>Promociones y mayoreo</h3><p>2×1, 3×2, descuento por departamento, por horario o hasta agotar existencias. Precio de mayoreo con un botón y descuentos manuales con permiso.</p></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico"><svg class="icono"><use href="#i-paquete"/></svg></div><h3>Inventario con historial</h3><p>Entradas, ajustes y cada movimiento queda registrado. Avisos de producto bajo y filas en rojo cuando algo se agota.</p></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico"><svg class="icono"><use href="#i-camion"/></svg></div><h3>Proveedores y órdenes de compra</h3><p>Registra a tus repartidores y sus días de visita. El programa sugiere qué pedirle a cada uno y arma la orden de compra en borrador.</p></article>
-        <article class="tarjeta reveal"><div class="ico verde"><svg class="icono"><use href="#i-tijeras"/></svg></div><h3>Corte y fondo por caja</h3><p>Fondo del día, ventas por forma de pago, por departamento, canceladas y ganancia. Corte parcial o general, con registro de quién lo hizo.</p></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico verde"><svg class="icono"><use href="#i-grafica"/></svg></div><h3>Estadísticas y proyecciones</h3><p>Días y horas pico, ticket promedio, comparativos contra la semana y el mes pasados, productos que más dejan y productos rezagados.</p></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico verde"><svg class="icono"><use href="#i-clima"/></svg></div><h3>Sugerencias según el clima</h3><p>Con internet, consulta el pronóstico de tu ciudad y cruza el clima con tus ventas: más agua y hielo cuando hace calor, más sopas cuando llueve.</p></article>
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-imagen"/></svg></div><h3>Fotos de producto</h3><p>Ponle foto a lo que vendes sin código de barras (pan, fruta, dulces sueltos) para encontrarlo de un vistazo.</p></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico"><svg class="icono"><use href="#i-usuarios"/></svg></div><h3>Cajeros, permisos y bitácora</h3><p>Administrador, gerente y cajeros con permisos por persona. Autorización con clave para cancelar o descontar. Todo queda en la bitácora.</p></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico"><svg class="icono"><use href="#i-servidor"/></svg></div><h3>Varias cajas</h3><p>Una caja con base de datos local, o varias cajas conectadas a un servidor PostgreSQL en la red de la tienda, con existencias compartidas.</p></article>
-        <article class="tarjeta reveal"><div class="ico ambar"><svg class="icono"><use href="#i-telefono"/></svg></div><h3>Tu tienda en el teléfono</h3><p>Conéctate al Wi-Fi de la tienda y revisa ventas, estadísticas e inventario desde tu celular. Sin apps que instalar, sin nube.</p></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico ambar"><svg class="icono"><use href="#i-factura"/></svg></div><h3>Facturación CFDI 4.0</h3><p>Factura por venta o factura global a través de Facturama. <span class="nota">Requiere una cuenta con ese servicio (tiene costo con ellos, no con nosotros).</span></p></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico ambar"><svg class="icono"><use href="#i-impresora"/></svg></div><h3>Impresora, cajón y báscula</h3><p>Impresoras térmicas de tickets (ESC/POS) o de sistema, apertura del cajón de dinero y báscula por puerto serial.</p></article>
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-sin-wifi"/></svg></div><h3>Funciona sin internet</h3><p>Todo vive en tu computadora. La red solo se usa, si quieres, para actualizaciones, el clima y facturar.</p></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico"><svg class="icono"><use href="#i-actualizar"/></svg></div><h3>Actualizaciones gratis</h3><p>Cuando hay versión nueva aparece un aviso discreto. Descargas el instalador, lo ejecutas encima y tus datos se quedan donde están.</p></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico"><svg class="icono"><use href="#i-cpu"/></svg></div><h3>Corre en PCs viejas</h3><p>Probado para equipos con 2–4 GB de RAM, disco duro mecánico y pantalla de 1024×768. También Mac y Linux.</p></article>
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-bd"/></svg></div><h3>Respaldos automáticos</h3><p>Copia de seguridad al cerrar, restauración desde Configuración y exportación a CSV, Excel y PDF de cualquier tabla.</p></article>
-        <article class="tarjeta proximamente reveal retraso-1"><span class="etiqueta-pronto">Próximamente</span><div class="ico"><svg class="icono"><use href="#i-usuarios"/></svg></div><h3>Clientes y crédito (fiado)</h3><p>Cuentas por cliente y control del fiado. Todavía no está disponible; está en la lista de lo que sigue.</p></article>
-        <article class="tarjeta proximamente reveal retraso-2"><span class="etiqueta-pronto">Próximamente</span><div class="ico"><svg class="icono"><use href="#i-recibo"/></svg></div><h3>Leer tickets del proveedor con la cámara</h3><p>Capturar la entrada de mercancía fotografiando la nota del repartidor. Hoy es solo una demostración en la página móvil.</p></article>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ PANTALLAS ═══════════════════ -->
-  <section class="seccion" id="pantallas" aria-labelledby="titulo-pantallas">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Así se ve</span>
-        <h2 class="titulo" id="titulo-pantallas">Pantallas reales del programa</h2>
-        <p>Capturas tomadas del programa con una tienda de ejemplo («Abarrotes Doña Lupita»). Sin retoques.</p>
-      </div>
-
-      <div class="vista-rapida reveal" id="vista-rapida">
-        <div class="pestanas" role="tablist" aria-label="Pantallas del programa">
-          <button type="button" role="tab" aria-selected="true" aria-controls="vr-ventas" id="tab-ventas"><svg class="icono"><use href="#i-tienda"/></svg>Ventas</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="vr-productos" id="tab-productos"><svg class="icono"><use href="#i-paquete"/></svg>Productos</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="vr-inventario" id="tab-inventario"><svg class="icono"><use href="#i-camion"/></svg>Inventario</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="vr-corte" id="tab-corte"><svg class="icono"><use href="#i-tijeras"/></svg>Corte</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="vr-estadisticas" id="tab-estadisticas"><svg class="icono"><use href="#i-grafica"/></svg>Estadísticas</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="vr-configuracion" id="tab-configuracion"><svg class="icono"><use href="#i-cpu"/></svg>Configuración</button>
-        </div>
-        <div class="panel activo" id="vr-ventas" role="tabpanel" aria-labelledby="tab-ventas">
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F1 · Ventas</span></div><img src="img/capturas/ventas.webp" alt="Pestaña Ventas con un ticket en captura y el total en grande" width="1600" height="867" loading="lazy"></div>
-          <p class="pie-panel">Rápida. Clara. Con el teclado.</p>
-        </div>
-        <div class="panel" id="vr-productos" role="tabpanel" aria-labelledby="tab-productos" hidden>
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F3 · Productos</span></div><img src="img/capturas/productos.webp" alt="Pestaña Productos con el catálogo, precios y existencias" width="1600" height="867" loading="lazy"></div>
-          <p class="pie-panel">Tu catálogo con costo, venta, mayoreo, existencia y foto.</p>
-        </div>
-        <div class="panel" id="vr-inventario" role="tabpanel" aria-labelledby="tab-inventario" hidden>
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F4 · Inventario</span></div><img src="img/capturas/inventario.webp" alt="Pestaña Inventario: entrada de mercancía por proveedor y tabla de existencias con productos bajos resaltados" width="1600" height="867" loading="lazy"></div>
-          <p class="pie-panel">Entradas por proveedor, ajustes con motivo y alertas de producto bajo.</p>
-        </div>
-        <div class="panel" id="vr-corte" role="tabpanel" aria-labelledby="tab-corte" hidden>
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>Corte</span></div><img src="img/capturas/corte.webp" alt="Pestaña Corte con el resumen del día" width="1600" height="867" loading="lazy"></div>
-          <p class="pie-panel">Lo que debe haber en el cajón, por forma de pago y por departamento.</p>
-        </div>
-        <div class="panel" id="vr-estadisticas" role="tabpanel" aria-labelledby="tab-estadisticas" hidden>
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>Estadísticas</span></div><img src="img/capturas/estadisticas.webp" alt="Pestaña Estadísticas con comparativos y gráficas" width="1600" height="867" loading="lazy"></div>
-          <p class="pie-panel">Tus números, comparados con la semana y el mes pasados.</p>
-        </div>
-        <div class="panel" id="vr-configuracion" role="tabpanel" aria-labelledby="tab-configuracion" hidden>
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>Configuración</span></div><img src="img/capturas/configuracion.webp" alt="Pestaña Configuración con las secciones del negocio, ticket, impresora, respaldos y más" width="1600" height="867" loading="lazy"></div>
-          <p class="pie-panel">Negocio, ticket, logotipo, impresora, báscula, respaldos, usuarios, acceso móvil y facturación.</p>
-        </div>
-      </div>
-
-      <div class="pantalla">
-        <div class="pantalla-texto reveal">
-          <span class="sobretitulo">Ventas</span>
-          <h3>Escanea, cobra, siguiente</h3>
-          <p>La pantalla donde pasarás el día. El cursor siempre está en el campo de código; cada producto que escaneas aparece en el ticket con su existencia, y la caja del total es imposible de perder de vista.</p>
-          <ul>
-            <li><svg class="icono"><use href="#i-check"/></svg><span><kbd>F12</kbd> abre el cobro; <kbd>Enter</kbd> cobra en efectivo exacto.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Las promociones se aplican solas (ahí ves el 3×2 de Sabritas).</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Sugerencias abajo: lo que se vende mucho a esta hora en tu tienda.</span></li>
-          </ul>
-        </div>
-        <div class="pantalla-visual reveal retraso-1">
-          <div class="demo-ticket" id="demo-ticket" aria-label="Demostración animada: se escanean productos, se suma el total y se cobra">
-            <div class="cab"><svg class="icono lector"><use href="#i-scan"/></svg><div class="campo"></div></div>
-            <table>
-              <thead><tr><th>Producto</th><th>Cant.</th><th>Importe</th></tr></thead>
-              <tbody></tbody>
-            </table>
-            <div class="total"><span class="t">TOTAL</span><span class="m">$0.00</span></div>
-            <div class="pie"><span class="ayuda">Escanea los productos…</span><span class="cambio"></span><span class="cobrar">Cobrar  F12</span></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="pantalla invertida">
-        <div class="pantalla-texto reveal">
-          <span class="sobretitulo">Cobro</span>
-          <h3>Una ventana de cobro que no deja dudas</h3>
-          <p>Escribe lo que recibes o toca el billete con <kbd>F1</kbd>–<kbd>F5</kbd>. El cambio aparece en grande y en verde. Si el cliente paga parte con tarjeta y parte en efectivo, los dos campos lo resuelven.</p>
-          <ul>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Esc regresa al ticket sin perder nada.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Con impresora térmica, imprime el ticket y abre el cajón.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Reimprime el último ticket con <kbd>Ctrl</kbd>+<kbd>I</kbd>.</span></li>
-          </ul>
-        </div>
-        <div class="pantalla-visual reveal retraso-1">
-          <div class="ventana" style="max-width:460px;margin:0 auto">
-            <div class="ventana-barra"><i></i><i></i><i></i><span>Cobrar</span></div>
-            <img src="img/capturas/cobro.webp" alt="Ventana de cobro: total a cobrar $256.00, efectivo recibido 500, botones de billetes rápidos y cambio $244.00" width="640" height="695" loading="lazy">
-          </div>
-        </div>
-      </div>
-
-      <div class="pantalla">
-        <div class="pantalla-texto reveal">
-          <span class="sobretitulo">Productos e inventario</span>
-          <h3>Tu catálogo, con costos, precios y existencias</h3>
-          <p>Da de alta un producto escaneando su código. Precio de costo, de venta y de mayoreo, departamento, unidad (pieza o kilo), mínimo de alerta y foto. En Inventario registras entradas por proveedor y cada ajuste queda con motivo y responsable.</p>
-          <ul>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Historial de precios y de movimientos por producto.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Catálogo de productos comunes precargado para empezar rápido.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Exporta a Excel, CSV o PDF.</span></li>
-          </ul>
-        </div>
-        <div class="pantalla-visual reveal retraso-1">
-          <div class="ventana">
-            <div class="ventana-barra"><i></i><i></i><i></i><span>F3 · Productos</span></div>
-            <img src="img/capturas/productos.webp" alt="Pestaña Productos: tabla con código, descripción, costo, venta, mayoreo, stock y departamento; el aguacate muestra su foto" width="1600" height="867" loading="lazy">
-          </div>
-        </div>
-      </div>
-
-      <div class="pantalla invertida" id="estadisticas">
-        <div class="pantalla-texto reveal">
-          <span class="sobretitulo verde">Estadísticas</span>
-          <h3>Saber cómo va la tienda sin sacar cuentas a mano</h3>
-          <p>Venta total, tickets, ticket promedio y comparativos contra la semana y el mes pasados. Gráficas por día, por día de la semana y por franja horaria. Y la parte que más ayuda a planear:</p>
-          <ul>
-            <li><svg class="icono"><use href="#i-check"/></svg><span><b>Reabastecimiento:</b> qué, cuánto y a quién pedir, calculado con tu venta promedio de 30 días.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span><b>Rezagados:</b> productos sin venta que tienen tu dinero detenido en el anaquel.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span><b>Nivel de datos:</b> el programa te dice qué tan confiable es cada número según cuánto historial lleva.</span></li>
-          </ul>
-        </div>
-        <div class="pantalla-visual reveal retraso-1">
-          <div class="grafica" aria-label="Gráfica ilustrativa: ventas de la semana y proyección">
-            <div class="cab"><b>Ventas por día</b><span>últimas 2 semanas + proyección</span></div>
-            <svg viewBox="0 0 520 220" role="img" aria-hidden="true">
-              <defs><linearGradient id="degradado-area" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#4F8BD1" stop-opacity=".35"/><stop offset="1" stop-color="#4F8BD1" stop-opacity="0"/></linearGradient></defs>
-              <g class="eje">
-                <line x1="40" y1="180" x2="510" y2="180" stroke="rgba(255,255,255,.15)"/>
-                <line x1="40" y1="110" x2="510" y2="110" stroke="rgba(255,255,255,.07)"/>
-                <line x1="40" y1="40" x2="510" y2="40" stroke="rgba(255,255,255,.07)"/>
-                <text x="4" y="184">$1k</text><text x="4" y="114">$2k</text><text x="4" y="44">$3k</text>
-                <text x="60" y="205">L</text><text x="92" y="205">M</text><text x="124" y="205">M</text><text x="156" y="205">J</text><text x="188" y="205">V</text><text x="220" y="205">S</text><text x="252" y="205">D</text>
-                <text x="284" y="205">L</text><text x="316" y="205">M</text><text x="348" y="205">M</text><text x="380" y="205">J</text><text x="412" y="205">V</text><text x="444" y="205">S</text><text x="476" y="205">D</text>
-              </g>
-              <g class="barras" fill="rgba(79,139,209,.22)">
-                <rect x="52" y="120" width="20" height="60"/><rect x="84" y="138" width="20" height="42"/><rect x="116" y="128" width="20" height="52"/><rect x="148" y="124" width="20" height="56"/><rect x="180" y="96" width="20" height="84"/><rect x="212" y="58" width="20" height="122"/><rect x="244" y="104" width="20" height="76"/>
-                <rect x="276" y="114" width="20" height="66"/><rect x="308" y="134" width="20" height="46"/><rect x="340" y="122" width="20" height="58"/><rect x="372" y="118" width="20" height="62"/><rect x="404" y="88" width="20" height="92"/><rect x="436" y="50" width="20" height="130"/><rect x="468" y="98" width="20" height="82"/>
-              </g>
-              <path class="area" d="M62 120 L94 138 L126 128 L158 124 L190 96 L222 58 L254 104 L286 114 L318 134 L350 122 L382 118 L414 88 L446 50 L478 98 L478 180 L62 180 Z"/>
-              <path class="linea" d="M62 120 L94 138 L126 128 L158 124 L190 96 L222 58 L254 104 L286 114 L318 134 L350 122 L382 118 L414 88 L446 50 L478 98"/>
-              <path class="pronostico" d="M286 116 L318 132 L350 124 L382 116 L414 92 L446 54 L478 100"/>
-              <circle cx="446" cy="50" r="5" fill="#8DB8EC"/>
-              <text x="446" y="32" text-anchor="middle" fill="#EAF0F8" font-size="12" font-weight="700" font-family="inherit">Sábado: tu día fuerte</text>
-            </svg>
-            <div class="leyenda"><span><i></i>Ventas reales</span><span><i class="p"></i>Lo esperado según tu historial</span></div>
-            <div class="cifras">
-              <div class="cifra"><b data-contar="2689" data-prefijo="$">$0</b><span>mejor día de la semana</span></div>
-              <div class="cifra"><b class="verde" data-contar="106.82" data-decimales="2" data-prefijo="$">$0.00</b><span>ticket promedio</span></div>
-              <div class="cifra"><b data-contar="19" data-sufijo=" h">0 h</b><span>hora pico: 7 pm</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="pantalla reveal">
-        <div class="pantalla-visual">
-          <div class="ventana">
-            <div class="ventana-barra"><i></i><i></i><i></i><span>Estadísticas · Semana</span></div>
-            <img src="img/capturas/estadisticas.webp" alt="Pestaña Estadísticas: nivel de datos suficiente, venta total de la semana $8,225.50, 77 transacciones, comparativos y gráficas de ventas por día" width="1600" height="867" loading="lazy">
-          </div>
-        </div>
-        <div class="pantalla-texto">
-          <span class="sobretitulo verde">Estadísticas, de verdad</span>
-          <h3>Así se ve con un mes de ventas</h3>
-          <p>Secciones de Resumen, Horarios pico, Cajeros y horas, Productos más vendidos, Reabastecimiento, Recomendaciones y Clima. Cada sección tiene su botón de ayuda que explica, en palabras sencillas, cómo leer lo que muestra.</p>
-        </div>
-      </div>
-
-      <div class="pantalla invertida">
-        <div class="pantalla-texto reveal">
-          <span class="sobretitulo">Corte de caja</span>
-          <h3>El corte del día en una sola pantalla</h3>
-          <p>Dinero inicial, ventas en efectivo, tarjeta, transferencia y vales, lo que debe haber en el cajón, canceladas, ganancia (solo para quien tiene permiso de verla) y productos que se quedaron bajos. Corte por caja o general.</p>
-        </div>
-        <div class="pantalla-visual reveal retraso-1">
-          <div class="ventana">
-            <div class="ventana-barra"><i></i><i></i><i></i><span>Corte</span></div>
-            <img src="img/capturas/corte.webp" alt="Pestaña Corte: resumen del día con fondo de caja, ventas por forma de pago, total en caja, ventas por departamento y productos bajos" width="1600" height="867" loading="lazy">
-          </div>
-        </div>
-      </div>
-
-      <div class="pantalla">
-        <div class="pantalla-texto reveal">
-          <span class="sobretitulo ambar">Acceso móvil</span>
-          <h3>Tu tienda en el teléfono, sin salir de tu red</h3>
-          <p>El programa abre una página en la red Wi-Fi de la tienda. Escaneas un código QR desde Configuración, entras con tu mismo usuario y ves ventas de hoy, estadísticas, historial e inventario desde el celular, en la trastienda o desde la casa si está en la misma red.</p>
-          <ul>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Nada sale a internet: la página la sirve tu propia computadora.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Sesiones de 48 horas o permanentes, que puedes cerrar desde la PC.</span></li>
-            <li><svg class="icono"><use href="#i-check"/></svg><span>Se ve bien en cualquier teléfono; no hay que instalar nada.</span></li>
-          </ul>
-        </div>
-        <div class="pantalla-visual reveal retraso-1">
-          <div class="telefonos">
-            <div class="telefono"><img src="img/capturas/movil-inicio.webp" alt="Página móvil: estadísticas de la semana con venta total, tickets, ticket promedio y productos más vendidos" width="600" height="1299" loading="lazy"></div>
-            <div class="telefono"><img src="img/capturas/movil-inventario.webp" alt="Página móvil: inventario con búsqueda de productos y existencias" width="600" height="1299" loading="lazy"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ DESCARGAS ═══════════════════ -->
-  <section class="seccion seccion-alt" id="descargas" aria-labelledby="titulo-descargas">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Descargas</span>
-        <h2 class="titulo" id="titulo-descargas">Descárgalo e instálalo en 5 minutos</h2>
-        <p>Versión <strong data-version>más reciente</strong> · publicada el <span data-fecha-version>—</span>. Los enlaces siempre apuntan a la última versión publicada.</p>
-      </div>
-
-      <div class="detecta reveal" id="detecta-so">
-        <div>
-          <h3>Elige tu sistema</h3>
-          <p>Si entras desde la computadora de la tienda, el botón elegirá el instalador correcto por ti.</p>
-        </div>
-        <a class="btn btn-primario btn-grande" data-notas href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg><span>Descargar</span></a>
-      </div>
-
-      <div class="rejilla">
-        <article class="tarjeta tarjeta-descarga reveal">
-          <div class="so"><div class="ico"><svg class="icono"><use href="#i-monitor"/></svg></div><div><h3>Windows</h3><div class="para">Windows 10 y 11</div></div></div>
-          <p>Instalador normal: siguiente, siguiente, listo. Crea un acceso en el escritorio y en el menú Inicio.</p>
-          <div class="archivos">
-            <a class="archivo" data-activo="windows-x64" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Windows 64 bits (.exe)<small>la mayoría de las PCs</small></a>
-            <a class="archivo" data-activo="windows-x86" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Windows 32 bits (.exe)<small>equipos muy antiguos</small></a>
-          </div>
-        </article>
-        <article class="tarjeta tarjeta-descarga reveal retraso-1">
-          <div class="so"><div class="ico"><svg class="icono"><use href="#i-laptop"/></svg></div><div><h3>macOS</h3><div class="para">Mac con Apple Silicon o Intel</div></div></div>
-          <p>Abre el .dmg y arrastra el programa a Aplicaciones. Si no sabes cuál es tu Mac: menú  → «Acerca de esta Mac».</p>
-          <div class="archivos">
-            <a class="archivo" data-activo="macos-arm64" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Mac Apple Silicon (.dmg)<small>M1, M2, M3, M4…</small></a>
-            <a class="archivo" data-activo="macos-x64" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Mac Intel (.dmg)<small>Mac de 2020 o antes</small></a>
-          </div>
-          <div class="comando"><svg class="icono"><use href="#i-terminal"/></svg><code id="cmd-brew" data-comando>brew tap minepacman/tap &amp;&amp; brew install --cask punto-de-venta</code><button type="button" data-copiar="#cmd-brew" aria-label="Copiar comando de Homebrew">Copiar</button></div>
-        </article>
-        <article class="tarjeta tarjeta-descarga reveal retraso-2">
-          <div class="so"><div class="ico"><svg class="icono"><use href="#i-terminal"/></svg></div><div><h3>Linux</h3><div class="para">Ubuntu, Debian, Mint, Fedora y otros</div></div></div>
-          <p>Paquete .deb para Ubuntu 24.04+, Debian 13+ y Mint 22+; .rpm para Fedora y openSUSE; .tar.gz para cualquier otra distribución (incluye Ubuntu 22.04 y Debian 12).</p>
-          <div class="archivos">
-            <a class="archivo" data-activo="linux-x64.deb" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Ubuntu / Debian (.deb)<small></small></a>
-            <a class="archivo" data-activo="linux-x64.rpm" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Fedora / openSUSE (.rpm)<small></small></a>
-            <a class="archivo" data-activo="linux-x64.tar.gz" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg>Portable (.tar.gz)<small></small></a>
-          </div>
-        </article>
-      </div>
-      <div class="descarga-pie reveal">
-        <a data-activo="sha" href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono" style="display:inline-block;vertical-align:-4px;width:1em;height:1em"><use href="#i-escudo"/></svg> Sumas SHA-256 para verificar la descarga</a>
-        <a data-enlace="releases" href="https://github.com/Minepacman/Punto-Ventas/releases">Todas las versiones y notas de cambios</a>
-        <a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">Código fuente en GitHub</a>
-      </div>
-
-      <div class="aviso reveal">
-        <h3><svg class="icono"><use href="#i-candado"/></svg>Si tu computadora te advierte al abrir el instalador, es normal</h3>
-        <p>El programa es gratuito y no está «firmado» con un certificado comercial (cuesta varios cientos de dólares al año). Por eso Windows y macOS muestran una advertencia la primera vez. El instalador que descargas desde esta página o desde GitHub es el original; puedes comprobarlo con las sumas SHA-256 de arriba.</p>
-        <div class="dos">
-          <div>
-            <h4>Windows (pantalla azul «Windows protegió su PC»)</h4>
-            <ol>
-              <li>Haz clic en <b>«Más información»</b> (texto pequeño debajo del mensaje).</li>
-              <li>Aparece el botón <b>«Ejecutar de todas formas»</b>; haz clic.</li>
-              <li>Sigue el instalador normal. Solo pasa la primera vez.</li>
-            </ol>
-          </div>
-          <div>
-            <h4>macOS («no se puede abrir porque proviene de un desarrollador no identificado»)</h4>
-            <ol>
-              <li>Cierra el aviso. Ve a <b>Ajustes del Sistema → Privacidad y seguridad</b>.</li>
-              <li>Abajo aparece «Se bloqueó PuntoDeVenta…»; pulsa <b>«Abrir de todos modos»</b> y confirma.</li>
-              <li>Alternativa: en Aplicaciones, <b>clic derecho sobre PuntoDeVenta → Abrir → Abrir</b>.</li>
-            </ol>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ REQUISITOS ═══════════════════ -->
-  <section class="seccion" id="requisitos" aria-labelledby="titulo-requisitos">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Requisitos del equipo</span>
-        <h2 class="titulo" id="titulo-requisitos">Si tu computadora enciende, probablemente le sirve</h2>
-        <p>Está hecho a propósito para equipos modestos: la PC que ya tienes en el mostrador casi seguro alcanza.</p>
-      </div>
-      <div class="tabla-env reveal">
-        <table class="tabla">
-          <thead><tr><th scope="col"></th><th scope="col">Mínimo</th><th scope="col">Recomendado</th></tr></thead>
-          <tbody>
-            <tr><td>Sistema</td><td>Windows 10 (64 o 32 bits) · macOS 11 o más reciente · Linux de 64 bits <!-- REVISAR: versión mínima de macOS que admite el runtime (JDK 17) --></td><td>Windows 10/11 de 64 bits o macOS reciente</td></tr>
-            <tr><td>Memoria RAM</td><td>2 GB</td><td>4 GB</td></tr>
-            <tr><td>Procesador</td><td>Cualquier Intel/AMD de 64 bits (o de 32 bits con el instalador x86), Apple Silicon</td><td>Doble núcleo o mejor</td></tr>
-            <tr><td>Disco</td><td>Unos 300 MB para el programa más tus datos (una tienda ocupa pocos MB al año). Disco duro mecánico está bien.</td><td>Disco de estado sólido (SSD): abre en segundos</td></tr>
-            <tr><td>Pantalla</td><td>1024 × 768</td><td>1366 × 768 o más</td></tr>
-            <tr><td>Internet</td><td>No se necesita para vender</td><td>Solo para actualizaciones, el clima y facturar</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="hardware reveal">
-        <h3>Accesorios opcionales (ninguno es obligatorio)</h3>
-        <ul class="lista-iconos">
-          <li><svg class="icono"><use href="#i-scan"/></svg><span><b>Lector de código de barras</b> USB tipo «teclado»: cualquiera del mercado, desde los más baratos. Se conecta y funciona.</span></li>
-          <li><svg class="icono"><use href="#i-impresora"/></svg><span><b>Impresora de tickets térmica</b> (ESC/POS, 58 u 80 mm) o la impresora normal que ya tengas.</span></li>
-          <li><svg class="icono"><use href="#i-tijeras"/></svg><span><b>Cajón de dinero</b> conectado a la impresora térmica: se abre solo al cobrar.</span></li>
-          <li><svg class="icono"><use href="#i-bascula"/></svg><span><b>Báscula</b> con puerto serial (o USB-serial) para vender a granel sin teclear el peso.</span></li>
-          <li><svg class="icono"><use href="#i-telefono"/></svg><span><b>Tu teléfono</b> en el mismo Wi-Fi de la tienda para el acceso móvil.</span></li>
-          <li><svg class="icono"><use href="#i-servidor"/></svg><span><b>Varias cajas:</b> una computadora de la tienda con PostgreSQL (gratis) a la que se conectan las demás.</span></li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ TUTORIAL ═══════════════════ -->
-  <section class="seccion seccion-alt" id="tutorial" aria-labelledby="titulo-tutorial">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Cómo empezar</span>
-        <h2 class="titulo" id="titulo-tutorial">De la descarga a tu primera venta</h2>
-        <p>Ocho pasos. El propio programa te lleva de la mano la primera vez con un asistente y un recorrido por las pestañas.</p>
-      </div>
-      <div class="pasos">
-        <article class="paso reveal">
-          <div class="img centro"><img src="img/capturas/login.webp" alt="Pantalla de inicio de sesión del programa" width="640" height="669" loading="lazy" style="object-fit:contain;padding:12px"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Instala y abre el programa</h3><p>Descarga el instalador de tu sistema, ábrelo y acepta la advertencia de seguridad como se explica arriba. En Windows queda un acceso en el escritorio.</p></div>
-        </article>
-        <article class="paso reveal retraso-1">
-          <div class="img"><img src="img/capturas/configuracion-chica.webp" alt="Pestaña de Configuración del programa" width="800" height="434" loading="lazy"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>¿Una caja o varias?</h3><p>La primera vez pregunta cómo usarás esta computadora. Si tienes una sola caja (lo normal), elige <b>Una sola caja</b> y listo: no hay nada más que configurar.</p></div>
-        </article>
-        <article class="paso reveal retraso-2">
-          <div class="img centro"><img src="img/capturas/login.webp" alt="Inicio de sesión con usuario y contraseña" width="640" height="669" loading="lazy" style="object-fit:contain;padding:12px"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Entra como administrador</h3><p>Usuario <code>admin</code>, contraseña <code>admin123</code>. El programa te pide de inmediato una contraseña nueva, tuya. Guárdala bien: con ella autorizas cancelaciones y descuentos.</p></div>
-        </article>
-        <article class="paso reveal retraso-3">
-          <div class="img centro"><img src="img/capturas/asistente.webp" alt="Asistente inicial: bienvenido al Punto de Venta, nombre del negocio" width="720" height="788" loading="lazy" style="object-fit:contain;object-position:top;padding:12px"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Datos de tu negocio</h3><p>Un asistente te pide el nombre de la tienda y lo básico del ticket. Después, en Configuración, puedes poner logotipo, formas de pago, impresora, respaldos y más.</p></div>
-        </article>
-        <article class="paso reveal">
-          <div class="img"><img src="img/capturas/productos-chica.webp" alt="Pestaña Productos con la tabla del catálogo" width="800" height="434" loading="lazy"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Da de alta tus productos</h3><p>En <kbd>F3</kbd> Productos pulsa «Nuevo», escanea el código con el lector, escribe nombre, costo y precio, y si quieres tómale foto. También hay un catálogo de artículos comunes para precargar.</p></div>
-        </article>
-        <article class="paso reveal retraso-1">
-          <div class="img"><img src="img/capturas/ventas-chica.webp" alt="Pestaña Ventas con un ticket en captura" width="800" height="434" loading="lazy"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Vende</h3><p>En <kbd>F1</kbd> Ventas escanea los productos, <kbd>F12</kbd> para cobrar, escribe lo que recibes y <kbd>Enter</kbd>. El cambio aparece en grande. ¿Otro cliente mientras tanto? <kbd>F11</kbd> pone el ticket en espera.</p></div>
-        </article>
-        <article class="paso reveal retraso-2">
-          <div class="img"><img src="img/capturas/corte-chica.webp" alt="Pestaña Corte con el resumen del día" width="800" height="434" loading="lazy"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Haz tu corte</h3><p>Al cerrar, en Corte cuentas el efectivo del cajón, el programa lo compara con lo que debería haber y registra el corte con tu nombre. Al día siguiente te pedirá el fondo de caja.</p></div>
-        </article>
-        <article class="paso reveal retraso-3">
-          <div class="img"><img src="img/capturas/estadisticas-chica.webp" alt="Pestaña Estadísticas con tarjetas y gráficas" width="800" height="434" loading="lazy"></div>
-          <div class="cuerpo"><span class="num" aria-hidden="true"></span><h3>Mira tus estadísticas</h3><p>Desde el primer día ves el resumen; con las semanas se van encendiendo las proyecciones, el reabastecimiento por proveedor y las recomendaciones. Cada sección trae su botón «?».</p></div>
-        </article>
-      </div>
-
-      <div class="atajos reveal" id="atajos">
-        <h3><svg class="icono"><use href="#i-teclado"/></svg>Atajos de teclado (pulsa <kbd>F10</kbd> en el programa para verlos)</h3>
-        <dl>
-          <dt><kbd>F1</kbd></dt><dd>Ir a Ventas</dd>
-          <dt><kbd>F3</kbd></dt><dd>Ir a Productos</dd>
-          <dt><kbd>F4</kbd></dt><dd>Ir a Inventario</dd>
-          <dt><kbd>F5</kbd></dt><dd>Ir a Estadísticas</dd>
-          <dt><kbd>F6</kbd></dt><dd>Buscar producto por nombre o código</dd>
-          <dt><kbd>F7</kbd></dt><dd>Cambiar la cantidad del renglón</dd>
-          <dt><kbd>F8</kbd></dt><dd>Descuento manual al renglón</dd>
-          <dt><kbd>F9</kbd></dt><dd>Precio de mayoreo al renglón</dd>
-          <dt><kbd>F11</kbd></dt><dd>Poner el ticket en espera</dd>
-          <dt><kbd>Mayús</kbd>+<kbd>F11</kbd></dt><dd>Recuperar un ticket en espera</dd>
-          <dt><kbd>F12</kbd></dt><dd>Cobrar (en la ventana de cobro: Enter cobra, Esc regresa)</dd>
-          <dt><kbd>F10</kbd></dt><dd>Ver la lista completa de atajos</dd>
-        </dl>
-        <details class="detalles">
-          <summary>Más atajos</summary>
-          <dl style="margin-top:12px">
-            <dt><kbd>3</kbd><kbd>*</kbd>código</dt><dd>Tres piezas de un producto al escanear (<code>cantidad*código</code>)</dd>
-            <dt><kbd>+</kbd> / <kbd>−</kbd></dt><dd>Una pieza más o menos al renglón seleccionado</dd>
-            <dt><kbd>Supr</kbd></dt><dd>Quitar el renglón seleccionado</dd>
-            <dt><kbd>Ctrl</kbd>+<kbd>L</kbd></dt><dd>Bloquear la pantalla o cambiar de cajero (el ticket se guarda en espera)</dd>
-            <dt><kbd>Ctrl</kbd>+<kbd>I</kbd></dt><dd>Reimprimir el último ticket cobrado</dd>
-            <dt><kbd>Ctrl</kbd>+<kbd>J</kbd></dt><dd>Abrir el cajón de dinero</dd>
-            <dt><kbd>Ctrl</kbd>+<kbd>Mayús</kbd>+<kbd>P</kbd></dt><dd>Leer el peso de la báscula</dd>
-            <dt><kbd>Ctrl</kbd>+<kbd>Mayús</kbd>+<kbd>C</kbd></dt><dd>Cancelar el ticket en captura</dd>
-            <dt><kbd>Ctrl</kbd>+letra</dt><dd>Alternativa a las teclas F en laptops (Ctrl+B buscar, Ctrl+Enter cobrar, Ctrl+G en espera…). En Mac es Cmd.</dd>
-          </dl>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ DONACIONES ═══════════════════ -->
-  <section class="seccion" id="donaciones" aria-labelledby="titulo-donaciones">
-    <div class="contenedor">
-      <div class="donar">
-        <div class="reveal">
-          <span class="sobretitulo verde">Apoyar el proyecto</span>
-          <h2 class="titulo" id="titulo-donaciones">Es gratis. Si te sirve, puedes echar la mano.</h2>
-          <p class="texto-grande">Punto de Venta es <strong>software libre</strong>: lo puedes usar en todas las cajas que quieras, para siempre, sin pagar nada y sin que ninguna función se bloquee. Lo hace una sola persona en su tiempo, y las donaciones son lo que permite seguir corrigiendo, mejorando y dando soporte.</p>
-          <p class="texto-grande">Quien dona recibe una <strong>clave de apoyo</strong> para su negocio. No desbloquea funciones (todas ya están abiertas); lo que da es <em>tiempo del desarrollador</em>:</p>
-          <ul class="beneficios">
-            <li><svg class="icono"><use href="#i-chat"/></svg><span><b>Soporte técnico personalizado</b> por WhatsApp o correo, con prioridad cuando algo falla en tu tienda.</span></li>
-            <li><svg class="icono"><use href="#i-chispas"/></svg><span><b>Funciones a la medida:</b> tus peticiones van primero en la lista de lo que sigue.</span></li>
-            <li><svg class="icono"><use href="#i-rayo"/></svg><span><b>Acceso anticipado</b> a las versiones de prueba antes de que salgan para todos.</span></li>
-            <li><svg class="icono"><use href="#i-estrella"/></svg><span><b>El nombre de tu negocio</b> en la pantalla «Acerca de», y se quita la ventana de donación que ve el administrador al entrar.</span></li>
-          </ul>
-          <p style="margin-top:18px;color:var(--muted);font-size:.95rem">La clave dura un año y se puede renovar con otra donación cuando quieras. Sin ella el programa sigue funcionando exactamente igual.</p>
-        </div>
-        <aside class="cuenta reveal retraso-1" aria-labelledby="titulo-cuenta">
-          <h3 id="titulo-cuenta"><svg class="icono"><use href="#i-corazon"/></svg>Donar por transferencia (SPEI)</h3>
-          <dl>
-            <dt>Banco</dt><dd class="texto" data-dato="donacion.banco" data-pendiente="Por confirmar">PENDIENTE</dd>
-            <dt>CLABE</dt><dd data-dato="donacion.clabe" data-pendiente="Por confirmar">PENDIENTE</dd>
-            <dt>Beneficiario</dt><dd class="texto" data-dato="donacion.beneficiario" data-pendiente="Por confirmar">PENDIENTE</dd>
-            <dt>Concepto</dt><dd class="texto"><span data-dato="donacion.concepto">PDV + nombre de tu negocio</span></dd>
-          </dl>
-          <ol class="pasos-clave">
-            <li>Transfiere la cantidad que gustes y pon en el concepto <b>«PDV» y el nombre de tu negocio</b> (por ejemplo «PDV Abarrotes Lupita»).</li>
-            <li>En el programa, pulsa <b>«Ya doné: pedir mi clave»</b> (en la ventana de donación o en «Acerca de»). Arma un mensaje con los datos; envíalo por WhatsApp o correo junto con tu comprobante.</li>
-            <li>Recibirás tu clave de apoyo. Como administrador, pégala en <b>«Ya tengo mi clave»</b>. Con varias cajas basta activarla una vez.</li>
-          </ol>
-        </aside>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ CONTACTO ═══════════════════ -->
-  <section class="seccion seccion-alt" id="contacto" aria-labelledby="titulo-contacto">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Contacto</span>
-        <h2 class="titulo" id="titulo-contacto">¿Dudas, fallas o ideas?</h2>
-        <p><strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong> · <span data-dato="autor.ocupacion" data-pendiente="Por confirmar">PENDIENTE</span> <!-- REVISAR: ocupación del autor --></p>
-      </div>
-      <div class="contacto-rejilla">
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-correo"/></svg></div><h3>Correo</h3><p>Para dudas, comprobantes de donación y soporte.</p><a class="valor" data-enlace="correo" href="#contacto">PENDIENTE</a></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico verde"><svg class="icono"><use href="#i-llamada"/></svg></div><h3>WhatsApp</h3><p>Soporte personal para quienes apoyan el proyecto.</p><a class="valor" data-enlace="whatsapp" href="#contacto">PENDIENTE</a></article>
-        <article class="tarjeta reveal retraso-2"><div class="ico"><svg class="icono"><use href="#i-github"/></svg></div><h3>Código en GitHub</h3><p>Todo el programa es público: puedes leerlo, copiarlo y mejorarlo.</p><a class="valor" data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">github.com/Minepacman/Punto-Ventas</a></article>
-        <article class="tarjeta reveal retraso-3"><div class="ico ambar"><svg class="icono"><use href="#i-ayuda"/></svg></div><h3>Reportar un problema</h3><p>Si algo no funciona, cuéntalo aquí con todo detalle; sirve para todos.</p><a class="valor" data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Abrir un reporte</a></article>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════ FAQ ═══════════════════ -->
-  <section class="seccion" id="faq" aria-labelledby="titulo-faq">
-    <div class="contenedor">
-      <div class="encabezado reveal">
-        <span class="sobretitulo">Preguntas frecuentes</span>
-        <h2 class="titulo" id="titulo-faq">Lo que todo el mundo pregunta</h2>
-      </div>
-      <div class="faq reveal">
-        <details open><summary>¿De verdad es gratis? ¿No hay letra chiquita?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí, de verdad. No hay mensualidad, no hay límite de productos, de ventas ni de cajas, y ninguna función se bloquea. Es software libre con licencia GPLv3: puedes usarlo, copiarlo, regalarlo y hasta modificarlo. Si quieres apoyar, hay <a href="#donaciones">donaciones voluntarias</a>, pero no son obligatorias para nada.</p></div></details>
-        <details><summary>¿Necesito internet?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>No. Vender, cobrar, inventario, corte y estadísticas funcionan sin conexión. Internet se usa solo si quieres tres cosas opcionales: buscar actualizaciones, el pronóstico del clima para las sugerencias y facturar (CFDI).</p></div></details>
-        <details><summary>¿A dónde van mis datos?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Se quedan en tu computadora, en un archivo de base de datos dentro de tu carpeta de usuario. Nadie los ve, no se suben a ninguna nube y el programa no manda estadísticas a nadie. Por eso mismo conviene activar los respaldos automáticos (Configuración) y guardar una copia en una USB de vez en cuando.</p></div></details>
-        <details><summary>¿Funciona en mi PC vieja?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Está diseñado para eso: Windows 10 u 11 con 2 GB de RAM, disco duro normal y pantalla de 1024×768. Hay instalador de 32 bits para equipos muy antiguos (cuando está incluido en la versión). Windows 7 ya no es compatible. Lo que sí notarás es que en un equipo lento tarda unos segundos más en abrir; una vez abierto, vende igual de rápido.</p></div></details>
-        <details><summary>¿Cómo actualizo? ¿Pierdo mis datos?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Cuando hay versión nueva, el programa muestra un enlace discreto en la barra de abajo (nunca descarga ni instala nada solo). Bajas el instalador, lo ejecutas encima del anterior y listo: la base de datos y la configuración no se tocan. En Mac arrastras la app nueva sobre la anterior; en Linux instalas el paquete nuevo.</p></div></details>
-        <details><summary>¿Puedo tener varias cajas?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí. Una computadora de la tienda corre el servidor PostgreSQL (gratis) y las demás cajas se conectan a él por la red local; las existencias y los cortes se comparten. El programa trae la migración desde una sola caja y una guía paso a paso. Para una tienda con una sola caja no necesitas nada de esto.</p></div></details>
-        <details><summary>¿Puedo facturar (CFDI)?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí, factura por venta y factura global con CFDI 4.0 a través de Facturama, un proveedor autorizado por el SAT. Necesitas contratar una cuenta con ellos (ese servicio sí tiene costo, que le pagas a Facturama); el programa solo se conecta con tus credenciales. Si no facturas, simplemente no lo configuras.</p></div></details>
-        <details><summary>¿Sirve para verdulería, papelería o tortillería?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí. Maneja venta por pieza y a granel (kilos con decimales, báscula opcional), productos sin código de barras con foto, departamentos y promociones. Lo único que no es: un sistema de restaurante con mesas y comandas.</p></div></details>
-        <details><summary>¿Y si se descompone la computadora?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Si tenías respaldos activos, instalas el programa en la computadora nueva y restauras el último respaldo desde Configuración: vuelven productos, ventas, cortes y usuarios. Por eso insistimos tanto en guardar copias fuera del equipo.</p></div></details>
-        <details><summary>¿Quién hace esto y por qué debería confiar?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Lo hace una sola persona, <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>, y todo el código es público en GitHub: cualquiera puede revisarlo. Las contraseñas se guardan cifradas, hay bitácora de todo lo que hacen los usuarios, y el programa no se comunica con ningún servidor salvo los tres casos opcionales de arriba.</p></div></details>
-      </div>
-    </div>
-  </section>
 </main>
 
 <footer class="pie">
   <div class="contenedor">
-    <div class="pie-rejilla">
+    <div class="pie-fila">
       <div>
-        <a class="marca" href="#inicio"><img src="img/icono.svg" alt="" width="34" height="34">Punto de Venta</a>
-        <p>Punto de venta gratuito y de código abierto para tiendas de México. Un proyecto independiente de <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>.</p>
+        <p><b>Caja Libre</b> · software libre bajo licencia GPLv3 · hecho en México por <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>.</p>
+        <ul>
+          <li><a href="descargar.html">Descargar</a></li>
+          <li><a href="funciones.html">Funciones</a></li>
+          <li><a href="empezar.html">Cómo empezar</a></li>
+          <li><a href="apoyar.html">Apoyar</a></li>
+          <li><a href="acerca.html">Quién lo hace</a></li>
+          <li><a href="preguntas.html">Preguntas</a></li>
+        </ul>
       </div>
-      <div>
-        <h4>Programa</h4>
-        <ul><li><a href="#descargas">Descargas</a></li><li><a href="#requisitos">Requisitos</a></li><li><a href="#tutorial">Cómo empezar</a></li><li><a href="#atajos">Atajos de teclado</a></li><li><a href="#faq">Preguntas frecuentes</a></li></ul>
-      </div>
-      <div>
-        <h4>Proyecto</h4>
-        <ul><li><a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">Código en GitHub</a></li><li><a data-enlace="releases" href="https://github.com/Minepacman/Punto-Ventas/releases">Versiones</a></li><li><a data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Reportar un problema</a></li><li><a data-enlace="licencia" href="https://github.com/Minepacman/Punto-Ventas/blob/main/LICENSE">Licencia GPLv3</a></li></ul>
-      </div>
-      <div>
-        <h4>Apoyo</h4>
-        <ul><li><a href="#donaciones">Donar</a></li><li><a href="#contacto">Contacto</a></li><li><a href="#historia">Por qué existe</a></li></ul>
-      </div>
+      <ul>
+        <li><a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">Código en GitHub</a></li>
+        <li><a data-enlace="releases" href="https://github.com/Minepacman/Punto-Ventas/releases">Versiones</a></li>
+        <li><a data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Reportar un problema</a></li>
+        <li><a href="https://github.com/Minepacman/Punto-Ventas/blob/main/MARCA.md">Política de marca</a></li>
+      </ul>
     </div>
-    <div class="pie-bajo">
-      <span>© <span data-anio>2026</span> <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span> · Software libre bajo licencia GPLv3.</span>
-      <span>Iconos: <a href="https://lucide.dev" rel="noopener">Lucide</a> (ISC). Sin rastreadores, sin cookies.</span>
-    </div>
+    <p class="legal">© <span data-anio>2026</span> <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>. El nombre «Caja Libre» y el logotipo identifican la versión del autor. Este sitio no usa cookies ni rastreadores.</p>
   </div>
 </footer>
 

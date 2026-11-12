@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Nombre local por mDNS (Bonjour / Zeroconf): publica "nombre.local" para cada
- * IPv4 de la red y el servicio "_http._tcp" "Punto de Venta". Solo corre
+ * IPv4 de la red y el servicio "_http._tcp" "Caja Libre". Solo corre
  * mientras el servidor móvil está encendido.
  *
  * Todo ocurre en un hilo propio (nunca en el de JavaFX ni en el arranque) y
@@ -147,7 +147,7 @@ public class AnunciadorMdns {
                 // Una instancia por interfaz: cada una responde con SU IP para "nombre.local"
                 JmDNS j = JmDNS.create(ip, nombre);
                 instancias.add(j);
-                j.registerService(ServiceInfo.create("_http._tcp.local.", "Punto de Venta", puerto, 0, 0, "path=/"));
+                j.registerService(ServiceInfo.create("_http._tcp.local.", "Caja Libre", puerto, 0, 0, "path=/"));
             }
         } catch (IOException | RuntimeException e) {
             cerrar(instancias);

@@ -144,7 +144,7 @@ class BaseDatosServiceTest {
             st.execute("CREATE TABLE cosas (id integer)");
         }
         assertThatThrownBy(() -> baseDatosService.restaurar(ajena, "admin123"))
-                .isInstanceOf(NegocioException.class).hasMessageContaining("no es un respaldo de este Punto de Venta");
+                .isInstanceOf(NegocioException.class).hasMessageContaining("no es un respaldo de Caja Libre");
         // contraseña incorrecta
         assertThatThrownBy(() -> baseDatosService.restaurar(respaldo, "mala"))
                 .isInstanceOf(NegocioException.class).hasMessageContaining("contraseña");

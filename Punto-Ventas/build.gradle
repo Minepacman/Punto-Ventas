@@ -11,7 +11,7 @@ group = 'me.eliassanchezfernandez'
 // ÚNICA fuente de verdad de la versión: de aquí salen version.properties (util/VersionApp, lo que ve el
 // usuario y el User-Agent del buscador de actualizaciones), el manifiesto del jar y --app-version de
 // jpackage. Para publicar: subir este número, hacer commit y etiquetar "v" + versión (ver docs/publicar.md).
-version = '1.0.3'
+version = '1.0.4'
 description = 'Punto-de-venta'
 ext.repositorioUrl = 'https://github.com/Minepacman/Punto-Ventas'
 
@@ -138,6 +138,12 @@ tasks.named('processResources') {
     filesMatching('version.properties') {
         expand(version: project.version)
     }
+    // Licencia y avisos legales: una sola copia en la raíz del repositorio; viajan en el jar para que
+    // «Acerca de» y Configuración → Licencia los muestren (LICENSE → LICENSE.txt dentro del classpath).
+    from(rootProject.file('..')) {
+        include 'LICENSE', 'AVISOS-TERCEROS.md', 'AVISOS-ADICIONALES.md', 'MARCA.md'
+        rename '^LICENSE$', 'LICENSE.txt'
+    }
 }
 tasks.named('jar') {
     manifest {
@@ -186,6 +192,13 @@ tasks.register('publicarRevocaciones', JavaExec) {
     classpath = sourceSets.herramientas.runtimeClasspath
     mainClass = 'me.eliassanchezfernandez.puntodeventa.herramientas.HerramientaDonadores'
     args 'publicar-revocaciones', '--salida', rootProject.file('../claves/revocadas.pdvr').absolutePath
+}
+tasks.register('firmarDatosDonacion', JavaExec) {
+    group = 'donadores'
+    description = 'Firma donacion.properties (CLABE, banco, beneficiario, contacto) y escribe claves/donacion.pdvd; correrlo tras cada cambio de esos datos, luego commit y push'
+    classpath = sourceSets.herramientas.runtimeClasspath
+    mainClass = 'me.eliassanchezfernandez.puntodeventa.herramientas.HerramientaDonadores'
+    args 'publicar-donacion', '--salida', rootProject.file('../claves/donacion.pdvd').absolutePath
 }
 
 // Opciones de la JVM pensadas para PCs de 2-4 GB de RAM y disco duro (también las usa jpackage).
@@ -294,6 +307,11 @@ tasks.register('jpackageTask') {
             throw new GradleException("-PlinuxType debe ser deb, rpm o tar.gz (recibido: $linuxType)")
         }
 
+        // El nombre COMERCIAL es "Caja Libre" (util/Marca); el nombre TÉCNICO del instalador sigue siendo
+        // "PuntoDeVenta" a propósito: así la app de macOS sigue siendo PuntoDeVenta.app (una sola app al
+        // actualizar, mismo cask de Homebrew), el instalador de Windows reemplaza al anterior en la misma
+        // carpeta y el paquete de Linux sigue siendo punto-de-venta. En macOS el nombre que aparece en la
+        // barra de menús y el Dock sí es "Caja Libre" (--mac-package-name, máximo 15 caracteres).
         def args = [jpackage,
                 '--input', lib.absolutePath,
                 '--dest', destino.absolutePath,
@@ -301,9 +319,9 @@ tasks.register('jpackageTask') {
                 '--main-jar', tasks.jar.archiveFileName.get(),
                 '--main-class', 'me.eliassanchezfernandez.puntodeventa.Launcher',
                 '--app-version', versionNumerica,
-                '--vendor', 'Elias Sanchez',
+                '--vendor', 'Elias Sanchez',     // no cambiar: en Windows es el grupo del menú Inicio
                 '--copyright', '2026 Elias Oziel Sanchez Fernandez - GPLv3',
-                '--description', 'Punto de venta para abarrotes']
+                '--description', 'Caja Libre: punto de venta para abarrotes']
         // jpackage rechaza las opciones "de instalador" (--about-url, --license-file, --linux-*, --win-*) con --type app-image
         def esAppImage = !esMac && !esWindows && linuxType == 'tar.gz'
         if (!esAppImage) args += ['--about-url', repositorioUrl]
@@ -312,7 +330,7 @@ tasks.register('jpackageTask') {
         jvmOpciones.each { args += ['--java-options', it] }
         if (esMac) {
             args += ['--type', 'dmg', '--mac-package-identifier', 'me.eliassanchezfernandez.puntodeventa',
-                     '--mac-package-name', 'PuntoDeVenta']
+                     '--mac-package-name', 'Caja Libre']
         } else if (esWindows) {
             args += ['--type', (project.findProperty('winType') ?: 'exe'),
                      '--win-menu', '--win-shortcut', '--win-per-user-install', '--win-dir-chooser',

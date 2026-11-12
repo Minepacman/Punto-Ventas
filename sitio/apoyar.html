@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apoyar Caja Libre — donaciones y contacto</title>
+<meta name="description" content="Caja Libre es gratis. Si te sirve, puedes apoyar con una donación por transferencia (SPEI): qué recibes a cambio, cómo pedir tu clave de apoyo y cómo comprobar que la cuenta es la del autor. También el contacto para dudas y fallas.">
+<meta name="theme-color" content="#2A4566">
+<link rel="icon" type="image/svg+xml" href="img/icono.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="img/icono-32.png">
+<link rel="canonical" href="https://minepacman.github.io/Punto-Ventas/apoyar.html">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_MX">
+<meta property="og:title" content="Apoyar Caja Libre">
+<meta property="og:description" content="Es gratis. Si te sirve, puedes echar la mano con una donación y recibir soporte personal.">
+<meta property="og:url" content="https://minepacman.github.io/Punto-Ventas/apoyar.html">
+<meta property="og:image" content="https://minepacman.github.io/Punto-Ventas/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<a class="saltar" href="#contenido">Ir al contenido</a>
+<header class="cabecera">
+  <div class="contenedor cabecera-fila">
+    <a class="marca" href="./"><img src="img/icono.svg" alt="" width="30" height="30">Caja Libre</a>
+    <nav class="nav" aria-label="Páginas">
+      <a href="./">Inicio</a>
+      <a href="funciones.html">Funciones</a>
+      <a href="empezar.html">Cómo empezar</a>
+      <a href="apoyar.html" aria-current="page">Apoyar</a>
+      <a href="acerca.html">Quién lo hace</a>
+      <a href="preguntas.html">Preguntas</a>
+      <a href="descargar.html" class="nav-descargar">Descargar</a>
+    </nav>
+    <details class="menu">
+      <summary>Menú</summary>
+      <nav aria-label="Páginas">
+        <a href="./">Inicio</a>
+        <a href="funciones.html">Funciones</a>
+        <a href="descargar.html">Descargar</a>
+        <a href="empezar.html">Cómo empezar</a>
+        <a href="apoyar.html" aria-current="page">Apoyar el proyecto</a>
+        <a href="acerca.html">Quién lo hace</a>
+        <a href="preguntas.html">Preguntas frecuentes</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<main id="contenido">
+  <div class="contenedor">
+    <div class="intro">
+      <h1>Apoyar el proyecto</h1>
+      <p>Caja Libre es gratis y lo va a seguir siendo: lo puedes usar en todas las cajas que quieras, para siempre, sin que ninguna función se bloquee. Lo hago yo solo, en mi tiempo, y las donaciones son lo que me permite seguir corrigiendo errores, agregando lo que la gente pide y dando soporte.</p>
+    </div>
+
+    <div class="rejilla-2">
+      <div>
+        <h2 style="margin-top:0">Qué recibes si donas</h2>
+        <p>Quien dona recibe una <b>clave de apoyo</b> para su negocio. No desbloquea funciones (todas ya están abiertas); lo que da es tiempo mío:</p>
+        <ul>
+          <li><b>Soporte personal</b> por WhatsApp o correo, con prioridad cuando algo falla en tu tienda.</li>
+          <li><b>Tus peticiones primero.</b> Lo que necesiten quienes apoyan va al principio de la lista de lo que sigue.</li>
+          <li><b>Versiones de prueba</b> antes de que salgan para todos, si quieres probarlas.</li>
+          <li><b>El nombre de tu negocio</b> en la pantalla «Acerca de», y se quita la ventana de donación que ve el administrador al entrar.</li>
+        </ul>
+        <p class="nota-chica">La clave dura un año y se renueva con otra donación cuando quieras. Sin ella el programa funciona exactamente igual. No hay cantidad mínima: cada quien da lo que puede.</p>
+
+        <h2>Cómo pedir tu clave</h2>
+        <ol>
+          <li>Haz la transferencia y pon en el concepto <b>«PDV»</b> y el nombre de tu negocio (por ejemplo «PDV Abarrotes Lupita»).</li>
+          <li>En el programa, pulsa <b>«Ya doné: pedir mi clave»</b> (en la ventana de donación o en «Acerca de»). Arma un mensaje con los datos de tu instalación; mándamelo por WhatsApp o correo junto con tu comprobante.</li>
+          <li>Te regreso tu clave de apoyo. Como administrador, pégala en <b>«Ya tengo mi clave»</b>. Con varias cajas basta activarla una vez.</li>
+        </ol>
+        <p class="nota-chica">Las claves las emito únicamente yo. Nadie más las vende, y una clave comprada a otra persona no da soporte mío.</p>
+      </div>
+
+      <aside class="cuenta" aria-labelledby="titulo-cuenta">
+        <h2 id="titulo-cuenta">Donar por transferencia (SPEI)</h2>
+        <dl class="datos">
+          <dt>Banco</dt><dd data-dato="donacion.banco" data-pendiente="Por confirmar">PENDIENTE</dd>
+          <dt>CLABE</dt><dd data-dato="donacion.clabe" data-pendiente="Por confirmar">PENDIENTE</dd>
+          <dt>Beneficiario</dt><dd data-dato="donacion.beneficiario" data-pendiente="Por confirmar">PENDIENTE</dd>
+          <dt>Concepto</dt><dd><span data-dato="donacion.concepto">PDV + nombre de tu negocio</span></dd>
+        </dl>
+        <p id="donacion-estado">Los datos de esta cuenta se publican firmados por el autor en el repositorio (<code>claves/donacion.pdvd</code>); el programa oficial los coteja y dice «Datos verificados».</p>
+        <div class="nota aviso" style="margin-bottom:0">
+          <p><b>Antes de confirmar la transferencia, revisa que tu banco muestre como beneficiario a «Elias Oziel Sánchez Fernández».</b> Si aparece otro nombre, no transfieras: esta es la única cuenta mía y la única que aparece en este sitio.</p>
+        </div>
+      </aside>
+    </div>
+
+    <h2 id="contacto">Contacto</h2>
+    <p>Para dudas, fallas, ideas y comprobantes de donación. Soy <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>; contesto yo.</p>
+    <ul class="contacto">
+      <li><b>Correo</b> <a data-enlace="correo" href="mailto:elias.osiel@hotmail.com">elias.osiel@hotmail.com</a></li>
+      <li><b>WhatsApp</b> <a data-enlace="whatsapp" href="https://wa.me/522821416799">282 141 6799</a> <span class="nota-chica">(soporte personal para quienes apoyan el proyecto)</span></li>
+      <li><b>Errores</b> <a data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Reportar un problema en GitHub</a> <span class="nota-chica">(público; sirve para que otros vean si les pasa lo mismo)</span></li>
+      <li><b>Código</b> <a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">github.com/Minepacman/Punto-Ventas</a></li>
+    </ul>
+    <p class="nota-chica">Si una copia del programa, un sitio o una cuenta bancaria se hace pasar por la oficial, avísame por cualquiera de estos medios. Los canales oficiales están en <a href="acerca.html#oficial">quién lo hace</a>.</p>
+  </div>
+</main>
+
+<footer class="pie">
+  <div class="contenedor">
+    <div class="pie-fila">
+      <div>
+        <p><b>Caja Libre</b> · software libre bajo licencia GPLv3 · hecho en México por <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>.</p>
+        <ul>
+          <li><a href="descargar.html">Descargar</a></li>
+          <li><a href="funciones.html">Funciones</a></li>
+          <li><a href="empezar.html">Cómo empezar</a></li>
+          <li><a href="apoyar.html">Apoyar</a></li>
+          <li><a href="acerca.html">Quién lo hace</a></li>
+          <li><a href="preguntas.html">Preguntas</a></li>
+        </ul>
+      </div>
+      <ul>
+        <li><a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">Código en GitHub</a></li>
+        <li><a data-enlace="releases" href="https://github.com/Minepacman/Punto-Ventas/releases">Versiones</a></li>
+        <li><a data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Reportar un problema</a></li>
+        <li><a href="https://github.com/Minepacman/Punto-Ventas/blob/main/MARCA.md">Política de marca</a></li>
+      </ul>
+    </div>
+    <p class="legal">© <span data-anio>2026</span> <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>. El nombre «Caja Libre» y el logotipo identifican la versión del autor. Este sitio no usa cookies ni rastreadores.</p>
+  </div>
+</footer>
+<script src="datos.js"></script>
+<script src="sitio.js"></script>
+</body>
+</html>

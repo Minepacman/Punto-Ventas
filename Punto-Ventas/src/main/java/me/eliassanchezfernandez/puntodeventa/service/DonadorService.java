@@ -4,6 +4,8 @@ import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.repository.ConfiguracionRepository;
 import me.eliassanchezfernandez.puntodeventa.util.ClaveDonador;
+import me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados;
+import me.eliassanchezfernandez.puntodeventa.util.Donacion;
 import me.eliassanchezfernandez.puntodeventa.util.IdInstalacion;
 import me.eliassanchezfernandez.puntodeventa.util.RevocacionesApoyo;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
@@ -67,12 +69,45 @@ public class DonadorService {
         }
     }
 
+    /** Datos de donación del autor ya verificados (null = no hay copia local: «sin verificar») */
+    private volatile DatosDonacionFirmados.Datos datosDonacion;
+    private volatile String datosDonacionTexto;
+
+    /** Lo que la ventana de donación y «Acerca de» dicen de la cuenta que muestran */
+    public enum VerificacionDonacion {
+        /** Los datos incrustados coinciden con los que publicó (firmó) el autor */
+        VERIFICADOS,
+        /** El autor todavía no publica su CLABE (el archivo firmado dice pendiente) */
+        PENDIENTES,
+        /** Nunca se pudo bajar el archivo firmado: se muestran los datos incrustados con la invitación a cotejar en el sitio */
+        SIN_VERIFICAR,
+        /** Firma válida del autor pero la cuenta NO es la suya: copia modificada; no donar a esa cuenta */
+        NO_COINCIDEN
+    }
+
+    public record EstadoDonacion(VerificacionDonacion verificacion, Optional<DatosDonacionFirmados.Datos> publicados) {
+        public boolean alerta() { return verificacion == VerificacionDonacion.NO_COINCIDEN; }
+
+        /** Texto corto para la pantalla */
+        public String texto() {
+            return switch (verificacion) {
+                case VERIFICADOS -> "Datos verificados ✔ (firmados por el autor el "
+                        + ClaveDonador.Datos.fecha(publicados.map(DatosDonacionFirmados.Datos::emitido).orElse(null)) + ")";
+                case PENDIENTES -> "Datos de donación aún no publicados por el autor.";
+                case SIN_VERIFICAR -> "Sin verificar (no se ha podido consultar el sitio oficial): compara estos datos con los del sitio antes de donar.";
+                case NO_COINCIDEN -> "⚠ Estos datos NO coinciden con los publicados por el autor. No dones a esta cuenta; consulta el sitio oficial.";
+            };
+        }
+    }
+
     /** Las pruebas firman con su propio par de llaves (la privada oficial no está en el repositorio) */
     void usarVerificadorParaPruebas(ClaveDonador v) {
         verificador = v == null ? ClaveDonador.oficial() : v;
         ultimo = null;
         revocaciones = null;
         revocacionesTexto = null;
+        datosDonacion = null;
+        datosDonacionTexto = null;
     }
 
     void usarRelojParaPruebas(Clock c) {
@@ -240,6 +275,70 @@ public class DonadorService {
         return Optional.ofNullable(l).map(RevocacionesApoyo.Lista::emitido);
     }
 
+    // ── Datos de donación firmados (los baja ActualizacionService, sin sesión) ──
+
+    /** Copia local verificada de los datos de donación del autor; se relee si otra caja la cambió */
+    private DatosDonacionFirmados.Datos datosDonacionVigentes() {
+        String texto;
+        try {
+            texto = configuracionService.obtener().getDatosDonacionFirmados();
+        } catch (RuntimeException baseNoDisponible) {
+            return datosDonacion;
+        }
+        if (texto == null || texto.isBlank()) return null;
+        if (texto.equals(datosDonacionTexto)) return datosDonacion;
+        try {
+            DatosDonacionFirmados.Datos d = DatosDonacionFirmados.verificar(texto, verificador);
+            datosDonacion = d;
+            datosDonacionTexto = texto;
+            return d;
+        } catch (DatosDonacionFirmados.DatosInvalidosException e) {
+            return null;    // copia corrupta o de otra llave: como si no hubiera (fail-open)
+        }
+    }
+
+    /**
+     * Recibe el texto descargado del repositorio ({@code claves/donacion.pdvd}). Se guarda solo
+     * si la firma es del desarrollador y la fecha no es anterior a la de la copia local.
+     * @return true si se guardaron datos nuevos
+     */
+    @Transactional
+    public boolean actualizarDatosDonacion(String textoDescargado) {
+        if (textoDescargado == null || textoDescargado.isBlank()) return false;
+        DatosDonacionFirmados.Datos nuevos;
+        try {
+            nuevos = DatosDonacionFirmados.verificar(textoDescargado, verificador);
+        } catch (DatosDonacionFirmados.DatosInvalidosException e) {
+            return false;
+        }
+        if (nuevos.emitido().isAfter(LocalDate.now(reloj).plusDays(1))) return false;   // fecha del futuro: no se acepta
+        DatosDonacionFirmados.Datos actuales = datosDonacionVigentes();
+        if (actuales != null && nuevos.emitido().isBefore(actuales.emitido())) return false;
+        String limpio = ClaveDonador.limpiar(textoDescargado);
+        if (limpio.equals(datosDonacionTexto)) return false;
+        Configuracion c = configuracionService.obtenerParaEditar();
+        if (limpio.equals(c.getDatosDonacionFirmados())) return false;
+        c.setDatosDonacionFirmados(limpio);
+        guardar(c);
+        datosDonacion = nuevos;
+        datosDonacionTexto = limpio;
+        auditoriaService.registrarSistema("DATOS_DONACION_ACTUALIZADOS",
+                "emitidos " + nuevos.emitido() + (nuevos.pendiente() ? ", pendientes" : ", CLABE publicada"));
+        return true;
+    }
+
+    /**
+     * ¿Los datos de donación que muestra este programa son los del autor? Compara los
+     * incrustados ({@code donacion.properties}) con la copia firmada. Sin copia: sin verificar.
+     */
+    public EstadoDonacion verificarDatosDonacion(Donacion.Datos incrustados) {
+        DatosDonacionFirmados.Datos publicados = datosDonacionVigentes();
+        if (publicados == null) return new EstadoDonacion(VerificacionDonacion.SIN_VERIFICAR, Optional.empty());
+        if (!publicados.coincideCon(incrustados)) return new EstadoDonacion(VerificacionDonacion.NO_COINCIDEN, Optional.of(publicados));
+        return new EstadoDonacion(publicados.pendiente() ? VerificacionDonacion.PENDIENTES : VerificacionDonacion.VERIFICADOS,
+                Optional.of(publicados));
+    }
+
     // ── Mensajes para el desarrollador ────────────────────────────────────
 
     /** Id aleatorio de esta instalación (solo para el libro del desarrollador) */
@@ -253,7 +352,7 @@ public class DonadorService {
      * id de instalación y modo de caja. Sin clave se dice y ya.
      */
     public String mensajeSoporte(String problema) {
-        StringBuilder sb = new StringBuilder("Soporte Punto de Venta\n");
+        StringBuilder sb = new StringBuilder("Soporte Caja Libre\n");
         sb.append("Versión: ").append(VersionApp.etiqueta()).append(" (").append(sistema()).append(")\n");
         Optional<Apoyo> a = apoyo();
         if (a.isPresent()) {
@@ -270,11 +369,20 @@ public class DonadorService {
 
     /** Mensaje "ya doné" con lo que el desarrollador necesita para identificar el abono y emitir la clave */
     public String mensajeDonacion(String negocio, String monto, String fecha, String rastreo) {
-        StringBuilder sb = new StringBuilder("Hola, apoyé al Punto de Venta.\n");
+        return mensajeDonacion(negocio, monto, fecha, rastreo, null);
+    }
+
+    /**
+     * Igual, con el nombre del beneficiario que el donador vio en su banco: si no es el del autor,
+     * el desarrollador detecta de inmediato que pagó a una cuenta ajena (copia modificada).
+     */
+    public String mensajeDonacion(String negocio, String monto, String fecha, String rastreo, String beneficiarioVisto) {
+        StringBuilder sb = new StringBuilder("Hola, apoyé a Caja Libre.\n");
         sb.append("Negocio: ").append(negocio == null || negocio.isBlank() ? "(escríbelo aquí)" : negocio.trim()).append('\n');
         if (monto != null && !monto.isBlank()) sb.append("Monto: ").append(monto.trim()).append('\n');
         if (fecha != null && !fecha.isBlank()) sb.append("Fecha: ").append(fecha.trim()).append('\n');
         if (rastreo != null && !rastreo.isBlank()) sb.append("Clave de rastreo: ").append(rastreo.trim()).append('\n');
+        if (beneficiarioVisto != null && !beneficiarioVisto.isBlank()) sb.append("Vi como beneficiario: ").append(beneficiarioVisto.trim()).append('\n');
         sb.append("Instalación: ").append(idInstalacion()).append(" · Versión: ").append(VersionApp.etiqueta());
         return sb.toString();
     }

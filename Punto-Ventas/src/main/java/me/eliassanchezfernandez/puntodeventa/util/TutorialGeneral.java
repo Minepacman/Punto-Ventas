@@ -35,7 +35,7 @@ public final class TutorialGeneral {
     /** Todos los pasos, en orden (sin filtrar por permisos) */
     public static List<Paso> pasos() {
         List<Paso> p = new ArrayList<>();
-        p.add(new Paso(null, "Bienvenido al Punto de Venta",
+        p.add(new Paso(null, "Bienvenido a Caja Libre",
                 "Este recorrido corto te muestra qué hay en cada pestaña y cómo moverte rápido con el teclado. "
                 + "Dura un minuto y puedes verlo otra vez cuando quieras desde «Tutorial», en la barra de abajo.\n\n"
                 + "Avanza con Enter o →, regresa con ← y sal con Esc.",

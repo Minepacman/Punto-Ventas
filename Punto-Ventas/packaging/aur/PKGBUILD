@@ -9,7 +9,7 @@
 pkgname=punto-de-venta-bin
 pkgver=1.0.1
 pkgrel=1
-pkgdesc="Punto de venta de escritorio para tiendas de abarrotes (binario oficial, con su propio runtime de Java)"
+pkgdesc="Caja Libre: punto de venta de escritorio para tiendas de abarrotes (binario oficial, con su propio runtime de Java)"
 arch=('x86_64')
 url="https://github.com/Minepacman/Punto-Ventas"
 license=('GPL-3.0-or-later')

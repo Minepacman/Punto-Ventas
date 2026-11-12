@@ -23,7 +23,9 @@ cuando se sube una etiqueta `v*`. No hay que compilar nada a mano.
    ```
 
    Si la etiqueta no coincide con `build.gradle`, el flujo se detiene antes de compilar.
-3. Espera el flujo (unos 15–25 min). Crea la release con:
+3. Espera el flujo (unos 15–25 min). Crea la release «Caja Libre 1.1.0» con (los archivos
+   conservan el prefijo técnico `PuntoDeVenta-`: lo usan el cask de Homebrew y el PKGBUILD; el
+   buscador de actualizaciones no mira el prefijo, solo `-windows-x64.exe`, `-macos-arm64.dmg`, etc.):
    - `PuntoDeVenta-1.1.0-windows-x64.exe` (obligatorio)
    - `PuntoDeVenta-1.1.0-macos-arm64.dmg` (obligatorio)
    - `PuntoDeVenta-1.1.0-windows-x86.exe` y `PuntoDeVenta-1.1.0-macos-x64.dmg`
@@ -47,11 +49,22 @@ cuando se sube una etiqueta `v*`. No hay que compilar nada a mano.
   una: cambiar el SHA y el comentario (o activar Dependabot para `github-actions`).
 - Se publica `SHA256SUMS.txt`; las versiones de los runners salen del nombre
   de la etiqueta validado (`v1.2.3` o `v1.2.3-beta.1`), nunca de entradas libres.
+- **Attestations de procedencia** (`actions/attest-build-provenance`, fijada por SHA): el trabajo
+  `release` tiene además `id-token: write` y `attestations: write` y firma (Sigstore, vía GitHub)
+  todos los archivos de `instaladores/`. Gratis solo en repositorios públicos. Cualquiera verifica:
+  `gh attestation verify PuntoDeVenta-<v>-windows-x64.exe --repo Minepacman/Punto-Ventas`
+  (también en <https://github.com/Minepacman/Punto-Ventas/attestations>). Ver `docs/firma-de-codigo.md`
+  para la firma de Windows (SignPath) y la notarización de Apple, todavía pendientes.
+- Pendiente, a mano: firmar `SHA256SUMS.txt` con una llave de releases distinta de la de donadores
+  (`minisign`) desde tu computadora y subir el `.minisig` a la release; nunca desde Actions.
+- Las notas de cada release empiezan con la guía de descarga, que incluye la línea fija «Caja Libre
+  es gratuito… dona solo a la cuenta del sitio oficial… beneficiario Elias Oziel Sánchez Fernández».
 - **Pendiente en GitHub (lo hace el dueño, una vez)**: Settings → Rules →
   New tag ruleset para `v*` que solo el dueño pueda crear/borrar. Sin eso,
   cualquier colaborador con permiso de push podría disparar una release.
 - La misma consulta diaria de versiones baja `claves/revocadas.pdvr` (lista
-  firmada de claves de donador revocadas; ver `docs/donadores.md`).
+  firmada de claves de donador revocadas) y `claves/donacion.pdvd` (datos de
+  donación del autor firmados; ver `docs/donadores.md`).
 
 ## Qué hace el programa instalado
 

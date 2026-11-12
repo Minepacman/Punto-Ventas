@@ -35,7 +35,7 @@
         <VBox alignment="CENTER" spacing="4" styleClass="login-header">
             <padding><Insets bottom="18" left="32" right="32" top="26" /></padding>
             <ImageView fx:id="imgLogo" fitHeight="72" fitWidth="220" managed="false" preserveRatio="true" visible="false" />
-            <Label fx:id="lblNombreTienda" styleClass="login-brand-title" text="Punto de Venta" textAlignment="CENTER" wrapText="true" />
+            <Label fx:id="lblNombreTienda" styleClass="login-brand-title" text="Caja Libre" textAlignment="CENTER" wrapText="true" />
             <Label fx:id="lblCaja" styleClass="login-brand-subtitle" text="Caja 1" />
             <HBox fx:id="hboxConexion" alignment="CENTER" managed="false" spacing="6" visible="false">
                 <Circle fx:id="puntoConexion" radius="5" styleClass="login-conexion-pendiente" />
