@@ -11,7 +11,7 @@ group = 'me.eliassanchezfernandez'
 // ÚNICA fuente de verdad de la versión: de aquí salen version.properties (util/VersionApp, lo que ve el
 // usuario y el User-Agent del buscador de actualizaciones), el manifiesto del jar y --app-version de
 // jpackage. Para publicar: subir este número, hacer commit y etiquetar "v" + versión (ver docs/publicar.md).
-version = '1.0.1'
+version = '1.0.2'
 description = 'Punto-de-venta'
 ext.repositorioUrl = 'https://github.com/Minepacman/Punto-Ventas'
 

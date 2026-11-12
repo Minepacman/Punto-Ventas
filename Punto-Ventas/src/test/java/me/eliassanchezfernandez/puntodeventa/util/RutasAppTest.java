@@ -16,7 +16,7 @@ class RutasAppTest {
     @Test
     void laRutaSalDeLaUrlJdbc() {
         assertThat(RutasApp.rutaDeUrl("jdbc:sqlite:datos.db")).isEqualTo(Path.of("datos.db").toAbsolutePath());
-        assertThat(RutasApp.rutaDeUrl("jdbc:sqlite:/tmp/x/datos.db?foo=bar")).isEqualTo(Path.of("/tmp/x/datos.db"));
+        assertThat(RutasApp.rutaDeUrl("jdbc:sqlite:/tmp/x/datos.db?foo=bar")).isEqualTo(Path.of("/tmp/x/datos.db").toAbsolutePath());   // en Windows "/tmp" se resuelve a la unidad actual
         assertThatThrownBy(() -> RutasApp.rutaDeUrl("jdbc:sqlite::memory:")).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> RutasApp.rutaDeUrl("jdbc:h2:mem:x")).isInstanceOf(IllegalStateException.class);
     }
