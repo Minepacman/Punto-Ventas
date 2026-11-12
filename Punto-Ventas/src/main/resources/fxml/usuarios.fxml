@@ -25,6 +25,17 @@
         </HBox>
     </top>
 
+    <!-- Opciones del inicio de sesión (solo ADMIN) -->
+    <bottom>
+        <HBox fx:id="barraLogin" alignment="CENTER_LEFT" spacing="12" styleClass="status-bar">
+            <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+            <CheckBox fx:id="chkMostrarEnLogin" text="Mostrar la lista de usuarios en el inicio de sesión" onAction="#onMostrarEnLogin"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="lblCodigoEstado" text=""/>
+            <Button fx:id="btnCodigoRecuperacion" text="🔑 Código de recuperación…" onAction="#onCodigoRecuperacion"/>
+        </HBox>
+    </bottom>
+
     <center>
         <SplitPane dividerPositions="0.5">
 
@@ -61,14 +72,14 @@
                         <Label text="Contraseña" styleClass="field-label"/>
                         <PasswordField fx:id="txtContrasena"/>
                         <Label fx:id="lblAyudaContrasena" text="" wrapText="true"
-                               style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
+                               styleClass="hint"/>
                     </VBox>
 
                     <VBox spacing="4">
                         <Label text="Rol *" styleClass="field-label"/>
                         <ComboBox fx:id="comboRol" maxWidth="Infinity"/>
                         <Label text="Administrador: todo. Gerente: edita productos y desactiva usuarios. Cajero: ventas e inventario básico. Los permisos de abajo ajustan lo que el rol permite."
-                               wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"/>
+                               wrapText="true" styleClass="hint"/>
                     </VBox>
 
                     <CheckBox fx:id="chkActivo" text="Usuario activo (puede iniciar sesión)"/>

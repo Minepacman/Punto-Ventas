@@ -53,6 +53,11 @@ public class LimitadorIntentos {
         }
     }
 
+    /** Olvida los fallos de esa clave (p. ej. un administrador la desbloqueó, o pruebas) */
+    public void olvidar(String clave) {
+        fallos.remove(clave);
+    }
+
     private void purgar(Deque<Long> q, long ahora) {
         long limite = ahora - ventana.toMillis();
         while (!q.isEmpty() && q.peekFirst() <= limite) q.pollFirst();

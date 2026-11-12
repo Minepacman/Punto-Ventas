@@ -66,9 +66,27 @@ public class MovimientoInventario {
     @Column(name = "costo_unitario")
     private Double costoUnitario;
 
+    /**
+     * Proveedor de la entrada (catálogo de proveedores). Nullable: las entradas
+     * anteriores solo tienen el texto de {@link #proveedor}, que se conserva como historial.
+     */
+    @Column(name = "proveedor_id")
+    private Long proveedorId;
+
     /** Folio de la venta relacionada (VENTA / CANCELACION) */
     @Column(name = "venta_id")
     private Long ventaId;
+
+    /**
+     * Número de caja (instalación) que registró la fila. Null en las filas
+     * anteriores a "varias cajas", que cuentan como caja 1.
+     */
+    @Column(name = "caja")
+    private Integer caja;
+
+    public int getCajaONumero() {
+        return caja == null || caja <= 0 ? 1 : caja;
+    }
 
     public enum Tipo {
         ENTRADA("Entrada"), AJUSTE("Ajuste"), VENTA("Venta"),

@@ -111,6 +111,17 @@ public class Venta {
     @Column(name = "plazo_cancelacion_horas")
     private Integer plazoCancelacionHoras;
 
+    /**
+     * Número de caja (instalación) que registró la fila. Null en las filas
+     * anteriores a "varias cajas", que cuentan como caja 1.
+     */
+    @Column(name = "caja")
+    private Integer caja;
+
+    public int getCajaONumero() {
+        return caja == null || caja <= 0 ? 1 : caja;
+    }
+
     // ── Renglones y pagos ────────────────────────────────────────────────
 
     @OneToMany(mappedBy = "venta", cascade = CascadeType.ALL, orphanRemoval = true)

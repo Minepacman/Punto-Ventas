@@ -7,14 +7,17 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.service.CajeroService;
+import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.PoliticaContrasena;
+import me.eliassanchezfernandez.puntodeventa.service.RecuperacionService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,8 +75,16 @@ public class UsuariosController implements Initializable {
     @FXML private Button        btnGuardar;
     @FXML private Button        btnPermisosDelRol;
 
+    // ── Opciones del inicio de sesión (barra inferior, solo ADMIN) ───────
+    @FXML private HBox     barraLogin;
+    @FXML private CheckBox chkMostrarEnLogin;
+    @FXML private Label    lblCodigoEstado;
+    @FXML private Button   btnCodigoRecuperacion;
+
     @Autowired private CajeroService cajeroService;
     @Autowired private SesionService sesionService;
+    @Autowired private ConfiguracionService configuracionService;
+    @Autowired private RecuperacionService  recuperacionService;
 
     private final ObservableList<Cajero> lista = FXCollections.observableArrayList();
     private final Map<Permiso, CheckBox> checksPermiso = new EnumMap<>(Permiso.class);
@@ -115,8 +126,85 @@ public class UsuariosController implements Initializable {
         });
 
         aplicarRolDelOperador();
+        cargarOpcionesLogin();
         onNuevo();
         recargar();
+    }
+
+    // ── Opciones del inicio de sesión ────────────────────────────────────
+
+    private void cargarOpcionesLogin() {
+        if (!sesionService.esAdmin()) return;
+        try {
+            chkMostrarEnLogin.setSelected(configuracionService.isLoginMostrarUsuarios());
+            lblCodigoEstado.setText(recuperacionService.hayCodigo()
+                    ? "Hay un código de recuperación vigente."
+                    : "Sin código de recuperación: si olvidas tu contraseña no podrás recuperarla.");
+        } catch (RuntimeException e) {
+            lblCodigoEstado.setText("");
+        }
+    }
+
+    @FXML
+    private void onMostrarEnLogin() {
+        try {
+            configuracionService.guardarOpcionesLogin(chkMostrarEnLogin.isSelected());
+        } catch (NegocioException e) {
+            chkMostrarEnLogin.setSelected(!chkMostrarEnLogin.isSelected());
+            alerta(Alert.AlertType.ERROR, "No se pudo guardar", e.getMessage());
+        }
+    }
+
+    /**
+     * Genera (o reemplaza) el código con el que el administrador puede
+     * restablecer su contraseña desde el inicio de sesión si la olvida. Se
+     * muestra una sola vez: el dueño debe anotarlo y guardarlo fuera de la
+     * computadora.
+     */
+    @FXML
+    private void onCodigoRecuperacion() {
+        boolean habia;
+        try {
+            habia = recuperacionService.hayCodigo();
+        } catch (RuntimeException e) {
+            habia = false;
+        }
+        if (!Ventanas.confirmar("Código de recuperación",
+                (habia ? "Ya hay un código vigente; al generar otro el anterior deja de servir.\n\n" : "")
+                + "Se generará un código con el que podrás restablecer tu contraseña de administrador "
+                + "desde el inicio de sesión si la olvidas.\nSe muestra UNA sola vez: anótalo y guárdalo "
+                + "en un lugar seguro, fuera de esta computadora.\n\n¿Generar el código?")) {
+            return;
+        }
+        String codigo;
+        try {
+            codigo = recuperacionService.generarCodigo();
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se pudo generar", e.getMessage());
+            return;
+        }
+        mostrarCodigo(codigo);
+        cargarOpcionesLogin();
+    }
+
+    private void mostrarCodigo(String codigo) {
+        Dialog<Void> dlg = new Dialog<>();
+        dlg.setTitle("Código de recuperación");
+        dlg.setHeaderText("Anota este código y guárdalo en un lugar seguro.\nNo se volverá a mostrar.");
+        TextField txt = new TextField(codigo);
+        txt.setEditable(false);
+        txt.setStyle("-fx-font-family: monospace; -fx-font-size: 18px; -fx-alignment: center;");
+        Label ayuda = new Label("Para usarlo: en el inicio de sesión elige \"¿Olvidaste tu contraseña?\", escribe tu usuario, "
+                + "este código y una contraseña nueva. Sirve una sola vez; después genera otro aquí.");
+        ayuda.setWrapText(true);
+        ayuda.setMaxWidth(420);
+        VBox caja = new VBox(10, txt, ayuda);
+        caja.setPadding(new javafx.geometry.Insets(10));
+        dlg.getDialogPane().setContent(caja);
+        dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        Ventanas.estilizar(dlg);
+        javafx.application.Platform.runLater(() -> { txt.requestFocus(); txt.selectAll(); });
+        dlg.showAndWait();
     }
 
     // ── Acciones ──────────────────────────────────────────────────────────
@@ -247,6 +335,8 @@ public class UsuariosController implements Initializable {
         btnGuardar.setDisable(!admin);
         btnDesbloquear.setVisible(admin);
         btnDesbloquear.setManaged(admin);
+        barraLogin.setVisible(admin);
+        barraLogin.setManaged(admin);
     }
 
     private void recargar() {

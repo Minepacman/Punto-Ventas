@@ -7,7 +7,18 @@ import com.sun.net.httpserver.HttpServer;
 import jakarta.annotation.PreDestroy;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
+import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
+import me.eliassanchezfernandez.puntodeventa.model.Franja;
+import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
+import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.Venta;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Periodo;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Totales;
+import me.eliassanchezfernandez.puntodeventa.service.PermisoRequeridoException;
+import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.service.AuditoriaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
@@ -50,6 +61,11 @@ import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.zip.GZIPOutputStream;
+import java.net.URLDecoder;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.util.function.Supplier;
 
 /**
  * Servidor web local para la interfaz móvil (teléfonos en la misma red Wi-Fi).
@@ -63,8 +79,16 @@ import java.util.zip.GZIPOutputStream;
  *   POST /api/sesion/recordar {recordar}  (Bearer)             -> sesión permanente / 48 h
  *   POST /api/logout          (Bearer)                          -> revoca el token
  *
- * Los datos de ventas/inventario/estadísticas son SIMULADOS en la página por
- * ahora; el login y las sesiones sí son reales.
+ *   GET  /api/estadisticas?periodo=dia|semana|mes   (VER_HISTORIAL)
+ *   GET  /api/ventas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (VER_HISTORIAL, máx. 93 días y 500 ventas)
+ *   GET  /api/inventario?q=                          (cualquier usuario; costos solo con VER_GANANCIAS)
+ *   POST /api/inventario/ajuste {productoId, tipo: entrada|ajuste|merma, cantidad, motivo, proveedor?, costo?}
+ *                                                    (AJUSTAR_INVENTARIO)
+ *
+ * Cada endpoint de datos valida el token, relee al usuario de la BD y ejecuta el
+ * servicio dentro de SesionService.ejecutarComo(usuarioMovil, ip, ...): los
+ * servicios verifican permisos y auditan como el usuario MÓVIL, y la sesión de
+ * escritorio ni se lee ni se modifica. El OCR de tickets sigue siendo un demo en la página.
  *
  * Seguridad: solo escucha si el ADMIN lo activó (por defecto apagado); límite
  * de intentos fallidos por IP además del bloqueo por usuario; cuerpos de
@@ -111,6 +135,24 @@ public class ServidorMovilService {
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private AuditoriaService     auditoriaService;
     @Autowired private Clock                reloj;
+    @Autowired private EstadisticasService  estadisticasService;
+    @Autowired private VentaService         ventaService;
+    @Autowired private ProductoService      productoService;
+    @Autowired private AnunciadorMdns       anunciador;
+
+    /** Puertos de respaldo (después del preferido) cuando el elegido está ocupado; 0 = lo asigna el sistema */
+    static final List<Integer> PUERTOS_RESPALDO = candidatosRespaldo();
+
+    private static List<Integer> candidatosRespaldo() {
+        List<Integer> l = new ArrayList<>();
+        for (int p = 8085; p <= 8095; p++) l.add(p);
+        l.add(18085);
+        l.add(0);
+        return List.copyOf(l);
+    }
+
+    /** Nombre local configurado (sin ".local"); su Host se acepta aunque mDNS no esté disponible */
+    private volatile String nombreLocal;
 
     /** Pruebas: poner en false para que no arranque solo aunque la BD diga "activo" */
     @Value("${app.movil.autoarranque:true}")
@@ -135,7 +177,11 @@ public class ServidorMovilService {
         if (!autoarranque) return;
         try {
             Configuracion c = configuracionService.obtener();
-            if (c.isMovilActivo()) iniciar(c.getMovilPuerto());
+            if (c.isMovilActivo()) {
+                if (c.isMovilPuertoManual()) iniciar(c.getMovilPuerto());
+                else iniciarAutomatico(c.getMovilPuerto());
+                configuracionService.registrarPuertoMovilEnlazado(getPuerto());
+            }
         } catch (Exception e) {
             System.err.println("⚠ No se pudo iniciar el acceso móvil: " + e.getMessage());
         }
@@ -153,14 +199,45 @@ public class ServidorMovilService {
      */
     public synchronized void iniciar(int puerto) {
         if (servidor != null) return;
-        HttpServer nuevo;
+        arrancar(abrir(puerto));
+    }
+
+    /**
+     * Arranque automático: prueba el puerto preferido (el último que funcionó o el 8085), luego
+     * 8085-8095 y 18085, y por último uno que asigne el sistema. Devuelve el puerto realmente usado.
+     */
+    public synchronized int iniciarAutomatico(int preferido) {
+        List<Integer> candidatos = new ArrayList<>();
+        candidatos.add(preferido);
+        candidatos.addAll(PUERTOS_RESPALDO);
+        return iniciarConCandidatos(candidatos);
+    }
+
+    /** Prueba los puertos en orden y se queda con el primero libre */
+    synchronized int iniciarConCandidatos(List<Integer> candidatos) {
+        if (servidor != null) return getPuerto();
+        for (int puerto : new java.util.LinkedHashSet<>(candidatos)) {
+            try {
+                arrancar(abrir(puerto));
+                return getPuerto();
+            } catch (NegocioException ocupado) {
+                // siguiente candidato
+            }
+        }
+        throw new NegocioException("No se pudo abrir ningún puerto para el acceso móvil. Revisa el antivirus o el firewall.");
+    }
+
+    private static HttpServer abrir(int puerto) {
         try {
-            nuevo = HttpServer.create(new InetSocketAddress(puerto), 0);
+            return HttpServer.create(new InetSocketAddress(puerto), 0);
         } catch (BindException e) {
             throw new NegocioException("El puerto " + puerto + " ya está en uso por otro programa. Elige otro puerto.");
         } catch (IOException | RuntimeException e) {
             throw new NegocioException("No se pudo abrir el puerto " + puerto + ": " + e.getMessage());
         }
+    }
+
+    private void arrancar(HttpServer nuevo) {
         ExecutorService pool = crearPool();
         limitador = new LimitadorIntentos(reloj, MAX_FALLOS_POR_IP, VENTANA_FALLOS);
         limitadorUsuarios = new LimitadorIntentos(reloj, MAX_FALLOS_POR_USUARIO, VENTANA_FALLOS_USUARIO);
@@ -170,6 +247,7 @@ public class ServidorMovilService {
         servidor = nuevo;
         hilos = pool;
         System.out.println("📱 Acceso móvil activo en el puerto " + nuevo.getAddress().getPort());
+        aplicarNombreLocal();
     }
 
     /** 2–4 hilos y cola de 32: con la cola llena se rechaza (el servidor cierra la conexión) en vez de crecer sin límite */
@@ -187,6 +265,7 @@ public class ServidorMovilService {
         HttpServer s = servidor;
         if (s == null) return;
         servidor = null;
+        anunciador.detener();
         s.stop(0);
         if (hilos != null) hilos.shutdownNow();
         hilos = null;
@@ -203,22 +282,51 @@ public class ServidorMovilService {
         return s == null ? 0 : s.getAddress().getPort();
     }
 
-    /** Direcciones para abrir desde el teléfono: IPv4 privadas no loopback de las interfaces activas */
-    public List<String> urlsLan(int puerto) {
-        List<String> urls = new ArrayList<>();
+    /** IPv4 privadas no loopback de las interfaces activas */
+    public static List<Inet4Address> ipsLan() {
+        List<Inet4Address> ips = new ArrayList<>();
         try {
             Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
-            if (ifaces == null) return urls;
+            if (ifaces == null) return ips;
             for (NetworkInterface ni : Collections.list(ifaces)) {
                 if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) continue;
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
-                    if (a instanceof Inet4Address && !a.isLoopbackAddress() && a.isSiteLocalAddress()) {
-                        urls.add("http://" + a.getHostAddress() + ":" + puerto + "/");
-                    }
+                    if (a instanceof Inet4Address v4 && !a.isLoopbackAddress() && a.isSiteLocalAddress()) ips.add(v4);
                 }
             }
         } catch (IOException ignorada) { /* sin red: lista vacía */ }
+        return ips;
+    }
+
+    /** Direcciones para abrir desde el teléfono */
+    public List<String> urlsLan(int puerto) {
+        List<String> urls = new ArrayList<>();
+        for (Inet4Address a : ipsLan()) urls.add("http://" + a.getHostAddress() + ":" + puerto + "/");
         return urls;
+    }
+
+    // ── Nombre local (mDNS) ───────────────────────────────────────────────
+
+    /** Fija el nombre local aceptado en la cabecera Host (sin publicarlo) */
+    void fijarNombreLocal(String nombre) {
+        this.nombreLocal = nombre == null || nombre.isBlank() ? null : nombre.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Relee el nombre local de la configuración y (re)publica mDNS en segundo plano si el servidor
+     * está encendido. Nunca lanza: si falla, el acceso por IP sigue igual.
+     */
+    public void aplicarNombreLocal() {
+        try {
+            fijarNombreLocal(configuracionService.obtener().getMovilNombre());
+            if (servidor == null || nombreLocal == null) {
+                anunciador.detener();
+                return;
+            }
+            anunciador.iniciar(nombreLocal, getPuerto(), new ArrayList<>(ipsLan()));
+        } catch (RuntimeException e) {
+            System.err.println("⚠ Nombre local no disponible: " + e.getMessage());
+        }
     }
 
     // ── Enrutado ──────────────────────────────────────────────────────────
@@ -249,6 +357,8 @@ public class ServidorMovilService {
             h = h.substring(0, dos);
         }
         if (h.equals("localhost") || IPV4.matcher(h).matches()) return true;
+        String local = nombreLocal;
+        if (local != null && h.equals(local + ".local")) return true;
         String equipo = nombreDeEquipo();
         return !equipo.isEmpty() && (h.equals(equipo) || h.equals(equipo + ".local"));
     }
@@ -284,6 +394,10 @@ public class ServidorMovilService {
                 case "/api/sesion"          -> { exigir(metodo, "GET");  sesion(ex); }
                 case "/api/sesion/recordar" -> { exigir(metodo, "POST"); recordar(ex); }
                 case "/api/logout"          -> { exigir(metodo, "POST"); logout(ex); }
+                case "/api/estadisticas"    -> { exigir(metodo, "GET");  estadisticas(ex); }
+                case "/api/ventas"          -> { exigir(metodo, "GET");  ventas(ex); }
+                case "/api/inventario"      -> { exigir(metodo, "GET");  inventario(ex); }
+                case "/api/inventario/ajuste" -> { exigir(metodo, "POST"); ajusteInventario(ex); }
                 default -> error(ex, 404, "NO_ENCONTRADO", "No encontrado.");
             }
         } catch (MetodoNoPermitido e) {
@@ -522,6 +636,305 @@ public class ServidorMovilService {
                 : v.sesion().getExpira().toInstant(ZoneOffset.UTC).toEpochMilli());
         r.put("ahora", reloj.millis());
         return r;
+    }
+
+    // ── Datos reales (estadísticas, ventas, inventario) ───────────────────
+
+    static final int MAX_DIAS_VENTAS = 93;
+    static final int MAX_VENTAS = 500;
+    static final int MAX_PRODUCTOS = 200;
+
+    /**
+     * Esqueleto común: token válido → permiso (comprobado aquí con el usuario recién leído de la BD
+     * y vuelto a comprobar por el servicio) → servicio ejecutado COMO el usuario móvil.
+     * El ámbito se limpia siempre (finally dentro de ejecutarComo).
+     */
+    private void protegido(HttpExchange ex, Permiso requerido, java.util.function.Function<Cajero, Object> accion)
+            throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        Cajero cajero = v.get().cajero();
+        if (requerido != null && !cajero.tienePermiso(requerido)) { sinPermiso(ex); return; }
+        Object resultado;
+        try {
+            Supplier<Object> trabajo = () -> accion.apply(cajero);
+            resultado = sesionService.ejecutarComo(cajero, ipDe(ex), trabajo);
+        } catch (PermisoRequeridoException e) {
+            sinPermiso(ex);
+            return;
+        }
+        responder(ex, 200, resultado);
+    }
+
+    private void sinPermiso(HttpExchange ex) throws IOException {
+        error(ex, 403, "SIN_PERMISO", "Sin permiso para esta sección.");
+    }
+
+    private static Map<String, String> parametros(HttpExchange ex) {
+        Map<String, String> r = new LinkedHashMap<>();
+        String q = ex.getRequestURI().getRawQuery();
+        if (q == null || q.isEmpty()) return r;
+        if (q.length() > 400) throw new CuerpoInvalido(400, "Consulta demasiado larga.");
+        for (String par : q.split("&")) {
+            if (par.isEmpty()) continue;
+            int i = par.indexOf('=');
+            String k = i < 0 ? par : par.substring(0, i);
+            String val = i < 0 ? "" : par.substring(i + 1);
+            try {
+                r.put(URLDecoder.decode(k, StandardCharsets.UTF_8), URLDecoder.decode(val, StandardCharsets.UTF_8));
+            } catch (IllegalArgumentException e) {
+                throw new CuerpoInvalido(400, "Consulta inválida.");
+            }
+        }
+        return r;
+    }
+
+    private static LocalDate fecha(String valor, LocalDate porDefecto) {
+        if (valor == null || valor.isBlank()) return porDefecto;
+        try {
+            return LocalDate.parse(valor.trim());
+        } catch (DateTimeParseException e) {
+            throw new CuerpoInvalido(400, "Fecha inválida. Usa el formato AAAA-MM-DD.");
+        }
+    }
+
+    private static Map<String, Object> mapaTotales(Totales t) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("total", t.total());
+        m.put("transacciones", t.transacciones());
+        m.put("piezas", t.piezas());
+        m.put("ticketPromedio", Math.round(t.ticketPromedio() * 100.0) / 100.0);
+        return m;
+    }
+
+    private void estadisticas(HttpExchange ex) throws IOException {
+        String per = parametros(ex).getOrDefault("periodo", "dia").toLowerCase(Locale.ROOT);
+        if (!per.equals("dia") && !per.equals("semana") && !per.equals("mes")) {
+            throw new CuerpoInvalido(400, "Periodo inválido. Usa dia, semana o mes.");
+        }
+        protegido(ex, Permiso.VER_HISTORIAL, cajero -> {
+            LocalDate hoy = estadisticasService.hoy();
+            Periodo p = switch (per) {
+                case "semana" -> Periodo.semana(hoy);
+                case "mes"    -> Periodo.mes(hoy);
+                default       -> Periodo.dia(hoy);
+            };
+            String etiqueta = switch (per) { case "semana" -> "Semana"; case "mes" -> "Mes"; default -> "Hoy"; };
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("periodo", per);
+            r.put("desde", p.desde().toString());
+            r.put("hasta", p.hasta().toString());
+            r.put("totales", mapaTotales(estadisticasService.totales(p)));
+
+            estadisticasService.comparaciones().stream().filter(c -> c.etiqueta().equals(etiqueta)).findFirst()
+                    .ifPresent(c -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("detalle", c.detalle());
+                        m.put("anterior", mapaTotales(c.anterior()));
+                        m.put("variacionPct", c.variacionPct());      // null = sin periodo anterior con ventas
+                        r.put("comparacion", m);
+                    });
+
+            List<Map<String, Object>> top = new ArrayList<>();
+            for (var t : estadisticasService.topProductos(p, 5)) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", t.producto().getId());
+                m.put("descripcion", t.producto().getDescripcion());
+                m.put("unidad", unidadDe(t.producto()));
+                m.put("piezas", t.piezas());
+                m.put("importe", t.importe());
+                top.add(m);
+            }
+            r.put("top", top);
+
+            List<Map<String, Object>> franjas = new ArrayList<>();
+            estadisticasService.porFranja(p).forEach((f, t) -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("franja", f.name());
+                m.put("etiqueta", f.getEtiqueta());
+                m.put("total", t.total());
+                m.put("transacciones", t.transacciones());
+                franjas.add(m);
+            });
+            r.put("franjas", franjas);
+
+            List<Map<String, Object>> serie = new ArrayList<>();
+            estadisticasService.serieDiaria(p).forEach((d, total) -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("fecha", d.toString());
+                m.put("total", total);
+                serie.add(m);
+            });
+            r.put("serie", serie);
+
+            boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
+            r.put("gananciaVisible", ganancias);
+            if (ganancias) {
+                double g = 0;
+                for (Venta v : ventaService.ventasEntre(p.desde(), p.hasta())) {
+                    if (v.isCancelada()) continue;
+                    for (DetalleVenta d : v.getDetalles()) g += d.getImporte() - d.getCostoUnitarioODefault() * d.getCantidad();
+                }
+                r.put("ganancia", Math.round(g * 100.0) / 100.0);
+            }
+            return r;
+        });
+    }
+
+    private void ventas(HttpExchange ex) throws IOException {
+        Map<String, String> q = parametros(ex);
+        LocalDate hoy = estadisticasService.hoy();
+        LocalDate desde = fecha(q.get("desde"), hoy);
+        LocalDate hasta = fecha(q.get("hasta"), q.get("desde") == null ? hoy : desde);
+        if (hasta.isBefore(desde)) throw new CuerpoInvalido(400, "La fecha final no puede ser anterior a la inicial.");
+        if (ChronoUnit.DAYS.between(desde, hasta) + 1 > MAX_DIAS_VENTAS) {
+            throw new CuerpoInvalido(400, "El rango máximo es de " + MAX_DIAS_VENTAS + " días.");
+        }
+        protegido(ex, Permiso.VER_HISTORIAL, cajero -> {
+            boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
+            List<Venta> todas = ventaService.ventasEntre(desde, hasta);
+            List<Map<String, Object>> lista = new ArrayList<>();
+            for (Venta v : todas) {
+                if (lista.size() >= MAX_VENTAS) break;
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", v.getId());
+                m.put("folio", v.getFolio());
+                m.put("fecha", v.getFecha().toString());
+                m.put("cajero", v.getCajero() == null ? "" : v.getCajero().getNombreCompleto());
+                m.put("total", v.getTotal());
+                m.put("formaPago", v.getFormaPago() == null ? "" : v.getFormaPago().getEtiqueta());
+                m.put("cancelada", v.isCancelada());
+                List<Map<String, Object>> lineas = new ArrayList<>();
+                for (DetalleVenta d : v.getDetalles()) {
+                    Map<String, Object> l = new LinkedHashMap<>();
+                    l.put("productoId", d.getProducto().getId());
+                    l.put("descripcion", d.getProducto().getDescripcion());
+                    l.put("unidad", unidadDe(d.getProducto()));
+                    l.put("cantidad", d.getCantidad());
+                    l.put("precio", d.getPrecioVenta());
+                    l.put("importe", d.getImporte());
+                    if (ganancias) l.put("costo", d.getCostoUnitarioODefault());
+                    lineas.add(l);
+                }
+                m.put("lineas", lineas);
+                lista.add(m);
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("desde", desde.toString());
+            r.put("hasta", hasta.toString());
+            r.put("ventas", lista);
+            r.put("total", todas.size());
+            r.put("truncado", todas.size() > lista.size());
+            return r;
+        });
+    }
+
+    private static String unidadDe(Producto p) {
+        return p.getUnidad() != null ? p.getUnidad().getAbreviatura()
+                : (p.getTipoVenta() == Producto.TipoVenta.GRANEL ? "kg" : "pza");
+    }
+
+    private static Map<String, Object> mapaProducto(Producto p, boolean ganancias) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", p.getId());
+        m.put("codigo", p.getCodigoBarras());
+        m.put("descripcion", p.getDescripcion());
+        m.put("existencia", p.getCantidadActual());
+        m.put("minimo", p.getCantidadMinima());
+        m.put("stockBajo", ProductoService.tieneStockBajo(p));
+        m.put("unidad", unidadDe(p));
+        m.put("departamento", p.getDepartamento() == null ? "" : p.getDepartamento().getNombre());
+        m.put("precio", p.getPrecioVenta());
+        if (ganancias) m.put("costo", p.getPrecioCosto());
+        return m;
+    }
+
+    private void inventario(HttpExchange ex) throws IOException {
+        String q = parametros(ex).getOrDefault("q", "").trim();
+        if (q.length() > 60) throw new CuerpoInvalido(400, "Búsqueda demasiado larga.");
+        protegido(ex, null, cajero -> {
+            boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
+            List<Producto> encontrados = productoService.buscar(q).stream()
+                    .filter(p -> p.isActivo() && p.isUsaInventario())
+                    .sorted(java.util.Comparator.comparing((Producto p) -> !ProductoService.tieneStockBajo(p))
+                            .thenComparing(p -> p.getDescripcion() == null ? "" : p.getDescripcion().toLowerCase(Locale.ROOT)))
+                    .toList();
+            List<Map<String, Object>> lista = new ArrayList<>();
+            for (Producto p : encontrados) {
+                if (lista.size() >= MAX_PRODUCTOS) break;
+                lista.add(mapaProducto(p, ganancias));
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("productos", lista);
+            r.put("total", encontrados.size());
+            r.put("truncado", encontrados.size() > lista.size());
+            r.put("puedeAjustar", cajero.tienePermiso(Permiso.AJUSTAR_INVENTARIO));
+            return r;
+        });
+    }
+
+    private static double numero(Object o, String campo) {
+        if (!(o instanceof Number n)) throw new CuerpoInvalido(400, "El campo " + campo + " debe ser un número.");
+        double d = n.doubleValue();
+        if (!Double.isFinite(d)) throw new CuerpoInvalido(400, "El campo " + campo + " es inválido.");
+        return d;
+    }
+
+    private void ajusteInventario(HttpExchange ex) throws IOException {
+        // Se valida el token ANTES de leer el cuerpo (no se procesan datos de quien no tiene sesión)
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        if (!v.get().cajero().tienePermiso(Permiso.AJUSTAR_INVENTARIO)) { sinPermiso(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        if (!(cuerpo.get("productoId") instanceof Number idNum) || idNum.doubleValue() != Math.rint(idNum.doubleValue())) {
+            throw new CuerpoInvalido(400, "Producto inválido.");
+        }
+        long productoId = idNum.longValue();
+        String tipo = texto(cuerpo.get("tipo"), 20).toLowerCase(Locale.ROOT);
+        double cantidad = numero(cuerpo.get("cantidad"), "cantidad");
+        String motivo = texto(cuerpo.get("motivo"), 200).trim();
+        String proveedor = texto(cuerpo.get("proveedor"), 150).trim();
+        Double costo = cuerpo.get("costo") == null ? null : numero(cuerpo.get("costo"), "costo");
+        if (!tipo.equals("entrada") && !tipo.equals("ajuste") && !tipo.equals("merma")) {
+            throw new CuerpoInvalido(400, "Tipo inválido. Usa entrada, ajuste o merma.");
+        }
+        if (costo != null && costo > 0 && !v.get().cajero().tienePermiso(Permiso.VER_GANANCIAS)) {
+            sinPermiso(ex);     // cambiar el costo exige poder ver costos
+            return;
+        }
+        protegido(ex, Permiso.AJUSTAR_INVENTARIO, cajero -> {
+            Producto antes = productoService.buscarPorId(productoId)
+                    .orElseThrow(() -> new NegocioException("El producto ya no existe."));
+            double existenciaAntes = antes.getCantidadActual();
+            Producto despues;
+            String detalle;
+            switch (tipo) {
+                case "entrada" -> {
+                    despues = productoService.registrarEntrada(productoId, cantidad,
+                            proveedor.isEmpty() ? "No indicado (móvil)" : proveedor,
+                            costo == null ? 0 : costo, null);
+                    detalle = "Entrada +" + cantidad;
+                }
+                case "merma" -> {
+                    if (!(cantidad > 0)) throw new NegocioException("La cantidad de la merma debe ser mayor a cero.");
+                    if (cantidad > existenciaAntes) throw new NegocioException("La merma no puede ser mayor a la existencia actual.");
+                    despues = productoService.ajustarStock(productoId, existenciaAntes - cantidad,
+                            "Merma: " + (motivo.isEmpty() ? "sin motivo" : motivo), null);
+                    detalle = "Merma -" + cantidad;
+                }
+                default -> {
+                    despues = productoService.ajustarStock(productoId, cantidad, motivo, null);
+                    detalle = "Ajuste a " + cantidad;
+                }
+            }
+            auditoriaService.registrar(cajero, "INVENTARIO_MOVIL",
+                    detalle + " · " + despues.getDescripcion() + " (" + existenciaAntes + " → "
+                            + despues.getCantidadActual() + ")" + (motivo.isEmpty() ? "" : " · " + motivo), (Cajero) null);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("producto", mapaProducto(despues, cajero.tienePermiso(Permiso.VER_GANANCIAS)));
+            return r;
+        });
     }
 
     // ── Utilidades HTTP ───────────────────────────────────────────────────

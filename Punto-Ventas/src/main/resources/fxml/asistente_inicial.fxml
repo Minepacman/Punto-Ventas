@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    asistente_inicial.fxml  –  Asistente de primera vez del administrador
+    Controlador: AsistenteInicialController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.AsistenteInicialController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="12">
+                <padding><Insets top="20" right="24" bottom="12" left="24"/></padding>
+
+                <Label text="Bienvenido. Vamos a preparar tu negocio" styleClass="title" wrapText="true"/>
+                <Label text="Estos datos salen en el ticket, en la pantalla de inicio de sesión y en las sugerencias de venta. Todo se puede cambiar después en la pestaña Configuración."
+                       styleClass="subtitle" wrapText="true"/>
+
+                <!-- ── Nombre ─────────────────────────────────── -->
+                <Label text="1. Nombre del negocio" styleClass="form-section-title"/>
+                <TextField fx:id="txtNombre" promptText="ej: Abarrotes Doña Lupe" onAction="#onGuardar"/>
+
+                <!-- ── Logotipo ───────────────────────────────── -->
+                <Label text="2. Logotipo (opcional)" styleClass="form-section-title"/>
+                <HBox spacing="14" alignment="CENTER_LEFT">
+                    <StackPane styleClass="asistente-logo" minWidth="200" minHeight="90" maxWidth="200" maxHeight="90">
+                        <ImageView fx:id="imgLogo" fitWidth="200" fitHeight="90" preserveRatio="true"/>
+                        <Label fx:id="lblSinLogo" text="Sin logotipo" styleClass="hint"/>
+                    </StackPane>
+                    <VBox spacing="6">
+                        <Button text="Elegir imagen..." onAction="#onElegirLogo"/>
+                        <Button fx:id="btnQuitarLogo" text="Quitar" onAction="#onQuitarLogo"/>
+                        <Label text="PNG o JPG de hasta 1 MB." styleClass="hint"/>
+                    </VBox>
+                </HBox>
+
+                <!-- ── Ubicación ──────────────────────────────── -->
+                <Label text="3. Ubicación del negocio (para el clima, opcional)" styleClass="form-section-title"/>
+                <Label text="Con la ubicación, el programa registra el clima cada hora y lo relaciona con tus ventas para mejorar las sugerencias. Solo se envían las coordenadas; nada más sale de este equipo."
+                       styleClass="hint" wrapText="true"/>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <TextField fx:id="txtCiudad" promptText="Ciudad, ej: Puebla" HBox.hgrow="ALWAYS" onAction="#onBuscarCiudad"/>
+                    <Button fx:id="btnBuscar" text="Buscar" onAction="#onBuscarCiudad"/>
+                </HBox>
+                <ComboBox fx:id="cmbLugares" promptText="Elige tu ciudad" maxWidth="Infinity"/>
+                <HBox spacing="12">
+                    <VBox spacing="4" HBox.hgrow="ALWAYS">
+                        <Label text="Latitud" styleClass="field-label"/>
+                        <TextField fx:id="txtLatitud" promptText="ej: 19.4326"/>
+                    </VBox>
+                    <VBox spacing="4" HBox.hgrow="ALWAYS">
+                        <Label text="Longitud" styleClass="field-label"/>
+                        <TextField fx:id="txtLongitud" promptText="ej: -99.1332"/>
+                    </VBox>
+                </HBox>
+                <CheckBox fx:id="chkClima" text="Registrar el clima cada hora (requiere internet)"/>
+                <Label fx:id="lblEstadoUbicacion" text="Busca tu ciudad o deja los campos vacíos para omitir este paso."
+                       styleClass="hint" wrapText="true"/>
+
+                <Label fx:id="lblError" text="" styleClass="field-error-label" wrapText="true" visible="false" managed="false"/>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+    <bottom>
+        <HBox spacing="12" alignment="CENTER_LEFT" styleClass="asistente-pie">
+            <padding><Insets top="10" right="24" bottom="14" left="24"/></padding>
+            <Hyperlink text="Omitir por ahora" onAction="#onOmitir" focusTraversable="false"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button text="Guardar y continuar" onAction="#onGuardar" styleClass="button-primary"
+                    defaultButton="true" prefHeight="38"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

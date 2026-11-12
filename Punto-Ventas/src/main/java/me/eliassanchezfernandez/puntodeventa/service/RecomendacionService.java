@@ -11,6 +11,7 @@ import me.eliassanchezfernandez.puntodeventa.repository.ParProductosRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoClimaRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoRepository;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.MadurezDatos;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +45,9 @@ import java.util.Set;
  *    los más vendidos del catálogo.
  *
  * Los pesos dependen del nivel de datos: en Entrenamiento manda lo genérico;
- * con historial manda lo aprendido. La confianza se acota por nivel para que
- * en las primeras semanas las sugerencias sean discretas. Determinista: con
+ * con historial manda lo aprendido. La confianza se acota por la madurez de
+ * los datos (sube día a día hasta los 30 días) para que en las primeras
+ * semanas las sugerencias sean discretas. Determinista: con
  * los mismos datos y el mismo "ahora" regresa lo mismo (desempate por id).
  *
  * No exige permiso (la usa el cajero) y no expone importes.
@@ -74,12 +76,15 @@ public class RecomendacionService {
         }
     }
 
+    /** Tope de confianza sin historial (también el piso del tope graduado por madurez) */
+    static final double TOPE_MINIMO = 0.35;
+
     /** Pesos de cada fuente según el nivel de datos (suman 1) y tope de confianza */
     public record Pesos(double generico, double canasta, double diaHora, double clima, double tope) {
 
         public static Pesos para(NivelDatos nivel, boolean hayClima) {
             Pesos p = switch (nivel) {
-                case SIN_DATOS     -> new Pesos(1.00, 0.00, 0.00, 0.00, 0.35);
+                case SIN_DATOS     -> new Pesos(1.00, 0.00, 0.00, 0.00, TOPE_MINIMO);
                 case ENTRENAMIENTO -> new Pesos(0.60, 0.20, 0.10, 0.10, 0.50);
                 case PARCIAL       -> new Pesos(0.30, 0.35, 0.20, 0.15, 0.75);
                 case SUFICIENTE    -> new Pesos(0.10, 0.45, 0.25, 0.20, 1.00);
@@ -87,26 +92,49 @@ public class RecomendacionService {
             // Sin clima, su peso pasa a día/hora para no castigar la confianza
             return hayClima ? p : new Pesos(p.generico, p.canasta, p.diaHora + p.clima, 0, p.tope);
         }
+
+        /**
+         * Igual, pero el tope de confianza sube de forma continua con la madurez
+         * de los datos: 35 % sin historial y 100 % a partir de
+         * {@link EstadisticasService#DIAS_CONFIABLES} días (en vez de saltar por nivel).
+         */
+        public static Pesos para(MadurezDatos madurez, boolean hayClima) {
+            Pesos p = para(madurez.nivel(), hayClima);
+            double tope = madurez.hayVentas() ? TOPE_MINIMO + (1.0 - TOPE_MINIMO) * madurez.factorConfianza() : TOPE_MINIMO;
+            return new Pesos(p.generico, p.canasta, p.diaHora, p.clima, Math.round(tope * 1000.0) / 1000.0);
+        }
     }
 
     // ── API ──────────────────────────────────────────────────────────────
 
-    /** Sugerencias para el carrito en este momento, con el nivel de datos actual */
+    /** Sugerencias para el carrito en este momento, con la madurez de datos actual (la usa Ventas) */
     @Transactional(readOnly = true)
     public List<Sugerencia> sugerir(Collection<Long> carrito, LocalDateTime ahora, ClimaRegistro clima, int maximo) {
-        return sugerir(carrito, ahora, clima, maximo, estadisticasService.nivelDatosActual());
+        return sugerir(carrito, ahora, clima, maximo, estadisticasService.madurezActual());
     }
 
     /**
-     * Versión con el nivel explícito (pruebas y simulaciones).
+     * Versión con el nivel explícito (pruebas y simulaciones): el tope de
+     * confianza es el fijo de ese nivel.
      * @param carrito ids de los productos ya en el ticket (se excluyen)
      * @param clima   clima de la hora, o null si no hay datos
      */
     @Transactional(readOnly = true)
     public List<Sugerencia> sugerir(Collection<Long> carrito, LocalDateTime ahora, ClimaRegistro clima,
                                     int maximo, NivelDatos nivel) {
+        return sugerir(carrito, ahora, clima, maximo, Pesos.para(nivel, clima != null));
+    }
+
+    /** Versión con la madurez explícita: el tope de confianza crece día a día hasta los 30 días */
+    @Transactional(readOnly = true)
+    public List<Sugerencia> sugerir(Collection<Long> carrito, LocalDateTime ahora, ClimaRegistro clima,
+                                    int maximo, MadurezDatos madurez) {
+        return sugerir(carrito, ahora, clima, maximo, Pesos.para(madurez, clima != null));
+    }
+
+    private List<Sugerencia> sugerir(Collection<Long> carrito, LocalDateTime ahora, ClimaRegistro clima,
+                                     int maximo, Pesos pesos) {
         Set<Long> enCarrito = carrito == null ? Set.of() : new HashSet<>(carrito);
-        Pesos pesos = Pesos.para(nivel, clima != null);
         Map<Long, Candidato> candidatos = new HashMap<>();
 
         if (pesos.canasta() > 0 && !enCarrito.isEmpty()) {

@@ -3,6 +3,7 @@ package me.eliassanchezfernandez.puntodeventa.service;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
+import me.eliassanchezfernandez.puntodeventa.servidor.LimitadorIntentos;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
@@ -10,10 +11,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Servicio de autenticación, sesión activa y permisos.
@@ -41,10 +45,25 @@ public class SesionService {
     public static final String ADMIN_CONTRASENA = "admin123";
     public static final int    MAX_INTENTOS_FALLIDOS = 5;
 
+    /** Mensaje único de todo fallo de credenciales (no revela si el usuario existe o está inactivo) */
+    public static final String MENSAJE_CREDENCIALES = "Usuario o contraseña incorrectos.";
+
+    /**
+     * Límite de fallos de ESTA caja sin importar el usuario (SEG-07): frena a quien
+     * prueba muchos usuarios o contraseñas seguidas en la terminal. Es independiente
+     * del bloqueo por usuario y vive solo en memoria.
+     */
+    public static final int MAX_FALLOS_TERMINAL = 10;
+    public static final Duration VENTANA_FALLOS_TERMINAL = Duration.ofMinutes(5);
+    private static final String TERMINAL = "escritorio";
+
     @Autowired private CajeroRepository cajeroRepo;
     @Autowired private PasswordEncoder  passwordEncoder;
     @Autowired private AuditoriaService auditoriaService;
     @Autowired private SesionMovilService sesionMovilService;
+
+    private final LimitadorIntentos limitadorTerminal =
+            new LimitadorIntentos(Clock.systemUTC(), MAX_FALLOS_TERMINAL, VENTANA_FALLOS_TERMINAL);
 
     /** Cajero que inició sesión actualmente (null = nadie autenticado) */
     private volatile Cajero cajeroActual = null;
@@ -57,6 +76,7 @@ public class SesionService {
      */
     public Cajero autenticar(String usuario, String contrasena)
             throws CredencialesInvalidasException {
+        rechazarSiEsActorMovil();
         Cajero cajero = verificarCredenciales(usuario, contrasena);
         cajeroActual = cajero;
         return cajero;
@@ -80,29 +100,39 @@ public class SesionService {
             throw new CredencialesInvalidasException("Usuario y contraseña son obligatorios.");
         }
         String nombreUsuario = usuario.trim();
+        if (nombreUsuario.length() > 60) nombreUsuario = nombreUsuario.substring(0, 60);
+
+        long espera = limitadorTerminal.segundosDeEspera(TERMINAL);
+        if (espera > 0) {
+            auditoriaService.registrarIndependiente(nombreUsuario, "LOGIN_LIMITADO",
+                    "Demasiados intentos fallidos en esta caja; espera " + espera + " s");
+            throw new CredencialesInvalidasException(mensajeEsperaTerminal(espera), true);
+        }
 
         Optional<Cajero> encontrado = cajeroRepo.findByUsuarioIgnoreCase(nombreUsuario);
-        if (encontrado.isEmpty()) {
-            auditoriaService.registrarIndependiente(nombreUsuario, "LOGIN_FALLIDO", "Usuario inexistente");
-            throw new CredencialesInvalidasException("Usuario no encontrado o inactivo.");
+        if (encontrado.isEmpty() || !encontrado.get().isActivo()) {
+            // Mismo costo (un BCrypt) que una contraseña incorrecta: el tiempo de
+            // respuesta no delata si el usuario existe. Mismo mensaje, mismo conteo.
+            passwordEncoder.matches(contrasena, hashFicticio());
+            limitadorTerminal.registrarFallo(TERMINAL);
+            auditoriaService.registrarIndependiente(nombreUsuario, "LOGIN_FALLIDO",
+                    encontrado.isEmpty() ? "Usuario inexistente" : "Usuario inactivo");
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
         Cajero cajero = encontrado.get();
 
-        if (!cajero.isActivo()) {
-            auditoriaService.registrarIndependiente(nombreUsuario, "LOGIN_FALLIDO", "Usuario inactivo");
-            throw new CredencialesInvalidasException("Usuario no encontrado o inactivo.");
-        }
         if (cajero.isBloqueado()) {
             auditoriaService.registrarIndependiente(nombreUsuario, "LOGIN_BLOQUEADO",
                     "Intento con usuario bloqueado hasta " + cajero.getBloqueadoHasta());
             throw new CredencialesInvalidasException(String.format(
                     "Usuario bloqueado por intentos fallidos. Intenta de nuevo en %d minuto(s) o pide a un administrador que lo desbloquee.",
-                    Math.max(1, java.time.Duration.between(LocalDateTime.now(), cajero.getBloqueadoHasta()).toMinutes())));
+                    Math.max(1, Duration.between(LocalDateTime.now(), cajero.getBloqueadoHasta()).toMinutes())), true);
         }
 
         if (!passwordEncoder.matches(contrasena, cajero.getContrasenaHash())) {
+            limitadorTerminal.registrarFallo(TERMINAL);
             registrarIntentoFallido(cajero);
-            throw new CredencialesInvalidasException("Contraseña incorrecta.");
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
 
         if (cajero.getIntentosFallidosOCero() > 0 || cajero.getBloqueadoHasta() != null) {
@@ -110,13 +140,32 @@ public class SesionService {
             cajero.setBloqueadoHasta(null);
             cajeroRepo.save(cajero);
         }
+        // Un acceso correcto demuestra que quien está en la caja conoce una clave válida:
+        // se olvidan los fallos previos para que no bloqueen al siguiente cajero.
+        limitadorTerminal.olvidar(TERMINAL);
         return cajero;
     }
 
     /** Mensaje único de todo fallo de credenciales móviles (no revela si el usuario existe, está bloqueado, etc.) */
-    public static final String MENSAJE_CREDENCIALES_MOVIL = "Usuario o contraseña incorrectos.";
+    public static final String MENSAJE_CREDENCIALES_MOVIL = MENSAJE_CREDENCIALES;
 
     private volatile String hashFicticio;
+
+    static String mensajeEsperaTerminal(long segundos) {
+        return segundos >= 90
+                ? "Demasiados intentos fallidos en esta caja. Espera " + ((segundos + 59) / 60) + " minutos e inténtalo de nuevo."
+                : "Demasiados intentos fallidos en esta caja. Espera " + segundos + " segundos e inténtalo de nuevo.";
+    }
+
+    /** Segundos que esta caja debe esperar antes de otro intento (0 = puede intentar) */
+    public long segundosDeEsperaTerminal() {
+        return limitadorTerminal.segundosDeEspera(TERMINAL);
+    }
+
+    /** Solo para pruebas: olvida los fallos acumulados de la terminal */
+    void reiniciarLimiteTerminalParaPruebas() {
+        limitadorTerminal.olvidar(TERMINAL);
+    }
 
     /**
      * Credenciales del acceso móvil. A diferencia de {@link #verificarCredenciales}:
@@ -179,6 +228,7 @@ public class SesionService {
 
     /** Cierra la sesión actual */
     public void cerrarSesion() {
+        rechazarSiEsActorMovil();
         cajeroActual = null;
     }
 
@@ -189,12 +239,13 @@ public class SesionService {
      */
     @Transactional
     public void cambiarContrasenaPropia(String actual, String nueva) {
+        rechazarSiEsActorMovil();
         Cajero c = cajeroActual;
         if (c == null) throw new NegocioException("No hay una sesión activa. Vuelve a iniciar sesión.");
         if (actual == null || !passwordEncoder.matches(actual, c.getContrasenaHash())) {
             throw new NegocioException("La contraseña actual no es correcta.");
         }
-        PoliticaContrasena.validar(nueva);
+        PoliticaContrasena.validar(nueva, c.getUsuario());
         if (passwordEncoder.matches(nueva, c.getContrasenaHash())) {
             throw new NegocioException("La nueva contraseña debe ser distinta a la actual.");
         }
@@ -215,32 +266,32 @@ public class SesionService {
 
     /** true solo si hay alguien autenticado Y no tiene pendiente cambiar su contraseña */
     public boolean haySesionActiva() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena();
     }
 
     /** Hay alguien autenticado pero debe cambiar su contraseña antes de operar */
     public boolean sesionPendienteDeCambio() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && c.isDebeCambiarContrasena();
     }
 
     public Cajero getCajeroActual() {
-        return cajeroActual;
+        return actorEfectivo();
     }
 
     public String getNombreCajero() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null ? c.getNombreCompleto() : "—";
     }
 
     public boolean esAdmin() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena() && c.getRol() == Cajero.Rol.ADMIN;
     }
 
     public boolean esGerente() {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena() && c.getRol() == Cajero.Rol.GERENTE;
     }
 
@@ -258,6 +309,8 @@ public class SesionService {
      * para que desactivaciones o cambios de permisos surtan efecto de inmediato.
      */
     public Cajero requerirSesion() {
+        ContextoActor.Actor movil = ContextoActor.actual();
+        if (movil != null) return requerirActorMovil(movil);
         Cajero c = cajeroActual;
         if (c == null) {
             throw new NegocioException("No hay una sesión activa. Vuelve a iniciar sesión.");
@@ -277,7 +330,7 @@ public class SesionService {
     // ── Permisos ──────────────────────────────────────────────────────────
 
     public boolean tienePermiso(Permiso permiso) {
-        Cajero c = cajeroActual;
+        Cajero c = actorEfectivo();
         return c != null && !c.isDebeCambiarContrasena() && c.tienePermiso(permiso);
     }
 
@@ -316,16 +369,80 @@ public class SesionService {
 
     /** Refresca el cajero en sesión desde la BD (p. ej. tras cambiar sus permisos) */
     public void refrescarSesion() {
+        if (ContextoActor.actual() != null) return;   // el escritorio no se toca desde el móvil
         Cajero c = cajeroActual;
         if (c != null) {
             cajeroRepo.findById(c.getId()).ifPresent(x -> cajeroActual = x);
         }
     }
 
+    // ── Usuario que actúa (acceso móvil) ──────────────────────────────────
+
+    /**
+     * Ejecuta {@code accion} haciendo que TODO lo que consulte la sesión
+     * (verificarPermiso, requerirSesion, getCajeroActual, auditoría, movimientos
+     * de inventario) vea a {@code cajero} como el usuario, en lugar del de la
+     * sesión de escritorio. El actor vive en un ThreadLocal y se limpia SIEMPRE en
+     * el finally (también si la acción lanza una excepción), restaurando el
+     * anterior si hubiera anidamiento. La sesión de escritorio (cajeroActual) no
+     * se lee ni se escribe dentro del ámbito. La auditoría agrega "[vía móvil, IP x]".
+     *
+     * Debe ejecutarse en el MISMO hilo que las llamadas a servicios (las
+     * transacciones de Spring también son por hilo, así que es lo natural).
+     */
+    public <T> T ejecutarComo(Cajero cajero, String ip, Supplier<T> accion) {
+        if (cajero == null) throw new IllegalArgumentException("Falta el usuario que actúa.");
+        ContextoActor.Actor anterior = ContextoActor.fijar(new ContextoActor.Actor(cajero, ip));
+        try {
+            return accion.get();
+        } finally {
+            ContextoActor.restaurar(anterior);
+        }
+    }
+
+    public void ejecutarComo(Cajero cajero, String ip, Runnable accion) {
+        ejecutarComo(cajero, ip, () -> { accion.run(); return null; });
+    }
+
+    /** Usuario del ámbito móvil si lo hay; si no, el de la sesión de escritorio */
+    private Cajero actorEfectivo() {
+        ContextoActor.Actor a = ContextoActor.actual();
+        return a != null ? a.cajero() : cajeroActual;
+    }
+
+    /** Relee al usuario móvil de la BD en cada operación: desactivarlo o quitarle permisos surte efecto de inmediato */
+    private Cajero requerirActorMovil(ContextoActor.Actor actor) {
+        Cajero enBd = cajeroRepo.findById(actor.cajero().getId()).orElse(null);
+        if (enBd == null || !enBd.isActivo()) {
+            throw new NegocioException("Tu usuario ya no está disponible. Inicia sesión de nuevo.");
+        }
+        if (enBd.isDebeCambiarContrasena()) {
+            throw new NegocioException("Debes cambiar tu contraseña en el programa de escritorio.");
+        }
+        return enBd;
+    }
+
+    /** Dentro de un ámbito móvil nunca se abre, cierra ni modifica la sesión de escritorio */
+    private static void rechazarSiEsActorMovil() {
+        if (ContextoActor.actual() != null) {
+            throw new IllegalStateException("La sesión de escritorio no se puede cambiar desde el acceso móvil.");
+        }
+    }
+
     // ── Excepción interna ─────────────────────────────────────────────────
 
     public static class CredencialesInvalidasException extends Exception {
-        public CredencialesInvalidasException(String msg) { super(msg); }
+        /** true = no fue "usuario o contraseña incorrectos" sino un bloqueo o espera: el mensaje se muestra tal cual */
+        private final boolean bloqueo;
+
+        public CredencialesInvalidasException(String msg) { this(msg, false); }
+
+        public CredencialesInvalidasException(String msg, boolean bloqueo) {
+            super(msg);
+            this.bloqueo = bloqueo;
+        }
+
+        public boolean isBloqueo() { return bloqueo; }
     }
 
     // ── Inicialización: crear admin por defecto si no hay cajeros ─────────

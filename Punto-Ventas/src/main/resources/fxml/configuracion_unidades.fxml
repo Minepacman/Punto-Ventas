@@ -41,6 +41,10 @@
                 <TextField fx:id="txtAbreviatura" promptText="ej: doc"/>
             </VBox>
             <CheckBox fx:id="chkDecimales" text="Permite decimales"/>
+            <VBox spacing="4">
+                <Label text="Clave SAT (c_ClaveUnidad, para facturar)" styleClass="field-label"/>
+                <TextField fx:id="txtClaveSat" promptText="ej: H87 pieza, KGM kilo, LTR litro"/>
+            </VBox>
             <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary" maxWidth="Infinity" prefHeight="36"/>
             <Button text="Nueva" onAction="#onNueva" maxWidth="Infinity" prefHeight="36"/>
             <Button text="Eliminar" onAction="#onEliminar" styleClass="button-danger" maxWidth="Infinity" prefHeight="36"/>

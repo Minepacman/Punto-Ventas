@@ -15,6 +15,7 @@ import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.TicketPendienteRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
+import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +60,10 @@ public class VentaService {
     @Autowired private ConfiguracionService      configuracionService;
     @Autowired private SesionService             sesionService;
     @Autowired private AuditoriaService          auditoriaService;
+    @Autowired private DispositivosService       dispositivosService;
+    @Autowired private IdentidadCaja             identidadCaja;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FacturaRepository facturaRepo;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -342,13 +347,27 @@ public class VentaService {
             cantidadPorProducto.merge(id, d.getCantidad(), Double::sum);
         }
 
-        // 2) Stock (sumando renglones repetidos). Sin existencia solo con permiso/autorización.
+        // 3) Total y pagos con los importes ya recalculados
+        double total = calcularTotal(detalles);
+        List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
+        double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
+        Venta.FormaPago formaPrincipal = pagosValidos.stream()
+                .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
+                .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
+
+        // 3b) Stock (sumando renglones repetidos), descontado EN la base de datos con un UPDATE
+        //    condicionado: con varias cajas vendiendo el mismo producto a la vez, ninguna puede
+        //    llevarse piezas que otra ya vendió. Sin existencia solo con permiso/autorización; si
+        //    falta el permiso, la excepción revierte la transacción completa (nada queda descontado).
         boolean ventaSinStock = false;
+        Map<Long, double[]> existencias = new LinkedHashMap<>();   // id → {antes, después}
         for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
-            try {
-                validarStock(p, e.getValue());
-            } catch (StockInsuficienteException sinStock) {
+            if (!p.isUsaInventario()) continue;
+            double cantidad = e.getValue();
+            if (productoRepo.descontarSiAlcanza(p.getId(), cantidad) == 0) {
+                em.refresh(p);   // existencia real (quizá otra caja acaba de vender) para el mensaje
+                StockInsuficienteException sinStock = new StockInsuficienteException(p, cantidad);
                 try {
                     sesionService.verificarPermiso(Permiso.VENDER_SIN_STOCK, autorizaciones);
                 } catch (PermisoRequeridoException pe) {
@@ -361,16 +380,11 @@ public class VentaService {
                 for (DetalleVenta d : detalles) {
                     if (d.getProducto().getId().equals(e.getKey())) marcarAutorizador(d, autorizadores, aut);
                 }
+                productoRepo.descontar(p.getId(), cantidad);
             }
+            double despues = releerExistencia(p);
+            existencias.put(p.getId(), new double[] { redondearCantidad(despues + cantidad), despues });
         }
-
-        // 3) Total y pagos con los importes ya recalculados
-        double total = calcularTotal(detalles);
-        List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
-        double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
-        Venta.FormaPago formaPrincipal = pagosValidos.stream()
-                .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
-                .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
 
         // 4) Armar la venta
         Venta venta = new Venta();
@@ -385,6 +399,7 @@ public class VentaService {
         venta.setPlazoCancelacionHoras(config.getPlazoCancelacionHoras());
         venta.setCajero(cajeroRepo.findById(cajeroSesion.getId()).orElse(null));
         venta.setCajeroNombre(cajeroSesion.getNombreCompleto());
+        venta.setCaja(identidadCaja.numero());
         venta.setAutorizadaPorNombre(autorizadores.isEmpty() ? null : String.join(", ", autorizadores));
 
         for (PagoVenta pago : pagosValidos) {
@@ -398,19 +413,15 @@ public class VentaService {
         Venta guardada = ventaRepo.save(venta);
         guardada.setFolio(config.folioDe(guardada.getId()));
 
-        // 5) Descontar inventario con bitácora y consumir cupo de promociones
-        for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
+        // 5) Bitácora del inventario ya descontado y consumo del cupo de promociones
+        for (Map.Entry<Long, double[]> e : existencias.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
-            if (p.isUsaInventario()) {
-                double antes = p.getCantidadActual();
-                p.setCantidadActual(redondearCantidad(antes - e.getValue()));
-                productoRepo.save(p);
-                productoService.registrarMovimiento(p, MovimientoInventario.Tipo.VENTA, -e.getValue(),
-                        antes, p.getCantidadActual(), "Venta #" + guardada.getId(), null, null, guardada.getId());
-                // Aviso solo si ESTA venta lo hizo cruzar el mínimo (INV-03)
-                if (antes > p.getCantidadMinima() && p.getCantidadActual() <= p.getCantidadMinima()) {
-                    guardada.getAlertasStockBajo().add(p);
-                }
+            double antes = e.getValue()[0], despues = e.getValue()[1];
+            productoService.registrarMovimiento(p, MovimientoInventario.Tipo.VENTA, -cantidadPorProducto.get(e.getKey()),
+                    antes, despues, "Venta #" + guardada.getId(), null, null, guardada.getId());
+            // Aviso solo si ESTA venta lo hizo cruzar el mínimo (INV-03)
+            if (antes > p.getCantidadMinima() && despues <= p.getCantidadMinima()) {
+                guardada.getAlertasStockBajo().add(p);
             }
         }
         for (DetalleVenta d : detalles) {
@@ -419,8 +430,9 @@ public class VentaService {
             }
         }
 
-        // 6) El ticket pendiente del cajero ya se cobró
-        ticketPendienteRepo.deleteByCajeroId(cajeroSesion.getId());
+        // 6) El ticket pendiente del cajero en ESTA caja ya se cobró (el de otra caja sigue ahí)
+        ticketPendienteRepo.findConLineasByCajeroIdYCaja(cajeroSesion.getId(), identidadCaja.numero())
+                .ifPresent(ticketPendienteRepo::delete);
 
         if (!autorizadores.isEmpty() || ventaSinStock) {
             auditoriaService.registrar(cajeroSesion, "VENTA_AUTORIZADA",
@@ -454,7 +466,7 @@ public class VentaService {
                         + "\" no está habilitada en Configuración.");
             }
             if (p.getFormaPago() != Venta.FormaPago.EFECTIVO) noEfectivo += p.getMonto();
-            validos.add(new PagoVenta(p.getFormaPago(), redondear(p.getMonto())));
+            validos.add(copiarPago(p));
         }
         if (validos.isEmpty()) {
             throw new NegocioException("El monto pagado no es válido.");
@@ -470,6 +482,27 @@ public class VentaService {
                     "El pago (%s) es menor que el total (%s).", Moneda.formato(suma), Moneda.formato(total)));
         }
         return validos;
+    }
+
+    /**
+     * Copia el pago con el monto redondeado. En pagos con tarjeta valida y
+     * normaliza los datos del voucher (terminal, últimos 4, autorización):
+     * obligatorios si Configuración → Terminal bancaria lo exige; si se
+     * capturaron, siempre se validan. En los demás medios se descartan.
+     */
+    private PagoVenta copiarPago(PagoVenta p) {
+        PagoVenta nuevo = new PagoVenta(p.getFormaPago(), redondear(p.getMonto()));
+        if (p.getFormaPago() != Venta.FormaPago.TARJETA) return nuevo;
+        boolean capturado = DatosTarjeta.hayAlgo(p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion());
+        var dispositivos = dispositivosService.obtener();
+        if (capturado || dispositivos.isExigirDatosTarjeta()) {
+            DatosTarjeta d = DatosTarjeta.validar(p.getTerminalNombre(), p.getTarjetaUltimos4(),
+                    p.getAutorizacion(), dispositivos.getListaTerminales());
+            nuevo.setTerminalNombre(d.terminal());
+            nuevo.setTarjetaUltimos4(d.ultimos4());
+            nuevo.setAutorizacion(d.autorizacion());
+        }
+        return nuevo;
     }
 
     /** Productos de la venta que quedaron en o por debajo de su mínimo (INV-03) */
@@ -506,6 +539,14 @@ public class VentaService {
         if (v.isCancelada()) {
             throw new NegocioException("La venta #" + v.getId() + " ya estaba cancelada.");
         }
+        // Una venta facturada no se cancela mientras su CFDI siga vigente (o pendiente de confirmar)
+        facturaRepo.findDeVentaEnEstados(v.getId(), FacturacionService.ESTADOS_QUE_BLOQUEAN).stream().findFirst()
+                .ifPresent(f -> {
+                    throw new NegocioException(String.format(
+                            "La venta #%d está en la factura %s%s (%s). Cancela o sustituye primero esa factura en "
+                            + "Ventas por período → Facturas y después cancela la venta.",
+                            v.getId(), f.getSerieFolio(), f.esGlobal() ? " (global)" : "", f.getEstadoEnum().getEtiqueta()));
+                });
         LocalDateTime limite = v.getLimiteCancelacion();
         if (LocalDateTime.now().isAfter(limite)) {
             throw new NegocioException(String.format(
@@ -521,11 +562,10 @@ public class VentaService {
         for (Map.Entry<Long, Double> e : porProducto.entrySet()) {
             Producto p = productoRepo.findById(e.getKey()).orElse(null);
             if (p == null || !p.isUsaInventario()) continue;
-            double antes = p.getCantidadActual();
-            p.setCantidadActual(redondearCantidad(antes + e.getValue()));
-            productoRepo.save(p);
+            productoRepo.sumar(p.getId(), e.getValue());   // atómico: no pisa ventas de otras cajas
+            double despues = releerExistencia(p);
             productoService.registrarMovimiento(p, MovimientoInventario.Tipo.CANCELACION, e.getValue(),
-                    antes, p.getCantidadActual(), "Cancelación venta #" + v.getId(), null, null, v.getId());
+                    redondearCantidad(despues - e.getValue()), despues, "Cancelación venta #" + v.getId(), null, null, v.getId());
         }
         // Devolver cupo de promociones "hasta agotar"
         for (DetalleVenta d : v.getDetalles()) {
@@ -580,18 +620,18 @@ public class VentaService {
 
     // ── Corte del día ─────────────────────────────────────────────────────
 
-    /** Total vendido hoy sin contar canceladas */
+    /** Total vendido hoy en ESTA caja sin contar canceladas */
     public double totalVentasHoy() {
         LocalDateTime inicio = LocalDate.now().atStartOfDay();
         LocalDateTime fin    = inicio.plusDays(1);
-        Double total = ventaRepo.sumTotalEntre(inicio, fin);
+        Double total = ventaRepo.sumTotalEntre(inicio, fin, identidadCaja.numero());
         return total != null ? total : 0.0;
     }
 
     /**
-     * Resumen de las ventas de hoy para la pantalla de Corte (excluye
-     * canceladas). Requiere HACER_CORTE o VER_GANANCIAS; la ganancia solo
-     * se incluye si el usuario tiene VER_GANANCIAS.
+     * Resumen de las ventas de hoy de ESTA caja para la pantalla de Corte
+     * (excluye canceladas). Requiere HACER_CORTE o VER_GANANCIAS; la ganancia
+     * solo se incluye si el usuario tiene VER_GANANCIAS.
      */
     @Transactional(readOnly = true)
     public ResumenCorte resumenDelDia() {
@@ -600,10 +640,16 @@ public class VentaService {
 
     @Transactional(readOnly = true)
     public ResumenCorte resumenDe(LocalDate dia) {
+        return resumenDe(dia, identidadCaja.numero());
+    }
+
+    /** Resumen de un día de una caja ({@code caja} null = todas las cajas), con los permisos de corte */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenDe(LocalDate dia, Integer caja) {
         if (!sesionService.tienePermiso(Permiso.HACER_CORTE)) {
             sesionService.verificarPermiso(Permiso.VER_GANANCIAS);
         }
-        ResumenCorte r = resumenCompletoDe(dia);
+        ResumenCorte r = resumenCompletoDe(dia, caja);
         if (!sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
             r.ganancia = 0;
             r.gananciaVisible = false;
@@ -611,35 +657,59 @@ public class VentaService {
         return r;
     }
 
+    /** Resumen de TODAS las cajas (corte general): solo ADMIN */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenGeneralDe(LocalDate dia) {
+        sesionService.verificarAdmin();
+        return resumenCompletoDe(dia, null);
+    }
+
+    /** Compatibilidad: resumen completo de esta caja */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenCompletoDe(LocalDate dia) {
+        return resumenCompletoDe(dia, identidadCaja.numero());
+    }
+
     /**
      * Resumen sin filtro de permisos (uso interno: CajaService.hacerCorte).
      * Todo se suma en SQL: el corte no carga los tickets ni sus renglones
      * (en una tienda con cientos de ventas al día eso es lo caro en un disco lento).
+     * @param caja número de caja, o null para sumar todas las cajas
      */
     @Transactional(readOnly = true)
-    public ResumenCorte resumenCompletoDe(LocalDate dia) {
+    public ResumenCorte resumenCompletoDe(LocalDate dia, Integer caja) {
         LocalDateTime inicio = dia.atStartOfDay();
         LocalDateTime fin = inicio.plusDays(1);
         ResumenCorte r = new ResumenCorte();
+        r.caja = caja;
 
-        Object[] activas = ventaRepo.resumenActivas(inicio, fin).get(0);
+        Object[] activas = ventaRepo.resumenActivas(inicio, fin, caja).get(0);
         r.numVentas     = ((Number) activas[0]).intValue();
         r.ventasTotales = ((Number) activas[1]).doubleValue();
         r.subtotal      = ((Number) activas[2]).doubleValue();
         r.iva           = ((Number) activas[3]).doubleValue();
 
-        Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin).get(0);
+        Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin, caja).get(0);
         r.numCanceladas   = ((Number) canceladas[0]).intValue();
         r.totalCanceladas = ((Number) canceladas[1]).doubleValue();
 
         // El cambio sale del efectivo; las ventas anteriores al pago dividido van todas a su forma de pago
-        for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO)) {
+        for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO, caja)) {
             sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
         }
-        for (Object[] f : ventaRepo.ventasSinPagosPorForma(inicio, fin)) {
+        for (Object[] f : ventaRepo.ventasSinPagosPorForma(inicio, fin, caja)) {
             sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
         }
-        for (Object[] f : ventaRepo.importesPorDepartamento(inicio, fin)) {
+        for (Object[] f : ventaRepo.tarjetaPorTerminal(inicio, fin, Venta.FormaPago.TARJETA, caja)) {
+            String terminal = f[0] != null ? (String) f[0] : "Sin datos de terminal";
+            r.tarjetaPorTerminal.add(new TarjetaTerminal(terminal, ((Number) f[1]).intValue(),
+                    redondear(((Number) f[2]).doubleValue())));
+        }
+        for (PagoVenta p : ventaRepo.vouchersTarjeta(inicio, fin, Venta.FormaPago.TARJETA, caja)) {
+            r.vouchers.add(new VoucherTarjeta(p.getVenta().getFecha(), p.getVenta().getFolioMostrado(),
+                    p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion(), p.getMonto()));
+        }
+        for (Object[] f : ventaRepo.importesPorDepartamento(inicio, fin, caja)) {
             String nombre = f[0] != null ? (String) f[0] : "Sin departamento";
             double importe = ((Number) f[1]).doubleValue();
             r.porDepartamento.merge(nombre, importe, Double::sum);
@@ -656,6 +726,12 @@ public class VentaService {
         r.ganancia        = redondear(r.ganancia);
         r.totalCanceladas = redondear(r.totalCanceladas);
         r.productosBajos.addAll(productoService.productosConStockBajo());
+        if (caja == null) {
+            for (Object[] f : ventaRepo.ventasPorCaja(inicio, fin)) {
+                r.porCaja.add(new VentasCaja(((Number) f[0]).intValue(), ((Number) f[1]).intValue(),
+                        redondear(((Number) f[2]).doubleValue())));
+            }
+        }
         return r;
     }
 
@@ -672,6 +748,8 @@ public class VentaService {
 
     /** Totales del día agrupados; es un simple contenedor de datos */
     public static class ResumenCorte {
+        /** Caja a la que corresponde el resumen; null = todas las cajas (corte general) */
+        public Integer caja;
         public double ventasTotales;
         public double subtotal;
         public double iva;
@@ -688,7 +766,25 @@ public class VentaService {
         public boolean gananciaVisible = true;
         public final Map<String, Double> porDepartamento = new LinkedHashMap<>();
         public final List<Producto> productosBajos = new ArrayList<>();
+        /** Cobros con tarjeta del día por terminal (los capturados a mano en Ventas) */
+        public final List<TarjetaTerminal> tarjetaPorTerminal = new ArrayList<>();
+        /** Cada cobro con tarjeta del día, para cuadrar contra el voucher */
+        public final List<VoucherTarjeta> vouchers = new ArrayList<>();
+        /** Solo en el resumen general: ventas activas de cada caja */
+        public final List<VentasCaja> porCaja = new ArrayList<>();
+
+        public boolean esGeneral() { return caja == null; }
     }
+
+    /** Ventas activas de una caja en el día (resumen general) */
+    public record VentasCaja(int caja, int ventas, double total) { }
+
+    /** Cobros con tarjeta de una terminal: cuántos y cuánto */
+    public record TarjetaTerminal(String terminal, int pagos, double monto) { }
+
+    /** Un cobro con tarjeta con los datos del voucher (alguno puede ser null en ventas antiguas) */
+    public record VoucherTarjeta(LocalDateTime fecha, String folio, String terminal, String ultimos4,
+                                 String autorizacion, double monto) { }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -698,6 +794,21 @@ public class VentaService {
         d.setAutorizadoPorId(aut.administrador().getId());
         d.setAutorizadoPorUsuario(aut.administrador().getUsuario());
         autorizadores.add(aut.nombreAdministrador());
+    }
+
+    /**
+     * Vuelve a leer la existencia tras un UPDATE atómico y, si quedó con residuos
+     * de punto flotante (p. ej. 8.899999 tras vender 1.1), la deja en milésimas
+     * SOLO si nadie la cambió entre tanto (comparar-e-intercambiar).
+     */
+    double releerExistencia(Producto p) {
+        em.refresh(p);
+        double leida = p.getCantidadActual();
+        double redondeada = redondearCantidad(leida);
+        if (redondeada != leida && productoRepo.fijarSiNoCambio(p.getId(), leida, redondeada) == 1) {
+            em.refresh(p);
+        }
+        return p.getCantidadActual();
     }
 
     /** Redondea a centavos para evitar residuos de punto flotante */

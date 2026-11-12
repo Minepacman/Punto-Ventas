@@ -65,13 +65,19 @@ public final class Ventanas {
 
     // ── Navegación ────────────────────────────────────────────────────────
 
-    /** Pantalla de inicio de sesión en el Stage principal (ventana chica, fija) */
+    /**
+     * Pantalla de inicio de sesión en el Stage principal (ventana chica, fija).
+     * El tamaño lo da el contenido (sizeToScene): el LoginController lo vuelve a
+     * ajustar cada vez que cambia de paso o muestra un aviso.
+     */
     public static void mostrarLogin(Stage stage, ApplicationContext ctx) throws IOException {
         Parent root = cargar(ctx, "/fxml/login.fxml");
 
         stage.setFullScreen(false);
         stage.setMaximized(false);
-        stage.setScene(new Scene(root, 320, 460));
+        stage.setMinWidth(0);
+        stage.setMinHeight(0);
+        stage.setScene(new Scene(root));
         stage.setTitle("Punto de Venta");
         stage.setResizable(false);
         stage.sizeToScene();
@@ -241,7 +247,8 @@ public final class Ventanas {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private static void aplicarCss(Scene scene) {
+    /** Aplica app.css a una escena creada a mano (ventanas sin FXML, como el tutorial y la donación) */
+    public static void aplicarCss(Scene scene) {
         URL css = Ventanas.class.getResource(CSS_APP);
         if (css != null && !scene.getStylesheets().contains(css.toExternalForm())) {
             scene.getStylesheets().add(css.toExternalForm());

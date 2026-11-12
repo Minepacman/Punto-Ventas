@@ -18,19 +18,26 @@
                     styleClass="button-primary"/>
             <Button text="🖨 Imprimir Corte"     onAction="#onImprimirCorte"/>
             <Button fx:id="btnCorregirFondo" text="✏ Corregir fondo" onAction="#onCorregirFondo"/>
+            <Button fx:id="btnCorteGeneral" text="Σ Corte general (todas las cajas)" onAction="#onCorteGeneral"/>
+            <Label fx:id="lblCaja" text="Caja 1" styleClass="badge"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Label fx:id="lblUltimoCorte" text="Hoy no se ha hecho ningún corte." wrapText="true"
-                   style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
+                   styleClass="hint"/>
         </HBox>
     </top>
 
     <center>
         <ScrollPane fitToWidth="true">
-            <GridPane hgap="24" vgap="0">
-                <padding><Insets topRightBottomLeft="24"/></padding>
+            <!-- Cada sección es una tarjeta (.card) sobre el lienzo; dos columnas iguales -->
+            <GridPane hgap="16" vgap="16">
+                <padding><Insets topRightBottomLeft="20"/></padding>
+                <columnConstraints>
+                    <ColumnConstraints percentWidth="50"/>
+                    <ColumnConstraints percentWidth="50"/>
+                </columnConstraints>
 
                 <!-- Columna 0: Entradas de efectivo -->
-                <VBox GridPane.columnIndex="0" GridPane.rowIndex="0" spacing="8">
+                <VBox GridPane.columnIndex="0" GridPane.rowIndex="0" spacing="8" styleClass="card" maxWidth="Infinity">
                     <Label text="Entradas de Efectivo" styleClass="corte-section-title"/>
                     <GridPane hgap="16" vgap="4">
                         <Label text="Entrada de Dinero (Cambio):" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
@@ -43,7 +50,7 @@
                 </VBox>
 
                 <!-- Columna 1: Dinero en Caja -->
-                <VBox GridPane.columnIndex="1" GridPane.rowIndex="0" spacing="8">
+                <VBox GridPane.columnIndex="1" GridPane.rowIndex="0" spacing="8" styleClass="card" maxWidth="Infinity">
                     <Label text="Dinero en Caja" styleClass="corte-section-title"/>
                     <GridPane hgap="16" vgap="4">
                         <Label text="Ventas en efectivo:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
@@ -58,8 +65,7 @@
                 </VBox>
 
                 <!-- Fila 1: Pagos de contado / IVA y Ventas por Departamento -->
-                <VBox GridPane.columnIndex="0" GridPane.rowIndex="1" spacing="8">
-                    <padding><Insets top="20"/></padding>
+                <VBox GridPane.columnIndex="0" GridPane.rowIndex="1" spacing="8" styleClass="card" maxWidth="Infinity">
                     <Label text="Pagos de Contado" styleClass="corte-section-title"/>
                     <GridPane hgap="16" vgap="4">
                         <Label text="Efectivo:"           GridPane.rowIndex="0" GridPane.columnIndex="0"/>
@@ -79,8 +85,7 @@
                     </GridPane>
                 </VBox>
 
-                <VBox GridPane.columnIndex="1" GridPane.rowIndex="1" spacing="8">
-                    <padding><Insets top="20"/></padding>
+                <VBox GridPane.columnIndex="1" GridPane.rowIndex="1" spacing="8" styleClass="card" maxWidth="Infinity">
                     <Label text="Ventas por Departamento" styleClass="corte-section-title"/>
                     <TableView fx:id="tablaDepartamentos" prefHeight="160">
                         <columns>
@@ -91,14 +96,29 @@
                 </VBox>
 
                 <!-- Fila 2: productos bajos (INV-03) -->
-                <VBox GridPane.columnIndex="0" GridPane.rowIndex="2" GridPane.columnSpan="2" spacing="8">
-                    <padding><Insets top="20"/></padding>
+                <VBox GridPane.columnIndex="0" GridPane.rowIndex="2" GridPane.columnSpan="2" spacing="8" styleClass="card" maxWidth="Infinity">
                     <Label text="Productos en o por debajo del mínimo" styleClass="corte-section-title"/>
                     <TableView fx:id="tablaBajos" prefHeight="160">
                         <columns>
                             <TableColumn fx:id="colBajoDescripcion" text="Producto" prefWidth="300"/>
                             <TableColumn fx:id="colBajoActual"      text="Existencia" prefWidth="100" styleClass="align-right"/>
                             <TableColumn fx:id="colBajoMinimo"      text="Mínimo"     prefWidth="100" styleClass="align-right"/>
+                        </columns>
+                    </TableView>
+                </VBox>
+
+                <!-- Fila 3: cobros con tarjeta (voucher capturado en Ventas) -->
+                <VBox GridPane.columnIndex="0" GridPane.rowIndex="3" GridPane.columnSpan="2" spacing="8" styleClass="card" maxWidth="Infinity">
+                    <Label text="Cobros con tarjeta del día" styleClass="corte-section-title"/>
+                    <Label fx:id="lblTarjetaTerminales" text="Sin cobros con tarjeta." wrapText="true" styleClass="hint"/>
+                    <TableView fx:id="tablaVouchers" prefHeight="170">
+                        <columns>
+                            <TableColumn fx:id="colVHora"     text="Hora"          prefWidth="70"/>
+                            <TableColumn fx:id="colVFolio"    text="Folio"         prefWidth="80"/>
+                            <TableColumn fx:id="colVTerminal" text="Terminal"      prefWidth="180"/>
+                            <TableColumn fx:id="colVTarjeta"  text="Tarjeta"       prefWidth="90"/>
+                            <TableColumn fx:id="colVAut"      text="Autorización"  prefWidth="130"/>
+                            <TableColumn fx:id="colVMonto"    text="Monto"         prefWidth="100" styleClass="align-right"/>
                         </columns>
                     </TableView>
                 </VBox>
@@ -110,7 +130,7 @@
     <!-- Totales finales -->
     <bottom>
         <HBox styleClass="corte-footer" spacing="40" alignment="CENTER">
-            <padding><Insets topRightBottomLeft="16"/></padding>
+            <padding><Insets top="12" right="24" bottom="12" left="24"/></padding>
             <VBox alignment="CENTER" spacing="4">
                 <Label text="Ventas Totales" styleClass="corte-footer-title"/>
                 <Label fx:id="lblVentasTotales" text="\$0.00" styleClass="corte-footer-value"/>

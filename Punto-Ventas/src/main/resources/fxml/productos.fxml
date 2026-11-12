@@ -37,8 +37,8 @@
                     <Button text="📥 Importar"         onAction="#onImportar"/>
                 </HBox>
 
-                <HBox spacing="8" alignment="CENTER_LEFT">
-                    <padding><Insets top="0" right="10" bottom="8" left="10"/></padding>
+                <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">
+                    <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
                     <Label text="🔍"/>
                     <TextField fx:id="txtBuscar"
                                promptText="Buscar por código o descripción..."
@@ -90,6 +90,8 @@
         <!-- Contenido del formulario centrado y con scroll -->
         <center>
             <ScrollPane fitToWidth="true">
+                <!-- .form-scroll centra el formulario como tarjeta sobre el lienzo -->
+                <VBox styleClass="form-scroll">
                 <VBox styleClass="form-panel" spacing="14"
                       maxWidth="680" alignment="TOP_CENTER">
                     <padding><Insets top="24" right="40" bottom="32" left="40"/></padding>
@@ -103,14 +105,13 @@
                         <HBox fx:id="hboxYaExiste"
                               visible="false" managed="false"
                               spacing="6" alignment="CENTER_LEFT"
-                              style="-fx-background-color:rgba(220,53,69,0.12);-fx-background-radius:6;-fx-padding:8;">
-                            <Label text="⚠"
-                                   style="-fx-text-fill:#C0392B;-fx-font-size:14"/>
+                              styleClass="callout, callout-danger">
+                            <Label text="⚠"/>
                             <VBox spacing="1">
                                 <Label text="Este código ya está registrado."
-                                       style="-fx-text-fill:#C0392B;-fx-font-weight:bold;-fx-font-size:12"/>
+                                       styleClass="text-bold"/>
                                 <Label fx:id="lblProductoExistente" text=""
-                                       style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
+                                       styleClass="field-error-label"/>
                             </VBox>
                         </HBox>
                     </VBox>
@@ -182,7 +183,7 @@
                     <Label fx:id="lblErrorPrecio"
                            text="⚠ Los precios no pueden ser negativos."
                            visible="false" managed="false"
-                           style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
+                           styleClass="field-error-label"/>
 
                     <Separator/>
 
@@ -193,6 +194,34 @@
                                   promptText="— Sin Departamento —"
                                   maxWidth="Infinity"/>
                     </VBox>
+
+                    <Separator/>
+
+                    <!-- ── DATOS FISCALES (CFDI 4.0; opcionales) ── -->
+                    <Label text="Facturación (claves del SAT, opcionales)" styleClass="form-subsection-title"/>
+                    <GridPane hgap="16" vgap="10">
+                        <Label text="Clave producto/servicio"
+                               GridPane.columnIndex="0" GridPane.rowIndex="0" styleClass="field-label"/>
+                        <HBox spacing="6" GridPane.columnIndex="1" GridPane.rowIndex="0">
+                            <TextField fx:id="txtClaveProdServ" promptText="8 dígitos, ej. 50000000" HBox.hgrow="ALWAYS"/>
+                            <Button text="Buscar…" onAction="#onBuscarClaveProdServ"/>
+                        </HBox>
+                        <Label text="Clave de unidad"
+                               GridPane.columnIndex="0" GridPane.rowIndex="1" styleClass="field-label"/>
+                        <HBox spacing="6" GridPane.columnIndex="1" GridPane.rowIndex="1">
+                            <TextField fx:id="txtClaveUnidad" promptText="ej. H87, KGM, LTR" HBox.hgrow="ALWAYS"/>
+                            <Button text="Buscar…" onAction="#onBuscarClaveUnidad"/>
+                        </HBox>
+                        <Label text="Objeto de impuesto"
+                               GridPane.columnIndex="0" GridPane.rowIndex="2" styleClass="field-label"/>
+                        <ComboBox fx:id="comboObjetoImp" maxWidth="Infinity"
+                                  GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+                        <columnConstraints>
+                            <ColumnConstraints prefWidth="160" minWidth="140"/>
+                            <ColumnConstraints hgrow="ALWAYS"/>
+                        </columnConstraints>
+                    </GridPane>
+                    <Label fx:id="lblClavesDefecto" wrapText="true" styleClass="hint"/>
 
                     <Separator/>
 
@@ -220,14 +249,14 @@
                                    onKeyReleased="#onValidarInventario"/>
 
                         <Label text="(Alerta cuando el stock llegue a este valor)"
-                               style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"
+                               styleClass="hint"
                                GridPane.columnIndex="0" GridPane.rowIndex="2"
                                GridPane.columnSpan="2"/>
 
                         <Label fx:id="lblAvisoStock"
                                text="La existencia de este producto se modifica desde Inventario (F4) o con las ventas."
                                visible="false" managed="false" wrapText="true"
-                               style="-fx-text-fill:-color-fg-muted;-fx-font-size:10"
+                               styleClass="hint"
                                GridPane.columnIndex="0" GridPane.rowIndex="3"
                                GridPane.columnSpan="2"/>
 
@@ -240,7 +269,7 @@
                     <Label fx:id="lblErrorInventario"
                            text="⚠ Las cantidades no pueden ser negativas."
                            visible="false" managed="false"
-                           style="-fx-text-fill:#C0392B;-fx-font-size:11"/>
+                           styleClass="field-error-label"/>
 
                     <Region minHeight="12"/>
 
@@ -259,6 +288,7 @@
                                 prefHeight="38"/>
                     </HBox>
 
+                </VBox>
                 </VBox>
             </ScrollPane>
         </center>
@@ -346,7 +376,7 @@
                     <Label fx:id="lblErrorDepartamento"
                             text="⚠ El nombre no puede estar vacío."
                             visible="false" managed="false"
-                            style="-fx-text-fill:#C0392B;-fx-font-size:11">
+                            styleClass="field-error-label">
                         <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
                     </Label>
 

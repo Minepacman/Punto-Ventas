@@ -1,88 +1,123 @@
 /*
  * app.css  -  Punto de Venta
  *
- * Author stylesheet layered on top of the AtlantaFX NordLight user-agent theme
- * (see PuntoDeVentaApp.start()). It is attached through the `stylesheets`
- * attribute of login.fxml and main.fxml, so every view fx:included into
- * main.fxml inherits it.
+ * Hoja de autor sobre el tema de agente AtlantaFX NordLight (ver
+ * PuntoDeVentaApp.start()). Se adjunta con el atributo `stylesheets` de
+ * login.fxml y main.fxml (y las vistas modales), y Ventanas.estilizar() la
+ * agrega a los Alert/Dialog.
  *
- * How it works
- * ------------
- * 1. PALETTE: every colour is defined ONCE as a looked-up colour (-pos-*) in
- *    `.root`. Tweak those values to re-skin the app.
- * 2. THEME BRIDGE: the AtlantaFX semantic variables (-color-fg-*, -color-bg-*,
- *    -color-accent-*, ...) are re-pointed at the palette, so built-in controls
- *    (check boxes, radio buttons, progress, scroll bars, dialogs...) follow
- *    the same colours without extra rules.
- * 3. COMPONENTS: generic selectors (.button, .text-input, .table-view,
- *    .tab-pane, ...) so views that do not exist yet are styled too.
- * 4. APP CLASSES: the styleClass names already used in the FXML files,
- *    plus a small set of utility classes (see the end of the file).
+ * Dirección visual: "mostrador"
+ * ------------------------------
+ * Tres niveles de superficie, cada uno con un valor distinto para que haya
+ * profundidad sin efectos caros:
+ *   0. Lienzo (-pos-bg-app): gris azulado; nunca lleva texto importante.
+ *   1. Panel (-pos-surface): blanco; tablas, formularios, tarjetas, barras.
+ *      Las tarjetas (.card) añaden una "sombra" de 2 capas pintada con
+ *      -fx-background-insets negativos: cuesta lo mismo que un fondo plano.
+ *   2. Banda (-pos-band-*): azul marino oscuro; cabecera principal, pie del
+ *      corte y caja del TOTAL en Ventas. Es lo que ancla la jerarquía.
+ * Los botones tienen "cuerpo": borde inferior 1 px más oscuro y degradado
+ * muy suave en los primarios; al presionar pierden el borde inferior.
+ * El foco de teclado es un anillo de 2 px claramente visible (los cajeros
+ * trabajan con teclado).
  *
- * Notes for maintainers
- * ---------------------
- * - Author stylesheets beat the user-agent theme regardless of selector
- *   specificity. That is why button and input states are restated here in
- *   full: setting a property on `.button` here would otherwise silently
- *   override AtlantaFX's `.button:hover`, `.button.accent`, etc.
- * - The palette is a LIGHT palette. If a dark AtlantaFX theme is enabled,
- *   swap the values in the PALETTE block (or remove the THEME BRIDGE block).
+ * Rendimiento: solo se usa -fx-effect en la tarjeta del login y en los
+ * menús emergentes (se pintan una vez). Nunca en tablas, campos ni paneles
+ * que se repintan al teclear.
+ *
+ * Estructura
+ * ----------
+ * 1. PALETA + PUENTE AL TEMA: cada color se define una vez (-pos-*) y las
+ *    variables semánticas de AtlantaFX (-color-*) se apuntan a la paleta.
+ * 2..6. Controles genéricos (botones, campos, tablas, pestañas, contenedores).
+ * 7..11. Clases de la aplicación (shell, secciones, ventas, corte, login).
+ * 12. Utilidades (.card, .badge, .callout, tipografía).
+ *
+ * Nota: una hoja de autor gana al tema de agente sin importar la
+ * especificidad, por eso los estados (:hover, :focused, :armed) se
+ * declaran completos aquí.
  */
 
 
 /* ======================================================================
-   1. PALETTE + THEME BRIDGE
+   1. PALETA + PUENTE AL TEMA
    ====================================================================== */
 
 .root {
-    /* ---------- PALETTE (edit here) ----------------------------------- */
+    /* ---------- Superficies ------------------------------------------ */
+    -pos-bg-app:          #E6EAF0;   /* nivel 0: lienzo                    */
+    -pos-surface:         #FFFFFF;   /* nivel 1: paneles, tablas, campos   */
+    -pos-surface-alt:     #F2F4F7;   /* encabezado de tabla, pies, franjas */
+    -pos-surface-inset:   #E9EDF2;   /* hundido: presionado, solo lectura  */
 
-    /* Neutrals */
-    -pos-bg-app:          #F3F5F8;   /* window background behind content  */
-    -pos-surface:         #FFFFFF;   /* panels, tables, inputs, toolbars  */
-    -pos-surface-alt:     #F7F8FA;   /* table header, secondary surfaces  */
-    -pos-surface-inset:   #ECEFF3;   /* pressed / read-only / wells        */
-    -pos-border:          #D3D9E0;   /* default borders                    */
-    -pos-border-subtle:   #E4E8ED;   /* row separators, dividers           */
-    -pos-border-strong:   #B4BCC7;   /* hovered borders                    */
+    -pos-border:          #C9D1DB;   /* borde normal                       */
+    -pos-border-subtle:   #E0E5EB;   /* separadores de fila, divisores     */
+    -pos-border-strong:   #A6B0BD;   /* borde al pasar el ratón / inferior */
 
-    -pos-text:            #1E2631;   /* primary text                       */
-    -pos-text-muted:      #5A6472;   /* labels, secondary text             */
-    -pos-text-subtle:     #8A939F;   /* hints, placeholders                */
+    /* nivel 2: banda oscura (cabecera, pie del corte, caja del total) */
+    -pos-band-bg:         linear-gradient(to bottom, #2A4566 0%, #213A58 100%);
+    -pos-band-bg-flat:    #213A58;
+    -pos-band-border:     #182C44;
+    -pos-band-text:       #FFFFFF;
+    -pos-band-text-muted: rgba(255, 255, 255, 0.78);
+    -pos-band-line:       rgba(255, 255, 255, 0.16);
+    -pos-band-fill:       rgba(255, 255, 255, 0.10);
+    -pos-band-fill-hover: rgba(255, 255, 255, 0.18);
+
+    /* ---------- Texto -------------------------------------------------- */
+    -pos-text:            #1B232E;
+    -pos-text-muted:      #525C6A;   /* AA sobre lienzo y sobre blanco     */
+    -pos-text-subtle:     #6B7582;   /* pistas, marcadores (AA sobre blanco)*/
     -pos-text-on-accent:  #FFFFFF;
 
-    /* Accent (the single brand colour: primary actions, focus, selection) */
+    /* ---------- Acento (acciones primarias, foco, selección) ---------- */
     -pos-accent:          #2F6CAD;
     -pos-accent-hover:    #285E98;
     -pos-accent-pressed:  #224F80;
-    -pos-accent-text:     #285E98;   /* accent used as text on white       */
-    -pos-accent-muted:    #CBDCEF;   /* selected rows (focused table)      */
-    -pos-accent-subtle:   #EAF1F9;   /* selected rows, hover tint          */
-    -pos-focus-ring:      rgba(47, 108, 173, 0.30);
+    -pos-accent-text:     #255C96;
+    -pos-accent-muted:    #C6DAEF;   /* fila seleccionada con foco         */
+    -pos-accent-subtle:   #E8F0F9;   /* fila seleccionada, tinte hover     */
+    -pos-accent-gradient: linear-gradient(to bottom, #3B79BB 0%, #2F6CAD 100%);
+    -pos-accent-gradient-hover: linear-gradient(to bottom, #336FB1 0%, #285E98 100%);
+    -pos-focus-ring:      rgba(47, 108, 173, 0.42);
 
-    /* Semantic (used sparingly: destructive actions, alerts, stock status) */
+    /* ---------- Semánticos -------------------------------------------- */
     -pos-danger:          #B23A43;
     -pos-danger-hover:    #9B323A;
+    -pos-danger-pressed:  #822A31;
     -pos-danger-text:     #A1343C;
     -pos-danger-muted:    #EFC8CB;
     -pos-danger-subtle:   #FBF0F1;
-    -pos-danger-ring:     rgba(178, 58, 67, 0.28);
+    -pos-danger-ring:     rgba(178, 58, 67, 0.36);
 
     -pos-success:         #2E7A55;
-    -pos-success-text:    #276A49;
+    -pos-success-hover:   #286B4B;
+    -pos-success-pressed: #215A3F;
+    -pos-success-text:    #256546;
     -pos-success-muted:   #C5E2D2;
     -pos-success-subtle:  #EDF6F1;
+    -pos-success-gradient: linear-gradient(to bottom, #36895F 0%, #2E7A55 100%);
+    -pos-success-gradient-hover: linear-gradient(to bottom, #2F7B55 0%, #286B4B 100%);
+    -pos-success-ring:    rgba(46, 122, 85, 0.40);
 
     -pos-warning:         #B0731C;
-    -pos-warning-text:    #8A5A14;
+    -pos-warning-text:    #7F5212;
     -pos-warning-muted:   #F1DBB4;
     -pos-warning-subtle:  #FCF5E9;
 
-    -pos-row-hover:       #F4F7FB;
-    -pos-row-alt:         #FAFBFC;
+    -pos-row-hover:       #F3F6FA;
+    -pos-row-alt:         #F8FAFC;
     -pos-tooltip-bg:      #2B323C;
 
-    /* ---------- THEME BRIDGE (AtlantaFX variables -> palette) --------- */
+    /* "Sombras" pintadas (sin -fx-effect) */
+    -pos-shadow-1:        rgba(27, 35, 46, 0.07);
+    -pos-shadow-2:        rgba(27, 35, 46, 0.12);
+
+    /* Radios */
+    -pos-radius:          6;
+    -pos-radius-lg:       10;
+
+    /* ---------- PUENTE AL TEMA (variables AtlantaFX -> paleta) -------- */
 
     -color-fg-default:          -pos-text;
     -color-fg-muted:            -pos-text-muted;
@@ -127,32 +162,33 @@
     -color-warning-muted:       -pos-warning-muted;
     -color-warning-subtle:      -pos-warning-subtle;
 
-    /* ---------- Base typography -------------------------------------- */
-    /* Type scale: 11 caption / 12 small / 13 body / 15 section / 20 page
-       title / 24-34 key figures. System font family (San Francisco on
-       macOS, Segoe UI on Windows). */
+    /* ---------- Tipografía base --------------------------------------- */
+    /* Escala: 11 pie / 12 pequeño / 13 cuerpo / 15 sección / 20 título /
+       24-36 cifras clave. Fuente del sistema (San Francisco / Segoe UI). */
     -fx-font-size: 13px;
     -fx-background-color: -pos-bg-app;
 }
 
 
 /* ======================================================================
-   2. BUTTONS
-   Hierarchy:
-     secondary (default .button) : white, grey border
-     primary  (.button-primary, .button-success, :default, .accent)
-                                  : accent fill, white text
-     destructive (.button-danger): danger outline, fills on hover
-     destructive solid (.button-danger-solid, .danger): danger fill
-     ghost (.button-ghost, .flat): no chrome until hover
-   All variants only set -color-button-* variables; the state rules below
-   paint them, so hover / focus / pressed work identically everywhere.
+   2. BOTONES
+   Jerarquía:
+     secundario (.button)                     : blanco, borde gris, borde inferior más oscuro
+     primario (.button-primary, .button-success, :default, .accent)
+                                              : degradado de acento, texto blanco
+     destructivo (.button-danger)             : contorno rojo, se rellena al pasar
+     destructivo sólido (.button-danger-solid): relleno rojo
+     éxito sólido (.button.success, .btn-cobrar): verde (dinero / cobrar)
+     fantasma (.button-ghost, .flat)          : sin marco hasta pasar el ratón
+   Cada variante solo define variables -color-button-*; los estados de
+   abajo pintan con ellas. Capas: borde inferior (edge), borde, fondo.
    ====================================================================== */
 
 .button {
     -color-button-bg:             -pos-surface;
     -color-button-fg:             -pos-text;
     -color-button-border:         -pos-border;
+    -color-button-edge:           -pos-border-strong;
     -color-button-bg-hover:       -pos-surface-alt;
     -color-button-fg-hover:       -pos-text;
     -color-button-border-hover:   -pos-border-strong;
@@ -164,30 +200,31 @@
     -color-button-border-pressed: -pos-border-strong;
     -pos-button-ring:             -pos-focus-ring;
 
-    -fx-background-color:  -color-button-border, -color-button-bg;
-    -fx-background-insets: 0, 1;
-    -fx-background-radius: 6, 5;
+    -fx-background-color:  -color-button-edge, -color-button-border, -color-button-bg;
+    -fx-background-insets: 0, 0 0 1 0, 1;
+    -fx-background-radius: 6, 6, 5;
     -fx-text-fill: -color-button-fg;
     -fx-padding: 7 14 7 14;
     -fx-graphic-text-gap: 6;
     -fx-cursor: hand;
 }
 
-/* Primary: one accent colour for the main action of each screen.
-   .button-success is kept as an alias because the current views use it for
-   "Nuevo / Agregar / Guardar" (primary actions), keeping a single accent. */
+/* Primario: un acento para la acción principal de cada pantalla.
+   .button-success se conserva como alias porque las vistas lo usan para
+   "Nuevo / Agregar / Guardar". */
 .button:default,
 .button.accent,
 .button.primary,
 .button-primary,
 .button-success {
-    -color-button-bg:             -pos-accent;
+    -color-button-bg:             -pos-accent-gradient;
     -color-button-fg:             -pos-text-on-accent;
-    -color-button-border:         -pos-accent;
-    -color-button-bg-hover:       -pos-accent-hover;
+    -color-button-border:         -pos-accent-hover;
+    -color-button-edge:           -pos-accent-pressed;
+    -color-button-bg-hover:       -pos-accent-gradient-hover;
     -color-button-fg-hover:       -pos-text-on-accent;
-    -color-button-border-hover:   -pos-accent-hover;
-    -color-button-bg-focused:     -pos-accent;
+    -color-button-border-hover:   -pos-accent-pressed;
+    -color-button-bg-focused:     -pos-accent-gradient;
     -color-button-fg-focused:     -pos-text-on-accent;
     -color-button-border-focused: -pos-accent-pressed;
     -color-button-bg-pressed:     -pos-accent-pressed;
@@ -196,13 +233,13 @@
     -fx-font-weight: bold;
 }
 
-/* Destructive (outlined): Eliminar, Cancelar ticket, Salir. Stays quiet
-   until hovered so red does not dominate the toolbar. */
+/* Destructivo (contorno): Eliminar, Cancelar ticket, Salir. */
 .button-danger,
 .button.danger-outline {
     -color-button-bg:             -pos-surface;
     -color-button-fg:             -pos-danger-text;
     -color-button-border:         -pos-danger-muted;
+    -color-button-edge:           -pos-danger-muted;
     -color-button-bg-hover:       -pos-danger-subtle;
     -color-button-fg-hover:       -pos-danger-hover;
     -color-button-border-hover:   -pos-danger;
@@ -215,46 +252,52 @@
     -pos-button-ring:             -pos-danger-ring;
 }
 
-/* Destructive (solid): for the confirm button of a delete dialog. */
+/* Destructivo sólido: botón de confirmar en un diálogo de borrado. */
 .button-danger-solid,
 .button.danger {
     -color-button-bg:             -pos-danger;
     -color-button-fg:             -pos-text-on-accent;
-    -color-button-border:         -pos-danger;
+    -color-button-border:         -pos-danger-hover;
+    -color-button-edge:           -pos-danger-pressed;
     -color-button-bg-hover:       -pos-danger-hover;
     -color-button-fg-hover:       -pos-text-on-accent;
-    -color-button-border-hover:   -pos-danger-hover;
+    -color-button-border-hover:   -pos-danger-pressed;
     -color-button-bg-focused:     -pos-danger;
     -color-button-fg-focused:     -pos-text-on-accent;
-    -color-button-border-focused: -pos-danger-hover;
-    -color-button-bg-pressed:     -pos-danger-hover;
+    -color-button-border-focused: -pos-danger-pressed;
+    -color-button-bg-pressed:     -pos-danger-pressed;
     -color-button-fg-pressed:     -pos-text-on-accent;
-    -color-button-border-pressed: -pos-danger-hover;
+    -color-button-border-pressed: -pos-danger-pressed;
     -pos-button-ring:             -pos-danger-ring;
     -fx-font-weight: bold;
 }
 
-/* AtlantaFX semantic success (filled green) - kept for explicit use only. */
-.button.success {
-    -color-button-bg:             -pos-success;
+/* Éxito sólido (verde): dinero. Lo usa el botón Cobrar. */
+.button.success,
+.btn-cobrar {
+    -color-button-bg:             -pos-success-gradient;
     -color-button-fg:             -pos-text-on-accent;
-    -color-button-border:         -pos-success;
-    -color-button-bg-hover:       -pos-success-text;
+    -color-button-border:         -pos-success-hover;
+    -color-button-edge:           -pos-success-pressed;
+    -color-button-bg-hover:       -pos-success-gradient-hover;
     -color-button-fg-hover:       -pos-text-on-accent;
-    -color-button-border-hover:   -pos-success-text;
-    -color-button-bg-focused:     -pos-success;
+    -color-button-border-hover:   -pos-success-pressed;
+    -color-button-bg-focused:     -pos-success-gradient;
     -color-button-fg-focused:     -pos-text-on-accent;
-    -color-button-border-focused: -pos-success-text;
-    -color-button-bg-pressed:     -pos-success-text;
+    -color-button-border-focused: -pos-success-pressed;
+    -color-button-bg-pressed:     -pos-success-pressed;
     -color-button-fg-pressed:     -pos-text-on-accent;
-    -color-button-border-pressed: -pos-success-text;
+    -color-button-border-pressed: -pos-success-pressed;
+    -pos-button-ring:             -pos-success-ring;
+    -fx-font-weight: bold;
 }
 
-/* Ghost / flat: icon buttons, "Regresar", low-emphasis actions. */
+/* Fantasma: botones de icono, "Regresar", acciones de poca importancia. */
 .button-ghost,
 .button.flat {
     -color-button-bg:             transparent;
     -color-button-border:         transparent;
+    -color-button-edge:           transparent;
     -color-button-bg-hover:       -pos-surface-inset;
     -color-button-border-hover:   transparent;
     -color-button-bg-focused:     transparent;
@@ -263,27 +306,29 @@
     -color-button-border-pressed: transparent;
 }
 
-/* --- States (shared by every variant) ------------------------------- */
+/* --- Estados (comunes a todas las variantes) ------------------------ */
 
 .button:hover {
-    -fx-background-color: -color-button-border-hover, -color-button-bg-hover;
+    -fx-background-color:  -color-button-edge, -color-button-border-hover, -color-button-bg-hover;
+    -fx-background-insets: 0, 0 0 1 0, 1;
     -fx-text-fill: -color-button-fg-hover;
     -fx-opacity: 1;
 }
 
-/* Focus: 2px soft ring outside the button + accent border. */
+/* Foco: anillo de 2 px fuera del botón + borde de acento. */
 .button:focused {
-    -fx-background-color:  -pos-button-ring, -color-button-border-focused, -color-button-bg-focused;
-    -fx-background-insets: -2, 0, 1;
-    -fx-background-radius: 8, 6, 5;
+    -fx-background-color:  -pos-button-ring, -color-button-edge, -color-button-border-focused, -color-button-bg-focused;
+    -fx-background-insets: -2, 0, 0 0 1 0, 1;
+    -fx-background-radius: 8, 6, 6, 5;
     -fx-text-fill: -color-button-fg-focused;
 }
 
 .button:focused:hover {
-    -fx-background-color:  -pos-button-ring, -color-button-border-focused, -color-button-bg-hover;
+    -fx-background-color:  -pos-button-ring, -color-button-edge, -color-button-border-focused, -color-button-bg-hover;
     -fx-text-fill: -color-button-fg-hover;
 }
 
+/* Presionado: desaparece el borde inferior (el botón "se hunde"). */
 .button:armed,
 .button:focused:armed {
     -fx-background-color:  -color-button-border-pressed, -color-button-bg-pressed;
@@ -296,7 +341,7 @@
     -fx-opacity: 0.45;
 }
 
-/* --- Sizes ---------------------------------------------------------- */
+/* --- Tamaños -------------------------------------------------------- */
 
 .button-lg {
     -fx-font-size: 15px;
@@ -308,41 +353,87 @@
     -fx-padding: 4 10 4 10;
 }
 
-/* Large tile buttons (Configuración). Applied automatically to buttons laid
-   out in a TilePane; `.tile-button` lets you opt in elsewhere. */
+/* Mosaicos grandes (Configuración): tarjetas clicables. Se aplica solo a
+   los botones directamente en un TilePane; `.tile-button` permite usarlo
+   en otro lugar. */
 TilePane > .button,
 .tile-button {
+    -color-button-bg-hover:       -pos-accent-subtle;
+    -color-button-border-hover:   -pos-accent;
     -fx-content-display: top;
     -fx-text-alignment: center;
     -fx-alignment: center;
     -fx-wrap-text: true;
-    -fx-padding: 8;
-    -fx-background-radius: 8, 7;
+    -fx-padding: 10;
+    -fx-font-size: 12px;
+    -fx-background-color:  -pos-shadow-1, -color-button-edge, -color-button-border, -color-button-bg;
+    -fx-background-insets: 0 0 -2 0, 0, 0 0 1 0, 1;
+    -fx-background-radius: 10, 9, 9, 8;
+}
+
+TilePane > .button:hover,
+.tile-button:hover {
+    -fx-background-color:  -pos-shadow-1, -color-button-edge, -color-button-border-hover, -color-button-bg-hover;
+    -fx-background-insets: 0 0 -2 0, 0, 0 0 1 0, 1;
+    -fx-background-radius: 10, 9, 9, 8;
 }
 
 TilePane > .button:focused,
 .tile-button:focused {
-    -fx-background-radius: 10, 8, 7;
+    -fx-background-color:  -pos-button-ring, -color-button-edge, -color-button-border-focused, -color-button-bg-focused;
+    -fx-background-insets: -2, 0, 0 0 1 0, 1;
+    -fx-background-radius: 11, 9, 9, 8;
 }
 
 TilePane > .button:armed,
 .tile-button:armed {
-    -fx-background-radius: 8, 7;
+    -fx-background-color:  -color-button-border-pressed, -color-button-bg-pressed;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 9, 8;
 }
 
-/* Toggle buttons follow the secondary look. */
+/* Botones de alternancia: aspecto secundario; seleccionado = tinte de acento. */
 .toggle-button {
-    -fx-background-radius: 6, 5;
+    -fx-background-color:  -pos-border-strong, -pos-border, -pos-surface;
+    -fx-background-insets: 0, 0 0 1 0, 1;
+    -fx-background-radius: 6, 6, 5;
+    -fx-text-fill: -pos-text;
+    -fx-padding: 7 14 7 14;
     -fx-cursor: hand;
+}
+
+.toggle-button:hover {
+    -fx-background-color:  -pos-border-strong, -pos-border-strong, -pos-surface-alt;
+}
+
+.toggle-button:selected {
+    -fx-background-color:  -pos-accent-hover, -pos-accent, -pos-accent-subtle;
+    -fx-background-insets: 0, 0 0 1 0, 1;
+    -fx-text-fill: -pos-accent-text;
+    -fx-font-weight: bold;
+}
+
+.toggle-button:focused {
+    -fx-background-color:  -pos-focus-ring, -pos-border-strong, -pos-accent, -pos-surface;
+    -fx-background-insets: -2, 0, 0 0 1 0, 1;
+    -fx-background-radius: 8, 6, 6, 5;
+}
+
+.toggle-button:focused:selected {
+    -fx-background-color:  -pos-focus-ring, -pos-accent-hover, -pos-accent, -pos-accent-subtle;
 }
 
 .hyperlink {
     -fx-text-fill: -pos-accent-text;
 }
 
+.hyperlink:focused {
+    -fx-border-color: -pos-accent;
+}
+
 
 /* ======================================================================
-   3. TEXT INPUTS, COMBO BOXES, CHECK / RADIO
+   3. CAMPOS DE TEXTO, COMBOS, CASILLAS
    ====================================================================== */
 
 .text-input {
@@ -356,9 +447,10 @@ TilePane > .button:armed,
     -color-input-fg-highlight:   -pos-text;
     -pos-input-ring:             -pos-focus-ring;
 
-    -fx-background-color:  -color-input-border, -color-input-bg;
-    -fx-background-insets: 0, 1;
-    -fx-background-radius: 6, 5;
+    /* borde superior un poco más oscuro: el campo se ve "hundido" */
+    -fx-background-color:  -pos-border-strong, -color-input-border, -color-input-bg;
+    -fx-background-insets: 0, 1 0 0 0, 1;
+    -fx-background-radius: 6, 6, 5;
     -fx-text-fill: -color-input-fg;
     -fx-prompt-text-fill: -pos-text-subtle;
     -fx-highlight-fill: -color-input-bg-highlight;
@@ -386,8 +478,8 @@ TilePane > .button:armed,
     -fx-opacity: 0.6;
 }
 
-/* Validation: AtlantaFX pseudo-classes (Styles.STATE_DANGER / SUCCESS)
-   and a plain styleClass alternative. */
+/* Validación: pseudoclases de AtlantaFX (Styles.STATE_DANGER / SUCCESS)
+   o la clase .field-error. */
 .text-input:danger,
 .text-input.field-error {
     -color-input-fg:             -pos-text;
@@ -402,18 +494,18 @@ TilePane > .button:armed,
     -color-input-border-focused: -pos-success;
 }
 
-/* ComboBox, ChoiceBox, DatePicker */
+/* ComboBox, ChoiceBox, DatePicker: mismo cuerpo que un botón secundario */
 .combo-box-base,
 .choice-box {
-    -fx-background-color:  -pos-border, -pos-surface;
-    -fx-background-insets: 0, 1;
-    -fx-background-radius: 6, 5;
+    -fx-background-color:  -pos-border-strong, -pos-border, -pos-surface;
+    -fx-background-insets: 0, 0 0 1 0, 1;
+    -fx-background-radius: 6, 6, 5;
     -fx-cursor: hand;
 }
 
 .combo-box-base:hover,
 .choice-box:hover {
-    -fx-background-color: -pos-border-strong, -pos-surface;
+    -fx-background-color:  -pos-border-strong, -pos-border-strong, -pos-surface;
 }
 
 .combo-box-base:focused,
@@ -425,6 +517,13 @@ TilePane > .button:armed,
     -fx-background-radius: 8, 6, 5;
 }
 
+/* El campo editable del combo / datepicker ya tiene el marco exterior */
+.combo-box-base > .text-field,
+.date-picker > .text-field {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+}
+
 .combo-box-base > .arrow-button {
     -fx-background-color: transparent;
 }
@@ -434,8 +533,15 @@ TilePane > .button:armed,
 }
 
 .combo-box-popup > .list-view {
-    -fx-background-color: -pos-border, -pos-surface;
+    -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 1;
+    -fx-background-radius: 6, 5;
+    -fx-padding: 4;
+    -fx-effect: dropshadow(gaussian, rgba(27, 35, 46, 0.20), 12, 0.2, 0, 4);
+}
+
+.combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell {
+    -fx-background-radius: 4;
 }
 
 .combo-box-popup > .list-view > .virtual-flow > .clipped-container > .sheet > .list-cell:filled:hover {
@@ -447,25 +553,33 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text;
 }
 
-/* Check boxes and radio buttons: rounded box, visible keyboard focus. */
+.date-picker-popup {
+    -fx-effect: dropshadow(gaussian, rgba(27, 35, 46, 0.20), 12, 0.2, 0, 4);
+}
+
+/* Casillas y radios: caja redondeada, foco visible. */
 .check-box > .box {
     -fx-background-radius: 4, 3;
 }
 
 .check-box:focused > .box,
 .radio-button:focused > .radio {
-    -fx-effect: dropshadow(gaussian, -pos-focus-ring, 4, 0.8, 0, 0);
+    -fx-background-insets: -2, 0, 1;
+    -fx-effect: dropshadow(gaussian, -pos-focus-ring, 5, 0.9, 0, 0);
 }
 
 .check-box,
 .radio-button {
-    -fx-background-color: transparent;   /* NordLight paints radios white */
+    -fx-background-color: transparent;   /* NordLight pinta los radios de blanco */
     -fx-cursor: hand;
 }
 
 
 /* ======================================================================
-   4. TABLES / LISTS
+   4. TABLAS / LISTAS
+   Encabezado gris con borde inferior; filas alternas; fila seleccionada
+   con barra de acento a la izquierda; borde de acento cuando la tabla
+   tiene el foco de teclado.
    ====================================================================== */
 
 .table-view,
@@ -485,23 +599,25 @@ TilePane > .button:armed,
     -fx-background-color: -pos-surface;
     -fx-border-color: -pos-border;
     -fx-border-width: 1;
+    -fx-padding: 0;
 }
 
 .table-view:focused,
 .tree-table-view:focused,
 .list-view:focused {
-    -fx-border-color: -pos-border;
+    -fx-border-color: -pos-accent;
 }
 
-/* Header */
+/* Encabezado */
 .table-view > .column-header-background {
     -fx-background-color:  -pos-border, -pos-surface-alt;
     -fx-background-insets: 0, 0 0 1 0;
 }
 
 .table-view > .column-header-background .column-header {
-    -fx-size: 36px;
+    -fx-size: 34px;
     -fx-font-size: 12px;
+    -fx-background-color: transparent;
     -fx-border-color: transparent -pos-border-subtle transparent transparent;
     -fx-border-width: 0 1 0 0;
 }
@@ -513,19 +629,27 @@ TilePane > .button:armed,
 }
 
 .table-view > .column-header-background > .filler {
+    -fx-background-color: transparent;
     -fx-border-width: 0;
 }
 
-/* Rows */
+/* Filas */
 .table-view .table-row-cell {
     -fx-cell-size: 2.6em;
+    -fx-background-color: -color-cell-border, -color-cell-bg;
+    -fx-background-insets: 0, 0 0 1 0;
+}
+
+.table-view .table-row-cell:odd {
+    -fx-background-color: -color-cell-border, -color-cell-bg-odd;
 }
 
 .table-view .table-row-cell > .table-cell {
     -fx-padding: 0 10 0 10;
+    -fx-text-fill: -color-cell-fg;
 }
 
-/* Hover, then selection restated so it wins over hover (author origin). */
+/* Hover, luego selección (se declara después para ganarle al hover). */
 .table-view .table-row-cell:filled:hover,
 .tree-table-view .tree-table-row-cell:filled:hover {
     -fx-background-color: -color-cell-border, -pos-row-hover;
@@ -533,7 +657,8 @@ TilePane > .button:armed,
 
 .table-view .table-row-cell:filled:selected,
 .tree-table-view .tree-table-row-cell:filled:selected {
-    -fx-background-color: -color-cell-border, -color-cell-bg-selected;
+    -fx-background-color:  -color-cell-border, -pos-accent-muted, -color-cell-bg-selected;
+    -fx-background-insets: 0, 0 0 1 0, 0 0 1 3;
 }
 
 .table-view:focused .table-row-cell:filled:selected,
@@ -542,8 +667,11 @@ TilePane > .button:armed,
     -fx-background-insets: 0, 0 0 1 0, 0 0 1 3;
 }
 
-/* Number columns: add styleClass="align-right" to the TableColumn
-   (AtlantaFX alignment class, propagated to the cells). */
+.table-view .table-row-cell:filled:selected > .table-cell {
+    -fx-text-fill: -pos-text;
+}
+
+/* Columnas numéricas: styleClass="align-right" en la TableColumn. */
 .table-view .table-row-cell > .table-cell.align-right {
     -fx-alignment: center-right;
 }
@@ -552,7 +680,7 @@ TilePane > .button:armed,
     -fx-alignment: center-right;
 }
 
-/* Empty-table placeholder */
+/* Tabla vacía */
 .table-view .placeholder .label,
 .list-view .placeholder .label {
     -fx-text-fill: -pos-text-subtle;
@@ -563,10 +691,35 @@ TilePane > .button:armed,
     -fx-padding: 8 10 8 10;
 }
 
+.list-view .list-cell:filled:selected {
+    -fx-background-color: -pos-accent-muted;
+    -fx-text-fill: -pos-text;
+}
+
+/* Barras de desplazamiento discretas */
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar > .thumb {
+    -fx-background-color: -pos-border-strong;
+    -fx-background-radius: 6;
+}
+
+.scroll-bar > .thumb:hover,
+.scroll-bar > .thumb:pressed {
+    -fx-background-color: -pos-text-subtle;
+}
+
+.scroll-bar > .track {
+    -fx-background-color: transparent;
+}
+
 
 /* ======================================================================
-   5. TABS (generic + .main-tabs)
-   Underline tabs: muted text, selected = dark text + 2px accent bar.
+   5. PESTAÑAS (genéricas + .main-tabs)
+   Pestañas subrayadas: texto apagado; seleccionada = texto oscuro + barra
+   de acento de 3 px.
    ====================================================================== */
 
 .tab-pane > .tab-header-area {
@@ -580,8 +733,8 @@ TilePane > .button:armed,
 
 .tab-pane > .tab-header-area > .headers-region > .tab {
     -fx-background-color:  transparent, transparent;
-    -fx-background-insets: 0, 0 0 2 0;
-    -fx-padding: 8 14 8 14;
+    -fx-background-insets: 0, 0 0 3 0;
+    -fx-padding: 9 14 9 14;
     -fx-cursor: hand;
 }
 
@@ -607,7 +760,7 @@ TilePane > .button:armed,
     -fx-font-weight: bold;
 }
 
-/* Keyboard focus on a tab: subtle tinted background (no dotted outline). */
+/* Foco de teclado en una pestaña: fondo teñido (sin contorno punteado). */
 .tab-pane:focused > .tab-header-area > .headers-region > .tab:selected {
     -fx-background-color: -pos-accent, -pos-accent-subtle;
 }
@@ -620,22 +773,27 @@ TilePane > .button:armed,
     -fx-background-color: transparent;
 }
 
-/* Main navigation */
+/* Navegación principal: más alta, letra mayor, bajo la banda oscura. */
 .main-tabs > .tab-header-area {
     -fx-padding: 0 12 0 12;
 }
 
+.main-tabs > .tab-header-area > .tab-header-background {
+    -fx-background-color:  -pos-border, -pos-surface;
+    -fx-background-insets: 0, 0 0 1 0;
+}
+
 .main-tabs > .tab-header-area > .headers-region > .tab {
-    -fx-padding: 10 18 10 18;
+    -fx-padding: 11 18 10 18;
 }
 
 .main-tabs > .tab-header-area > .headers-region > .tab > .tab-container > .tab-label {
-    -fx-font-size: 13px;
+    -fx-font-size: 14px;
 }
 
 
 /* ======================================================================
-   6. CONTAINERS: toolbars, menus, scroll / split panes, separators
+   6. CONTENEDORES: barras, menús, scroll / split, separadores, diálogos
    ====================================================================== */
 
 .tool-bar {
@@ -655,6 +813,7 @@ TilePane > .button:armed,
     -fx-background-insets: 0, 1;
     -fx-background-radius: 6, 5;
     -fx-padding: 4;
+    -fx-effect: dropshadow(gaussian, rgba(27, 35, 46, 0.20), 12, 0.2, 0, 4);
 }
 
 .menu-item {
@@ -693,17 +852,32 @@ TilePane > .button:armed,
     -fx-background-color: transparent;
 }
 
+.split-pane > .split-pane-divider {
+    -fx-background-color: -pos-border;
+}
+
+.split-pane > .split-pane-divider:hover,
+.split-pane > .split-pane-divider:pressed {
+    -fx-background-color: -pos-accent;
+}
+
 .separator {
     -color-separator: -pos-border-subtle;
 }
 
-/* Dialogs / Alerts (only styled when app.css is added to the DialogPane). */
+.separator > .line {
+    -fx-border-color: -pos-border-subtle;
+}
+
+/* Diálogos / Alertas (solo cuando app.css se agrega al DialogPane):
+   encabezado gris con borde, cuerpo blanco, barra de botones gris. */
 .dialog-pane {
     -fx-background-color: -pos-surface;
+    -fx-padding: 0;
 }
 
 .dialog-pane:header > .header-panel {
-    -fx-background-color:  -pos-border-subtle, -pos-surface-alt;
+    -fx-background-color:  -pos-border, -pos-surface-alt;
     -fx-background-insets: 0, 0 0 1 0;
     -fx-padding: 16 20 16 20;
 }
@@ -712,41 +886,133 @@ TilePane > .button:armed,
     -fx-font-size: 15px;
     -fx-font-weight: bold;
     -fx-text-fill: -pos-text;
+    -fx-wrap-text: true;
 }
 
 .dialog-pane > .content {
-    -fx-padding: 16 20 4 20;
+    -fx-padding: 18 20 8 20;
+}
+
+.dialog-pane > .content.label {
+    -fx-font-size: 13px;
+    -fx-text-fill: -pos-text;
+    -fx-wrap-text: true;
+}
+
+.dialog-pane > .button-bar {
+    -fx-background-color:  -pos-border-subtle, -pos-surface-alt;
+    -fx-background-insets: 0, 1 0 0 0;
 }
 
 .dialog-pane > .button-bar > .container {
-    -fx-padding: 16 20 16 20;
+    -fx-padding: 12 20 12 20;
+}
+
+.dialog-pane > .button-bar > .container > .button {
+    -fx-min-width: 88;
+}
+
+.titled-pane > .title {
+    -fx-background-color:  -pos-border, -pos-surface-alt;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-font-weight: bold;
+}
+
+.titled-pane > .content {
+    -fx-background-color: -pos-surface;
+    -fx-border-color: -pos-border;
+}
+
+.progress-indicator {
+    -fx-progress-color: -pos-accent;
 }
 
 
 /* ======================================================================
-   7. APP SHELL (main.fxml)
+   7. SHELL DE LA APLICACIÓN (main.fxml)
+   Banda oscura arriba (marca, reloj, usuario, salir), pestañas claras
+   debajo, barra de estado hundida abajo.
    ====================================================================== */
 
 .main-toolbar {
-    -fx-background-color:  -pos-border, -pos-surface;
+    -fx-background-color:  -pos-band-border, -pos-band-bg;
     -fx-background-insets: 0, 0 0 1 0;
     -fx-padding: 8 16 8 16;
     -fx-spacing: 12;
 }
 
 .main-toolbar .label {
-    -fx-text-fill: -pos-text-muted;
+    -fx-text-fill: -pos-band-text-muted;
 }
 
 .main-toolbar .brand-label,
 .brand-label {
-    -fx-font-size: 16px;
+    -fx-font-size: 17px;
     -fx-font-weight: bold;
-    -fx-text-fill: -pos-text;
+    -fx-text-fill: -pos-band-text;
+}
+
+.main-toolbar .separator:vertical > .line {
+    -fx-border-color: transparent transparent transparent -pos-band-line;
+    -fx-border-width: 0 0 0 1;
+}
+
+/* Botones sobre la banda oscura: translúcidos, texto blanco. */
+.main-toolbar .button {
+    -color-button-bg:             -pos-band-fill;
+    -color-button-fg:             -pos-band-text;
+    -color-button-border:         rgba(255, 255, 255, 0.28);
+    -color-button-edge:           rgba(0, 0, 0, 0.25);
+    -color-button-bg-hover:       -pos-band-fill-hover;
+    -color-button-fg-hover:       -pos-band-text;
+    -color-button-border-hover:   rgba(255, 255, 255, 0.45);
+    -color-button-bg-focused:     -pos-band-fill;
+    -color-button-fg-focused:     -pos-band-text;
+    -color-button-border-focused: #FFFFFF;
+    -color-button-bg-pressed:     rgba(0, 0, 0, 0.22);
+    -color-button-fg-pressed:     -pos-band-text;
+    -color-button-border-pressed: rgba(255, 255, 255, 0.28);
+    -pos-button-ring:             rgba(255, 255, 255, 0.35);
+}
+
+.main-toolbar .button-danger {
+    -color-button-fg:             #FFD9DC;
+    -color-button-border:         rgba(255, 150, 158, 0.55);
+    -color-button-bg-hover:       rgba(178, 58, 67, 0.55);
+    -color-button-fg-hover:       #FFFFFF;
+    -color-button-border-hover:   rgba(255, 150, 158, 0.85);
+    -color-button-fg-focused:     #FFD9DC;
+    -color-button-border-focused: #FFD9DC;
+    -color-button-bg-pressed:     rgba(130, 42, 49, 0.75);
+    -color-button-fg-pressed:     #FFFFFF;
+    -pos-button-ring:             rgba(255, 150, 158, 0.40);
+}
+
+/* Insignia "Caja N" (varias cajas) sobre la banda oscura */
+.main-toolbar .badge {
+    -fx-background-color: -pos-band-fill-hover;
+    -fx-text-fill: -pos-band-text;
+}
+
+/* Reloj (cabecera, junto al usuario) */
+.main-toolbar .reloj-hora {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-band-text;
+}
+
+.main-toolbar .reloj-fecha {
+    -fx-font-size: 11px;
+    -fx-text-fill: -pos-band-text-muted;
+}
+
+/* Menú de desbordamiento de la ToolBar cuando no cabe todo */
+.main-toolbar > .tool-bar-overflow-button > .arrow {
+    -fx-background-color: -pos-band-text;
 }
 
 .status-bar {
-    -fx-background-color:  -pos-border, -pos-surface-alt;
+    -fx-background-color:  -pos-border, -pos-surface-inset;
     -fx-background-insets: 0, 1 0 0 0;
     -fx-font-size: 11px;
 }
@@ -755,34 +1021,35 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-muted;
 }
 
-/* ── RELOJ (cabecera, junto al usuario) ───────────────────────────── */
-.main-toolbar .reloj-hora {
-    -fx-font-size: 20px;
-    -fx-font-weight: bold;
-    -fx-text-fill: -pos-text;
-}
-
-.main-toolbar .reloj-fecha {
-    -fx-font-size: 11px;
-    -fx-text-fill: -pos-text-subtle;
-}
-
 
 /* ======================================================================
-   8. SECTION TOOLBARS & FORMS (productos, clientes, inventario, corte...)
+   8. BARRAS DE SECCIÓN Y FORMULARIOS (productos, clientes, inventario...)
    ====================================================================== */
 
-/* Action row at the top of each view */
+/* Fila de acciones arriba de cada vista: blanca con borde inferior. */
 .section-toolbar {
-    -fx-background-color:  -pos-border-subtle, -pos-surface;
+    -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 0 0 1 0;
     -fx-padding: 10 16 10 16;
     -fx-alignment: center-left;
 }
 
-/* Search bars (ventas) */
+.section-toolbar .form-section-title {
+    -fx-font-size: 14px;
+    -fx-text-fill: -pos-text-muted;
+}
+
+/* Fila de búsqueda bajo la barra de acciones (productos, clientes) */
+.search-row {
+    -fx-background-color:  -pos-border, -pos-surface;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-padding: 8 16 8 16;
+    -fx-alignment: center-left;
+}
+
+/* Barra de búsqueda de Ventas: campo grande, protagonista. */
 .search-bar {
-    -fx-background-color:  -pos-border-subtle, -pos-surface;
+    -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 0 0 1 0;
     -fx-padding: 12 16 12 16;
     -fx-border-width: 0;
@@ -794,16 +1061,23 @@ TilePane > .button:armed,
 }
 
 .search-bar > .text-field {
-    -fx-font-size: 15px;
-    -fx-padding: 8 12 8 12;
+    -fx-font-size: 16px;
+    -fx-padding: 9 14 9 14;
+    -fx-min-width: 200;
 }
 
-/* Form container: a white card on the grey app background. When it is a
-   pane of a SplitPane (inventario) it becomes a flat white panel. */
+.search-bar .separator:vertical > .line {
+    -fx-border-color: transparent transparent transparent -pos-border;
+}
+
+/* Formulario: panel blanco. En un SplitPane (inventario, usuarios) es el
+   panel lateral; en un ScrollPane (ventanas de configuración) llena la
+   ventana. Para verlo como tarjeta centrada, envolverlo en `.form-scroll`
+   (ver productos.fxml). */
 .form-panel {
     -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 1;
-    -fx-background-radius: 8, 7;
+    -fx-background-radius: 10, 9;
 }
 
 .split-pane .form-panel {
@@ -812,11 +1086,32 @@ TilePane > .button:armed,
     -fx-background-radius: 0;
 }
 
-/* Inside a ScrollPane (productos form) the panel is not centred and touches
-   the viewport edges, so it sits directly on the app background instead.
-   Wrap it in a centred `.card` to get the card look there. */
 .scroll-pane .form-panel {
+    -fx-background-color: -pos-surface;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+}
+
+/* Raíz de una escena completa (pantalla "sin conexión" de PantallaConexion):
+   panel plano que llena la ventana. */
+.root.form-panel {
+    -fx-background-color: -pos-surface;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+}
+
+/* Contenedor que centra un formulario como tarjeta sobre el lienzo. */
+.form-scroll {
+    -fx-padding: 24;
+    -fx-alignment: top-center;
     -fx-background-color: transparent;
+}
+
+.form-scroll > .form-panel,
+.scroll-pane .form-scroll > .form-panel {
+    -fx-background-color:  -pos-shadow-1, -pos-shadow-2, -pos-border, -pos-surface;
+    -fx-background-insets: 0 0 -3 0, 0 0 -1 0, 0, 1;
+    -fx-background-radius: 12, 11, 10, 9;
 }
 
 .field-label {
@@ -825,10 +1120,19 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-muted;
 }
 
+/* Títulos de sección: barra de acento a la izquierda. */
 .section-title,
-.form-section-title,
 .config-section-title,
 .corte-section-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+    -fx-border-color: transparent transparent transparent -pos-accent;
+    -fx-border-width: 0 0 0 3;
+    -fx-padding: 0 0 0 10;
+}
+
+.form-section-title {
     -fx-font-size: 15px;
     -fx-font-weight: bold;
     -fx-text-fill: -pos-text;
@@ -841,7 +1145,7 @@ TilePane > .button:armed,
     -fx-padding: 4 0 0 0;
 }
 
-/* Read-only value shown in a form (inventario: descripción, cantidad) */
+/* Valor de solo lectura en un formulario (inventario: descripción, cantidad) */
 .info-label {
     -fx-font-size: 14px;
     -fx-font-weight: bold;
@@ -849,12 +1153,14 @@ TilePane > .button:armed,
 }
 
 .config-section-title {
-    -fx-padding: 0 0 2 0;
+    -fx-padding: 0 0 2 10;
 }
 
 
 /* ======================================================================
    9. VENTAS (ticket + cobro)
+   Jerarquía: búsqueda grande arriba, ticket al centro, panel de cobro a la
+   derecha con el TOTAL en una caja oscura y Cobrar en verde.
    ====================================================================== */
 
 .ticket-table {
@@ -865,12 +1171,16 @@ TilePane > .button:armed,
     -fx-cell-size: 2.8em;
 }
 
+.ticket-table > .column-header-background .column-header {
+    -fx-size: 36px;
+}
+
 .totales-panel {
     -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 0 0 0 1;
-    -fx-padding: 20;
+    -fx-padding: 16;
     -fx-min-width: 260;
-    -fx-pref-width: 280;
+    -fx-pref-width: 290;
 }
 
 .totales-panel > .label {
@@ -879,36 +1189,73 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-muted;
 }
 
-.totales-panel > .text-field {
+.totales-panel .text-field {
     -fx-font-size: 18px;
+    -fx-alignment: center-right;
+    -fx-padding: 8 12 8 12;
+}
+
+.totales-panel .label {
+    -fx-text-fill: -pos-text-muted;
+}
+
+.totales-panel .button-ghost {
+    -fx-font-size: 12px;
+    -fx-padding: 4 8 4 8;
+    -color-button-border: -pos-border-subtle;
+    -color-button-bg: -pos-surface-alt;
+}
+
+/* Caja oscura del total (VBox.total-box en ventas.fxml) */
+.total-box {
+    -fx-background-color:  -pos-band-border, -pos-band-bg;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-background-radius: 10, 10;
+    -fx-padding: 12 16 14 16;
+    -fx-spacing: 2;
     -fx-alignment: center-right;
 }
 
 .total-label-title,
-.totales-panel .total-label-title {
+.totales-panel .total-label-title,
+.total-box > .total-label-title {
     -fx-font-size: 12px;
     -fx-font-weight: bold;
-    -fx-text-fill: -pos-text-muted;
+    -fx-text-fill: -pos-band-text-muted;
 }
 
 .total-amount,
-.totales-panel .total-amount {
-    -fx-font-size: 34px;
+.totales-panel .total-amount,
+.total-box > .total-amount {
+    -fx-font-size: 36px;
     -fx-font-weight: bold;
-    -fx-text-fill: -pos-text;
+    -fx-text-fill: -pos-band-text;
 }
+
+/* Si el total no está dentro de .total-box (otra vista), va en oscuro. */
+.totales-panel > .total-label-title { -fx-text-fill: -pos-text-muted; }
+.totales-panel > .total-amount      { -fx-text-fill: -pos-text; }
 
 .cambio-label,
 .totales-panel .cambio-label {
-    -fx-font-size: 22px;
+    -fx-font-size: 24px;
     -fx-font-weight: bold;
     -fx-text-fill: -pos-success-text;
 }
 
 .btn-cobrar {
-    -fx-font-size: 16px;
+    -fx-font-size: 18px;
     -fx-font-weight: bold;
-    -fx-padding: 13 16 13 16;
+    -fx-padding: 14 16 14 16;
+    -fx-background-radius: 8, 8, 7;
+}
+
+.btn-cobrar:focused {
+    -fx-background-radius: 10, 8, 8, 7;
+}
+
+.btn-cobrar:armed {
+    -fx-background-radius: 8, 7;
 }
 
 .ticket-footer {
@@ -924,6 +1271,7 @@ TilePane > .button:armed,
 
 /* ======================================================================
    10. CORTE DE CAJA
+   Secciones en tarjetas; pie oscuro con los dos totales grandes.
    ====================================================================== */
 
 .corte-value {
@@ -935,6 +1283,8 @@ TilePane > .button:armed,
     -fx-font-weight: bold;
     -fx-text-fill: -pos-text;
     -fx-padding: 6 0 0 0;
+    -fx-border-color: -pos-border-subtle transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
 }
 
 .corte-total-value {
@@ -942,33 +1292,42 @@ TilePane > .button:armed,
     -fx-font-weight: bold;
     -fx-text-fill: -pos-text;
     -fx-padding: 6 0 0 0;
+    -fx-border-color: -pos-border-subtle transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
 }
 
 .corte-footer {
-    -fx-background-color:  -pos-border, -pos-surface;
+    -fx-background-color:  -pos-band-border, -pos-band-bg;
     -fx-background-insets: 0, 1 0 0 0;
-    -fx-padding: 16 24 16 24;
+    -fx-padding: 14 24 14 24;
+}
+
+.corte-footer .separator:vertical > .line {
+    -fx-border-color: transparent transparent transparent -pos-band-line;
 }
 
 .corte-footer-title {
     -fx-font-size: 12px;
     -fx-font-weight: bold;
-    -fx-text-fill: -pos-text-muted;
+    -fx-text-fill: -pos-band-text-muted;
 }
 
 .corte-footer-value {
-    -fx-font-size: 24px;
+    -fx-font-size: 26px;
     -fx-font-weight: bold;
-    -fx-text-fill: -pos-text;
+    -fx-text-fill: -pos-band-text;
 }
 
 
 /* ======================================================================
    11. LOGIN
+   Fondo oscuro de marca; tarjeta blanca centrada con cabecera teñida.
+   (Única pantalla con -fx-effect: se pinta una vez.)
    ====================================================================== */
 
 .login-root {
-    -fx-background-color: -pos-surface;
+    -fx-background-color: linear-gradient(to bottom right, #2A4566 0%, #1B3049 100%);
+    -fx-padding: 28;
 }
 
 .login-background {
@@ -976,11 +1335,24 @@ TilePane > .button:armed,
 }
 
 .login-card {
-    -fx-background-color: -pos-surface;
+    -fx-background-color:  -pos-band-border, -pos-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 14, 13;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 28, 0.15, 0, 10);
+}
+
+.login-header {
+    -fx-background-color:  -pos-surface-alt;
+    -fx-background-insets: 1 1 0 1;
+    -fx-background-radius: 13 13 0 0;
+}
+
+.login-card > .separator > .line {
+    -fx-border-color: -pos-border;
 }
 
 .login-brand-title {
-    -fx-font-size: 22px;
+    -fx-font-size: 24px;
     -fx-font-weight: bold;
     -fx-text-fill: -pos-text;
 }
@@ -991,30 +1363,121 @@ TilePane > .button:armed,
 }
 
 .login-form .text-input {
+    -fx-font-size: 14px;
     -fx-padding: 9 12 9 12;
 }
 
 .btn-login {
+    -fx-font-size: 15px;
+    -fx-padding: 11 16 11 16;
+    -fx-background-radius: 8, 8, 7;
+}
+
+.btn-login:focused {
+    -fx-background-radius: 10, 8, 8, 7;
+}
+
+.btn-login:armed {
+    -fx-background-radius: 8, 7;
+}
+
+/* Título de cada paso (cambio de contraseña, fondo, recuperación) */
+.login-step-title {
     -fx-font-size: 14px;
-    -fx-padding: 10 16 10 16;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+/* Texto de ayuda pequeño (política, teclas, instrucciones) */
+.login-ayuda {
+    -fx-font-size: 11px;
+    -fx-text-fill: -pos-text-muted;
+}
+
+/* Enlaces discretos ("¿Olvidaste tu contraseña?", "Volver") */
+.login-link,
+.login-link:visited {
+    -fx-font-size: 12px;
+    -fx-padding: 0;
+    -fx-text-fill: -pos-accent-text;
+    -fx-border-color: transparent;
+}
+
+/* "Mostrar / Ocultar" contraseña: un ToggleButton que parece enlace */
+.login-link-button,
+.login-link-button:selected {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0 2 0 2;
+    -fx-font-size: 11px;
+    -fx-text-fill: -pos-accent-text;
+    -fx-cursor: hand;
+}
+
+.login-link-button:hover {
+    -fx-underline: true;
+}
+
+/* Selector rápido de usuarios (opcional, Configuración → Cajeros) */
+.login-chip {
+    -fx-background-color: -pos-border, -pos-surface-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 14, 13;
+    -fx-padding: 4 12 4 12;
+    -fx-font-size: 12px;
+    -fx-text-fill: -pos-text;
+    -fx-cursor: hand;
+}
+
+.login-chip:hover,
+.login-chip:focused {
+    -fx-background-color: -pos-accent, -pos-accent-subtle;
+}
+
+/* Punto de estado de la conexión con el servidor (varias cajas) */
+.login-conexion {
+    -fx-font-size: 11px;
+    -fx-text-fill: -pos-text-muted;
+}
+
+.login-conexion-pendiente {
+    -fx-fill: -pos-text-subtle;
+}
+
+.login-conexion-ok {
+    -fx-fill: -pos-success;
+}
+
+.login-conexion-error {
+    -fx-fill: -pos-danger;
 }
 
 
 /* ======================================================================
-   12. UTILITY CLASSES (opt-in from FXML / code)
+   12. UTILIDADES (opt-in desde FXML / código)
    ====================================================================== */
 
-/* Page container: padding for a view's content area. */
+/* Contenedor de página: relleno del área de contenido. */
 .page {
     -fx-padding: 24;
     -fx-spacing: 16;
 }
 
-/* Card: white surface with a subtle border. */
+/* Tarjeta: superficie blanca con borde y sombra pintada (2 capas bajo
+   el borde). Cuesta lo mismo que un fondo plano. */
 .card {
+    -fx-background-color:  -pos-shadow-1, -pos-shadow-2, -pos-border, -pos-surface;
+    -fx-background-insets: 0 0 -3 0, 0 0 -1 0, 0, 1;
+    -fx-background-radius: 12, 11, 10, 9;
+    -fx-padding: 16 20 16 20;
+    -fx-spacing: 10;
+}
+
+/* Tarjeta plana (sin sombra): dentro de otra tarjeta o de un SplitPane. */
+.card-flat {
     -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 1;
-    -fx-background-radius: 8, 7;
+    -fx-background-radius: 10, 9;
     -fx-padding: 16 20 16 20;
     -fx-spacing: 10;
 }
@@ -1025,7 +1488,7 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text;
 }
 
-/* Typography */
+/* Tipografía */
 .title {
     -fx-font-size: 20px;
     -fx-font-weight: bold;
@@ -1045,20 +1508,21 @@ TilePane > .button:armed,
 .text-success { -fx-text-fill: -pos-success-text; }
 .text-warning { -fx-text-fill: -pos-warning-text; }
 .text-accent  { -fx-text-fill: -pos-accent-text; }
+.text-mono    { -fx-font-family: "Monospaced"; }
 
-/* Hint under a field ("Alerta cuando el stock llegue a este valor") */
+/* Pista bajo un campo ("Alerta cuando el stock llegue a este valor") */
 .hint {
     -fx-font-size: 11px;
     -fx-text-fill: -pos-text-subtle;
 }
 
-/* Inline field validation message */
+/* Mensaje de validación en línea */
 .field-error-label {
     -fx-font-size: 11px;
     -fx-text-fill: -pos-danger-text;
 }
 
-/* Key figure (dashboards, cortes, historial de ventas) */
+/* Cifra clave (estadísticas, corte, historial) */
 .metric-value {
     -fx-font-size: 24px;
     -fx-font-weight: bold;
@@ -1071,18 +1535,23 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-muted;
 }
 
-/* Callouts: replace the inline rgba(220,53,69,0.12) error boxes. Put the
-   class on the HBox; child labels pick up the matching text colour. */
+/* Avisos (callout): la clase va en el HBox; las etiquetas hijas toman el
+   color. Barra de color a la izquierda para distinguirlos de una tarjeta. */
 .callout {
     -fx-background-color:  -pos-border, -pos-surface-alt;
     -fx-background-insets: 0, 1;
     -fx-background-radius: 6, 5;
     -fx-padding: 10 12 10 12;
     -fx-spacing: 8;
+    -fx-border-color: transparent transparent transparent -pos-text-subtle;
+    -fx-border-width: 0 0 0 3;
+    -fx-border-radius: 6 0 0 6;
+    -fx-border-insets: 0;
 }
 
 .callout-danger {
     -fx-background-color: -pos-danger-muted, -pos-danger-subtle;
+    -fx-border-color: transparent transparent transparent -pos-danger;
 }
 
 .callout-danger .label {
@@ -1091,6 +1560,7 @@ TilePane > .button:armed,
 
 .callout-warning {
     -fx-background-color: -pos-warning-muted, -pos-warning-subtle;
+    -fx-border-color: transparent transparent transparent -pos-warning;
 }
 
 .callout-warning .label {
@@ -1099,6 +1569,7 @@ TilePane > .button:armed,
 
 .callout-success {
     -fx-background-color: -pos-success-muted, -pos-success-subtle;
+    -fx-border-color: transparent transparent transparent -pos-success;
 }
 
 .callout-success .label {
@@ -1107,13 +1578,14 @@ TilePane > .button:armed,
 
 .callout-info {
     -fx-background-color: -pos-accent-muted, -pos-accent-subtle;
+    -fx-border-color: transparent transparent transparent -pos-accent;
 }
 
 .callout-info .label {
     -fx-text-fill: -pos-accent-text;
 }
 
-/* Status badges (e.g. stock "Bajo" / "OK", promoción "Activa"). */
+/* Insignias de estado (stock "Bajo" / "OK", promoción "Activa"). */
 .badge {
     -fx-background-color: -pos-surface-inset;
     -fx-background-radius: 10;
@@ -1123,12 +1595,12 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-muted;
 }
 
-.badge-danger  { -fx-background-color: -pos-danger-subtle;  -fx-text-fill: -pos-danger-text; }
-.badge-warning { -fx-background-color: -pos-warning-subtle; -fx-text-fill: -pos-warning-text; }
-.badge-success { -fx-background-color: -pos-success-subtle; -fx-text-fill: -pos-success-text; }
-.badge-accent  { -fx-background-color: -pos-accent-subtle;  -fx-text-fill: -pos-accent-text; }
+.badge-danger  { -fx-background-color: -pos-danger-muted;  -fx-text-fill: -pos-danger-text; }
+.badge-warning { -fx-background-color: -pos-warning-muted; -fx-text-fill: -pos-warning-text; }
+.badge-success { -fx-background-color: -pos-success-muted; -fx-text-fill: -pos-success-text; }
+.badge-accent  { -fx-background-color: -pos-accent-muted;  -fx-text-fill: -pos-accent-text; }
 
-/* Row-level states for TableRow factories:
+/* Estados por fila para las fábricas de TableRow:
    row.pseudoClassStateChanged(PseudoClass.getPseudoClass("low-stock"), ...) */
 .table-view .table-row-cell:filled:low-stock > .table-cell {
     -fx-text-fill: -pos-danger-text;
@@ -1138,18 +1610,24 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-subtle;
 }
 
-/* ── INVENTARIO: filas con stock bajo / agotado ───────────────────── */
-.table-row-cell.fila-stock-bajo {
-    -fx-background-color: -color-warning-subtle;
+/* Inventario: filas con stock bajo / agotado (clase puesta desde Java) */
+.table-view .table-row-cell.fila-stock-bajo {
+    -fx-background-color: -color-cell-border, -pos-warning-subtle;
 }
 
-.table-row-cell.fila-agotado {
-    -fx-background-color: -color-danger-subtle;
+.table-view .table-row-cell.fila-agotado {
+    -fx-background-color: -color-cell-border, -pos-danger-subtle;
 }
 
-.table-row-cell.fila-stock-bajo:selected,
-.table-row-cell.fila-agotado:selected {
-    -fx-background-color: -color-accent-subtle;
+.table-view .table-row-cell.fila-stock-bajo:filled:selected,
+.table-view .table-row-cell.fila-agotado:filled:selected {
+    -fx-background-color:  -color-cell-border, -pos-accent-muted, -pos-accent-subtle;
+    -fx-background-insets: 0, 0 0 1 0, 0 0 1 3;
+}
+
+.table-view:focused .table-row-cell.fila-stock-bajo:filled:selected,
+.table-view:focused .table-row-cell.fila-agotado:filled:selected {
+    -fx-background-color:  -color-cell-border, -pos-accent, -pos-accent-muted;
 }
 
 .estado-ok      { -fx-text-fill: -color-success-fg; -fx-font-weight: bold; }
@@ -1176,9 +1654,43 @@ TilePane > .button:armed,
 .heat-2 { -fx-background-color: -pos-accent-muted; }
 .heat-3 { -fx-background-color: -pos-accent-hover; }
 
-/* ── Estadísticas: texto claro sobre la celda más intensa del mapa de calor ── */
+/* Texto claro sobre la celda más intensa del mapa de calor */
 .heat-cell.heat-texto-claro {
     -fx-text-fill: -pos-text-on-accent;
+}
+
+.chart {
+    -fx-padding: 4;
+}
+
+.chart-plot-background {
+    -fx-background-color: -pos-surface;
+}
+
+.chart-vertical-grid-lines,
+.chart-horizontal-grid-lines {
+    -fx-stroke: -pos-border-subtle;
+}
+
+.axis {
+    -fx-tick-label-fill: -pos-text-muted;
+    -fx-tick-label-font-size: 11px;
+}
+
+.chart-series-line {
+    -fx-stroke: -pos-accent;
+    -fx-stroke-width: 2px;
+}
+
+.default-color0.chart-bar {
+    -fx-bar-fill: -pos-accent;
+    -fx-background-color: -pos-accent;
+    -fx-background-radius: 3 3 0 0;
+}
+
+.default-color0.chart-line-symbol {
+    -fx-background-color: -pos-accent, -pos-surface;
+    -fx-background-insets: 0, 2;
 }
 
 /* ── Ventas: panel de sugerencias (tira compacta bajo el ticket) ─────── */
@@ -1213,4 +1725,178 @@ TilePane > .button:armed,
 .sugerencia-chip .sugerencia-motivo {
     -fx-text-fill: -pos-text-subtle;
     -fx-font-size: 11px;
+}
+
+/* ======================================================================
+   Estadísticas: botón «?», tutorial y ayuda de sección
+   ====================================================================== */
+
+/* Botón «?» de ayuda: redondo, discreto, junto al título de cada tarjeta */
+.ayuda-button {
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-accent-text;
+    -fx-background-radius: 999;
+    -fx-border-radius: 999;
+    -fx-padding: 1 8 1 8;
+    -fx-min-width: 24;
+    -fx-min-height: 22;
+}
+
+.ayuda-button:hover {
+    -fx-background-color: -pos-accent-subtle;
+}
+
+.ayuda-button:focused {
+    -fx-background-color: -pos-focus-ring, -pos-accent-subtle;
+    -fx-background-insets: -2, 0;
+    -fx-background-radius: 999, 999;
+}
+
+/* Diálogo del tutorial y de ayuda: texto grande y legible a 1024×768 */
+.tutorial-pane {
+    -fx-background-color: -pos-surface;
+}
+
+.tutorial-titulo {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.tutorial-paso {
+    -fx-font-size: 12px;
+    -fx-text-fill: -pos-text-subtle;
+}
+
+.tutorial-texto {
+    -fx-font-size: 14px;
+    -fx-text-fill: -pos-text;
+    -fx-line-spacing: 3px;
+    -fx-padding: 2 10 8 2;
+}
+
+.tutorial-scroll {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.tutorial-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Puntos de progreso del tutorial (uno por página) */
+.tutorial-punto,
+.tutorial-punto-activo {
+    -fx-min-width: 10;
+    -fx-min-height: 10;
+    -fx-max-width: 10;
+    -fx-max-height: 10;
+    -fx-background-radius: 999;
+    -fx-background-color: -pos-border;
+}
+
+.tutorial-punto-activo {
+    -fx-background-color: -pos-accent;
+}
+
+
+/* ======================================================================
+   BIENVENIDA: asistente inicial, tutorial general y ventana de donación
+   (controller/AsistenteInicialController, TutorialGeneralDialogo, DonacionDialogo)
+   ====================================================================== */
+
+/* Asistente inicial: marco de la vista previa del logotipo y pie con botones */
+.asistente-logo {
+    -fx-background-color:  -pos-border, -pos-surface-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: -pos-radius, 5;
+    -fx-alignment: center;
+}
+
+.asistente-pie {
+    -fx-background-color:  -pos-border, -pos-surface-alt;
+    -fx-background-insets: 0, 1 0 0 0;
+}
+
+/* Tarjeta flotante del tutorial (ventana transparente sobre la principal) */
+.tutorial-card {
+    -fx-background-color:  -pos-band-border, -pos-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 12, 11;
+    -fx-padding: 18 24 18 24;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0.15, 0, 8);
+}
+
+.tutorial-paso {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-accent-text;
+}
+
+.tutorial-titulo {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.tutorial-texto {
+    -fx-font-size: 14px;
+    -fx-text-fill: -pos-text;
+    -fx-line-spacing: 2;
+}
+
+.tutorial-atajos {
+    -fx-font-family: "Consolas", "Menlo", "Courier New", monospace;
+    -fx-font-size: 12px;
+    -fx-text-fill: -pos-accent-text;
+    -fx-background-color: -pos-accent-subtle;
+    -fx-background-radius: -pos-radius;
+    -fx-padding: 8 12 8 12;
+}
+
+/* Encabezado de la pestaña de la que habla el tutorial */
+.main-tabs > .tab-header-area > .headers-region > .tab.tutorial-resaltada {
+    -fx-background-color: -pos-accent, -pos-accent-subtle;
+    -fx-background-insets: 0, 0 0 3 0;
+}
+
+.main-tabs > .tab-header-area > .headers-region > .tab.tutorial-resaltada > .tab-container > .tab-label {
+    -fx-text-fill: -pos-accent-text;
+    -fx-font-weight: bold;
+}
+
+/* Ventana de donación */
+.donacion-root {
+    -fx-background-color: -pos-surface;
+}
+
+.donacion-texto {
+    -fx-font-size: 13px;
+    -fx-text-fill: -pos-text;
+    -fx-line-spacing: 2;
+}
+
+.donacion-cuenta {
+    -fx-background-color:  -pos-border, -pos-surface-alt;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: -pos-radius, 5;
+    -fx-padding: 12 14 12 14;
+}
+
+.donacion-clabe {
+    -fx-font-family: "Consolas", "Menlo", "Courier New", monospace;
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.donacion-clabe-pendiente {
+    -fx-font-size: 14px;
+    -fx-font-style: italic;
+    -fx-text-fill: -pos-warning-text;
+}
+
+.donacion-contador {
+    -fx-font-size: 12px;
+    -fx-text-fill: -pos-text-muted;
 }

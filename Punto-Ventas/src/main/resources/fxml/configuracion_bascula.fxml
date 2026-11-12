@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    configuracion_bascula.fxml  –  Báscula serial (puerto, velocidad, protocolo y expresión del peso)
+    Controlador: ConfiguracionBasculaController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionBasculaController"
+            stylesheets="@../css/app.css">
+
+    <center>
+        <ScrollPane fitToWidth="true">
+            <VBox styleClass="form-panel" spacing="14">
+                <padding><Insets topRightBottomLeft="24"/></padding>
+
+                <Label text="Báscula" styleClass="form-section-title"/>
+                <Separator/>
+
+                <VBox spacing="2">
+                    <CheckBox fx:id="chkActiva" text="Usar una báscula conectada"/>
+                    <Label text="Con la báscula activa aparece el botón Leer peso en Ventas para los productos a granel. Sin báscula todo sigue funcionando: la cantidad se teclea."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="4">
+                    <Label text="Puerto serie" styleClass="field-label"/>
+                    <HBox spacing="8">
+                        <ComboBox fx:id="cmbPuerto" editable="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"
+                                  promptText="ej: COM3 o /dev/ttyUSB0"/>
+                        <Button text="Buscar puertos" onAction="#onBuscarPuertos"/>
+                    </HBox>
+                    <Label fx:id="lblPuertosEstado" text="" styleClass="hint" wrapText="true"/>
+                </VBox>
+
+                <HBox spacing="16">
+                    <VBox spacing="4" HBox.hgrow="ALWAYS">
+                        <Label text="Velocidad (baudios)" styleClass="field-label"/>
+                        <ComboBox fx:id="cmbBaudios" maxWidth="Infinity"/>
+                    </VBox>
+                    <VBox spacing="4" HBox.hgrow="ALWAYS">
+                        <Label text="Espera máxima (ms)" styleClass="field-label"/>
+                        <Spinner fx:id="spEspera" editable="true" maxWidth="Infinity"/>
+                    </VBox>
+                </HBox>
+
+                <VBox spacing="4">
+                    <Label text="Cómo manda el peso" styleClass="field-label"/>
+                    <ComboBox fx:id="cmbProtocolo" maxWidth="Infinity" onAction="#onProtocoloCambio"/>
+                    <Label text="Torrey, CAS y similares: pedir el peso (ENQ). Algunas básculas lo mandan solas todo el tiempo: flujo continuo."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox fx:id="boxComando" spacing="4">
+                    <Label text="Comando de petición (hexadecimal)" styleClass="field-label"/>
+                    <TextField fx:id="txtComando" promptText="05"/>
+                    <Label text="05 = ENQ. Algunas básculas usan otro, ej. 57 0D (W y Enter); revisa el manual."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="4">
+                    <Label text="Expresión regular del peso" styleClass="field-label"/>
+                    <TextField fx:id="txtRegex"/>
+                    <Label text="Se toma el primer grupo entre paréntesis (o toda la coincidencia). Ej. para tramas como ST,GS,   0.500kg: (\d+(?:[.,]\d+)?)"
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <VBox spacing="4">
+                    <Label text="Probar la expresión con una trama" styleClass="field-label"/>
+                    <HBox spacing="8">
+                        <TextField fx:id="txtTrama" HBox.hgrow="ALWAYS" promptText="ej:   0.500 kg"
+                                   onKeyReleased="#onTramaCambio"/>
+                        <Label fx:id="lblTramaResultado" text="—" styleClass="text-bold"/>
+                    </HBox>
+                </VBox>
+
+                <Label fx:id="lblLectura" text="" wrapText="true" styleClass="hint"/>
+
+                <Region minHeight="4"/>
+
+                <HBox spacing="12">
+                    <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"/>
+                    <Button fx:id="btnLeer" text="Leer peso (prueba)" onAction="#onLeerPrueba" prefHeight="38"/>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
+                </HBox>
+            </VBox>
+        </ScrollPane>
+    </center>
+
+</BorderPane>

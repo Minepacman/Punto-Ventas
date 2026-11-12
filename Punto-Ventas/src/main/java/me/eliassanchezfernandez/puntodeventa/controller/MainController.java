@@ -13,13 +13,15 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.control.Hyperlink;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
+import me.eliassanchezfernandez.puntodeventa.service.BienvenidaService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.Atajo;
+import me.eliassanchezfernandez.puntodeventa.util.Donacion;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +42,9 @@ import java.util.ResourceBundle;
  * Responsabilidades:
  *  - Actualizar el reloj de la cabecera (hora y fecha)
  *  - Controlar accesos por rol/permiso (pestañas Configuración y Corte)
- *  - Escuchar atajos de teclado F1–F4 y F12
+ *  - Registrar los atajos de teclado del catálogo util/Atajo (F1–F5 cambian de
+ *    pestaña, F10 muestra la lista; los de Ventas se delegan a VentasController
+ *    solo cuando esa pestaña está activa)
  *  - Cerrar sesión / salir conservando el ticket sin cobrar (USR-15)
  */
 @Component
@@ -59,6 +63,10 @@ public class MainController implements Initializable {
     @FXML private Label   labelHora;
     @FXML private Label   labelFecha;
     @FXML private Label   labelVersion;
+    @FXML private Label   labelCaja;
+    @FXML private Label   labelAtajos;
+    @FXML private Hyperlink lnkAtajos;
+    @FXML private Hyperlink lnkTutorial;
 
     // Ventas se incluye en main.fxml (fx:id del include + "Controller"); el resto se carga la primera vez que se abre su pestaña
     @FXML private VentasController     ventasViewController;
@@ -68,7 +76,9 @@ public class MainController implements Initializable {
     private EstadisticasController estadisticasViewController;
 
     @Autowired private SesionService      sesionService;
+    @Autowired private BienvenidaService  bienvenidaService;
     @Autowired private ApplicationContext springContext;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.IdentidadCaja identidadCaja;
 
     @Value("${app.version:1.0.0}")
     private String version;
@@ -90,11 +100,95 @@ public class MainController implements Initializable {
                 ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol().getEtiqueta() + ")"
                 : "Usuario: —");
         labelVersion.setText("v" + version);
+        // Qué caja es esta instalación (con varias cajas, además el número si el nombre no lo dice)
+        String caja = identidadCaja.nombre();
+        if (identidadCaja.esMultiCaja() && !caja.contains(String.valueOf(identidadCaja.numero()))) {
+            caja += " (" + identidadCaja.numero() + ")";
+        }
+        labelCaja.setText(caja);
+        labelCaja.setTooltip(new javafx.scene.control.Tooltip(identidadCaja.esMultiCaja()
+                ? "Caja " + identidadCaja.numero() + " conectada al servidor" : "Una sola caja (base de datos local)"));
 
         aplicarPermisos();
         configurarAtajosTeclado();
+        boolean mac = Atajo.esMac();
+        labelAtajos.setText(resumenAtajos(mac));
+        lnkAtajos.setText("Atajos " + Atajo.AYUDA_ATAJOS.etiquetaCorta(mac));
         configurarRefrescoDePestanas();
         configurarCierreDeVentana();
+        // Ya con la ventana en pantalla: asistente inicial → tutorial → donación (BienvenidaService decide cuáles)
+        Platform.runLater(this::flujoDeBienvenida);
+    }
+
+    // ── Bienvenida: asistente inicial, tutorial y donación ───────────────
+
+    /**
+     * Pasos que faltan justo después de entrar, en orden, cada uno modal
+     * sobre la principal. Un fallo en uno no impide los siguientes ni el uso
+     * de la caja. La donación la ve el ADMIN cada vez que se abre esta
+     * ventana (también al volver de «Bloquear»).
+     */
+    private void flujoDeBienvenida() {
+        Stage stage = ventana();
+        if (stage == null || !stage.isShowing()) return;
+        java.util.List<BienvenidaService.Paso> pasos;
+        try {
+            pasos = bienvenidaService.pasosPendientes();
+        } catch (RuntimeException e) {
+            System.err.println("Bienvenida: no se pudo consultar qué falta: " + e.getMessage());
+            return;
+        }
+        for (BienvenidaService.Paso paso : pasos) {
+            try {
+                switch (paso) {
+                    case ASISTENTE_INICIAL -> Ventanas.abrirModal(springContext, "/fxml/asistente_inicial.fxml",
+                            "Bienvenido al Punto de Venta", stage, 640, 700);
+                    case TUTORIAL_GENERAL -> mostrarTutorial(true);
+                    case DONACION -> DonacionDialogo.mostrar(stage, Donacion.cargar());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /** «Tutorial» en la barra de estado: el mismo recorrido, las veces que se quiera */
+    @FXML
+    private void onTutorial() {
+        mostrarTutorial(false);
+    }
+
+    /** @param primeraVez true = al terminar (o saltar) se marca como visto para este usuario */
+    private void mostrarTutorial(boolean primeraVez) {
+        Stage stage = ventana();
+        if (stage == null) return;
+        // fx:id → pestaña, solo las que este usuario conserva (aplicarPermisos quita las demás)
+        java.util.Map<String, Tab> todas = new java.util.LinkedHashMap<>();
+        todas.put("tabVentas", tabVentas);
+        todas.put("tabClientes", tabClientes);
+        todas.put("tabProductos", tabProductos);
+        todas.put("tabInventario", tabInventario);
+        todas.put("tabEstadisticas", tabEstadisticas);
+        todas.put("tabCorte", tabCorte);
+        todas.put("tabConfig", tabConfig);
+        java.util.Map<String, Tab> visibles = new java.util.LinkedHashMap<>();
+        todas.forEach((id, t) -> { if (tabPane.getTabs().contains(t)) visibles.put(id, t); });
+        try {
+            TutorialGeneralDialogo.mostrar(stage, tabPane, visibles);
+        } finally {
+            if (primeraVez) {
+                try {
+                    bienvenidaService.marcarTutorialGeneralVisto();
+                } catch (RuntimeException e) {
+                    System.err.println("Tutorial: no se pudo marcar como visto: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private Stage ventana() {
+        if (tabPane.getScene() == null) return null;
+        return tabPane.getScene().getWindow() instanceof Stage s ? s : null;
     }
 
     /** El ticket sin cobrar se guarda también si cierran la ventana (X) o la app (Cmd+Q) */
@@ -123,6 +217,23 @@ public class MainController implements Initializable {
                    ? "\nEl ticket sin cobrar se conservará para cuando vuelvas a entrar." : ""))) {
             return;
         }
+        volverAlLogin();
+    }
+
+    /**
+     * Bloquear / cambio rápido de cajero (Ctrl+L): vuelve al inicio de sesión SIN
+     * confirmar y sin cerrar el programa. El ticket en captura se guarda como
+     * pendiente y se restaura cuando el mismo cajero vuelve a entrar (USR-15);
+     * el login recuerda al último usuario, así que solo teclea su contraseña.
+     */
+    @FXML
+    private void onBloquear() {
+        // El ticket en captura queda "en espera" para que cualquier cajero de la caja lo recupere
+        if (ventasViewController != null) ventasViewController.ponerEnEsperaPorBloqueo();
+        volverAlLogin();
+    }
+
+    private void volverAlLogin() {
         try {
             if (reloj != null) reloj.stop();
             guardarTicketPendiente();
@@ -192,7 +303,44 @@ public class MainController implements Initializable {
         labelFecha.setText(Character.toUpperCase(fecha.charAt(0)) + fecha.substring(1));
     }
 
-    /** F1–F4 cambian de pestaña; F12 cobra el ticket si estamos en Ventas */
+    /** Texto corto de la barra de estado: las pestañas y lo esencial de Ventas */
+    static String resumenAtajos(boolean mac) {
+        StringBuilder sb = new StringBuilder();
+        for (Atajo a : java.util.List.of(Atajo.IR_VENTAS, Atajo.IR_CLIENTES, Atajo.IR_PRODUCTOS, Atajo.IR_INVENTARIO,
+                Atajo.IR_ESTADISTICAS, Atajo.BUSCAR_PRODUCTO, Atajo.PONER_EN_ESPERA, Atajo.COBRAR)) {
+            if (sb.length() > 0) sb.append("  ·  ");
+            sb.append(a.etiquetaCorta(mac)).append(' ').append(nombreCorto(a));
+        }
+        return sb.toString();
+    }
+
+    private static String nombreCorto(Atajo a) {
+        return switch (a) {
+            case IR_VENTAS -> "Ventas";
+            case IR_CLIENTES -> "Clientes";
+            case IR_PRODUCTOS -> "Productos";
+            case IR_INVENTARIO -> "Inventario";
+            case IR_ESTADISTICAS -> "Estadísticas";
+            case BUSCAR_PRODUCTO -> "Buscar";
+            case PONER_EN_ESPERA -> "En espera";
+            case COBRAR -> "Cobrar";
+            default -> a.getDescripcion();
+        };
+    }
+
+    @FXML
+    private void onAtajos() {
+        AtajosDialogo.mostrar(tabPane.getScene() != null ? tabPane.getScene().getWindow() : null);
+    }
+
+    /**
+     * Aceleradores de la escena: los globales cambian de pestaña o abren la ayuda;
+     * los de Ventas se delegan a VentasController solo con esa pestaña activa.
+     * Un acelerador no se dispara si el control con el foco consumió la tecla
+     * (p. ej. Supr dentro de un campo de texto) ni mientras hay un diálogo modal
+     * abierto (tiene su propia escena); las teclas que compiten con la escritura
+     * las resuelve VentasController con filtros según el foco.
+     */
     private void configurarAtajosTeclado() {
         // La Scene aún no existe en initialize(); se registran cuando aparece
         tabPane.sceneProperty().addListener((obs, old, scene) -> {
@@ -201,25 +349,37 @@ public class MainController implements Initializable {
     }
 
     private void registrarAtajos(Scene scene) {
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F1),
-                () -> tabPane.getSelectionModel().select(tabVentas));
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F2),
-                () -> tabPane.getSelectionModel().select(tabClientes));
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F3),
-                () -> tabPane.getSelectionModel().select(tabProductos));
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F4),
-                () -> tabPane.getSelectionModel().select(tabInventario));
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F5), () -> {
-            if (tabPane.getTabs().contains(tabEstadisticas)) {
-                tabPane.getSelectionModel().select(tabEstadisticas);
+        for (Atajo atajo : Atajo.values()) {
+            if (atajo.compiteConEscritura()) continue;     // Supr, +, −: los atiende VentasController según el foco
+            Runnable accion = atajo.getAmbito() == Atajo.Ambito.GLOBAL
+                    ? () -> ejecutarGlobal(atajo)
+                    : () -> {
+                        if (tabPane.getSelectionModel().getSelectedItem() == tabVentas && ventasViewController != null) {
+                            ventasViewController.ejecutarAtajo(atajo);
+                        }
+                    };
+            for (Atajo.Tecla tecla : atajo.teclas()) {
+                scene.getAccelerators().put(tecla.aCombinacion(), accion);
             }
-        });
-        scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F12), () -> {
-            if (tabPane.getSelectionModel().getSelectedItem() == tabVentas
-                    && ventasViewController != null) {
-                ventasViewController.cobrarDesdeAtajo();
-            }
-        });
+        }
+    }
+
+    private void ejecutarGlobal(Atajo atajo) {
+        switch (atajo) {
+            case IR_VENTAS       -> tabPane.getSelectionModel().select(tabVentas);
+            case IR_CLIENTES     -> seleccionarSiExiste(tabClientes);
+            case IR_PRODUCTOS    -> seleccionarSiExiste(tabProductos);
+            case IR_INVENTARIO   -> seleccionarSiExiste(tabInventario);
+            case IR_ESTADISTICAS -> seleccionarSiExiste(tabEstadisticas);
+            case AYUDA_ATAJOS    -> onAtajos();
+            case BLOQUEAR        -> onBloquear();
+            default -> { }
+        }
+    }
+
+    /** Las pestañas que el usuario no puede ver se quitaron del TabPane: el atajo no hace nada */
+    private void seleccionarSiExiste(Tab tab) {
+        if (tabPane.getTabs().contains(tab)) tabPane.getSelectionModel().select(tab);
     }
 
     /**

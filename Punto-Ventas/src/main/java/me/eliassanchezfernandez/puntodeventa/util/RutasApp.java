@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.util;
 
+import me.eliassanchezfernandez.puntodeventa.config.PerfilBaseDatos;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +13,13 @@ import java.nio.file.StandardCopyOption;
 
 /**
  * Dónde viven los archivos de la aplicación: la base de datos SQLite
- * (spring.datasource.url) y la carpeta "datos" junto a ella (logotipo).
+ * (spring.datasource.url), la carpeta "datos" junto a ella (logotipo) y la
+ * configuración local de la caja (conexion.properties, ver {@link ConexionLocal}).
+ *
+ * En modo PostgreSQL no hay archivo de base de datos: la carpeta "datos" y la
+ * de respaldos sugerida quedan en la carpeta de datos del usuario, y los
+ * métodos que hablan de un archivo .db ({@link #archivoBd()}) no deben
+ * llamarse (consultar antes {@link #esSqlite()}).
  *
  * La restauración de un respaldo no puede reemplazar datos.db con la
  * aplicación abierta (hay conexiones con el archivo abierto), así que el
@@ -87,17 +94,38 @@ public class RutasApp {
         return false;
     }
 
-    /**
-     * Se llama desde Launcher ANTES de Spring: fija spring.datasource.url si nadie la indicó
-     * (y crea la carpeta de datos). Devuelve la URL que quedará en uso.
-     */
+    /** Compatibilidad: usa la configuración local guardada en la carpeta de datos del usuario */
     public static String prepararUrl(String[] args) {
+        return prepararUrl(args, ConexionLocal.cargar(carpetaAplicacion()));
+    }
+
+    /**
+     * Se llama desde Launcher ANTES de Spring: fija spring.datasource.* según la
+     * configuración local de la caja, salvo que alguien haya dado una URL
+     * explícita (que manda sobre todo). Devuelve la URL que quedará en uso.
+     *
+     *  - URL explícita: se respeta tal cual; driver y dialecto se deducen de ella
+     *    (así SPRING_DATASOURCE_URL=jdbc:postgresql://... también sirve para probar).
+     *  - Modo PostgreSQL: URL, usuario y contraseña del servidor.
+     *  - Modo SQLite (por defecto): ./datos.db si existe, o datos.db en la carpeta de datos.
+     */
+    public static String prepararUrl(String[] args, ConexionLocal conexion) {
         Map<String, String> entorno = System.getenv();
         if (hayUrlExplicita(args, entorno)) {
             String explicita = System.getProperty(PROPIEDAD_URL);
             if (explicita == null) explicita = entorno.get(ENTORNO_URL);
-            return explicita != null ? explicita : URL_POR_DEFECTO;
+            if (explicita == null) explicita = urlDeArgumentos(args);
+            if (explicita == null) explicita = URL_POR_DEFECTO;
+            PerfilBaseDatos perfil = PerfilBaseDatos.deUrl(explicita);
+            ConexionLocal.fijarDriverYDialecto(perfil);
+            System.setProperty(ConexionLocal.PROP_MODO, perfil.name());
+            System.setProperty(ConexionLocal.PROP_CAJA_NUMERO, String.valueOf(conexion.getCajaNumero()));
+            System.setProperty(ConexionLocal.PROP_CAJA_NOMBRE, conexion.getCajaNombre());
+            return explicita;
         }
+        conexion.aplicarAlSistema();
+        if (conexion.esPostgresql()) return conexion.urlPostgresql();
+
         Path carpeta = carpetaAplicacion();
         String url = urlInicial(Path.of("").toAbsolutePath(), carpeta);
         try {
@@ -106,15 +134,39 @@ public class RutasApp {
             System.err.println("No se pudo crear la carpeta de datos (" + carpeta + "): " + e.getMessage());
         }
         System.setProperty(PROPIEDAD_URL, url);
+        ConexionLocal.fijarDriverYDialecto(PerfilBaseDatos.SQLITE);
         return url;
     }
 
-    /** Carpeta sugerida para los respaldos automáticos: junto a la base de datos */
-    public Path carpetaRespaldosSugerida() {
-        return archivoBd().resolveSibling("respaldos");
+    private static String urlDeArgumentos(String[] args) {
+        if (args == null) return null;
+        for (String a : args) {
+            if (a != null && a.startsWith("--" + PROPIEDAD_URL + "=")) return a.substring(("--" + PROPIEDAD_URL + "=").length());
+        }
+        return null;
     }
 
-    /** Archivo .db en uso (ruta absoluta) */
+    // ── Motor en uso ──────────────────────────────────────────────────────
+
+    public PerfilBaseDatos perfil() {
+        return PerfilBaseDatos.deUrl(urlBd);
+    }
+
+    public boolean esSqlite() {
+        return perfil().esSqlite();
+    }
+
+    /** URL JDBC en uso (nunca lleva la contraseña: esa va aparte en spring.datasource.password) */
+    public String urlBd() {
+        return urlBd;
+    }
+
+    /** Carpeta sugerida para los respaldos automáticos: junto a la base de datos (o en la carpeta de datos) */
+    public Path carpetaRespaldosSugerida() {
+        return carpetaBase().resolve("respaldos");
+    }
+
+    /** Archivo .db en uso (ruta absoluta). Solo en modo SQLite. */
     public Path archivoBd() {
         return rutaDeUrl(urlBd);
     }
@@ -124,10 +176,21 @@ public class RutasApp {
         if (carpetaDatosConfigurada != null && !carpetaDatosConfigurada.isBlank()) {
             return Path.of(carpetaDatosConfigurada).toAbsolutePath();
         }
-        return archivoBd().resolveSibling("datos");
+        return carpetaBase().resolve("datos");
     }
 
-    /** Respaldo en espera de aplicarse al reiniciar */
+    /** Carpeta donde cuelgan "datos" y "respaldos": la de datos.db, o la de la aplicación si no hay archivo */
+    private Path carpetaBase() {
+        if (esSqlite()) {
+            try {
+                Path bd = archivoBd();
+                if (bd.getParent() != null) return bd.getParent();
+            } catch (IllegalStateException enMemoria) { /* BD en memoria: carpeta de la aplicación */ }
+        }
+        return carpetaAplicacion();
+    }
+
+    /** Respaldo en espera de aplicarse al reiniciar (solo SQLite) */
     public Path archivoRestauracionPendiente() {
         return hermano(archivoBd(), SUFIJO_RESTAURAR);
     }
@@ -141,7 +204,7 @@ public class RutasApp {
     public static Path rutaDeUrl(String url) {
         String prefijo = "jdbc:sqlite:";
         if (url == null || !url.startsWith(prefijo)) {
-            throw new IllegalStateException("La base de datos no es un archivo SQLite: " + url);
+            throw new IllegalStateException("La base de datos no es un archivo SQLite: " + sinCredenciales(url));
         }
         String ruta = url.substring(prefijo.length());
         int q = ruta.indexOf('?');
@@ -150,6 +213,20 @@ public class RutasApp {
             throw new IllegalStateException("La base de datos está en memoria; no hay archivo.");
         }
         return Path.of(ruta).toAbsolutePath();
+    }
+
+    /** Quita "usuario:clave@" y parámetros de una URL JDBC para mostrarla o registrarla */
+    public static String sinCredenciales(String url) {
+        if (url == null) return "";
+        String limpia = url;
+        int q = limpia.indexOf('?');
+        if (q >= 0) limpia = limpia.substring(0, q);
+        int arroba = limpia.indexOf('@');
+        int dobleBarra = limpia.indexOf("//");
+        if (arroba > 0 && dobleBarra >= 0 && arroba > dobleBarra) {
+            limpia = limpia.substring(0, dobleBarra + 2) + limpia.substring(arroba + 1);
+        }
+        return limpia;
     }
 
     private static boolean tieneCabeceraSqlite(Path archivo) {

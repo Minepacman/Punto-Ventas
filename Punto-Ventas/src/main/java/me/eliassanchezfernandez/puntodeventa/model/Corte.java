@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 /**
  * Corte de caja guardado (CRT-06): efectivo esperado contra efectivo contado,
  * con faltante/sobrante, quién lo hizo y cuándo. Puede haber varios al día.
+ * Con varias cajas cada corte es de UNA caja; el administrador puede además
+ * guardar un corte general que suma todas.
  */
 @Entity
 @Table(name = "cortes")
@@ -75,6 +77,33 @@ public class Corte {
 
     @Column(length = 250)
     private String observaciones;
+
+    /**
+     * Número de caja (instalación) que registró la fila. Null en las filas
+     * anteriores a "varias cajas", que cuentan como caja 1.
+     */
+    @Column(name = "caja")
+    private Integer caja;
+
+    public int getCajaONumero() {
+        return caja == null || caja <= 0 ? 1 : caja;
+    }
+
+    /**
+     * Corte GENERAL (todas las cajas, solo ADMIN): suma las ventas y los fondos
+     * de todas las cajas del día. Null o false = corte de una caja.
+     */
+    @Column(name = "general")
+    private Boolean general;
+
+    public boolean isGeneral() {
+        return Boolean.TRUE.equals(general);
+    }
+
+    /** "Caja 2" o "Todas las cajas" */
+    public String getEtiquetaCaja() {
+        return isGeneral() ? "Todas las cajas" : "Caja " + getCajaONumero();
+    }
 
     public boolean hayFaltante()  { return diferencia < -0.005; }
     public boolean haySobrante()  { return diferencia >  0.005; }

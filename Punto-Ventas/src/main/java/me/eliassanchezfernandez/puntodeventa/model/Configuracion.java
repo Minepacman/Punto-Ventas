@@ -152,6 +152,18 @@ public class Configuracion {
     @Column(name = "estadisticas_actualizado")
     private LocalDateTime estadisticasActualizado;
 
+    // ── Asistente de primera vez ─────────────────────────────────────────
+
+    /**
+     * true = el administrador ya pasó (o decidió omitir) el asistente inicial
+     * que pide nombre, logotipo y ubicación del negocio. Es por instalación:
+     * los datos del negocio se capturan una sola vez (BienvenidaService).
+     */
+    @Column(name = "asistente_inicial_hecho")
+    private Boolean asistenteInicialHecho;
+
+    public boolean isAsistenteInicialHecho() { return asistenteInicialHecho != null && asistenteInicialHecho; }
+
     // ── Acceso móvil (servidor web local para teléfonos en la misma red) ──
 
     /** Servidor móvil encendido al abrir el programa (null = apagado) */
@@ -163,6 +175,44 @@ public class Configuracion {
     private Integer movilPuerto;
 
     public static final int MOVIL_PUERTO_POR_DEFECTO = 8085;
+
+    /** true = el administrador fijó el puerto a mano (opciones avanzadas); null/false = automático */
+    @Column(name = "movil_puerto_manual")
+    private Boolean movilPuertoManual;
+
+    /** Puerto anterior cuando el último arranque tuvo que cambiarlo (los QR impresos quedaron viejos); null = sin cambio */
+    @Column(name = "movil_puerto_anterior")
+    private Integer movilPuertoAnterior;
+
+    /** Nombre local mDNS sin ".local" (p. ej. "mitienda"); null = sin nombre */
+    @Column(name = "movil_nombre", length = 40)
+    private String movilNombre;
+
+    /** El QR codifica el nombre .local en vez de la IP (null = IP) */
+    @Column(name = "movil_qr_local")
+    private Boolean movilQrLocal;
+
+    // ── Inicio de sesión ─────────────────────────────────────────────────
+
+    /** Mostrar en la pantalla de inicio de sesión la lista de usuarios activos (null = no) */
+    @Column(name = "login_mostrar_usuarios")
+    private Boolean loginMostrarUsuarios;
+
+    /** Hash BCrypt del código de recuperación del administrador (null = no hay código vigente) */
+    @Column(name = "recuperacion_hash", length = 255)
+    private String recuperacionHash;
+
+    /** Cuándo se generó el código de recuperación vigente */
+    @Column(name = "recuperacion_generado")
+    private LocalDateTime recuperacionGenerado;
+
+    public boolean isLoginMostrarUsuarios() { return loginMostrarUsuarios != null && loginMostrarUsuarios; }
+    public boolean isHayCodigoRecuperacion() { return recuperacionHash != null && !recuperacionHash.isBlank(); }
+
+    public boolean isMovilPuertoManual()  { return movilPuertoManual != null && movilPuertoManual; }
+    public boolean isMovilQrLocal()       { return movilQrLocal != null && movilQrLocal; }
+    /** true si ya se guardó algún puerto (distinto del valor por defecto implícito) */
+    public boolean isMovilPuertoGuardado() { return movilPuerto != null; }
 
     public boolean isMovilActivo() { return movilActivo != null && movilActivo; }
     public int getMovilPuerto()    { return movilPuerto != null ? movilPuerto : MOVIL_PUERTO_POR_DEFECTO; }

@@ -313,7 +313,8 @@ PRD-08  Productos a granel y paquetes
         inventario.
         Estado actual: Parcial. La forma de venta se guarda pero no cambia nada:
         las ventas solo aceptan cantidades enteras, no hay báscula y el paquete no
-        descuenta componentes. Configuración > Báscula dice "no disponible".
+        descuenta componentes. (Actualización: la báscula serial ya se configura
+        en Configuración > Báscula y Ventas tiene el botón "Leer peso".)
         Estado vs. lo deseado: No cumple (permitir cantidades decimales para
         granel; integrar báscula). Paquetes: sin definir.
         Fuente: model/DetalleVenta.java (cantidad entera),
@@ -595,10 +596,17 @@ VEN-08  Pago en efectivo y cambio
 VEN-09  Pago con tarjeta
         Regla deseada: sin definir (no se respondió si se registra referencia o
         autorización de la tarjeta).
-        Estado actual: Implementado: se registra que se pagó el total exacto,
-        cambio 0, sin referencia.
-        Estado vs. lo deseado: Sin definir.
-        Fuente: service/VentaService.java
+        Estado actual: Implementado. Al cobrar con tarjeta el cajero elige la
+        terminal (lista en Configuración > Terminal bancaria) y captura los
+        últimos 4 dígitos y la autorización del voucher; se validan, se guardan en
+        el pago y se ven en el historial, el ticket y el corte (por terminal y
+        voucher por voucher). Nunca se guarda el número completo de la tarjeta.
+        Configuración puede exigir estos datos en todo pago con tarjeta. Queda el
+        punto de enganche TerminalBancaria para conectar Mercado Pago Point o Clip.
+        Estado vs. lo deseado: Sin definir (ya hay registro; el dueño decide si es
+        obligatorio).
+        Fuente: service/VentaService.java, terminal/TerminalBancaria.java,
+                terminal/ManualTerminal.java, model/PagoVenta.java
 
 VEN-10  Venta a crédito
         Regla deseada: sin definir (las preguntas de Clientes no se respondieron).
@@ -997,10 +1005,12 @@ HIS-04  Productos con ventas no se borran
 
 HIS-05  Reimprimir, filtrar y exportar
         Regla deseada: sin definir por el dueño.
-        Estado actual: No implementado (no hay filtro por cajero/forma de pago,
-        reimpresión ni exportación).
+        Estado actual: Parcial. "Reimprimir ticket" ya existe (requiere Ver
+        historial y queda en la bitácora). Siguen sin existir el filtro por
+        cajero/forma de pago y la exportación de este historial; las tablas de
+        Estadísticas sí se exportan a CSV, Excel y PDF.
         Estado vs. lo deseado: Sin definir.
-        Fuente: controller/VentasPeriodoController.java
+        Fuente: controller/VentasPeriodoController.java, service/ImpresionService.java
 
 HIS-06  Las ventas no se modifican ni se borran
         Regla deseada: se mantiene; las correcciones se harán con cancelación
@@ -1080,6 +1090,12 @@ CFG-08  Facturación electrónica (CFDI)
         Estado actual: No implementado.
         Estado vs. lo deseado: Sin definir.
         Fuente: controller/ConfiguracionController.java
+
+Dispositivos (implementado después de esta versión del documento): impresora de
+tickets ESC/POS o impresora normal, copias, impresión automática, cajón de dinero
+(permiso ABRIR_CAJON), báscula serial, lector de códigos (funciona como teclado) y
+terminales bancarias. Todo cambio es solo ADMIN y queda en la bitácora. Proveedores
+y órdenes de compra (permiso GESTIONAR_PROVEEDORES) están en Inventario.
 
 Preguntas para definir (Configuración) - siguen abiertas:
   - ¿RFC y logotipo en el ticket? (nombre y dirección ya se respondieron en

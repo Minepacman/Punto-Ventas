@@ -37,7 +37,7 @@
                     <Label text="Tasa de IVA (%)" styleClass="field-label"/>
                     <TextField fx:id="txtIva" promptText="16"/>
                     <Label text="Todos los precios de venta YA incluyen IVA; la tasa solo se usa para desglosarlo en el historial y el corte."
-                           wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
+                           wrapText="true" styleClass="hint"/>
                 </VBox>
 
                 <Separator/>
@@ -47,7 +47,7 @@
                     <Label text="Plazo para cancelar una venta (horas)" styleClass="field-label"/>
                     <TextField fx:id="txtPlazo" promptText="48"/>
                     <Label text="Cada venta conserva el plazo vigente al momento de cobrarla: cambiarlo no hace cancelables las ventas anteriores."
-                           wrapText="true" style="-fx-text-fill:-color-fg-muted;-fx-font-size:11"/>
+                           wrapText="true" styleClass="hint"/>
                 </VBox>
 
                 <Region minHeight="8"/>

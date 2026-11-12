@@ -31,6 +31,10 @@
             <Separator orientation="VERTICAL"/>
             <Button fx:id="btnCancelarVenta" text="⛔ Cancelar venta" onAction="#onCancelarVenta"
                     styleClass="button-danger"/>
+            <Button fx:id="btnReimprimir" text="🖨 Reimprimir ticket" onAction="#onReimprimir"/>
+            <Button fx:id="btnFacturar" text="🧾 Facturar" onAction="#onFacturar"/>
+            <Button fx:id="btnFacturas" text="📄 Facturas…" onAction="#onFacturas"/>
+            <Button text="📤 Exportar…" onAction="#onExportar"/>
             <Region HBox.hgrow="ALWAYS"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
@@ -52,6 +56,7 @@
                     <TableColumn fx:id="colIva"       text="IVA"           prefWidth="80"  styleClass="align-right"/>
                     <TableColumn fx:id="colTotal"     text="Total"         prefWidth="100" styleClass="align-right"/>
                     <TableColumn fx:id="colEstado"    text="Estado"        prefWidth="90"/>
+                    <TableColumn fx:id="colFactura"   text="Factura"       prefWidth="110"/>
                 </columns>
             </TableView>
 
@@ -80,7 +85,7 @@
         <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
             <Label fx:id="lblResumen" text="0 venta(s)  ·  Total: \$0.00"
-                   style="-fx-font-weight:bold" wrapText="true"/>
+                   styleClass="text-bold" wrapText="true"/>
         </HBox>
     </bottom>
 

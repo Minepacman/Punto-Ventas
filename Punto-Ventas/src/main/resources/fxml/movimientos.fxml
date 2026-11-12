@@ -25,6 +25,7 @@
             <Button text="🔍 Buscar" onAction="#onBuscar" styleClass="button-primary"/>
             <Separator orientation="VERTICAL"/>
             <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." HBox.hgrow="ALWAYS"/>
+            <Button text="📤 Exportar…" onAction="#onExportar"/>
             <Button text="Cerrar" onAction="#onCerrar"/>
         </HBox>
         </ScrollPane>
@@ -48,7 +49,7 @@
     <bottom>
         <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-            <Label fx:id="lblResumen" text="0 movimiento(s)" style="-fx-font-weight:bold"/>
+            <Label fx:id="lblResumen" text="0 movimiento(s)" styleClass="text-bold"/>
         </HBox>
     </bottom>
 

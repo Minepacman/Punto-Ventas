@@ -18,6 +18,9 @@ public interface ResumenDiarioRepository extends JpaRepository<ResumenDiario, Lo
     /** Días con ventas en el rango (inclusive), en orden cronológico */
     List<ResumenDiario> findByFechaBetweenOrderByFechaAsc(LocalDate desde, LocalDate hasta);
 
+    /** Días (agregados) con ventas anteriores a la fecha; "hoy" se cuenta en vivo */
+    long countByFechaBefore(LocalDate fecha);
+
     @Modifying
     @Query("DELETE FROM ResumenDiario r WHERE r.fecha IN :fechas")
     void deleteByFechas(List<LocalDate> fechas);

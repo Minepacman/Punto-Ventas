@@ -26,3 +26,9 @@ hs_err_pid*.log
 # Archivos auxiliares de SQLite en modo WAL
 datos.db-wal
 datos.db-shm
+
+# Copias de trabajo temporales de agentes
+.claude/worktrees/
+
+# Contexto local para Claude Code (no publicar)
+CLAUDE.md

@@ -32,19 +32,19 @@ public class UnidadService {
 
     /** Unidades que se crean con la primera ejecución */
     static final List<Unidad> PREDETERMINADAS = List.of(
-            new Unidad("Pieza", "pza", false),
-            new Unidad("Kilogramo", "kg", true),
-            new Unidad("Gramo", "g", true),
-            new Unidad("Litro", "L", true),
-            new Unidad("Metro", "m", true),
-            new Unidad("Caja", "caja", false));
+            new Unidad("Pieza", "pza", false, "H87"),
+            new Unidad("Kilogramo", "kg", true, "KGM"),
+            new Unidad("Gramo", "g", true, "GRM"),
+            new Unidad("Litro", "L", true, "LTR"),
+            new Unidad("Metro", "m", true, "MTR"),
+            new Unidad("Caja", "caja", false, "XBX"));
 
     @EventListener(ContextRefreshedEvent.class)
     @Transactional
     public void sembrarPredeterminadas() {
         if (unidadRepo.count() > 0) return;
         for (Unidad u : PREDETERMINADAS) {
-            unidadRepo.save(new Unidad(u.getNombre(), u.getAbreviatura(), u.isPermiteDecimales()));
+            unidadRepo.save(new Unidad(u.getNombre(), u.getAbreviatura(), u.isPermiteDecimales(), u.getClaveUnidad()));
         }
     }
 
@@ -70,6 +70,12 @@ public class UnidadService {
         if (abrev != null && abrev.length() > 10) {
             throw new NegocioException("La abreviatura puede tener hasta 10 caracteres.");
         }
+        String claveSat;
+        try {
+            claveSat = me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.normalizarUnidad(unidad.getClaveUnidad());
+        } catch (IllegalArgumentException e) {
+            throw new NegocioException(e.getMessage());
+        }
         unidadRepo.findByNombreIgnoreCase(nombre)
                 .filter(otra -> !otra.getId().equals(unidad.getId()))
                 .ifPresent(otra -> {
@@ -80,7 +86,7 @@ public class UnidadService {
         String accion;
         String detalle;
         if (unidad.getId() == null) {
-            guardada = unidadRepo.save(new Unidad(nombre, abrev, unidad.isPermiteDecimales()));
+            guardada = unidadRepo.save(new Unidad(nombre, abrev, unidad.isPermiteDecimales(), claveSat));
             accion = "UNIDAD_CREADA";
             detalle = descripcion(guardada);
         } else {
@@ -95,6 +101,7 @@ public class UnidadService {
             enBd.setNombre(nombre);
             enBd.setAbreviatura(abrev);
             enBd.setPermiteDecimales(unidad.isPermiteDecimales());
+            enBd.setClaveUnidad(claveSat);
             guardada = unidadRepo.save(enBd);
             accion = "UNIDAD_MODIFICADA";
             detalle += descripcion(guardada);
@@ -118,6 +125,7 @@ public class UnidadService {
 
     private static String descripcion(Unidad u) {
         return u.getNombre() + (u.getAbreviatura() != null ? " (" + u.getAbreviatura() + ")" : "")
-                + ", decimales=" + u.isPermiteDecimales();
+                + ", decimales=" + u.isPermiteDecimales()
+                + (u.getClaveUnidad() != null ? ", SAT=" + u.getClaveUnidad() : "");
     }
 }

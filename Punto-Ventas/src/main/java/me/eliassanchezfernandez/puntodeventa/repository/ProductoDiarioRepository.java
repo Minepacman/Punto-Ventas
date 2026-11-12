@@ -20,4 +20,8 @@ public interface ProductoDiarioRepository extends JpaRepository<ProductoDiario, 
     @Modifying
     @Query("DELETE FROM ProductoDiario pd WHERE pd.fecha IN :fechas")
     void deleteByFechas(List<LocalDate> fechas);
+
+    /** Último día (agregado) en que se vendió cada producto: [productoId, fecha]. Una fila por producto. */
+    @Query("SELECT pd.producto.id, MAX(pd.fecha) FROM ProductoDiario pd GROUP BY pd.producto.id")
+    List<Object[]> ultimaVentaPorProducto();
 }

@@ -52,7 +52,7 @@
                         <RadioButton fx:id="rb80" text="80 mm" toggleGroup="$grupoAncho"/>
                     </HBox>
                 </VBox>
-                <Label text="El nombre y la dirección del negocio se editan en Impuestos. Aquí solo se guardan los datos; la impresión llega en una etapa posterior."
+                <Label text="El nombre y la dirección del negocio se editan en Impuestos. Aquí se guardan los datos y el ancho; la impresora se elige en Dispositivos → Impresora de tickets."
                        wrapText="true" styleClass="hint"/>
 
                 <HBox spacing="12">
@@ -72,7 +72,7 @@
                 <padding><Insets topRightBottomLeft="12"/></padding>
                 <ImageView fx:id="imgLogo" fitHeight="60" preserveRatio="true" managed="false" visible="false"/>
                 <Label fx:id="lblVistaPrevia" wrapText="false"
-                       style="-fx-font-family:'Monospaced';-fx-font-size:11"/>
+                       styleClass="text-mono, text-small"/>
             </VBox>
         </VBox>
     </center>

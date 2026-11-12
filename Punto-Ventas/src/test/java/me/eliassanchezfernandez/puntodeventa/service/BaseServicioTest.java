@@ -41,6 +41,8 @@ public abstract class BaseServicioTest {
     @AfterEach
     void cerrarSesionAlTerminar() {
         sesionService.cerrarSesion();
+        // El límite de fallos de la terminal vive en memoria (no se revierte con la transacción)
+        sesionService.reiniciarLimiteTerminalParaPruebas();
     }
 
     /** Inicia sesión como el admin sembrado, sin la obligación de cambiar contraseña */

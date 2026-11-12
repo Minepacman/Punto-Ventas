@@ -2,6 +2,7 @@ package me.eliassanchezfernandez.puntodeventa.service;
 
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.SesionMovil;
+import me.eliassanchezfernandez.puntodeventa.servidor.AnunciadorMdns;
 import me.eliassanchezfernandez.puntodeventa.servidor.ServidorMovilService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ public class AccesoMovilService {
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private SesionMovilService   sesionMovilService;
     @Autowired private ServidorMovilService servidor;
+    @Autowired private AnunciadorMdns       anunciador;
     @Autowired private AuditoriaService     auditoriaService;
 
     /**
@@ -53,6 +55,50 @@ public class AccesoMovilService {
             if (activo) servidor.detener();
             throw e;
         }
+    }
+
+    /**
+     * Enciende (puerto automático) o apaga el servidor EN VIVO. Al encender prueba el último puerto
+     * que funcionó, luego los de respaldo y por último uno asignado por el sistema; guarda el que
+     * realmente quedó abierto. Si el administrador fijó un puerto a mano, se usa solo ese.
+     */
+    public Configuracion configurarAutomatico(boolean activo) {
+        sesionService.verificarAdmin();
+        Configuracion c = configuracionService.obtener();
+        if (activo && c.isMovilPuertoManual()) return configurar(true, c.getMovilPuerto());
+        if (activo && !servidor.estaActivo()) servidor.iniciarAutomatico(c.getMovilPuerto());
+        if (!activo) servidor.detener();
+        try {
+            return configuracionService.guardarAccesoMovil(activo, activo ? servidor.getPuerto() : c.getMovilPuerto());
+        } catch (RuntimeException e) {
+            if (activo) servidor.detener();
+            throw e;
+        }
+    }
+
+    /** Guarda puerto fijo/automático, nombre local y QR con nombre; aplica el nombre en vivo si el servidor está encendido */
+    public Configuracion guardarOpciones(boolean puertoManual, String nombreLocal, boolean qrLocal) {
+        sesionService.verificarAdmin();
+        Configuracion c = configuracionService.guardarOpcionesMovil(puertoManual, nombreLocal, qrLocal);
+        servidor.aplicarNombreLocal();
+        return c;
+    }
+
+    /** El administrador vio el aviso "La dirección cambió" */
+    public void confirmarCambioDireccion() {
+        configuracionService.confirmarCambioDireccionMovil();
+    }
+
+    /** Estado del nombre local para mostrarlo */
+    public record NombreLocalInfo(AnunciadorMdns.Estado estado, String host) { }
+
+    public NombreLocalInfo nombreLocal() {
+        return new NombreLocalInfo(anunciador.estado(), anunciador.hostEfectivo());
+    }
+
+    /** Sugerencia a partir del nombre de la tienda */
+    public String nombreLocalSugerido() {
+        return ConfiguracionService.sugerirNombreLocal(configuracionService.obtener().getNombreTienda());
     }
 
     /** Sesión abierta con el nombre de su usuario, lista para mostrar */
