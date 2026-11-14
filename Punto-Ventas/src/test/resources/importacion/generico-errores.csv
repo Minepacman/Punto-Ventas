@@ -1,0 +1,12 @@
+﻿Codigo;Nombre;Costo;Precio;Depto;Cantidad;Granel
+7501055300136;Coca-Cola 600 ml;12,50;18,00;Refrescos;24;No
+;Sin código;5;10;Varios;1;No
+ABC-1;Sin precio;5;;Varios;1;No
+ABC-2;Precio texto;5;caro;Varios;1;No
+ABC-3;Precio cero;5;0;Varios;1;No
+7501055300136;Repetido;5;10;Varios;1;No
+ABC-4;Caro mil quinientos;1,000;1,500;Varios;2,5;No
+ABC-5;Negativo;-5;10;Varios;1;No
+2003;Frijol a granel;25;38;Granos;12,75;Sí
+7.50105E+12;Código en notación científica;1;2;Varios;0;No
+;;;;;;

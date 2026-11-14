@@ -1,0 +1,5 @@
+Handle,SKU,Name,Category,Description,Cost,Price,Default price,Available for sale,Sold by weight,Option 1 name,Option 1 value,Option 2 name,Option 2 value,Option 3 name,Option 3 value,Barcode,SKU of included item,Quantity of included item,Use production,Supplier,Purchase cost,Track stock,In stock,Low stock
+coca-cola-600,10001,Coca-Cola 600 ml,Refrescos,"Refresco de cola, botella PET",12.5,18,18,Y,N,,,,,,,7501055300136,,,N,Coca-Cola FEMSA,12.5,Y,24,6
+jitomate,10002,Jitomate saladet,Verduras,"Jitomate por kilo
+de la central",18,32,32,Y,Y,,,,,,,,,,N,,18,Y,7.5,2
+pan-bimbo,10003,Pan Bimbo Grande,Panadería,,38,52,52,N,N,,,,,,,7501000111112,,,N,Bimbo,38,Y,3,2

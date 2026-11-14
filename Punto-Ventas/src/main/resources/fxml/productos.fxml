@@ -36,7 +36,9 @@
                     <Button fx:id="btnDepartamentos" text="Departamentos"      onAction="#onDepartamentos"/>
                     <Button fx:id="btnVentasPeriodo" text="Ventas por Período" onAction="#onVentasPeriodo"/>
                     <Button fx:id="btnPromociones"   text="Promociones"      onAction="#onPromociones"><graphic><Icono nombre="estrella"/></graphic></Button>
-                    <!-- "Importar" (desde archivo) se mostrará cuando exista; el handler onImportar queda en el controlador -->
+                    <Button fx:id="btnImportar"      text="Importar"         onAction="#onImportar"><graphic><Icono nombre="subir"/></graphic>
+                        <tooltip><Tooltip text="Migrar el catálogo desde eleventa, SICAR, Abarrotes PDV, MyBusiness, Loyverse o Excel/CSV"/></tooltip>
+                    </Button>
                 </HBox>
 
                 <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">

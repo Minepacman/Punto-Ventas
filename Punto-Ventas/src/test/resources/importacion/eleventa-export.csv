@@ -1,0 +1,5 @@
+Código;Producto;P. Costo;P. Venta;P. Mayoreo;Departamento;Existencia;Inv. Mínimo;Inv. Máximo;Tipo de Venta;Proveedor;Clave Producto / Servicio;Unidad Medida CFDI;IVA;IEPS
+7501055300136;Coca-Cola 600 ml;$12.50;$18.00;$16.50;Refrescos;24;6;48;UNIDAD;Coca-Cola FEMSA;50202306;H87;16;0
+2001;Jitomate saladet;$18.00;$32.00;$0.00;Frutas y Verduras;7.5;2;20;GRANEL;;50405700;KGM;0;0
+7501000111112;Pan Bimbo Grande;$38.00;$52.00;$50.00;- Sin Departamento -;3;2;10;UNIDAD;Bimbo;50181900;H87;0;0
+7501003300017;Azúcar estándar 1 kg;$22.00;$29.50;$0.00;Abarrotes;0;5;30;UNIDAD;;50161509;H87;0;0

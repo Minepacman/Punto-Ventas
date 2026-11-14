@@ -88,6 +88,7 @@ public class ProductosController implements Initializable {
     @FXML private Button                        btnDepartamentos;
     @FXML private Button                        btnVentasPeriodo;
     @FXML private Button                        btnPromociones;
+    @FXML private Button                        btnImportar;
 
     //tabla departamentos
     @FXML private TableView<Departamento>           tablaDepartamentos;
@@ -204,6 +205,7 @@ public class ProductosController implements Initializable {
         btnEliminar.setDisable(!editar);
         btnActivar.setDisable(!editar);
         btnDepartamentos.setDisable(!editar);
+        btnImportar.setDisable(!editar);
         btnVentasPeriodo.setDisable(!sesionService.tienePermiso(Permiso.VER_HISTORIAL));
         // Promociones se puede consultar; la ventana bloquea guardar sin permiso
     }
@@ -417,10 +419,22 @@ public class ProductosController implements Initializable {
         cargarProductos(); // las promociones no cambian productos, pero refrescamos por consistencia
     }
 
+    /** Asistente para migrar el catálogo desde otro punto de venta o Excel/CSV (ventana modal) */
     @FXML
     void onImportar() {
-        alerta(Alert.AlertType.INFORMATION, "Importar",
-                "La importación de productos desde archivo no está disponible en esta versión.");
+        boolean huboCambios;
+        try {
+            huboCambios = ImportarDialogo.mostrar(springContext, vistaTabla.getScene().getWindow());
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir el asistente de importación: " + e.getMessage());
+            return;
+        }
+        if (huboCambios) {
+            cargarProductos();
+            cargarDepartamentos();
+            onBuscar();
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
