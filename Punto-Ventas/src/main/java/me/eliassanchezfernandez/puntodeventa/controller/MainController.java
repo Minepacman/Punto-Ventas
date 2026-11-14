@@ -87,6 +87,7 @@ public class MainController implements Initializable {
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.IdentidadCaja identidadCaja;
     @Autowired private DonadorService       donadorService;
     @Autowired private ActualizacionService actualizacionService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService catalogoCodigosService;
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private AcercaDeDialogo      acercaDeDialogo;
 
@@ -145,6 +146,8 @@ public class MainController implements Initializable {
         if (stage == null || !stage.isShowing()) return;
         // La búsqueda de versiones nuevas corre en segundo plano mientras se muestran los pasos
         revisarActualizacionesEnSegundoPlano();
+        // Catálogo de códigos de barras: revisión semanal, un par de minutos después de entrar (nunca en el arranque)
+        catalogoCodigosService.programarRevisionSemanal();
         java.util.List<BienvenidaService.Paso> pasos;
         try {
             pasos = bienvenidaService.pasosPendientes();

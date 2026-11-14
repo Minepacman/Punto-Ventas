@@ -24,6 +24,7 @@ import javafx.stage.DirectoryChooser;
 import me.eliassanchezfernandez.puntodeventa.PuntoDeVentaApp;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.service.ArticulosPrecargadosService;
+import me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
@@ -64,6 +65,7 @@ public class ConfiguracionController implements Initializable {
     @Autowired private DispositivosDialogos dispositivosDialogos;
     @Autowired private AcercaDeDialogo acercaDeDialogo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.ActualizacionService actualizacionService;
+    @Autowired private CatalogoCodigosService catalogoCodigosService;
 
     @Override public void initialize(URL url, ResourceBundle rb) { }
 
@@ -266,6 +268,80 @@ public class ConfiguracionController implements Initializable {
             dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
             dlg.showAndWait();
         }
+    }
+
+    /**
+     * Catálogo de códigos de barras (codigos-barras-mx / Open Food Facts): interruptor de la
+     * consulta en internet, estado de la copia local y "Actualizar ahora". Solo ADMIN cambia la opción.
+     */
+    @FXML void onCatalogoCodigos() {
+        CatalogoCodigosService.Estado e = catalogoCodigosService.estado();
+        CheckBox enLinea = new CheckBox("Buscar datos de productos en internet");
+        enLinea.setSelected(e.enLinea());
+        enLinea.setWrapText(true);
+        enLinea.setDisable(!sesionService.esAdmin());
+        Label nota = new Label("Al dar de alta un producto por su código de barras, se proponen descripción, departamento e imagen "
+                + "a partir de un catálogo libre de productos que se venden en México (unos 25 000). El catálogo completo se "
+                + "descarga una vez por semana en segundo plano, unos minutos después de entrar; si un código no está en la copia "
+                + "local se consulta en internet y la foto se baja de Open Food Facts. Apagado, solo se usa la copia ya descargada "
+                + "y no se baja ninguna imagen. Nunca se envía nada de la tienda: solo se pide el código.");
+        nota.setWrapText(true);
+        nota.setPrefWidth(460);
+        nota.getStyleClass().add("hint");
+        Label estado = new Label(describirEstadoCatalogo(e));
+        estado.setWrapText(true);
+        estado.setPrefWidth(460);
+        Button actualizar = new Button("Actualizar ahora");
+        actualizar.setDisable(!sesionService.esAdmin());
+        Label resultado = new Label();
+        resultado.setWrapText(true);
+        resultado.setPrefWidth(460);
+        actualizar.setOnAction(ev -> {
+            actualizar.setDisable(true);
+            resultado.setText("Descargando el catálogo… (puede tardar un minuto en una conexión lenta)");
+            try {
+                catalogoCodigosService.actualizarAhoraEnSegundoPlano().thenAccept(r -> javafx.application.Platform.runLater(() -> {
+                    actualizar.setDisable(false);
+                    resultado.setText(switch (r.estado()) {
+                        case ACTUALIZADO -> "Catálogo actualizado: versión " + r.version() + ", "
+                                + String.format("%,d", r.productos()) + " productos.";
+                        case YA_AL_DIA -> "La copia local ya es la versión más reciente (" + r.version() + ").";
+                        case SIN_CONEXION -> "No se pudo descargar el catálogo (¿sin internet?). " + r.detalle();
+                        case RECHAZADO -> "El catálogo descargado no se aceptó: " + r.detalle();
+                    });
+                    estado.setText(describirEstadoCatalogo(catalogoCodigosService.estado()));
+                }));
+            } catch (NegocioException ex) {
+                actualizar.setDisable(false);
+                resultado.setText(ex.getMessage());
+            }
+        });
+        Label atribucion = new Label(CatalogoCodigosService.ATRIBUCION + ". Catálogo: " + CatalogoCodigosService.REPOSITORIO);
+        atribucion.setWrapText(true);
+        atribucion.setPrefWidth(460);
+        atribucion.getStyleClass().add("hint");
+        Hyperlink enlace = new Hyperlink("Ver el catálogo en GitHub");
+        enlace.setOnAction(ev -> PuntoDeVentaApp.abrirEnlace(CatalogoCodigosService.REPOSITORIO));
+        VBox contenido = new VBox(10, enLinea, nota, estado, new HBox(10, actualizar), resultado, atribucion, enlace);
+        if (sesionService.esAdmin()) {
+            dialogoGuardar("Códigos de barras", "Catálogo de códigos de barras", contenido,
+                    () -> configuracionService.guardarCodigosEnLinea(enLinea.isSelected()));
+        } else {
+            Dialog<ButtonType> dlg = dialogo("Códigos de barras", "Catálogo de códigos de barras", contenido);
+            dlg.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+            dlg.showAndWait();
+        }
+    }
+
+    private static String describirEstadoCatalogo(CatalogoCodigosService.Estado e) {
+        java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        if (!e.hayCatalogo()) {
+            return "Copia local: todavía no se ha descargado el catálogo."
+                    + (e.revisado() != null ? " Última revisión: " + e.revisado().format(f) + "." : "");
+        }
+        return "Copia local: versión " + e.version() + " · " + String.format("%,d", e.filasLocales()) + " productos"
+                + (e.descargado() != null ? " · descargada el " + e.descargado().format(f) : "")
+                + (e.revisado() != null ? " · última revisión " + e.revisado().format(f) : "") + ".";
     }
 
     /** Estado de donador, clave y soporte técnico: lo mismo que "Acerca de" en la barra de estado */

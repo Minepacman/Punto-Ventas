@@ -243,6 +243,38 @@ public class Configuracion {
     @Column(name = "version_esquema", length = 30)
     private String versionEsquema;
 
+    // ── Catálogo de códigos de barras (codigos-barras-mx, Open Food Facts ODbL) ──
+
+    /**
+     * Permitir consultas a internet para el catálogo de códigos de barras: descarga semanal del
+     * catálogo completo y búsqueda del fragmento cuando un código no está en la copia local
+     * (null = sí). Apagado, solo se usa la copia local que ya exista.
+     */
+    @Column(name = "codigos_en_linea")
+    private Boolean codigosEnLinea;
+
+    /** Versión (fecha AAAA-MM-DD de version.json) de la copia local del catálogo; null = nunca descargado */
+    @Column(name = "catalogo_codigos_version", length = 40)
+    private String catalogoCodigosVersion;
+
+    /** SHA-256 del CSV cargado: si version.json anuncia el mismo, no se vuelve a bajar */
+    @Column(name = "catalogo_codigos_sha256", length = 64)
+    private String catalogoCodigosSha256;
+
+    /** Filas cargadas en la última descarga */
+    @Column(name = "catalogo_codigos_productos")
+    private Integer catalogoCodigosProductos;
+
+    /** Cuándo se cargó la copia local */
+    @Column(name = "catalogo_codigos_descargado")
+    private LocalDateTime catalogoCodigosDescargado;
+
+    /** Última vez que se consultó version.json (haya o no versión nueva); se revisa cada 7 días */
+    @Column(name = "catalogo_codigos_revisado")
+    private LocalDateTime catalogoCodigosRevisado;
+
+    public boolean isCodigosEnLinea() { return codigosEnLinea == null || codigosEnLinea; }
+
     public boolean isActualizacionesAuto() { return actualizacionesAuto == null || actualizacionesAuto; }
     public boolean tieneClaveDonador()     { return claveDonador != null && !claveDonador.isBlank(); }
 

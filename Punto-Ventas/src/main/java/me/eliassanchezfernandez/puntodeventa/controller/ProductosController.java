@@ -26,6 +26,7 @@ import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
+import me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoImagenService;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
@@ -102,6 +103,14 @@ public class ProductosController implements Initializable {
     @FXML private HBox        hboxYaExiste;
     @FXML private Label       lblProductoExistente;
     @FXML private TextField   txtDescripcion;
+    // Autollenado por código de barras (ver sección CATÁLOGO DE CÓDIGOS)
+    @FXML private Button      btnBuscarCatalogo;
+    @FXML private HBox        hboxCatalogo;
+    @FXML private Label       lblCatalogoTitulo;
+    @FXML private Label       lblCatalogoDetalle;
+    @FXML private Label       lblCatalogoAtribucion;
+    @FXML private Button      btnCatalogoUsar;
+    @FXML private Button      btnCatalogoDeshacer;
     @FXML private StackPane   zonaImagen;
     @FXML private ImageView   imgProducto;
     @FXML private Label       lblSinImagen;
@@ -132,6 +141,7 @@ public class ProductosController implements Initializable {
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private ProductoService    productoService;
     @Autowired private ProductoImagenService productoImagenService;
+    @Autowired private CatalogoCodigosService catalogoCodigosService;
     @Autowired private ImagenProductoCache   imagenes;
     @Autowired private SesionService      sesionService;
     @Autowired private UnidadService      unidadService;
@@ -171,6 +181,7 @@ public class ProductosController implements Initializable {
         configurarComboDepartamento();
         configurarComboUnidad();
         configurarZonaImagen();
+        configurarCatalogo();
         cargarProductos();
         cargarDepartamentos();
 
@@ -759,6 +770,280 @@ public class ProductosController implements Initializable {
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    //  CATÁLOGO DE CÓDIGOS DE BARRAS (autollenado al dar de alta)
+    //
+    //  Al capturar un código (Enter del lector o al salir del campo) se busca
+    //  en CatalogoCodigosService fuera del hilo de JavaFX; con la ficha se
+    //  proponen descripción, departamento e imagen SOLO en los campos vacíos.
+    //  Un aviso dice qué se llenó y de dónde, con Deshacer / Usar estos datos.
+    //  En edición solo actúa el botón "Buscar datos".
+    // ─────────────────────────────────────────────────────────────────────
+
+    private enum CampoCatalogo { DESCRIPCION, DEPARTAMENTO, IMAGEN }
+
+    /** Cuenta de consultas: una respuesta tardía de otro código no pisa la actual */
+    private int secuenciaCatalogo;
+    /** Último código consultado automáticamente (no se repite la consulta al salir del campo varias veces) */
+    private String codigoCatalogoConsultado;
+    private CatalogoCodigosService.Ficha fichaCatalogo;
+    /** Campos que llenó el catálogo (lo que Deshacer revierte) */
+    private final java.util.EnumSet<CampoCatalogo> llenadosPorCatalogo = java.util.EnumSet.noneOf(CampoCatalogo.class);
+    /** Campos de la ficha que NO se aplicaron porque el usuario ya tenía algo (lo que "Usar estos datos" aplica) */
+    private final java.util.EnumSet<CampoCatalogo> pendientesCatalogo = java.util.EnumSet.noneOf(CampoCatalogo.class);
+    /** Valores previos para Deshacer */
+    private String descripcionAntesCatalogo;
+    private Departamento departamentoAntesCatalogo;
+    private ProductoImagenService.Normalizada imagenAntesCatalogo;
+    private String origenImagenAntesCatalogo;
+    private String descripcionDelCatalogo;
+    private Departamento departamentoDelCatalogo;
+
+    private void configurarCatalogo() {
+        // Al salir del campo de código (Tab, clic en Descripción) se consulta en el alta
+        txtCodigoBarras.focusedProperty().addListener((o, tenia, tiene) -> {
+            if (tenia && !tiene && productoEnEdicion == null && vistaFormulario.isVisible()) consultarCatalogo(false);
+        });
+        // Si el usuario cambia el código, el aviso anterior ya no corresponde
+        txtCodigoBarras.textProperty().addListener((o, a, b) -> {
+            if (hboxCatalogo.isVisible() && codigoCatalogoConsultado != null
+                    && !codigoCatalogoConsultado.equals(b == null ? "" : b.trim())) {
+                ocultarCatalogo();
+            }
+        });
+        lblCatalogoAtribucion.setText(CatalogoCodigosService.ATRIBUCION);
+    }
+
+    /** Enter en el campo de código (los lectores lo envían al final) */
+    @FXML
+    private void onCodigoBarrasEnter() {
+        onCodigoBarrasChanged();
+        if (productoEnEdicion == null) consultarCatalogo(false);
+        if (!hboxYaExiste.isVisible()) txtDescripcion.requestFocus();
+    }
+
+    /** Botón "Buscar datos": también en edición; avisa si no se encuentra */
+    @FXML
+    private void onBuscarCatalogo() {
+        consultarCatalogo(true);
+    }
+
+    private void consultarCatalogo(boolean manual) {
+        String codigo = txtCodigoBarras.getText() == null ? "" : txtCodigoBarras.getText().trim();
+        if (codigo.isEmpty()) {
+            if (manual) alerta(Alert.AlertType.INFORMATION, "Código de barras", "Escanea o escribe primero el código de barras.");
+            return;
+        }
+        if (hboxYaExiste.isVisible()) return;   // ya existe: no hay nada que llenar
+        if (!manual && codigo.equals(codigoCatalogoConsultado)) return;
+        if (me.eliassanchezfernandez.puntodeventa.util.CodigoBarras.normalizar(codigo).isEmpty()) {
+            if (manual) {
+                mostrarCatalogo("Este código no es un código de barras EAN/UPC.",
+                        "El catálogo solo tiene códigos de barras comerciales (8, 12 o 13 dígitos). Los códigos internos se capturan a mano.",
+                        false, false);
+            }
+            return;
+        }
+        codigoCatalogoConsultado = codigo;
+        int mia = ++secuenciaCatalogo;
+        if (manual) {
+            mostrarCatalogo("Buscando «" + codigo + "» en el catálogo…", "", false, false);
+            btnBuscarCatalogo.setDisable(true);
+        }
+        catalogoCodigosService.buscarEnSegundoPlano(codigo).thenAccept(r -> Platform.runLater(() -> {
+            btnBuscarCatalogo.setDisable(false);
+            if (mia != secuenciaCatalogo || !vistaFormulario.isVisible()) return;
+            if (!codigo.equals(txtCodigoBarras.getText() == null ? "" : txtCodigoBarras.getText().trim())) return;
+            if (r.isPresent()) {
+                aplicarFichaCatalogo(r.get());
+            } else if (manual) {
+                mostrarCatalogo("«" + codigo + "» no está en el catálogo.",
+                        catalogoCodigosService.isEnLinea()
+                                ? "Captura los datos a mano. Si no hay internet, solo se consulta la copia local."
+                                : "Captura los datos a mano. La consulta en internet está apagada (Configuración → Códigos de barras).",
+                        false, false);
+            }
+        }));
+    }
+
+    /** Llena los campos vacíos con la ficha y muestra el aviso; recuerda lo previo para Deshacer */
+    private void aplicarFichaCatalogo(CatalogoCodigosService.Ficha ficha) {
+        fichaCatalogo = ficha;
+        llenadosPorCatalogo.clear();
+        pendientesCatalogo.clear();
+        var datos = ficha.datos();
+        descripcionDelCatalogo = me.eliassanchezfernandez.puntodeventa.util.AutollenadoProducto.descripcion(datos);
+        departamentoDelCatalogo = me.eliassanchezfernandez.puntodeventa.util.AutollenadoProducto
+                .departamento(datos.getCategoria(), comboDepartamento.getItems()).orElse(null);
+
+        if (!descripcionDelCatalogo.isEmpty()) {
+            if (txtDescripcion.getText() == null || txtDescripcion.getText().isBlank()) {
+                descripcionAntesCatalogo = txtDescripcion.getText();
+                txtDescripcion.setText(descripcionDelCatalogo);
+                llenadosPorCatalogo.add(CampoCatalogo.DESCRIPCION);
+            } else if (!descripcionDelCatalogo.equals(txtDescripcion.getText().trim())) {
+                pendientesCatalogo.add(CampoCatalogo.DESCRIPCION);
+            }
+        }
+        if (departamentoDelCatalogo != null) {
+            if (comboDepartamento.getValue() == null) {
+                departamentoAntesCatalogo = null;
+                comboDepartamento.setValue(departamentoDelCatalogo);
+                llenadosPorCatalogo.add(CampoCatalogo.DEPARTAMENTO);
+            } else if (!departamentoDelCatalogo.getId().equals(comboDepartamento.getValue().getId())) {
+                pendientesCatalogo.add(CampoCatalogo.DEPARTAMENTO);
+            }
+        }
+        boolean puedeBajarImagen = datos.tieneImagen() && catalogoCodigosService.isEnLinea();
+        if (puedeBajarImagen) {
+            if (imagenPendiente == null && !imagenGuardada) {
+                imagenAntesCatalogo = null;
+                origenImagenAntesCatalogo = null;
+                bajarImagenDelCatalogo(datos.getImagen());
+                llenadosPorCatalogo.add(CampoCatalogo.IMAGEN);
+            } else {
+                pendientesCatalogo.add(CampoCatalogo.IMAGEN);
+            }
+        }
+        mostrarResultadoCatalogo();
+    }
+
+    /** "Usar estos datos": aplica también lo que no se tocó por tener ya un valor (todo reversible) */
+    @FXML
+    private void onCatalogoUsar() {
+        if (fichaCatalogo == null) return;
+        if (pendientesCatalogo.remove(CampoCatalogo.DESCRIPCION)) {
+            descripcionAntesCatalogo = txtDescripcion.getText();
+            txtDescripcion.setText(descripcionDelCatalogo);
+            llenadosPorCatalogo.add(CampoCatalogo.DESCRIPCION);
+        }
+        if (pendientesCatalogo.remove(CampoCatalogo.DEPARTAMENTO)) {
+            departamentoAntesCatalogo = comboDepartamento.getValue();
+            comboDepartamento.setValue(departamentoDelCatalogo);
+            llenadosPorCatalogo.add(CampoCatalogo.DEPARTAMENTO);
+        }
+        if (pendientesCatalogo.remove(CampoCatalogo.IMAGEN)) {
+            imagenAntesCatalogo = imagenPendiente;
+            origenImagenAntesCatalogo = origenImagen;
+            bajarImagenDelCatalogo(fichaCatalogo.datos().getImagen());
+            llenadosPorCatalogo.add(CampoCatalogo.IMAGEN);
+        }
+        mostrarResultadoCatalogo();
+    }
+
+    /** Deshacer: regresa cada campo que llenó el catálogo a lo que tenía (si el usuario no lo cambió después) */
+    @FXML
+    private void onCatalogoDeshacer() {
+        if (llenadosPorCatalogo.remove(CampoCatalogo.DESCRIPCION)
+                && descripcionDelCatalogo != null && descripcionDelCatalogo.equals(txtDescripcion.getText())) {
+            txtDescripcion.setText(descripcionAntesCatalogo == null ? "" : descripcionAntesCatalogo);
+        }
+        if (llenadosPorCatalogo.remove(CampoCatalogo.DEPARTAMENTO)
+                && departamentoDelCatalogo != null && comboDepartamento.getValue() != null
+                && departamentoDelCatalogo.getId().equals(comboDepartamento.getValue().getId())) {
+            comboDepartamento.setValue(departamentoAntesCatalogo);
+        }
+        if (llenadosPorCatalogo.remove(CampoCatalogo.IMAGEN)) {
+            secuenciaImagen++;   // cancela una descarga en curso
+            imagenPendiente = imagenAntesCatalogo;
+            origenImagen = origenImagenAntesCatalogo;
+            quitarImagen = false;
+            if (imagenPendiente != null) {
+                mostrarVistaPrevia(ImagenProductoCache.decodificar(imagenPendiente.imagen(), 0));
+                lblImagenEstado.setText(imagenPendiente.ancho() + " × " + imagenPendiente.alto() + " px · se guarda con el producto");
+            } else if (imagenGuardada && productoEnEdicion != null) {
+                cargarImagenActual(productoEnEdicion);
+            } else {
+                mostrarVistaPrevia(null);
+                lblImagenEstado.setText(AYUDA_IMAGEN);
+            }
+        }
+        llenadosPorCatalogo.clear();
+        ocultarCatalogo();
+    }
+
+    @FXML
+    private void onCatalogoCerrar() {
+        ocultarCatalogo();
+    }
+
+    private void bajarImagenDelCatalogo(String url) {
+        procesarImagen(() -> productoImagenService.descargarDesdeUrl(url), "catálogo de códigos (Open Food Facts)");
+    }
+
+    /** Arma el aviso con lo encontrado, lo llenado, lo pendiente y la procedencia */
+    private void mostrarResultadoCatalogo() {
+        var datos = fichaCatalogo.datos();
+        StringBuilder titulo = new StringBuilder("Encontrado en el catálogo: «").append(descripcionDelCatalogo).append("»");
+        if (datos.getCategoria() != null) titulo.append(" · ").append(datos.getCategoria());
+        titulo.append(fichaCatalogo.origen() == CatalogoCodigosService.Origen.LOCAL ? " (copia local)" : " (en línea)");
+
+        StringBuilder detalle = new StringBuilder();
+        if (!llenadosPorCatalogo.isEmpty()) {
+            detalle.append("Se llenó: ").append(nombresCampos(llenadosPorCatalogo)).append(". ");
+        }
+        if (!pendientesCatalogo.isEmpty()) {
+            detalle.append("Ya tenías ").append(nombresCampos(pendientesCatalogo))
+                    .append(": no se cambió; «Usar estos datos» lo reemplaza. ");
+        }
+        if (llenadosPorCatalogo.isEmpty() && pendientesCatalogo.isEmpty()) {
+            detalle.append("No había nada que llenar. ");
+        }
+        if (departamentoDelCatalogo == null && datos.getCategoria() != null && !"Otros".equalsIgnoreCase(datos.getCategoria())) {
+            detalle.append("Categoría del catálogo: ").append(datos.getCategoria())
+                    .append(" (no hay un departamento equivalente; créalo en Departamentos si lo quieres). ");
+        }
+        if (datos.tieneImagen() && !catalogoCodigosService.isEnLinea()) {
+            detalle.append("La imagen no se baja porque la consulta en internet está apagada. ");
+        }
+        detalle.append("Revisa el precio y el resto de los datos antes de guardar.");
+        mostrarCatalogo(titulo.toString(), detalle.toString().trim(), !pendientesCatalogo.isEmpty(), !llenadosPorCatalogo.isEmpty());
+    }
+
+    private static String nombresCampos(java.util.Set<CampoCatalogo> campos) {
+        java.util.List<String> n = new java.util.ArrayList<>();
+        if (campos.contains(CampoCatalogo.DESCRIPCION)) n.add("descripción");
+        if (campos.contains(CampoCatalogo.DEPARTAMENTO)) n.add("departamento");
+        if (campos.contains(CampoCatalogo.IMAGEN)) n.add("imagen");
+        if (n.size() <= 1) return String.join("", n);
+        return String.join(", ", n.subList(0, n.size() - 1)) + " e " + n.get(n.size() - 1);
+    }
+
+    private void mostrarCatalogo(String titulo, String detalle, boolean usar, boolean deshacer) {
+        lblCatalogoTitulo.setText(titulo);
+        lblCatalogoDetalle.setText(detalle);
+        lblCatalogoDetalle.setVisible(!detalle.isEmpty());
+        lblCatalogoDetalle.setManaged(!detalle.isEmpty());
+        btnCatalogoUsar.setVisible(usar);
+        btnCatalogoUsar.setManaged(usar);
+        btnCatalogoDeshacer.setVisible(deshacer);
+        btnCatalogoDeshacer.setManaged(deshacer);
+        hboxCatalogo.setVisible(true);
+        hboxCatalogo.setManaged(true);
+    }
+
+    private void ocultarCatalogo() {
+        hboxCatalogo.setVisible(false);
+        hboxCatalogo.setManaged(false);
+    }
+
+    /** Al limpiar el formulario: sin ficha, sin aviso y las respuestas en vuelo se descartan */
+    private void reiniciarCatalogo() {
+        secuenciaCatalogo++;
+        codigoCatalogoConsultado = null;
+        fichaCatalogo = null;
+        llenadosPorCatalogo.clear();
+        pendientesCatalogo.clear();
+        descripcionAntesCatalogo = null;
+        departamentoAntesCatalogo = null;
+        imagenAntesCatalogo = null;
+        origenImagenAntesCatalogo = null;
+        descripcionDelCatalogo = null;
+        departamentoDelCatalogo = null;
+        if (btnBuscarCatalogo != null) btnBuscarCatalogo.setDisable(false);
+        if (hboxCatalogo != null) ocultarCatalogo();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     //  HELPERS PRIVADOS
     // ─────────────────────────────────────────────────────────────────────
 
@@ -963,6 +1248,7 @@ public class ProductosController implements Initializable {
     private void limpiarFormulario() {
         txtCodigoBarras.clear();
         txtDescripcion.clear();
+        reiniciarCatalogo();
         secuenciaImagen++;
         imagenPendiente = null;
         origenImagen = null;
