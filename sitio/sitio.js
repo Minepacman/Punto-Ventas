@@ -26,6 +26,11 @@
   function pendiente(v) {
     return v == null || String(v).trim() === '' || /^PENDIENTE$/i.test(String(v).trim());
   }
+  // CLABE de 18 dígitos en grupos legibles (banco · plaza · cuenta · dígito verificador). Al copiar se quitan los espacios.
+  function formatearClabe(v) {
+    const d = String(v || '').replace(/\D/g, '');
+    return d.length === 18 ? d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6, 17) + ' ' + d.slice(17) : String(v || '');
+  }
   $$('[data-dato]').forEach(el => {
     const v = valor(el.dataset.dato);
     if (pendiente(v) && el.dataset.pendiente === undefined && !el.closest('.cuenta')) {
@@ -34,9 +39,13 @@
       el.textContent = el.dataset.pendiente || 'Por confirmar';
       el.classList.add(el.closest('.cuenta') ? 'pendiente' : 'pendiente-chip');
     } else {
-      el.textContent = v;
+      el.textContent = el.dataset.dato === 'donacion.clabe' ? formatearClabe(v) : v;
     }
   });
+  function botonClabe(hayClabe) {
+    $$('[data-copiar-digitos]').forEach(b => { b.disabled = !hayClabe; });
+  }
+  botonClabe(!pendiente(valor('donacion.clabe')));
   $$('[data-enlace]').forEach(a => {
     const tipo = a.dataset.enlace;
     const c = D.contacto || {};
@@ -48,6 +57,8 @@
       a.textContent = pendiente(c.telefonoTexto) ? c.whatsapp : c.telefonoTexto;
     } else if (tipo === 'repo') {
       a.href = REPO_URL;
+    } else if (tipo === 'github') {
+      a.href = (D.autor && !pendiente(D.autor.github)) ? D.autor.github : 'https://github.com/' + repo.usuario;
     } else if (tipo === 'issues') {
       a.href = REPO_URL + '/issues';
     } else if (tipo === 'releases') {
@@ -64,8 +75,11 @@
 
   // ── 1b. Datos de donación FIRMADOS por el autor (claves/donacion.pdvd del repositorio) ──
   // Mismo archivo que coteja el programa. Formato: PDVD1.<base64url(json)>.<base64url(firma Ed25519)>.
-  // Si el navegador tiene WebCrypto con Ed25519 (Chrome 137+, Firefox, Safari 17+) se verifica la firma y se
-  // dice «verificados»; si no, solo se muestran los datos del archivo. Si no se puede leer, quedan los de datos.js.
+  // Tres resultados posibles al comprobar la firma con WebCrypto (Chrome 137+, Firefox, Safari 17+):
+  //  · 'ok'          → se muestran los datos del archivo marcados como «verificados».
+  //  · 'sin-soporte' → el navegador no puede comprobar Ed25519: se muestran los datos del archivo SIN esa marca.
+  //  · 'mala'        → la firma NO coincide: el archivo no se usa; quedan los datos de respaldo de datos.js y un aviso.
+  // Si el archivo no se puede leer (sin red, 404), quedan los de datos.js con el texto base.
   const DONACION_URL = 'https://raw.githubusercontent.com/' + repo.usuario + '/' + repo.nombre + '/' + (repo.rama || 'main') + '/claves/donacion.pdvd';
   function b64urlABytes(t) {
     const b64 = t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4);
@@ -73,33 +87,52 @@
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   }
-  function pintarDonacion(d, verificada) {
+  function ponerEstadoDonacion(texto, clase) {
     const estado = $('#donacion-estado');
+    if (!estado) return;
+    estado.textContent = texto;
+    estado.classList.remove('ok', 'alerta');
+    if (clase) estado.classList.add(clase);
+  }
+  function pintarDonacion(d, verificada) {
     const poner = (clave, v) => $$('[data-dato="donacion.' + clave + '"]').forEach(el => {
       if (pendiente(v)) { el.textContent = el.dataset.pendiente || 'Por confirmar'; el.classList.add('pendiente'); }
       else { el.textContent = v; el.classList.remove('pendiente'); }
     });
     if (d.pendiente) {
       poner('clabe', ''); poner('banco', ''); poner('beneficiario', '');
-      if (estado) estado.textContent = 'El autor todavía no publica su cuenta de donación (archivo firmado del ' + d.emitido + '). Mientras tanto no dones a ninguna cuenta que diga ser de Caja Libre.';
+      botonClabe(false);
+      ponerEstadoDonacion('El autor todavía no publica su cuenta de donación (archivo firmado del ' + d.emitido + '). Mientras tanto no dones a ninguna cuenta que diga ser de Caja Libre.', 'alerta');
       return;
     }
-    const clabe = String(d.clabe || '').replace(/\D/g, '');
-    poner('clabe', clabe.length === 18 ? clabe.slice(0, 3) + ' ' + clabe.slice(3, 6) + ' ' + clabe.slice(6, 17) + ' ' + clabe.slice(17) : clabe);
+    poner('clabe', formatearClabe(d.clabe));
     poner('banco', d.banco); poner('beneficiario', d.beneficiario);
-    if (estado) estado.textContent = verificada
-      ? 'Datos verificados: firmados por el autor el ' + d.emitido + ' (firma Ed25519 comprobada en tu navegador).'
-      : 'Datos publicados por el autor el ' + d.emitido + ' (archivo firmado claves/donacion.pdvd del repositorio).';
+    botonClabe(!pendiente(d.clabe));
+    if (verificada) {
+      ponerEstadoDonacion('Datos verificados: firmados por el autor el ' + d.emitido + ' (firma Ed25519 comprobada en tu navegador).', 'ok');
+    } else {
+      ponerEstadoDonacion('Datos publicados por el autor el ' + d.emitido + ' en el archivo firmado claves/donacion.pdvd del repositorio. Tu navegador no puede comprobar la firma; el programa oficial sí la coteja (Acerca de → «Datos verificados»).');
+    }
   }
+  function avisarFirmaInvalida() {
+    // No se toca lo que ya pintó datos.js: el archivo descargado no es de fiar.
+    ponerEstadoDonacion('Atención: el archivo firmado que publica el repositorio NO pasó la comprobación de firma en tu navegador. ' +
+      'Aquí se muestran los datos de respaldo de este sitio, que podrían estar desactualizados. Antes de transferir, confirma la CLABE ' +
+      'con el autor por WhatsApp o correo, o revisa «Datos verificados» en el programa.', 'alerta');
+  }
+  // Devuelve 'ok', 'mala' o 'sin-soporte' (ver arriba). Solo la falta de Ed25519 en el navegador cuenta como «sin soporte».
   async function verificarFirma(carga, firma) {
+    if (!(window.crypto && crypto.subtle) || pendiente(D.llavePublica)) return 'sin-soporte';
+    let llave;
     try {
-      if (!(window.crypto && crypto.subtle) || pendiente(D.llavePublica)) return false;
       const spki = b64urlABytes(String(D.llavePublica).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
-      const llave = await crypto.subtle.importKey('spki', spki, { name: 'Ed25519' }, false, ['verify']);
-      return await crypto.subtle.verify({ name: 'Ed25519' }, llave, firma, carga);
-    } catch (e) { return false; }   // navegador sin Ed25519: se muestran los datos sin la marca «verificados»
+      llave = await crypto.subtle.importKey('spki', spki, { name: 'Ed25519' }, false, ['verify']);
+    } catch (e) { return 'sin-soporte'; }   // NotSupportedError: navegador sin Ed25519 (la llave es constante y conocida)
+    try {
+      return (await crypto.subtle.verify({ name: 'Ed25519' }, llave, firma, carga)) ? 'ok' : 'mala';
+    } catch (e) { return 'mala'; }   // la firma ni siquiera se pudo procesar: se trata como no válida
   }
-  if (window.fetch) {
+  if (window.fetch && $('#donacion-estado')) {
     fetch(DONACION_URL, { cache: 'no-cache' })
       .then(r => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))))
       .then(async texto => {
@@ -108,7 +141,9 @@
         const carga = b64urlABytes(partes[1]), firma = b64urlABytes(partes[2]);
         const d = JSON.parse(new TextDecoder().decode(carga));
         if (d.v !== 1) throw new Error('versión');
-        pintarDonacion(d, await verificarFirma(carga, firma));
+        const resultado = await verificarFirma(carga, firma);
+        if (resultado === 'mala') { avisarFirmaInvalida(); return; }
+        pintarDonacion(d, resultado === 'ok');
       })
       .catch(() => { /* sin red o archivo: quedan los datos de datos.js y el texto base */ });
   }
@@ -304,7 +339,7 @@
     }
   }
   pintarDeteccion();
-  if (window.fetch) {
+  if (window.fetch && ($('#detecta-so') || $$('[data-activo]').length)) {   // solo donde hay tarjetas de descarga (no en creador.html)
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     if (ctl) setTimeout(() => ctl.abort(), 8000);
     fetch(API_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: ctl && ctl.signal })
@@ -331,8 +366,11 @@
   }
   $$('[data-copiar]').forEach(b => {
     b.addEventListener('click', () => {
-      const texto = $(b.dataset.copiar) ? $(b.dataset.copiar).textContent : '';
-      const listo = () => { const t = b.textContent; b.textContent = 'Copiado'; setTimeout(() => { b.textContent = t; }, 1600); };
+      let texto = $(b.dataset.copiar) ? $(b.dataset.copiar).textContent : '';
+      if (b.dataset.copiarDigitos !== undefined) texto = texto.replace(/\D/g, '');   // la CLABE va sin espacios al banco
+      if (!texto) return;
+      const etiqueta = $('[data-etiqueta]', b) || b;   // si el botón lleva icono, solo cambia el texto
+      const listo = () => { const t = etiqueta.textContent; etiqueta.textContent = 'Copiado'; setTimeout(() => { etiqueta.textContent = t; }, 1600); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(listo, listo);
       else listo();
     });

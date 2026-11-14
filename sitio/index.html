@@ -19,7 +19,7 @@
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="estilos.css">
+<link rel="stylesheet" href="estilos.css?v=20261114b">
 <!--
   Sitio estático de Caja Libre (GPLv3). Carpeta sitio/ del repositorio Minepacman/Punto-Ventas.
   Datos editables (contacto, CLABE, nombre): datos.js. Capturas reales del programa en img/capturas/.
@@ -92,6 +92,7 @@
       <a href="#tutorial">Cómo empezar</a>
       <a href="#donaciones">Apoyar</a>
       <a href="#faq">Preguntas</a>
+      <a href="creador.html" title="Sobre el creador">Creador</a>
     </nav>
     <a class="btn btn-primario btn-chico" href="#descargas"><svg class="icono"><use href="#i-descargar"/></svg>Descargar</a>
     <button class="menu-boton" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="nav-movil"><svg class="icono"><use href="#i-menu"/></svg></button>
@@ -107,6 +108,7 @@
     <a href="#oficial">Versión oficial</a>
     <a href="#contacto">Contacto</a>
     <a href="#faq">Preguntas frecuentes</a>
+    <a href="creador.html">Sobre el creador</a>
   </nav>
 </header>
 
@@ -147,7 +149,7 @@
   <!-- ═══════════════════ AUTOR ═══════════════════ -->
   <div class="autor-franja">
     <div class="contenedor">
-      <span>Un proyecto independiente de <strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong></span>
+      <span>Un proyecto independiente de <a href="creador.html"><strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong></a></span>
       <span class="sep" aria-hidden="true">·</span>
       <span>Hecho en México, en español y pensando en tiendas de barrio</span>
       <div class="chips">
@@ -239,8 +241,7 @@
   <section class="seccion" id="pantallas" aria-labelledby="titulo-pantallas">
     <div class="contenedor">
       <div class="encabezado reveal">
-        <span class="sobretitulo">Así se ve</span>
-        <h2 class="titulo" id="titulo-pantallas">Pantallas reales del programa</h2>
+        <h2 class="titulo" id="titulo-pantallas">Así se ve</h2>
         <p>Capturas tomadas del programa con una tienda de ejemplo («Abarrotes Doña Lupita»). Sin retoques.</p>
       </div>
 
@@ -426,8 +427,8 @@
         </div>
         <div class="pantalla-visual reveal retraso-1">
           <div class="telefonos">
-            <div class="telefono"><img src="img/capturas/movil-inicio.webp" alt="Página móvil: estadísticas de la semana con venta total, tickets, ticket promedio y productos más vendidos" width="600" height="1299" loading="lazy"></div>
-            <div class="telefono"><img src="img/capturas/movil-inventario.webp" alt="Página móvil: inventario con búsqueda de productos y existencias" width="600" height="1299" loading="lazy"></div>
+            <div class="telefono"><div class="barra-estado" aria-hidden="true"><span class="hora">9:41</span><span class="estado-iconos" style="color:#000"><svg fill="#000" viewBox="0 0 18 12" width="18" height="12"><rect x="0" y="8" width="3" height="4" rx=".8"/><rect x="5" y="5.5" width="3" height="6.5" rx=".8"/><rect x="10" y="3" width="3" height="9" rx=".8"/><rect x="15" y="0" width="3" height="12" rx=".8"/></svg><svg fill="#000" viewBox="0 0 16 12" width="16" height="12"><path d="M8 11.6 5.6 9.2a3.4 3.4 0 0 1 4.8 0z"/><path d="M3.5 7.1a6.4 6.4 0 0 1 9 0l-1.4 1.4a4.4 4.4 0 0 0-6.2 0z"/><path d="M1.3 4.9a9.5 9.5 0 0 1 13.4 0l-1.4 1.4a7.5 7.5 0 0 0-10.6 0z"/></svg><svg fill="#000" viewBox="0 0 27 12" width="27" height="12"><rect x=".5" y=".5" width="22" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2"/><path d="M24.2 4v4a2.2 2.2 0 0 0 0-4z" fill-opacity=".4"/></svg></span></div><img src="img/capturas/movil-inicio.webp" alt="Página móvil: estadísticas de la semana con venta total, tickets, ticket promedio y productos más vendidos" width="600" height="1299" loading="lazy"></div>
+            <div class="telefono"><div class="barra-estado" aria-hidden="true"><span class="hora">9:41</span><span class="estado-iconos" style="color:#000"><svg fill="#000" viewBox="0 0 18 12" width="18" height="12"><rect x="0" y="8" width="3" height="4" rx=".8"/><rect x="5" y="5.5" width="3" height="6.5" rx=".8"/><rect x="10" y="3" width="3" height="9" rx=".8"/><rect x="15" y="0" width="3" height="12" rx=".8"/></svg><svg fill="#000" viewBox="0 0 16 12" width="16" height="12"><path d="M8 11.6 5.6 9.2a3.4 3.4 0 0 1 4.8 0z"/><path d="M3.5 7.1a6.4 6.4 0 0 1 9 0l-1.4 1.4a4.4 4.4 0 0 0-6.2 0z"/><path d="M1.3 4.9a9.5 9.5 0 0 1 13.4 0l-1.4 1.4a7.5 7.5 0 0 0-10.6 0z"/></svg><svg fill="#000" viewBox="0 0 27 12" width="27" height="12"><rect x=".5" y=".5" width="22" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2"/><path d="M24.2 4v4a2.2 2.2 0 0 0 0-4z" fill-opacity=".4"/></svg></span></div><img src="img/capturas/movil-inventario.webp" alt="Página móvil: inventario con búsqueda de productos y existencias" width="600" height="1299" loading="lazy"></div>
           </div>
         </div>
       </div>
@@ -642,24 +643,29 @@
             <li><svg class="icono"><use href="#i-rayo"/></svg><span><b>Acceso anticipado</b> a las versiones de prueba antes de que salgan para todos.</span></li>
             <li><svg class="icono"><use href="#i-estrella"/></svg><span><b>El nombre de tu negocio</b> en la pantalla «Acerca de», y se quita la ventana de donación que ve el administrador al entrar.</span></li>
           </ul>
-          <p style="margin-top:18px;color:var(--muted);font-size:.95rem">La clave dura un año y se puede renovar con otra donación cuando quieras. Sin ella el programa sigue funcionando exactamente igual.</p>
-        </div>
-        <aside class="cuenta reveal retraso-1" aria-labelledby="titulo-cuenta">
-          <h3 id="titulo-cuenta"><svg class="icono"><use href="#i-corazon"/></svg>Donar por transferencia (SPEI)</h3>
-          <dl>
-            <dt>Banco</dt><dd class="texto" data-dato="donacion.banco">Mercado Pago</dd>
-            <dt>CLABE</dt><dd data-dato="donacion.clabe">722 969 01004783130 8</dd>
-            <dt>Beneficiario</dt><dd class="texto" data-dato="donacion.beneficiario">Elias Oziel Sánchez Fernández</dd>
-            <dt>Concepto</dt><dd class="texto"><span data-dato="donacion.concepto">PDV + nombre de tu negocio</span></dd>
-          </dl>
-          <p class="texto" id="donacion-estado" style="margin:14px 0 0;font-size:.9rem;color:#525C6A">Los datos de esta cuenta se publican firmados por el autor en el repositorio (<code>claves/donacion.pdvd</code>).</p>
-          <p class="texto" style="margin:10px 0 0;font-size:.95rem;color:#1B232E"><b>Antes de confirmar la transferencia, revisa que tu banco muestre como beneficiario a «Elias Oziel Sánchez Fernández».</b> Si aparece otro nombre, no transfieras: esta es la única cuenta del autor y la única que aparece en este sitio.</p>
+          <p class="nota">La clave dura un año y se puede renovar con otra donación cuando quieras. Sin ella el programa sigue funcionando exactamente igual.</p>
+          <h3 class="pasos-titulo">Cómo recibir tu clave de apoyo</h3>
           <ol class="pasos-clave">
             <li>Transfiere la cantidad que gustes y pon en el concepto <b>«PDV» y el nombre de tu negocio</b> (por ejemplo «PDV Abarrotes Lupita»).</li>
             <li>En el programa, pulsa <b>«Ya doné: pedir mi clave»</b> (en la ventana de donación o en «Acerca de»). Arma un mensaje con los datos; envíalo por WhatsApp o correo junto con tu comprobante.</li>
             <li>Recibirás tu clave de apoyo. Como administrador, pégala en <b>«Ya tengo mi clave»</b>. Con varias cajas basta activarla una vez.</li>
-            <li>El único que emite claves de apoyo es el autor: nadie más las vende, y una clave comprada a otra persona no da soporte del autor.</li>
           </ol>
+          <p class="nota">El único que emite claves de apoyo es el autor: nadie más las vende, y una clave comprada a otra persona no da soporte del autor.</p>
+        </div>
+        <aside class="cuenta reveal retraso-1" aria-labelledby="titulo-cuenta">
+          <div class="cuenta-cab">
+            <h3 id="titulo-cuenta"><svg class="icono"><use href="#i-recibo"/></svg>Donar por transferencia (SPEI)</h3>
+            <span>Cuenta del autor</span>
+          </div>
+          <dl>
+            <div><dt>Banco</dt><dd data-dato="donacion.banco">Mercado Pago</dd></div>
+            <div><dt>CLABE</dt><dd class="clabe" id="clabe-valor" data-dato="donacion.clabe">722 969 01004783130 8</dd></div>
+            <div><dt>Beneficiario</dt><dd data-dato="donacion.beneficiario">Elias Oziel Sánchez Fernández</dd></div>
+            <div><dt>Concepto</dt><dd><span data-dato="donacion.concepto">PDV + nombre de tu negocio</span></dd></div>
+          </dl>
+          <button type="button" class="btn btn-primario" data-copiar="#clabe-valor" data-copiar-digitos><svg class="icono"><use href="#i-copiar"/></svg><span data-etiqueta>Copiar la CLABE</span></button>
+          <p class="cuenta-aviso"><b>Antes de confirmar la transferencia, revisa que tu banco muestre como beneficiario a «Elias Oziel Sánchez Fernández».</b> Si aparece otro nombre, no transfieras: esta es la única cuenta del autor y la única que aparece en este sitio.</p>
+          <p class="cuenta-estado" id="donacion-estado" role="status">Los datos de esta cuenta se publican firmados por el autor en el repositorio (<code>claves/donacion.pdvd</code>).</p>
         </aside>
       </div>
     </div>
@@ -710,7 +716,7 @@
       <div class="encabezado reveal">
         <span class="sobretitulo">Contacto</span>
         <h2 class="titulo" id="titulo-contacto">¿Dudas, fallas o ideas?</h2>
-        <p><strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong> · <span data-dato="autor.ocupacion">Desarrollador de software</span></p>
+        <p>Escríbele directamente a <strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong>, quien hace el programa. <a href="creador.html">Conoce al creador y sus otros proyectos</a>.</p>
       </div>
       <div class="contacto-rejilla">
         <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-correo"/></svg></div><h3>Correo</h3><p>Para dudas, comprobantes de donación y soporte.</p><a class="valor" data-enlace="correo" href="mailto:elias.osiel@hotmail.com">elias.osiel@hotmail.com</a></article>
@@ -738,7 +744,7 @@
         <details><summary>¿Puedo facturar (CFDI)?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí, factura por venta y factura global con CFDI 4.0 a través de Facturama, un proveedor autorizado por el SAT. Necesitas contratar una cuenta con ellos (ese servicio sí tiene costo, que le pagas a Facturama); el programa solo se conecta con tus credenciales. Si no facturas, simplemente no lo configuras.</p></div></details>
         <details><summary>¿Sirve para verdulería, papelería o tortillería?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí. Maneja venta por pieza y a granel (kilos con decimales, báscula opcional), productos sin código de barras con foto, departamentos y promociones. Lo único que no es: un sistema de restaurante con mesas y comandas.</p></div></details>
         <details><summary>¿Y si se descompone la computadora?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Si tenías respaldos activos, instalas el programa en la computadora nueva y restauras el último respaldo desde Configuración: vuelven productos, ventas, cortes y usuarios. Por eso insistimos tanto en guardar copias fuera del equipo.</p></div></details>
-        <details><summary>¿Quién hace esto y por qué debería confiar?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Lo hace una sola persona, <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>, y todo el código es público en GitHub: cualquiera puede revisarlo. Las contraseñas se guardan cifradas, hay bitácora de todo lo que hacen los usuarios, y el programa no se comunica con ningún servidor salvo los tres casos opcionales de arriba.</p></div></details>
+        <details><summary>¿Quién hace esto y por qué debería confiar?<svg class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Lo hace una sola persona, <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>, y todo el código es público en GitHub: cualquiera puede revisarlo. Las contraseñas se guardan cifradas, hay bitácora de todo lo que hacen los usuarios, y el programa no se comunica con ningún servidor salvo los tres casos opcionales de arriba. En <a href="creador.html">Sobre el creador</a> están su contacto y sus otros proyectos.</p></div></details>
       </div>
     </div>
   </section>
@@ -749,7 +755,7 @@
     <div class="pie-rejilla">
       <div>
         <a class="marca" href="#inicio"><img src="img/icono.svg" alt="" width="34" height="34">Caja Libre</a>
-        <p>Caja Libre es el punto de venta gratuito y de código abierto para tiendas de México. Un proyecto independiente de <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>.</p>
+        <p>Caja Libre es el punto de venta gratuito y de código abierto para tiendas de México. Un proyecto independiente de <a href="creador.html" data-dato="autor.nombre">Elias Oziel Sánchez Fernández</a>.</p>
       </div>
       <div>
         <h4>Programa</h4>
@@ -761,7 +767,7 @@
       </div>
       <div>
         <h4>Apoyo</h4>
-        <ul><li><a href="#donaciones">Donar</a></li><li><a href="#oficial">Versión oficial</a></li><li><a href="#contacto">Contacto</a></li><li><a href="#historia">Por qué existe</a></li></ul>
+        <ul><li><a href="#donaciones">Donar</a></li><li><a href="#oficial">Versión oficial</a></li><li><a href="#contacto">Contacto</a></li><li><a href="#historia">Por qué existe</a></li><li><a href="creador.html">Sobre el creador</a></li></ul>
       </div>
     </div>
     <div class="pie-bajo">
@@ -772,6 +778,6 @@
 </footer>
 
 <script src="datos.js"></script>
-<script src="sitio.js"></script>
+<script src="sitio.js?v=20261114b"></script>
 </body>
 </html>
