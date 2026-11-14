@@ -173,6 +173,7 @@ class ServidorMovilProveedoresTest {
         assertThat(enteros(p.get("diasPreventa"))).containsExactly(hoy.plusDays(1).getDayOfWeek().getValue());
         assertThat(p.get("proximaEntrega").asText()).isEqualTo(hoy.toString());
         assertThat(p.get("proximaPreventa").asText()).isEqualTo(hoy.plusDays(1).toString());
+        assertThat(p.get("productosQueSurte").asInt()).as("la primera entrada lo dejó como proveedor habitual del pan").isEqualTo(1);
         assertThat(p.has("notaMedia")).as("sin permiso ni siquiera aparece el campo").isFalse();
         assertThat(a.toString()).doesNotContain("125.0");
 
@@ -197,6 +198,7 @@ class ServidorMovilProveedoresTest {
         JsonNode sinCompras = proveedorEn(ge, nuevo.getId());
         assertThat(sinCompras.has("notaMedia")).isTrue();
         assertThat(sinCompras.get("notaMedia").isNull()).isTrue();
+        assertThat(sinCompras.get("productosQueSurte").asInt()).isZero();
         assertThat(sinCompras.get("proximaPreventa").isNull()).isTrue();
         assertThat(secciones(gestor.token()).get("proveedoresEditar").asBoolean()).isTrue();
 

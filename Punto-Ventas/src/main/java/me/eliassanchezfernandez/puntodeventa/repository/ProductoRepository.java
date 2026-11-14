@@ -26,6 +26,18 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
     List<Producto> findAllByOrderByDescripcionAsc();
 
+    /**
+     * Todos con su proveedor habitual ya cargado (es LAZY): una sola consulta para la tabla de
+     * Productos, sin una consulta por fila al mostrar la columna Proveedor.
+     */
+    @Query("SELECT p FROM Producto p LEFT JOIN FETCH p.proveedor ORDER BY p.descripcion ASC")
+    List<Producto> findAllConProveedorOrderByDescripcionAsc();
+
+    /** [proveedorId, productos activos que lo tienen como habitual]; una fila por proveedor */
+    @Query("SELECT p.proveedor.id, COUNT(p) FROM Producto p WHERE p.proveedor IS NOT NULL " +
+           "AND (p.activo IS NULL OR p.activo = true) GROUP BY p.proveedor.id")
+    List<Object[]> contarActivosPorProveedor();
+
     /** Productos con inventario cuya existencia ya llegó (o bajó) al mínimo */
     @Query("SELECT p FROM Producto p WHERE p.usaInventario = true " +
            "AND p.cantidadActual <= p.cantidadMinima ORDER BY p.descripcion")

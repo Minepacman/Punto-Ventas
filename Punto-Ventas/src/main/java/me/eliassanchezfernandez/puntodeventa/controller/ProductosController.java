@@ -25,11 +25,13 @@ import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoImagenService;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.UnidadService;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
@@ -79,6 +81,7 @@ public class ProductosController implements Initializable {
     @FXML private TableColumn<Producto, Double> colPrecioMayor;
     @FXML private TableColumn<Producto, Double> colExistencia;
     @FXML private TableColumn<Producto, String> colDepartamento;
+    @FXML private TableColumn<Producto, String> colProveedor;
     @FXML private TableColumn<Producto, String> colEstado;
     @FXML private TextField                     txtBuscar;
     @FXML private Button                        btnNuevo;
@@ -126,6 +129,8 @@ public class ProductosController implements Initializable {
     @FXML private TextField   txtPrecioMayoreo;
     @FXML private Label       lblErrorPrecio;
     @FXML private ComboBox<Departamento> comboDepartamento;
+    @FXML private ComboBox<Proveedor> comboProveedor;
+    @FXML private Button      btnNuevoProveedor;
     @FXML private ComboBox<Unidad> comboUnidad;
     @FXML private TextField   txtClaveProdServ;
     @FXML private TextField   txtClaveUnidad;
@@ -146,6 +151,7 @@ public class ProductosController implements Initializable {
     @Autowired private ImagenProductoCache   imagenes;
     @Autowired private SesionService      sesionService;
     @Autowired private UnidadService      unidadService;
+    @Autowired private ProveedorService   proveedorService;
     @Autowired private ApplicationContext springContext;
 
     // ── Estado interno ────────────────────────────────────────────────────
@@ -180,11 +186,13 @@ public class ProductosController implements Initializable {
         configurarColumnas();
         configurarColumnasDepartamentos();
         configurarComboDepartamento();
+        configurarComboProveedor();
         configurarComboUnidad();
         configurarZonaImagen();
         configurarCatalogo();
         cargarProductos();
         cargarDepartamentos();
+        cargarProveedores();
 
         tablaProductos.setItems(listaProductos);
         tablaDepartamentos.setItems(listaDepartamentos);
@@ -208,6 +216,10 @@ public class ProductosController implements Initializable {
         btnImportar.setDisable(!editar);
         btnVentasPeriodo.setDisable(!sesionService.tienePermiso(Permiso.VER_HISTORIAL));
         // Promociones se puede consultar; la ventana bloquea guardar sin permiso
+        // Dar de alta proveedores desde el formulario exige GESTIONAR_PROVEEDORES (elegir uno, no)
+        boolean gestionaProveedores = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
+        btnNuevoProveedor.setVisible(gestionaProveedores);
+        btnNuevoProveedor.setManaged(gestionaProveedores);
     }
 
     /** Recarga catálogos desde la BD (lo llama MainController al entrar a la pestaña) */
@@ -215,6 +227,7 @@ public class ProductosController implements Initializable {
         cargarUnidades();
         cargarProductos();
         cargarDepartamentos();
+        cargarProveedores();
         onBuscar();
     }
 
@@ -303,7 +316,7 @@ public class ProductosController implements Initializable {
         }
     }
 
-    /** Filtra por código, descripción o departamento */
+    /** Filtra por código, descripción, departamento o proveedor habitual */
     @FXML
     private void onBuscar() {
         String texto = txtBuscar.getText().trim().toLowerCase();
@@ -314,7 +327,9 @@ public class ProductosController implements Initializable {
                     p.getDescripcion().toLowerCase().contains(texto) ||
                     p.getCodigoBarras().toLowerCase().contains(texto) ||
                     (p.getDepartamento() != null &&
-                     p.getDepartamento().getNombre().toLowerCase().contains(texto))));
+                     p.getDepartamento().getNombre().toLowerCase().contains(texto)) ||
+                    (p.getProveedor() != null &&
+                     p.getProveedor().getNombre().toLowerCase().contains(texto))));
         }
     }
 
@@ -567,6 +582,7 @@ public class ProductosController implements Initializable {
             p.setPrecioVenta(precioVenta);
             p.setPrecioMayoreo(precioMayoreo);
             p.setDepartamento(comboDepartamento.getValue());
+            p.setProveedor(comboProveedor.getValue());
             p.setUnidad(comboUnidad.getValue());
             p.setClaveProdServ(txtClaveProdServ.getText());
             p.setClaveUnidad(txtClaveUnidad.getText());
@@ -1116,6 +1132,11 @@ public class ProductosController implements Initializable {
             Departamento d = c.getValue().getDepartamento();
             return new SimpleStringProperty(d != null ? d.getNombre() : "—");
         });
+        // El proveedor viene cargado con la lista (JOIN FETCH en ProductoService.listarTodos): sin consulta por fila
+        colProveedor.setCellValueFactory(c -> {
+            Proveedor prov = c.getValue().getProveedor();
+            return new SimpleStringProperty(prov != null ? prov.getNombre() : "—");
+        });
         colEstado.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().isActivo() ? "Activo" : "Inactivo"));
         tablaProductos.setRowFactory(tv -> new TableRow<>() {
             @Override protected void updateItem(Producto p, boolean empty) {
@@ -1171,6 +1192,94 @@ public class ProductosController implements Initializable {
             }
             @Override public Departamento fromString(String s) { return null; }
         });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  PROVEEDOR HABITUAL
+    //  El combo ofrece los proveedores activos (más el que el producto ya
+    //  tenga aunque esté desactivado) con "— Sin proveedor —" como primera
+    //  opción. "+ Nuevo" da de alta uno con nombre y teléfono sin salir del
+    //  formulario (solo con GESTIONAR_PROVEEDORES; el servicio lo vuelve a exigir).
+    // ─────────────────────────────────────────────────────────────────────
+
+    private void configurarComboProveedor() {
+        comboProveedor.setConverter(new StringConverter<>() {
+            @Override public String toString(Proveedor p) {
+                if (p == null) return "— Sin proveedor —";
+                return p.isActivo() ? p.getNombre() : p.getNombre() + " (desactivado)";
+            }
+            @Override public Proveedor fromString(String s) { return null; }
+        });
+    }
+
+    /** Proveedores activos por nombre; "Sin proveedor" (null) va primero. Un fallo aquí no estorba al catálogo. */
+    private void cargarProveedores() {
+        Proveedor elegido = comboProveedor.getValue();
+        List<Proveedor> activos;
+        try {
+            activos = proveedorService.listarActivos();
+        } catch (RuntimeException e) {
+            activos = List.of();
+        }
+        ObservableList<Proveedor> items = FXCollections.observableArrayList();
+        items.add(null);
+        items.addAll(activos);
+        comboProveedor.setItems(items);
+        if (elegido != null) seleccionarProveedor(elegido);
+    }
+
+    /** Deja elegido ese proveedor; si ya no está activo se agrega al final para que la edición lo conserve */
+    private void seleccionarProveedor(Proveedor p) {
+        if (p == null || p.getId() == null) { comboProveedor.setValue(null); return; }
+        Optional<Proveedor> enLista = comboProveedor.getItems().stream()
+                .filter(x -> x != null && p.getId().equals(x.getId())).findFirst();
+        if (enLista.isPresent()) {
+            comboProveedor.setValue(enLista.get());
+        } else {
+            comboProveedor.getItems().add(p);
+            comboProveedor.setValue(p);
+        }
+    }
+
+    @FXML
+    private void onNuevoProveedor() {
+        if (!sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES)) return;
+        Dialog<Proveedor> dlg = new Dialog<>();
+        dlg.setTitle("Nuevo proveedor");
+        dlg.setHeaderText("Dar de alta un proveedor");
+        TextField txtNombre = new TextField();
+        txtNombre.setPromptText("Nombre del proveedor (obligatorio)");
+        TextField txtTelefono = new TextField();
+        txtTelefono.setPromptText("Teléfono (opcional)");
+        Label ayuda = new Label("Los días de entrega, RFC y demás datos se capturan en Inventario → Proveedores.");
+        ayuda.setWrapText(true);
+        ayuda.getStyleClass().add("hint");
+        javafx.scene.layout.VBox caja = new javafx.scene.layout.VBox(8,
+                new Label("Nombre"), txtNombre, new Label("Teléfono"), txtTelefono, ayuda);
+        caja.setPadding(new javafx.geometry.Insets(10));
+        caja.setPrefWidth(380);
+        dlg.getDialogPane().setContent(caja);
+        dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        Button ok = (Button) dlg.getDialogPane().lookupButton(ButtonType.OK);
+        ok.setText("Guardar");
+        ok.disableProperty().bind(txtNombre.textProperty().isEmpty());
+        // Si el servicio rechaza los datos, el diálogo sigue abierto para corregirlos
+        ok.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            try {
+                dlg.setResult(proveedorService.guardar(null, txtNombre.getText(), null, txtTelefono.getText(), null,
+                        java.util.Set.of(), java.util.Set.of(), null));
+            } catch (NegocioException e) {
+                ev.consume();
+                alerta(Alert.AlertType.ERROR, "No se pudo guardar", e.getMessage());
+            }
+        });
+        dlg.setResultConverter(b -> b == ButtonType.OK ? dlg.getResult() : null);
+        Ventanas.estilizar(dlg);
+        Platform.runLater(txtNombre::requestFocus);
+        Optional<Proveedor> creado = dlg.showAndWait();
+        if (creado.isEmpty() || creado.get() == null) return;
+        cargarProveedores();
+        seleccionarProveedor(creado.get());
     }
 
     /** Unidades de medida del catálogo; elegir una ajusta "Se vende" a su regla de decimales */
@@ -1239,6 +1348,7 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.setText(String.valueOf(p.getPrecioVenta()));
         txtPrecioMayoreo.setText(String.valueOf(p.getPrecioMayoreo()));
         if (p.getDepartamento() != null) comboDepartamento.setValue(p.getDepartamento());
+        if (p.getProveedor() != null) seleccionarProveedor(p.getProveedor());
         if (p.getUnidad() != null) {
             comboUnidad.getItems().stream().filter(u -> u.getId().equals(p.getUnidad().getId()))
                     .findFirst().ifPresent(comboUnidad::setValue);
@@ -1275,6 +1385,8 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.clear();
         txtPrecioMayoreo.clear();
         comboDepartamento.setValue(null);
+        comboProveedor.setValue(null);
+        comboProveedor.getItems().removeIf(x -> x != null && !x.isActivo());   // el desactivado de una edición anterior
         comboUnidad.setValue(null);
         txtClaveProdServ.clear();
         txtClaveUnidad.clear();
@@ -1308,6 +1420,8 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.setDisable(bloquear);
         txtPrecioMayoreo.setDisable(bloquear);
         comboDepartamento.setDisable(bloquear);
+        comboProveedor.setDisable(bloquear);
+        btnNuevoProveedor.setDisable(bloquear);
         comboUnidad.setDisable(bloquear);
         chkUsaInventario.setDisable(bloquear);
         gridInventario.setDisable(bloquear || !chkUsaInventario.isSelected());

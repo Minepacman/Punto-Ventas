@@ -27,6 +27,7 @@ import java.util.Set;
  */
 @Entity
 @Table(name = "proveedores")
+@org.hibernate.annotations.BatchSize(size = 100)   // listas de productos: los proveedores habituales en una sola consulta
 @Getter
 @Setter
 @NoArgsConstructor

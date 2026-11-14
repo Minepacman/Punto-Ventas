@@ -54,18 +54,21 @@
 
         <!-- Tabla -->
         <center>
+            <!-- tableMenuButtonVisible: el botón "+" de la cabecera permite ocultar/mostrar columnas (p. ej. Proveedor) -->
             <TableView fx:id="tablaProductos"
-                       onMouseClicked="#onTablaDobleClick">
+                       onMouseClicked="#onTablaDobleClick"
+                       tableMenuButtonVisible="true">
                 <columns>
                     <TableColumn fx:id="colImagen"       text=""             prefWidth="44" minWidth="44" maxWidth="44" resizable="false"/>
-                    <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="140"/>
-                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="260"/>
-                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="85" styleClass="align-right"/>
-                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="85" styleClass="align-right"/>
-                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="85" styleClass="align-right"/>
-                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="75" styleClass="align-right"/>
-                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="140"/>
-                    <TableColumn fx:id="colEstado"       text="Estado"       prefWidth="80"/>
+                    <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="120"/>
+                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="230"/>
+                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="80" styleClass="align-right"/>
+                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="80" styleClass="align-right"/>
+                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="80" styleClass="align-right"/>
+                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="70" styleClass="align-right"/>
+                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="120"/>
+                    <TableColumn fx:id="colProveedor"    text="Proveedor"    prefWidth="110"/>
+                    <TableColumn fx:id="colEstado"       text="Estado"       prefWidth="70"/>
                 </columns>
                 <placeholder>
                     <Label text="No hay productos registrados. Pulsa + Nuevo para agregar."/>
@@ -251,6 +254,22 @@
                         <ComboBox fx:id="comboDepartamento"
                                   promptText="— Sin Departamento —"
                                   maxWidth="Infinity"/>
+                    </VBox>
+
+                    <!-- ── PROVEEDOR HABITUAL (opcional) ───────── -->
+                    <VBox spacing="4">
+                        <Label text="Proveedor habitual" styleClass="field-label"/>
+                        <HBox spacing="6" alignment="CENTER_LEFT">
+                            <ComboBox fx:id="comboProveedor"
+                                      promptText="— Sin proveedor —"
+                                      maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                            <!-- Solo con GESTIONAR_PROVEEDORES; da de alta un proveedor sin salir del formulario -->
+                            <Button fx:id="btnNuevoProveedor" text="+ Nuevo" onAction="#onNuevoProveedor">
+                                <tooltip><Tooltip text="Dar de alta un proveedor (nombre y teléfono) y elegirlo aquí"/></tooltip>
+                            </Button>
+                        </HBox>
+                        <Label text="Quién te surte este producto. Sirve para armar los pedidos por proveedor en Estadísticas → Reabastecimiento. Si lo dejas vacío, se toma de la primera entrada de mercancía."
+                               wrapText="true" styleClass="hint"/>
                     </VBox>
 
                     <Separator/>

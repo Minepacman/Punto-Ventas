@@ -1324,6 +1324,7 @@ async function vistaProveedores() {
       h('div', { class: 'campo' }, h('label', null, 'Días de entrega'), selectorDias('Días de entrega', new Set(p.diasEntrega))),
       p.diasPreventa.length ? h('div', { class: 'campo' }, h('label', null, 'Días de preventa'), selectorDias('Días de preventa', new Set(p.diasPreventa), { preventa: true })) : null,
       h('div', null, prox('Próxima entrega', p.proximaEntrega, true), prox('Próxima preventa', p.proximaPreventa, p.diasPreventa.length > 0)),
+      h('p', { class: 'sub' }, 'Productos que surte: ' + (p.productosQueSurte || 0) + (p.productosQueSurte ? '' : ' (se asigna en Productos, o con la primera entrada de mercancía)')),
       nota,
       p.notas ? h('p', { class: 'sub' }, p.notas) : null,
       h('div', { class: puedeEditar() ? 'acciones dos' : 'acciones' },

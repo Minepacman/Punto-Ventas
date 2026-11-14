@@ -51,6 +51,20 @@ public class Producto {
     private Unidad unidad;
 
     /**
+     * Proveedor habitual (quien normalmente surte este producto). Opcional; se captura en
+     * Productos y, si está vacío, se toma de la primera entrada de mercancía con proveedor
+     * (nunca se pisa lo que eligió el usuario). LAZY: las listas de Ventas, el buscador F6 y
+     * la página móvil no lo necesitan; el catálogo de Productos lo trae con JOIN FETCH
+     * ({@code ProductoRepository.findAllConProveedorOrderByDescripcionAsc}). Fuera de equals /
+     * hashCode / toString para que un proxy sin cargar nunca dispare una consulta.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proveedor_id")
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
+    private Proveedor proveedor;
+
+    /**
      * Producto descontinuado = inactivo: no aparece en Ventas (PRD-09).
      * Nullable para las filas anteriores a este campo (null = activo).
      */

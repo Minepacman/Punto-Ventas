@@ -35,8 +35,9 @@ import java.util.Map;
  *  - Frecuencia de surtido y pedido sugerido: con la venta promedio diaria de
  *    los últimos {@link #VENTANA_DIAS} días, la existencia y el mínimo, cada
  *    producto recibe "cada cuántos días conviene surtirlo" y "cuánto pedir",
- *    agrupado por el proveedor que lo surtió por última vez (entradas de
- *    inventario). Sin proveedor conocido se agrupa por departamento.
+ *    agrupado por su proveedor habitual (Productos) o, si no tiene, por el que
+ *    lo surtió por última vez (entradas de inventario). Sin proveedor conocido
+ *    se agrupa por departamento.
  *
  * Todo se calcula a partir de los agregados (producto_diario + hoy en vivo):
  * nunca se recorren las ventas. Exige VER_HISTORIAL; los costos solo salen si
@@ -212,7 +213,7 @@ public class ReabastecimientoService {
         Map<String, GrupoSurtido> cabeceras = new HashMap<>();
         for (Producto p : productoRepo.findByUsaInventarioTrueOrderByDescripcionAsc()) {
             if (!p.isActivo()) continue;
-            Proveedor prov = proveedorDeProducto.get(p.getId());
+            Proveedor prov = proveedorDe(p, proveedores, proveedorDeProducto);
             String clave;
             GrupoSurtido cabecera;
             if (prov != null) {
@@ -368,9 +369,23 @@ public class ReabastecimientoService {
     }
 
     /**
-     * Proveedor de cada producto: el de su entrada más reciente que corresponda a un proveedor
-     * del catálogo (por id, o por nombre en entradas antiguas). Las entradas con un texto que no
-     * es un proveedor ("No indicado (móvil)") se saltan: no le quitan al producto su proveedor.
+     * Quién surte el producto: primero su proveedor habitual (capturado en Productos o fijado por
+     * su primera entrada); si no tiene, el de su entrada más reciente con proveedor del catálogo.
+     * {@code proveedores} ya está cargado en esta transacción, así que el proveedor habitual (LAZY)
+     * se resuelve por id sin consultar la base.
+     */
+    private static Proveedor proveedorDe(Producto p, Map<Long, Proveedor> proveedores, Map<Long, Proveedor> inferidos) {
+        if (p.getProveedor() != null && p.getProveedor().getId() != null) {
+            Proveedor habitual = proveedores.get(p.getProveedor().getId());
+            if (habitual != null) return habitual;
+        }
+        return inferidos.get(p.getId());
+    }
+
+    /**
+     * Proveedor inferido de cada producto: el de su entrada más reciente que corresponda a un
+     * proveedor del catálogo (por id, o por nombre en entradas antiguas). Las entradas con un texto
+     * que no es un proveedor ("No indicado (móvil)") se saltan: no le quitan al producto su proveedor.
      */
     private Map<Long, Proveedor> proveedorPorProducto(Map<Long, Proveedor> proveedores) {
         Map<String, Proveedor> porNombre = new HashMap<>();

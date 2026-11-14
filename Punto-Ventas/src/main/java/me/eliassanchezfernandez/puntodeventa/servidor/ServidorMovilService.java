@@ -1177,11 +1177,13 @@ public class ServidorMovilService {
         return r;
     }
 
-    private static Map<String, Object> mapaProveedor(ProveedorService.ResumenProveedor rp, boolean costos) {
+    private static Map<String, Object> mapaProveedor(ProveedorService.ResumenProveedor rp, boolean costos,
+                                                     Map<Long, Long> productosPorProveedor) {
         Proveedor p = rp.proveedor();
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", p.getId());
         m.put("nombre", p.getNombre());
+        m.put("productosQueSurte", productosPorProveedor.getOrDefault(p.getId(), 0L));   // proveedor habitual en Productos
         m.put("telefono", p.getTelefono() == null ? "" : p.getTelefono());
         m.put("contacto", p.getContacto() == null ? "" : p.getContacto());
         m.put("notas", p.getNotas() == null ? "" : p.getNotas());
@@ -1213,8 +1215,11 @@ public class ServidorMovilService {
         r.put("costosVisibles", a.costosVisibles());
         r.put("puedeEditar", a.puedeEditar());
         r.put("ventanaDias", ProveedorService.DIAS_NOTA_MEDIA);
+        Map<Long, Long> productosPorProveedor = productoService.productosActivosPorProveedor();   // una consulta
         List<Map<String, Object>> lista = new ArrayList<>();
-        for (ProveedorService.ResumenProveedor rp : a.proveedores()) lista.add(mapaProveedor(rp, a.costosVisibles()));
+        for (ProveedorService.ResumenProveedor rp : a.proveedores()) {
+            lista.add(mapaProveedor(rp, a.costosVisibles(), productosPorProveedor));
+        }
         r.put("proveedores", lista);
         return r;
     }
@@ -1269,8 +1274,9 @@ public class ServidorMovilService {
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("ok", true);
             r.put("creado", idFinal == null);
+            Map<Long, Long> productosPorProveedor = productoService.productosActivosPorProveedor();
             a.proveedores().stream().filter(rp -> rp.proveedor().getId().equals(g.getId())).findFirst()
-                    .ifPresent(rp -> r.put("proveedor", mapaProveedor(rp, a.costosVisibles())));
+                    .ifPresent(rp -> r.put("proveedor", mapaProveedor(rp, a.costosVisibles(), productosPorProveedor)));
             return r;
         });
     }

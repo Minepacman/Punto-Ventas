@@ -59,8 +59,18 @@ public class ProductoService {
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
+    /** Todos los productos con su proveedor habitual cargado (una consulta; la tabla de Productos lo muestra) */
     public List<Producto> listarTodos() {
-        return productoRepo.findAllByOrderByDescripcionAsc();
+        return productoRepo.findAllConProveedorOrderByDescripcionAsc();
+    }
+
+    /** Cuántos productos activos tienen a cada proveedor como habitual (proveedorId → cuenta); una consulta */
+    public java.util.Map<Long, Long> productosActivosPorProveedor() {
+        java.util.Map<Long, Long> r = new java.util.HashMap<>();
+        for (Object[] f : productoRepo.contarActivosPorProveedor()) {
+            if (f[0] != null) r.put(((Number) f[0]).longValue(), ((Number) f[1]).longValue());
+        }
+        return r;
     }
 
     public List<Producto> buscarPorNombre(String texto) {
@@ -156,21 +166,31 @@ public class ProductoService {
         validar(producto);
         if (producto.getId() == null) {
             if (producto.getActivo() == null) producto.setActivo(true);
+            resolverProveedor(producto, null);
             // La existencia inicial es inventario que "aparece": exige el mismo permiso que una entrada
             if (producto.isUsaInventario() && producto.getCantidadActual() > 0) {
                 sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO);
             }
             Producto guardado = productoRepo.save(producto);
             if (guardado.isUsaInventario() && guardado.getCantidadActual() > 0) {
-                registrarMovimiento(guardado, MovimientoInventario.Tipo.ALTA_INICIAL,
+                // La existencia inicial queda ligada al proveedor habitual elegido (si lo hay)
+                Proveedor prov = guardado.getProveedor();
+                MovimientoInventario m = registrarMovimiento(guardado, MovimientoInventario.Tipo.ALTA_INICIAL,
                         guardado.getCantidadActual(), 0, guardado.getCantidadActual(),
-                        "Alta de producto", null, null, null);
+                        "Alta de producto", prov != null ? prov.getNombre() : null, null, null);
+                if (prov != null) {
+                    m.setProveedorId(prov.getId());
+                    movimientoRepo.save(m);
+                }
             }
             return guardado;
         }
 
         Producto enBd = productoRepo.findById(producto.getId())
                 .orElseThrow(() -> new NegocioException("El producto ya no existe."));
+        Proveedor proveedorAntes = enBd.getProveedor();
+        resolverProveedor(producto, enBd);
+        boolean cambiaProveedor = !mismoId(proveedorAntes, producto.getProveedor());
 
         // Precios: permiso + historial
         boolean cambiaPrecios = enBd.getPrecioVenta()   != producto.getPrecioVenta()
@@ -213,7 +233,39 @@ public class ProductoService {
                     -existenciaAntes, existenciaAntes, 0,
                     "Dejó de usar inventario", null, null, null);
         }
+        if (cambiaProveedor) {
+            auditoriaService.registrar(sesionService.getCajeroActual(), "PRODUCTO_PROVEEDOR_CAMBIADO",
+                    guardado.getCodigoBarras() + " " + guardado.getDescripcion() + ": proveedor "
+                            + nombreProveedor(proveedorAntes) + " → " + nombreProveedor(guardado.getProveedor()), (Cajero) null);
+        }
         return guardado;
+    }
+
+    /**
+     * Deja en el producto el proveedor habitual del catálogo (o null). Un proveedor desactivado
+     * solo se acepta si el producto ya lo tenía (al editar no se le obliga a cambiarlo); elegirlo
+     * de nuevo no, porque ya no surte.
+     */
+    private void resolverProveedor(Producto producto, Producto enBd) {
+        if (producto.getProveedor() == null) return;
+        Long id = producto.getProveedor().getId();
+        if (id == null) { producto.setProveedor(null); return; }
+        Proveedor prov = proveedorRepo.findById(id)
+                .orElseThrow(() -> new NegocioException("El proveedor ya no existe."));
+        boolean yaLoTenia = enBd != null && mismoId(enBd.getProveedor(), prov);
+        if (!prov.isActivo() && !yaLoTenia) {
+            throw new NegocioException("El proveedor \"" + prov.getNombre() + "\" está desactivado: elige otro o reactívalo en Proveedores.");
+        }
+        producto.setProveedor(prov);
+    }
+
+    private static boolean mismoId(Proveedor a, Proveedor b) {
+        if (a == null || b == null) return a == b;
+        return a.getId() != null && a.getId().equals(b.getId());
+    }
+
+    private static String nombreProveedor(Proveedor p) {
+        return p == null ? "ninguno" : p.getNombre();
     }
 
     /** Desactivar = descontinuar: deja de aparecer en Ventas (PRD-09) */
@@ -293,7 +345,7 @@ public class ProductoService {
         if (!proveedor.isActivo()) {
             throw new NegocioException("El proveedor \"" + proveedor.getNombre() + "\" está desactivado.");
         }
-        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
                 costoUnitario, autorizaciones, true);
     }
 
@@ -309,18 +361,22 @@ public class ProductoService {
                                             String motivo, double costoUnitario,
                                             Collection<Autorizacion> autorizaciones) {
         if (proveedor == null) throw new NegocioException("La orden no tiene proveedor.");
-        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
                 costoUnitario, autorizaciones, false);
     }
 
     /**
+     * @param proveedor proveedor del catálogo (null en entradas con el nombre escrito a mano). Si el
+     *        producto aún no tiene proveedor habitual, esta entrada se lo asigna; si ya tiene uno
+     *        (elegido por el usuario o por una entrada anterior) no se toca.
      * @param consumirAutorizacion true cuando esta entrada es la acción completa que se autorizó
      *        (la autorización de un solo uso se gasta aquí); false cuando forma parte de una
      *        operación mayor que la consumirá al final.
      */
-    private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Long proveedorId,
+    private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Proveedor proveedor,
                                     String motivo, double costoUnitario, Collection<Autorizacion> autorizaciones,
                                     boolean consumirAutorizacion) {
+        Long proveedorId = proveedor != null ? proveedor.getId() : null;
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         if (!Double.isFinite(cantidad) || cantidad <= 0) {
             throw new NegocioException("La cantidad a agregar debe ser mayor a cero.");
@@ -338,6 +394,8 @@ public class ProductoService {
             registrarCambioPrecio(p, "COSTO", p.getPrecioCosto(), costoUnitario);
             p.setPrecioCosto(costoUnitario);
         }
+        // Primera entrada con proveedor del catálogo: queda como proveedor habitual (solo si estaba vacío)
+        if (proveedor != null && p.getProveedor() == null) p.setProveedor(proveedor);
         productoRepo.save(p);
         // La existencia se suma EN la base (atómico): una venta simultánea en otra caja no se pierde
         productoRepo.sumar(p.getId(), cantidad);
