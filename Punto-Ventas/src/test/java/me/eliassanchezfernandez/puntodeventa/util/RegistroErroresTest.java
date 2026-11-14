@@ -83,7 +83,7 @@ class RegistroErroresTest {
     void elMensajeAlUsuarioNoTraePilaPeroSiLaCausaYLaCarpeta() {
         System.setProperty(RegistroErrores.PROPIEDAD_CARPETA, "/tmp/cl/logs");
         String msg = RegistroErrores.mensajeAviso(new RuntimeException("afuera", new IllegalStateException("la causa real")));
-        assertThat(msg).contains("la causa real").contains("/tmp/cl/logs").contains("Pedir soporte")
+        assertThat(msg).contains("la causa real").contains(java.nio.file.Path.of("/tmp/cl/logs").toString()).contains("Pedir soporte")
                 .doesNotContain("at ").doesNotContain("Exception");
     }
 
@@ -98,6 +98,6 @@ class RegistroErroresTest {
             ps.println("");    // una línea vacía no se registra, pero sí sale
         }
         assertThat(original.toString(StandardCharsets.UTF_8))
-                .isEqualTo("Respaldo automático fallido: disco lleno\nsin salto\r\n\n");
+                .isEqualTo("Respaldo automático fallido: disco lleno" + System.lineSeparator() + "sin salto\r\n" + System.lineSeparator());   // println usa el salto del sistema (\r\n en Windows)
     }
 }
