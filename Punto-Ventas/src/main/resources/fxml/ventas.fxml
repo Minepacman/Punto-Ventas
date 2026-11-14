@@ -23,6 +23,7 @@
                         onAction="#onAgregarProducto"
                         styleClass="button-success" focusTraversable="false"><graphic><Icono nombre="intro"/></graphic></Button>
                 <Button fx:id="btnBuscar"    text="Buscar  F6"   onAction="#onBuscar" focusTraversable="false"><graphic><Icono nombre="buscar"/></graphic></Button>
+                <Button fx:id="btnProductoComun" text="Sin código" onAction="#onProductoComun" focusTraversable="false"><graphic><Icono nombre="etiqueta"/></graphic></Button>
             </HBox>
             <HBox spacing="6" alignment="CENTER_LEFT">
                 <Button fx:id="btnCantidad"  text="Cantidad  F7"      onAction="#onCambiarCantidad" styleClass="button-sm" focusTraversable="false"/>

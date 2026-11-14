@@ -164,6 +164,11 @@ public class ProductoService {
     public Producto guardar(Producto producto) {
         sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
         validar(producto);
+        // El código del producto común es del sistema (Ctrl/Cmd+P en Ventas): no se da de alta ni se edita a mano
+        if (producto.getCodigoBarras() != null
+                && me.eliassanchezfernandez.puntodeventa.model.ProductoComun.CODIGO.equalsIgnoreCase(producto.getCodigoBarras().trim())) {
+            throw new NegocioException("Ese código está reservado para «Producto común» (Ctrl+P en Ventas). Usa otro código.");
+        }
         if (producto.getId() == null) {
             if (producto.getActivo() == null) producto.setActivo(true);
             resolverProveedor(producto, null);

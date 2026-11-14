@@ -83,6 +83,16 @@ public final class ConstructorCfdi {
             if (cantidad.scale() < 0) cantidad = cantidad.setScale(0);
             BigDecimal bruto = BigDecimal.valueOf(d.getPrecioVenta()).multiply(BigDecimal.valueOf(d.getCantidad()));
             BigDecimal descuento = BigDecimal.valueOf(d.getDescuento());
+            if (d.esProductoComun()) {
+                // Artículo fuera del catálogo: clave genérica 01010101 "No existe en el catálogo", sin
+                // NoIdentificacion, con el nombre tecleado; pieza, o kilogramo si la cantidad trae decimales
+                boolean decimales = cantidad.scale() > 0;
+                String claveUnidad = decimales ? "KGM" : CatalogoSat.UNIDAD_PIEZA;
+                lineas.add(new Linea(CatalogoSat.PROD_SERV_COMODIN, null, d.getDescripcionMostrada(), claveUnidad,
+                        CatalogoSat.unidad(claveUnidad).map(CatalogoSat.Entrada::descripcion).orElse(decimales ? "Kilogramo" : "Pieza"),
+                        ClavesSat.objetoImpDe(p), cantidad, bruto, descuento));
+                continue;
+            }
             lineas.add(new Linea(ClavesSat.claveProdServDe(p), p.getCodigoBarras(), p.getDescripcion(),
                     ClavesSat.claveUnidadDe(p), ClavesSat.nombreUnidadDe(p), ClavesSat.objetoImpDe(p),
                     cantidad, bruto, descuento));

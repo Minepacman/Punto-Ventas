@@ -101,7 +101,7 @@ public class TicketService {
         d.linea(raya);
 
         for (DetalleVenta r : v.getDetalles()) {
-            String descripcion = r.getProducto() != null ? r.getProducto().getDescripcion() : "(producto)";
+            String descripcion = r.getDescripcionMostrada();   // en un producto común, el nombre tecleado
             double importeBruto = r.getPrecioVenta() * r.getCantidad();
             d.linea(dosColumnas(cantidad(r.getCantidad()) + " " + descripcion, Moneda.formato(importeBruto), cols));
             if (r.getDescuento() > 0.004) {

@@ -12,6 +12,7 @@ import javafx.scene.layout.GridPane;
 import me.eliassanchezfernandez.puntodeventa.model.Corte;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja.Categoria;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoComun;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.service.CajaService;
@@ -110,6 +111,7 @@ public class CorteController implements Initializable {
     @FXML private Label lblVentasTotales;
     @FXML private Label lblGanancia;
     @FXML private Label lblGananciaTitulo;
+    @FXML private Label lblGananciaComunes;
 
     @FXML private TableView<Map.Entry<String, Double>>           tablaDepartamentos;
     @FXML private TableColumn<Map.Entry<String, Double>, String> colDepto;
@@ -595,6 +597,14 @@ public class CorteController implements Initializable {
         lblGananciaTitulo.setText("Ganancia " + que);
         lblVentasTotales.setText(moneda(r.ventasTotales) + "  (" + r.numVentas + " ventas)");
         lblGanancia.setText(r.gananciaVisible ? moneda(r.ganancia) : "—");
+        // Productos comunes (Ctrl+P, fuera del catálogo): su costo no es real sino una estimación del 20 %
+        boolean hayComunes = r.gananciaVisible && r.productosComunes > 0.004;
+        lblGananciaComunes.setVisible(hayComunes);
+        lblGananciaComunes.setManaged(hayComunes);
+        if (hayComunes) {
+            lblGananciaComunes.setText(String.format("Incluye %s de productos comunes con ganancia estimada del %d %% (%s)",
+                    moneda(r.productosComunes), Math.round(ProductoComun.MARGEN_GANANCIA * 100), moneda(r.gananciaProductosComunes)));
+        }
 
         porDepartamento.setAll(r.porDepartamento.entrySet());
         bajos.setAll(r.productosBajos);

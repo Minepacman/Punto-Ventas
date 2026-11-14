@@ -9,6 +9,7 @@ import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoComun;
 import me.eliassanchezfernandez.puntodeventa.model.Promocion;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
@@ -57,6 +58,7 @@ public class VentaService {
     @Autowired private TicketPendienteRepository ticketPendienteRepo;
     @Autowired private PromocionService          promocionService;
     @Autowired private ProductoService           productoService;
+    @Autowired private ProductoComunService      productoComunService;
     @Autowired private ConfiguracionService      configuracionService;
     @Autowired private SesionService             sesionService;
     @Autowired private AuditoriaService          auditoriaService;
@@ -71,7 +73,9 @@ public class VentaService {
     /** Producto ACTIVO por código exacto (los descontinuados no se venden) */
     public Optional<Producto> buscarPorCodigo(String codigo) {
         if (codigo == null || codigo.isBlank()) return Optional.empty();
-        return productoRepo.findByCodigoBarras(codigo.trim()).filter(Producto::isActivo);
+        // El producto del sistema "Producto común" no se vende por código: solo con Ctrl/Cmd+P (nombre y precio)
+        return productoRepo.findByCodigoBarras(codigo.trim()).filter(Producto::isActivo)
+                .filter(p -> !ProductoComun.es(p));
     }
 
     public List<Producto> buscarPorNombre(String texto) {
@@ -93,6 +97,9 @@ public class VentaService {
      *        o ya obtuvo autorización; cobrar() lo vuelve a verificar.
      */
     public DetalleVenta crearDetalle(Producto producto, double cantidad, boolean permitirSinStock) {
+        if (ProductoComun.es(producto)) {
+            throw new NegocioException("Un producto común se agrega desde Ventas con Ctrl/Cmd+P, con su nombre y precio.");
+        }
         validarCantidad(producto, cantidad);
         if (!producto.isActivo()) {
             throw new NegocioException("\"" + producto.getDescripcion() + "\" está desactivado y no se puede vender.");
@@ -101,6 +108,37 @@ public class VentaService {
 
         DetalleVenta d = new DetalleVenta();
         d.setProducto(producto);
+        d.setCantidad(cantidad);
+        recalcularPrecio(d);
+        return d;
+    }
+
+    /**
+     * Renglón de "producto común" ({@link ProductoComun}): un artículo que no está
+     * en el catálogo, con el nombre, el precio unitario y la cantidad que teclea el
+     * cajero. Nunca toca inventario, no entra a promociones ni a mayoreo (sí admite
+     * descuento manual) y su costo se estima en el 80 % de lo cobrado para que el
+     * corte registre el 20 % de ganancia. Lo puede agregar cualquier cajero que venda.
+     * @param nombre   vacío = {@link ProductoComun#NOMBRE_POR_DEFECTO}
+     * @param precio   precio unitario, mayor que cero
+     * @param cantidad mayor que cero; admite decimales (kilos)
+     */
+    @Transactional
+    public DetalleVenta crearDetalleProductoComun(String nombre, double precio, double cantidad) {
+        if (!Double.isFinite(precio) || precio <= 0) {
+            throw new NegocioException("Escribe el precio del producto (mayor que cero).");
+        }
+        if (precio > 1_000_000) {
+            throw new NegocioException("El precio es demasiado grande.");
+        }
+        Producto comun = productoComunService.obtenerOCrear();
+        validarCantidad(comun, cantidad);
+
+        DetalleVenta d = new DetalleVenta();
+        d.setProducto(comun);
+        d.setDescripcion(ProductoComun.nombreNormalizado(nombre));
+        d.setPrecioVenta(redondear(precio));
+        d.setPrecioLista(redondear(precio));
         d.setCantidad(cantidad);
         recalcularPrecio(d);
         return d;
@@ -132,6 +170,10 @@ public class VentaService {
      */
     public void recalcularPrecio(DetalleVenta d, Map<Long, Double> piezasUsadasEnTicket) {
         Producto p = d.getProducto();
+        if (ProductoComun.es(p)) {
+            recalcularProductoComun(d);
+            return;
+        }
         double lista = p.getPrecioVenta();
         d.setPrecioLista(lista);
         d.setCostoUnitario(p.getPrecioCosto());
@@ -187,6 +229,41 @@ public class VentaService {
         }
     }
 
+    /**
+     * Renglón de producto común: el precio base es el que tecleó el cajero (precioLista
+     * del renglón), sin promoción ni mayoreo; solo puede llevar descuento manual. El
+     * costo se estima al final sobre lo que de verdad se cobra (ProductoComun).
+     */
+    private void recalcularProductoComun(DetalleVenta d) {
+        double precio = d.getPrecioLista() != null && d.getPrecioLista() > 0 ? d.getPrecioLista() : d.getPrecioVenta();
+        if (!Double.isFinite(precio) || precio <= 0) {
+            throw new NegocioException("El renglón \"" + d.getDescripcionMostrada() + "\" no tiene precio.");
+        }
+        if (d.getDescripcion() == null || d.getDescripcion().isBlank()) d.setDescripcion(ProductoComun.NOMBRE_POR_DEFECTO);
+        d.setPrecioLista(precio);
+        d.setPrecioVenta(precio);
+        d.setMayoreo(false);
+        d.setPromocionId(null);
+        d.setPromocionNombre(null);
+        d.setPiezasPromocion(null);
+        d.setDescuento(0);
+        d.setTipoDescuento(DetalleVenta.TipoDescuento.NINGUNO);
+
+        if (d.tieneDescuentoManual()) {
+            double bruto = precio * d.getCantidad();
+            boolean porImporte = d.getDescuentoManualPct() == null || d.getDescuentoManualPct() <= 0;
+            double importe = d.getDescuentoManualImporte() != null ? d.getDescuentoManualImporte() : 0;
+            if (porImporte && importe >= bruto - 0.001) {
+                d.limpiarDescuentoManual();     // ya no cabe: se quita, como en los demás renglones
+            } else {
+                double descuento = !porImporte ? bruto * Math.min(100, d.getDescuentoManualPct()) / 100.0 : importe;
+                d.setDescuento(redondear(Math.max(0, descuento)));
+                d.setTipoDescuento(DetalleVenta.TipoDescuento.MANUAL);
+            }
+        }
+        d.setCostoUnitario(ProductoComun.costoUnitarioEstimado(d.getImporte(), d.getCantidad()));
+    }
+
     /** Compatibilidad: antes solo recalculaba la promoción */
     public void aplicarPromocion(DetalleVenta d) {
         recalcularPrecio(d);
@@ -195,6 +272,9 @@ public class VentaService {
     /** Activa/desactiva mayoreo en el renglón (APLICAR_MAYOREO). Quita el descuento manual. */
     public void aplicarMayoreo(DetalleVenta d, boolean activar, Collection<Autorizacion> autorizaciones) {
         if (activar) {
+            if (d.esProductoComun()) {
+                throw new NegocioException("Un producto común no tiene precio de mayoreo: cambia el precio o aplica un descuento.");
+            }
             sesionService.verificarPermiso(Permiso.APLICAR_MAYOREO, autorizaciones);
             if (d.getProducto().getPrecioMayoreo() <= 0) {
                 throw new NegocioException("\"" + d.getProducto().getDescripcion()
@@ -222,7 +302,8 @@ public class VentaService {
             if (importe != null && !Double.isFinite(importe)) {
                 throw new NegocioException("El importe de descuento no es válido.");
             }
-            if (importe != null && importe > d.getProducto().getPrecioVenta() * d.getCantidad() + 0.001) {
+            double precioBase = d.esProductoComun() ? d.getPrecioListaODefault() : d.getProducto().getPrecioVenta();
+            if (importe != null && importe > precioBase * d.getCantidad() + 0.001) {
                 throw new NegocioException("El descuento no puede ser mayor al importe del renglón.");
             }
         }
@@ -245,6 +326,7 @@ public class VentaService {
         if (cantidad > 100000) {
             throw new NegocioException("La cantidad es demasiado grande.");
         }
+        if (ProductoComun.es(producto)) return;   // admite decimales (kilos) aunque la tienda no venda a granel
         if (producto.permiteDecimales() && !configuracionService.isPermitirGranel()) {
             throw new NegocioException("La venta a granel está deshabilitada en Configuración: \""
                     + producto.getDescripcion() + "\" no se puede vender.");
@@ -480,6 +562,7 @@ public class VentaService {
     static DetalleVenta copiarDetalle(DetalleVenta d) {
         DetalleVenta c = new DetalleVenta();
         c.setProducto(d.getProducto());
+        c.setDescripcion(d.getDescripcion());
         c.setCantidad(d.getCantidad());
         c.setMayoreo(d.isMayoreo() ? Boolean.TRUE : null);
         c.setDescuentoManualPct(d.getDescuentoManualPct());
@@ -708,6 +791,7 @@ public class VentaService {
         ResumenCorte r = resumenCompletoEntre(inicio, fin, caja);
         if (!sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
             r.ganancia = 0;
+            r.gananciaProductosComunes = 0;
             r.gananciaVisible = false;
         }
         return r;
@@ -783,6 +867,20 @@ public class VentaService {
             r.porDepartamento.merge(nombre, importe, Double::sum);
             r.ganancia += importe - ((Number) f[2]).doubleValue();
         }
+        // Productos comunes (fuera del catálogo, Ctrl+P): no tienen departamento, así que van en "Sin
+        // departamento"; se sacan a su propio renglón y se informa su ganancia estimada (ProductoComun)
+        Object[] comunes = ventaRepo.importeProductoComun(inicio, fin, caja, ProductoComun.CODIGO).get(0);
+        r.productosComunes = redondear(((Number) comunes[0]).doubleValue());
+        r.gananciaProductosComunes = redondear(r.productosComunes - ((Number) comunes[1]).doubleValue());
+        if (r.productosComunes > 0.004) {
+            Double sinDepto = r.porDepartamento.get("Sin departamento");
+            if (sinDepto != null) {
+                double resto = redondear(sinDepto - r.productosComunes);
+                if (resto > 0.004) r.porDepartamento.put("Sin departamento", resto);
+                else r.porDepartamento.remove("Sin departamento");
+            }
+            r.porDepartamento.put(ResumenCorte.DEPARTAMENTO_PRODUCTOS_COMUNES, r.productosComunes);
+        }
         r.ventasTotales   = redondear(r.ventasTotales);
         r.subtotal        = redondear(r.subtotal);
         r.iva             = redondear(r.iva);
@@ -830,11 +928,20 @@ public class VentaService {
         public double transferencia;
         public double vales;
         public double ganancia;
+        /**
+         * Importe vendido en "productos comunes" (artículos fuera del catálogo tecleados con Ctrl+P) y la
+         * parte de {@link #ganancia} que viene de ellos: es una estimación del 20 % (ProductoComun), no un
+         * costo real, y la pantalla lo aclara.
+         */
+        public double productosComunes;
+        public double gananciaProductosComunes;
         public int    numVentas;
         public int    numCanceladas;
         public double totalCanceladas;
         /** false cuando quien consulta no tiene VER_GANANCIAS (ganancia = 0) */
         public boolean gananciaVisible = true;
+        /** Nombre con el que los productos comunes aparecen en {@link #porDepartamento} */
+        public static final String DEPARTAMENTO_PRODUCTOS_COMUNES = "Productos comunes (sin catálogo)";
         public final Map<String, Double> porDepartamento = new LinkedHashMap<>();
         public final List<Producto> productosBajos = new ArrayList<>();
         /** Cobros con tarjeta del día por terminal (los capturados a mano en Ventas) */

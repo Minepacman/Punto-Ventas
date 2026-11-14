@@ -690,6 +690,23 @@ VEN-19  Plazo de cancelación no retroactivo (NUEVA)
         Estado vs. lo deseado: Pendiente de implementar.
         Fuente: (no existe)
 
+VEN-20  Producto común (artículo fuera del catálogo) (NUEVA)
+        Regla deseada: en Ventas, Ctrl/Cmd+P (botón "Sin código") agrega algo que
+        no está en el inventario tecleando nombre (por defecto "Producto común"),
+        precio unitario y cantidad (admite decimales para kilos). Lo puede hacer
+        cualquier cajero que venda. No toca inventario, no entra a promociones ni a
+        mayoreo (sí admite descuento manual) y para el corte se estima una ganancia
+        del 20 % sobre lo cobrado (costo registrado = 80 % del importe). El ticket,
+        el historial, el celular y la factura muestran el nombre tecleado; en la
+        factura va con la clave genérica 01010101 y unidad Pieza (Kilogramo si la
+        cantidad trae decimales). El corte muestra aparte "Incluye $X de productos
+        comunes con ganancia estimada del 20 %".
+        Estado actual: Implementado. Todos esos renglones apuntan a un producto del
+        sistema oculto (código reservado PRODUCTO-COMUN) y el nombre/precio quedan
+        en el renglón (detalle_ventas.descripcion / precio_venta / costo_unitario).
+        Fuente: model/ProductoComun, VentaService.crearDetalleProductoComun,
+        ProductoComunDialogo, Atajo.PRODUCTO_COMUN
+
 Preguntas para definir (Ventas):
   - VEN-04: si todos los precios ya incluyen IVA, ¿qué elige exactamente el
     administrador en Configuración: la tasa (16 %, 8 % frontera, 0 %/exento por
@@ -1149,7 +1166,7 @@ RESUMEN: NÚMERO DE REGLAS POR SECCIÓN
   1. Usuarios, roles e inicio de sesión (USR) .... 19  (4 nuevas: USR-16 a USR-19)
   2. Productos y departamentos (PRD) ............. 17  (2 nuevas: PRD-16, PRD-17)
   3. Inventario (INV) ............................ 11  (1 nueva: INV-11)
-  4. Ventas (VEN) ................................ 19  (2 nuevas: VEN-18, VEN-19)
+  4. Ventas (VEN) ................................ 20  (3 nuevas: VEN-18, VEN-19, VEN-20)
   5. Promociones (PRO) ........................... 10  (1 nueva: PRO-10)
   6. Fondo y corte de caja (CRT) ................. 11  (2 nuevas: CRT-10, CRT-11)
   7. Clientes y crédito (CLI) ..................... 4

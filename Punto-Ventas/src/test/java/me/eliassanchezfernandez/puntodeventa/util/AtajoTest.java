@@ -36,6 +36,10 @@ class AtajoTest {
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.F11, false, false, false)).contains(Atajo.PONER_EN_ESPERA);
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.F11, false, true, false)).contains(Atajo.RECUPERAR_ESPERA);
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.B, true, false, false)).contains(Atajo.BUSCAR_PRODUCTO);
+        // Ctrl+P = producto común; Ctrl+Shift+P sigue siendo leer el peso de la báscula
+        assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.P, true, false, false)).contains(Atajo.PRODUCTO_COMUN);
+        assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.P, true, true, false)).contains(Atajo.LEER_PESO);
+        assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.P, false, false, false)).isEmpty();
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.C, true, true, false)).contains(Atajo.CANCELAR_TICKET);
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.DELETE, true, false, false)).contains(Atajo.CANCELAR_TICKET);
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.DELETE, false, false, false)).contains(Atajo.QUITAR_RENGLON);
@@ -90,6 +94,7 @@ class AtajoTest {
         assertThat(Atajo.IR_ESTADISTICAS.getPermiso()).isEqualTo(Permiso.VER_HISTORIAL);
         assertThat(Atajo.COBRAR.getPermiso()).isNull();
         assertThat(Atajo.BUSCAR_PRODUCTO.getPermiso()).isNull();
+        assertThat(Atajo.PRODUCTO_COMUN.getPermiso()).isNull();   // cualquier cajero que venda puede agregarlo
     }
 
     @Test

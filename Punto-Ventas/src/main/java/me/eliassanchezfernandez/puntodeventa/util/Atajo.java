@@ -37,6 +37,8 @@ public enum Atajo {
 
     // ── Ventas ──────────────────────────────────────────────────────────
     BUSCAR_PRODUCTO (Ambito.VENTAS, Tecla.de(KeyCode.F6), Tecla.atajo(KeyCode.B), "Buscar producto por nombre o código", null),
+    PRODUCTO_COMUN  (Ambito.VENTAS, Tecla.atajo(KeyCode.P), null, "Producto común: vender algo que no está en el catálogo (nombre, precio y cantidad)", null,
+                     "No toca el inventario; en el corte se estima 20 % de ganancia sobre lo cobrado"),
     CANTIDAD        (Ambito.VENTAS, Tecla.de(KeyCode.F7), null, "Cambiar la cantidad del renglón seleccionado", null,
                      "También: Enter o doble clic sobre el renglón"),
     DESCUENTO_MANUAL(Ambito.VENTAS, Tecla.de(KeyCode.F8), Tecla.atajo(KeyCode.D), "Descuento manual al renglón", Permiso.DESCUENTO_MANUAL),

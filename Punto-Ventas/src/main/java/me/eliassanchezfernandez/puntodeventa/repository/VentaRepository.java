@@ -131,6 +131,17 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            " GROUP BY dep.nombre ORDER BY SUM(d.precioVenta * d.cantidad - d.descuento) DESC")
     List<Object[]> importesPorDepartamento(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
+    /**
+     * [importe, costo] de los renglones de "producto común" (artículos fuera del catálogo tecleados en
+     * Ventas, model/ProductoComun) de las ventas activas: el corte los muestra aparte con su ganancia estimada.
+     */
+    @Query("SELECT COALESCE(SUM(d.precioVenta * d.cantidad - d.descuento), 0), " +
+           "COALESCE(SUM(COALESCE(d.costoUnitario, 0) * d.cantidad), 0) " +
+           "FROM DetalleVenta d JOIN d.venta v JOIN d.producto p " +
+           "WHERE p.codigoBarras = :codigoComun " +
+           "AND v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
+    List<Object[]> importeProductoComun(LocalDateTime inicio, LocalDateTime fin, Integer caja, String codigoComun);
+
     /** [terminal (null = sin datos), nº de pagos, monto] de los cobros con tarjeta de ventas activas */
     @Query("SELECT p.terminalNombre, COUNT(p), SUM(p.monto) FROM Venta v JOIN v.pagos p " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
