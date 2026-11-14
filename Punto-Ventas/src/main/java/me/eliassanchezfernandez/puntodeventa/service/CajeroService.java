@@ -37,6 +37,7 @@ public class CajeroService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.CorteRepository corteRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FondoCajaRepository fondoRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.MovimientoInventarioRepository movimientoRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.MovimientoCajaRepository movimientoCajaRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.AuditoriaRepository auditoriaRepo;
     @Autowired private PasswordEncoder  passwordEncoder;
     @Autowired private SesionService    sesionService;
@@ -287,6 +288,7 @@ public class CajeroService {
             || corteRepo.existsByCajeroId(cajeroId)
             || fondoRepo.existsByCajeroId(cajeroId)
             || movimientoRepo.existsByUsuarioId(cajeroId)
+            || movimientoCajaRepo.existsByCajeroId(cajeroId)
             || auditoriaRepo.existsByUsuarioIdOrAutorizadoPorId(cajeroId, cajeroId);
     }
 

@@ -67,7 +67,10 @@ class CortesYFoliosPostgresTest extends BasePostgresTest {
         assertThat(r2.numVentas - antes2.numVentas).isEqualTo(2);
         assertThat(r2.efectivo - antes2.efectivo).isCloseTo(200, within(0.001));
         assertThat(r2.tarjeta - antes2.tarjeta).isCloseTo(100, within(0.001));
-        Corte c2 = cajaService.hacerCorte(r2.efectivo + cajaService.fondoVigenteDelDia(LocalDate.now(), 2), null);
+        // El corte es por turno (desde el corte anterior de la caja 2 si lo hubo): se usa el esperado del servicio
+        double esperado2 = cajaService.estadoTurnoActual().esperado();
+        Corte c2 = cajaService.hacerCorte(esperado2, null);
+        assertThat(c2.getEfectivoEsperado()).isCloseTo(esperado2, within(0.001));
         assertThat(c2.getCajaONumero()).isEqualTo(2);
         assertThat(c2.getDiferencia()).isCloseTo(0, within(0.001));
 
@@ -79,7 +82,7 @@ class CortesYFoliosPostgresTest extends BasePostgresTest {
         VentaService.ResumenCorte g = ventaService.resumenGeneralDe(LocalDate.now());
         assertThat(g.numVentas - antesG.numVentas).isEqualTo(3);
         assertThat(g.porCaja).extracting(VentaService.VentasCaja::caja).contains(1, 2);
-        Corte cg = cajaService.hacerCorteGeneral(g.efectivo + cajaService.fondoTotalDelDia(LocalDate.now()), "general PG");
+        Corte cg = cajaService.hacerCorteGeneral(cajaService.estadoGeneralDelDia().esperado(), "general PG");
         assertThat(cg.isGeneral()).isTrue();
         assertThat(cg.getFondoInicial()).isCloseTo(cajaService.fondoTotalDelDia(LocalDate.now()), within(0.001));
         assertThat(cg.getDiferencia()).isCloseTo(0, within(0.001));

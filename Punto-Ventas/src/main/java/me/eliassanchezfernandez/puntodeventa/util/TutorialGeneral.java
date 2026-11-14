@@ -62,9 +62,12 @@ public final class TutorialGeneral {
                 + "Al abrirla por primera vez tiene su propio recorrido.",
                 List.of(Atajo.IR_ESTADISTICAS)));
         p.add(new Paso("tabCorte", "Corte",
-                "El cierre del día de esta caja: fondo inicial, ventas por forma de pago, cancelaciones y "
-                + "ganancias. Puedes imprimirlo o exportarlo.",
-                List.of()));
+                "El corte de esta caja por turno: lo que debe haber en el cajón desde el corte anterior "
+                + "(fondo o lo que dejó el turno pasado, más ventas en efectivo, más entradas, menos salidas), "
+                + "ventas por forma de pago, cancelaciones y ganancias. Aquí también registras entradas y "
+                + "salidas de efectivo (cambio, retiros, pagos a proveedores) y ves el reporte del día completo "
+                + "y el historial de cortes. Todo se imprime o exporta.",
+                List.of(Atajo.MOVIMIENTO_EFECTIVO)));
         p.add(new Paso("tabConfig", "Configuración",
                 "Todo lo demás: usuarios y permisos, datos del negocio y logotipo, ticket e impresora, "
                 + "formas de pago, moneda, folios, respaldos, báscula, cajón, acceso desde el celular, "

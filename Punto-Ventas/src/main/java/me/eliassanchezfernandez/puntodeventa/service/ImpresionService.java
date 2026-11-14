@@ -58,6 +58,7 @@ public class ImpresionService {
     @Autowired private VentaRepository ventaRepo;
     @Autowired private VentaService ventaService;
     @Autowired private CajaService cajaService;
+    @Autowired private MovimientoCajaService movimientoCajaService;
     @Autowired private OrdenCompraService ordenCompraService;
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
@@ -213,29 +214,67 @@ public class ImpresionService {
 
     // ── Corte de caja ─────────────────────────────────────────────────────
 
-    /** Imprime el reporte del corte de hoy (HACER_CORTE o VER_GANANCIAS; la ganancia solo con VER_GANANCIAS) */
+    /** ¿Hay una impresora configurada? (para ofrecer o no "imprimir comprobante") */
+    public boolean hayImpresora() {
+        return dispositivos.obtener().getModoImpresora() != ConfiguracionDispositivos.ModoImpresora.NINGUNA;
+    }
+
+    /** Imprime el reporte del turno en curso (HACER_CORTE o VER_GANANCIAS; la ganancia solo con VER_GANANCIAS) */
     public CompletableFuture<Resultado> imprimirCorteAsync() {
-        // Permisos, datos y bitácora en el hilo que llama (resumenDe ya verifica los permisos)
+        return imprimirCorteAsync(true);
+    }
+
+    /** @param turno true: turno en curso; false: día completo */
+    public CompletableFuture<Resultado> imprimirCorteAsync(boolean turno) {
+        // Permisos, datos y bitácora en el hilo que llama (estadoDe ya verifica los permisos)
         final DocumentoImpresion doc;
         try {
-            doc = documentoDeCorte();
+            doc = documentoDeCorte(turno);
         } catch (PermisoRequeridoException e) {
             throw e;
         } catch (RuntimeException e) {
             return CompletableFuture.completedFuture(Resultado.fallo(mensaje("No se pudo armar el reporte del corte", e)));
         }
         auditoriaService.registrar(sesionService.getCajeroActual(), "CORTE_IMPRESO",
-                "Corte del " + LocalDate.now(), (Cajero) null);
+                (turno ? "Turno en curso del " : "Día ") + LocalDate.now(), (Cajero) null);
+        final ConfiguracionDispositivos config = dispositivos.obtener();
+        return CompletableFuture.supplyAsync(() -> imprimirDocumento(doc, config, "No se pudo imprimir el corte"), hilo);
+    }
+
+    /** Imprime (o reimprime) un corte guardado con el resumen del periodo que cubrió */
+    public CompletableFuture<Resultado> imprimirCorteGuardadoAsync(Corte corte) {
+        final DocumentoImpresion doc;
+        try {
+            CajaService.EstadoCaja e = cajaService.estadoDelCorte(corte);
+            doc = ticketService.documentoCorte(e, corte, configuracionService.obtener(), sesionService.getNombreCajero());
+        } catch (PermisoRequeridoException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            return CompletableFuture.completedFuture(Resultado.fallo(mensaje("No se pudo armar el reporte del corte", e)));
+        }
+        auditoriaService.registrar(sesionService.getCajeroActual(), "CORTE_IMPRESO", "Corte #" + corte.getId(), (Cajero) null);
         final ConfiguracionDispositivos config = dispositivos.obtener();
         return CompletableFuture.supplyAsync(() -> imprimirDocumento(doc, config, "No se pudo imprimir el corte"), hilo);
     }
 
     DocumentoImpresion documentoDeCorte() {
+        return documentoDeCorte(true);
+    }
+
+    DocumentoImpresion documentoDeCorte(boolean turno) {
         Configuracion cfg = configuracionService.obtener();
-        VentaService.ResumenCorte r = ventaService.resumenDe(LocalDate.now());
-        double fondo = cajaService.fondoVigenteDelDia(LocalDate.now());
-        Corte ultimo = cajaService.cortesDeHoyDeEstaCaja().stream().findFirst().orElse(null);
-        return ticketService.documentoCorte(r, fondo, ultimo, cfg, sesionService.getNombreCajero());
+        CajaService.EstadoCaja e = turno ? cajaService.estadoTurnoActual() : cajaService.estadoDelDia();
+        // En el turno en curso el corte anterior es el punto de partida, no el resultado: no se repite
+        return ticketService.documentoCorte(e, null, cfg, sesionService.getNombreCajero());
+    }
+
+    // ── Entradas y salidas de efectivo ───────────────────────────────────
+
+    /** Comprobante de un movimiento de efectivo (quien puede ver los movimientos; auditado) */
+    public CompletableFuture<Resultado> imprimirMovimientoCajaAsync(Long movimientoId) {
+        me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja m = movimientoCajaService.obtener(movimientoId);
+        DocumentoImpresion doc = ticketService.documentoMovimientoCaja(m, configuracionService.obtener());
+        return imprimirDocumentoAsync(doc, "EFECTIVO_COMPROBANTE_IMPRESO", "Movimiento #" + movimientoId);
     }
 
     // ── Documentos sueltos (orden de compra, prueba) ─────────────────────

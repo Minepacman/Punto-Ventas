@@ -20,6 +20,7 @@ public enum Permiso {
     VER_HISTORIAL      ("Ver historial de ventas"),
     VER_GANANCIAS      ("Ver ganancias"),
     HACER_CORTE        ("Hacer el corte de caja"),
+    MOVIMIENTOS_CAJA   ("Entradas y salidas de efectivo (cambio, retiros, pagos)"),
     APLICAR_MAYOREO    ("Aplicar precio de mayoreo"),
     DESCUENTO_MANUAL   ("Hacer descuentos manuales"),
     VENDER_SIN_STOCK   ("Vender sin existencia"),
@@ -47,13 +48,16 @@ public enum Permiso {
      * confirmar). ABRIR_CAJON y GESTIONAR_PROVEEDORES también son del gerente
      * por defecto (el administrador puede quitárselos o dárselos a un cajero). Todo lo demás se lo concede el administrador por usuario.
      * FACTURAR también es del gerente; CANCELAR_FACTURA solo del administrador.
+     * MOVIMIENTOS_CAJA (meter cambio, retirar, pagar a un proveedor desde la caja) es del
+     * gerente; a un cajero se lo concede el administrador o autoriza cada movimiento.
      * CAJERO: ninguno (todo lo de la lista es de administrador, USR-13).
      */
     public static Set<Permiso> porDefecto(Cajero.Rol rol) {
         if (rol == null) return Collections.emptySet();
         return switch (rol) {
             case ADMIN   -> EnumSet.allOf(Permiso.class);
-            case GERENTE -> EnumSet.of(EDITAR_PRODUCTOS, CAMBIAR_PRECIOS, ABRIR_CAJON, GESTIONAR_PROVEEDORES, FACTURAR);
+            case GERENTE -> EnumSet.of(EDITAR_PRODUCTOS, CAMBIAR_PRECIOS, ABRIR_CAJON, GESTIONAR_PROVEEDORES, FACTURAR,
+                                       MOVIMIENTOS_CAJA);
             case CAJERO  -> EnumSet.noneOf(Permiso.class);
         };
     }

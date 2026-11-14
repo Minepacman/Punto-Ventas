@@ -123,6 +123,7 @@ public class VentasController implements Initializable {
     @FXML private Button     btnMayoreo;
     @FXML private Button     btnLeerPeso;
     @FXML private Button     btnAbrirCajon;
+    @FXML private Button     btnEfectivo;
     @FXML private Button     btnEnEspera;
     @FXML private Button     btnRecuperar;
     @FXML private Button     btnReimprimir;
@@ -164,6 +165,7 @@ public class VentasController implements Initializable {
     @Autowired private DispositivosDialogos   dispositivosDialogos;
     @Autowired private ImagenProductoCache    imagenes;
     @Autowired private FacturacionDialogos    facturacionDialogos;
+    @Autowired private MovimientoCajaDialogo  movimientoCajaDialogo;
 
     private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
@@ -235,6 +237,7 @@ public class VentasController implements Initializable {
         soloTooltip(btnLeerPeso,   Atajo.LEER_PESO, mac);
         soloTooltip(btnReimprimir, Atajo.REIMPRIMIR_ULTIMO, mac);
         soloTooltip(btnAbrirCajon, Atajo.ABRIR_CAJON, mac);
+        soloTooltip(btnEfectivo, Atajo.MOVIMIENTO_EFECTIVO, mac);
         soloTooltip(btnRecuperar,  Atajo.RECUPERAR_ESPERA, mac);
         soloTooltip(btnCancelar,   Atajo.CANCELAR_TICKET, mac);
     }
@@ -359,6 +362,7 @@ public class VentasController implements Initializable {
             case QUITAR_RENGLON    -> onQuitarLinea();
             case MAS_UNO           -> ajustarCantidad(1);
             case MENOS_UNO         -> ajustarCantidad(-1);
+            case MOVIMIENTO_EFECTIVO -> onMovimientoEfectivo();
             case ABRIR_CAJON -> {
                 if (btnAbrirCajon.isVisible()) onAbrirCajon();
                 else alerta(Alert.AlertType.INFORMATION, "Cajón de dinero",
@@ -864,6 +868,17 @@ public class VentasController implements Initializable {
         }, "bascula-leer");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Entrada o salida de efectivo que no es venta (Ctrl/Cmd+E): meter cambio,
+     * retirar, pagar a un proveedor. MOVIMIENTOS_CAJA o autorización; el
+     * diálogo registra, imprime el comprobante si hay impresora y queda en el corte.
+     */
+    @FXML
+    private void onMovimientoEfectivo() {
+        movimientoCajaDialogo.mostrar(raiz.getScene().getWindow(), MovimientoCajaDialogo.Prellenado.salida());
+        txtCodigo.requestFocus();
     }
 
     /** Pulso al cajón de dinero (ABRIR_CAJON o autorización de administrador; queda en la bitácora) */

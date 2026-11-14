@@ -841,10 +841,13 @@ CRT-03  Pantalla de Corte
 
 CRT-04  Periodo del corte
         Regla deseada: el corte es por DÍA (además, por cajero, ver CRT-09).
-        Estado actual: Implementado por día calendario (00:00 a 24:00), sumando a
-        todos los cajeros.
-        Estado vs. lo deseado: Cumple para el corte por día.
-        Fuente: service/VentaService.java
+        Estado actual: El corte guardado es por TURNO: desde el corte anterior de
+        la misma caja (o desde las 00:00 con el fondo del día) hasta ahora; al
+        guardarlo se captura cuánto se deja en el cajón para el siguiente turno.
+        La pantalla ofrece además el reporte del DÍA completo (acumulado desde las
+        00:00, con los retiros de los cortes descontados) y el historial de cortes.
+        Estado vs. lo deseado: Cumple (turno + reporte del día).
+        Fuente: service/CajaService.java, service/VentaService.java
 
 CRT-05  Ventas a crédito en el corte y cálculo de ganancia
         Regla deseada: las ventas a crédito NO cuentan como dinero en caja.
@@ -860,13 +863,12 @@ CRT-06  Hacer el corte: conteo y diferencias
         Regla deseada: el corte se puede hacer varias veces al día y se puede
         seguir vendiendo después. Al hacerlo se cuenta el efectivo y se registra
         el faltante o sobrante.
-        Estado actual: Parcial. "Hacer Corte de Hoy" solo actualiza las cifras y
-        muestra ventas totales y dinero esperado. Se puede repetir y seguir
-        vendiendo. No pide contar el efectivo, no calcula faltante/sobrante y no
-        guarda el corte.
-        Estado vs. lo deseado: No cumple (capturar efectivo contado, calcular y
-        guardar diferencia, guardar cada corte).
-        Fuente: controller/CorteController.java
+        Estado actual: Implementado. Cada corte guarda periodo, efectivo inicial,
+        ventas por forma de pago, entradas y salidas, esperado, contado,
+        diferencia (faltante/sobrante), lo que queda en caja y el retiro; se
+        puede repetir, seguir vendiendo, reimprimir y exportar.
+        Estado vs. lo deseado: Cumple.
+        Fuente: service/CajaService.java, controller/CorteController.java
 
 CRT-07  Imprimir corte
         Regla deseada: sin definir por el dueño.
@@ -877,17 +879,27 @@ CRT-07  Imprimir corte
 CRT-08  Entradas y salidas de efectivo
         Regla deseada: cada movimiento registra nombre o categoría, monto, hora,
         lo que había y lo que queda en caja, y el usuario que lo hizo.
-        Estado actual: No implementado.
-        Estado vs. lo deseado: Pendiente de implementar.
-        Fuente: fxml/corte.fxml, controller/CorteController.java
+        Estado actual: Implementado (tabla movimientos_caja): tipo, categoría
+        (cambio, otra entrada, retiro, pago a proveedor, gasto, devolución, otra
+        salida), monto, motivo, hora, caja, cajero, quién autorizó, efectivo antes
+        y después, proveedor/orden/venta relacionados; bitácora y comprobante
+        impreso. Permiso MOVIMIENTOS_CAJA (gerente por defecto) o autorización
+        de administrador. Se registra desde Corte, Ventas (Ctrl/Cmd+E), al
+        recibir una orden de compra (pago en efectivo, opcional) y al cancelar
+        una venta (devolución en efectivo, opcional). Suma/resta en el corte.
+        Estado vs. lo deseado: Cumple.
+        Fuente: model/MovimientoCaja.java, service/MovimientoCajaService.java,
+                controller/MovimientoCajaDialogo.java
 
 CRT-09  Corte por cajero
         Regla deseada: además del corte del día, se debe poder hacer corte por
         cajero.
-        Estado actual: No implementado. El corte mezcla a todos los cajeros
-        (aunque cada venta ya guarda qué cajero la cobró).
-        Estado vs. lo deseado: Pendiente de implementar.
-        Fuente: service/VentaService.java, model/Venta.java
+        Estado actual: Implementado como corte por TURNO (ver CRT-04): cada
+        cajero hace su corte al terminar y el siguiente arranca con lo que quedó
+        en el cajón. Un turno que cruza la medianoche sigue desde el corte de la
+        noche anterior si nadie capturó fondo ese día.
+        Estado vs. lo deseado: Cumple.
+        Fuente: service/CajaService.java
 
 CRT-10  Estadísticas del día para el administrador (NUEVA)
         Regla deseada: una sección donde el administrador vea el estado de las

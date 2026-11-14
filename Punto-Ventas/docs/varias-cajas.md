@@ -111,8 +111,12 @@ demás cajas solo se configuran como en el punto 4.
 
 - **Fondo de caja**: uno por caja y por día; lo captura el primero que entra en
   esa caja. El administrador lo puede corregir desde la pestaña Corte.
-- **Corte**: "Hacer corte de esta caja" suma solo las ventas de la caja donde se
-  hace. El administrador tiene además **Corte general (todas las cajas)**, que
+- **Corte**: "Hacer corte de esta caja" es por **turno**: cubre desde el corte
+  anterior de esa caja (o desde el inicio del día con el fondo) hasta ahora, con
+  las ventas en efectivo, las entradas y salidas de efectivo de esa caja, y
+  registra cuánto se deja en el cajón para el siguiente turno. Las entradas y
+  salidas de efectivo (cambio, retiros, pagos a proveedores, gastos, devoluciones)
+  también llevan su caja. El administrador tiene además **Corte general (todas las cajas)**, que
   suma las ventas y los fondos de todas.
 - **Folios**: salen del id de la venta, que lo asigna el servidor con una sola
   secuencia para toda la tienda: nunca se repiten aunque dos cajas cobren al mismo

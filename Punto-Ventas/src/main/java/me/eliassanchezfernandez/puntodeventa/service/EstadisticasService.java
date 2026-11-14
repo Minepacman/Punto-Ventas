@@ -205,24 +205,59 @@ public class EstadisticasService {
     // ── Resúmenes por día (agregados + hoy en vivo) ──────────────────────
 
     /**
-     * Resúmenes diarios del periodo: los días pasados vienen de resumen_diario
-     * y "hoy" se calcula en vivo de las ventas. Solo días con ventas.
+     * Resúmenes diarios del periodo: los días ya consolidados vienen de
+     * resumen_diario y los demás se calculan en vivo de las ventas. Solo días con ventas.
+     *
+     * Se calculan en vivo (M-14) no solo "hoy", sino todos los días que pueden
+     * haber cambiado desde la última corrida de {@link AgregadosService}: el día
+     * de esa corrida y los posteriores (la corrida de arranque suele ser a media
+     * mañana, y de madrugada "ayer" aún no está consolidado) y los días con
+     * ventas canceladas después de la corrida (la cancelación mueve el día de la
+     * venta original).
      */
     @Transactional(readOnly = true)
     public List<ResumenDiario> resumenesEntre(Periodo p) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
-        LocalDate hoy = hoy();
+        DiasEnVivo vivo = diasEnVivo(p);
         List<ResumenDiario> lista = new ArrayList<>();
-        if (p.desde().isBefore(hoy)) {
-            LocalDate hasta = p.hasta().isBefore(hoy) ? p.hasta() : hoy.minusDays(1);
-            lista.addAll(resumenRepo.findByFechaBetweenOrderByFechaAsc(p.desde(), hasta));
+        if (vivo.hastaConsolidado != null) {
+            for (ResumenDiario r : resumenRepo.findByFechaBetweenOrderByFechaAsc(p.desde(), vivo.hastaConsolidado)) {
+                if (!vivo.sueltos.contains(r.getFecha())) lista.add(r);
+            }
         }
-        if (p.incluye(hoy)) {
-            ResumenDiario deHoy = agregadosService.calcularDia(hoy).resumen();
-            if (deHoy.getTransacciones() > 0) lista.add(deHoy);
+        Map<LocalDate, AgregadosService.DiaCalculado> calculados = new TreeMap<>();
+        if (vivo.desdeVivo != null) calculados.putAll(agregadosService.calcularDias(vivo.desdeVivo, vivo.hastaVivo));
+        for (LocalDate d : vivo.sueltos) calculados.putAll(agregadosService.calcularDias(d, d));
+        for (AgregadosService.DiaCalculado d : calculados.values()) {
+            if (d.resumen().getTransacciones() > 0) lista.add(d.resumen());
         }
+        lista.sort(Comparator.comparing(ResumenDiario::getFecha));
         // Días futuros del periodo (p. ej. un rango personalizado) no tienen ventas
         return lista;
+    }
+
+    /** Qué parte de un periodo se lee de los agregados y qué parte se calcula en vivo */
+    record DiasEnVivo(LocalDate hastaConsolidado, LocalDate desdeVivo, LocalDate hastaVivo, java.util.Set<LocalDate> sueltos) { }
+
+    DiasEnVivo diasEnVivo(Periodo p) {
+        LocalDate hoy = hoy();
+        LocalDate hastaReal = p.hasta().isBefore(hoy) ? p.hasta() : hoy;
+        Optional<LocalDateTime> ultima = agregadosService.ultimaActualizacion();
+        // Sin corrida previa no hay nada consolidado: todo en vivo
+        LocalDate primerDiaVivo = ultima.map(LocalDateTime::toLocalDate).orElse(p.desde());
+        if (primerDiaVivo.isAfter(hoy)) primerDiaVivo = hoy;   // reloj atrasado: nunca dejar "hoy" fuera del cálculo en vivo
+        LocalDate desdeVivo = primerDiaVivo.isAfter(p.desde()) ? primerDiaVivo : p.desde();
+        boolean hayVivo = !desdeVivo.isAfter(hastaReal);
+        LocalDate hastaConsolidado = desdeVivo.isAfter(p.desde()) ? desdeVivo.minusDays(1) : null;
+        if (hastaConsolidado != null && hastaConsolidado.isAfter(hastaReal)) hastaConsolidado = hastaReal;
+        java.util.Set<LocalDate> sueltos = new java.util.TreeSet<>();
+        if (ultima.isPresent() && hastaConsolidado != null) {
+            for (LocalDateTime f : ventaRepository.findFechasAfectadasDesde(ultima.get().minusMinutes(5))) {
+                LocalDate d = f.toLocalDate();
+                if (p.incluye(d) && !d.isAfter(hastaConsolidado)) sueltos.add(d);
+            }
+        }
+        return new DiasEnVivo(hastaConsolidado, hayVivo ? desdeVivo : null, hastaReal, sueltos);
     }
 
     @Transactional(readOnly = true)
@@ -347,16 +382,20 @@ public class EstadisticasService {
                 ResumenDiario.VentaRedondeo.milesimas(piezasTotal), ResumenDiario.VentaRedondeo.centavos(importeTotal), c);
     }
 
-    /** Filas producto-día del periodo; "hoy" en vivo */
+    /** Filas producto-día del periodo; los días no consolidados (ver {@link #resumenesEntre}) en vivo */
     @Transactional(readOnly = true)
     public List<ProductoDiario> productosDiariosEntre(Periodo p) {
-        LocalDate hoy = hoy();
+        DiasEnVivo vivo = diasEnVivo(p);
         List<ProductoDiario> lista = new ArrayList<>();
-        if (p.desde().isBefore(hoy)) {
-            LocalDate hasta = p.hasta().isBefore(hoy) ? p.hasta() : hoy.minusDays(1);
-            lista.addAll(productoDiarioRepo.findEntre(p.desde(), hasta));
+        if (vivo.hastaConsolidado != null) {
+            for (ProductoDiario pd : productoDiarioRepo.findEntre(p.desde(), vivo.hastaConsolidado)) {
+                if (!vivo.sueltos.contains(pd.getFecha())) lista.add(pd);
+            }
         }
-        if (p.incluye(hoy)) lista.addAll(agregadosService.calcularDia(hoy).productos());
+        Map<LocalDate, AgregadosService.DiaCalculado> calculados = new TreeMap<>();
+        if (vivo.desdeVivo != null) calculados.putAll(agregadosService.calcularDias(vivo.desdeVivo, vivo.hastaVivo));
+        for (LocalDate d : vivo.sueltos) calculados.putAll(agregadosService.calcularDias(d, d));
+        for (AgregadosService.DiaCalculado d : calculados.values()) lista.addAll(d.productos());
         return lista;
     }
 

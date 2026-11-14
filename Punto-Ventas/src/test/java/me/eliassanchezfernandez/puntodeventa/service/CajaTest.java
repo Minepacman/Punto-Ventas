@@ -74,9 +74,12 @@ class CajaTest extends BaseServicioTest {
         assertThat(c.getGanancia()).isGreaterThan(0);
         assertThat(cajaService.cortesDeHoy()).extracting(Corte::getId).contains(c.getId());
 
-        // Se puede seguir vendiendo y hacer otro corte
+        // Se puede seguir vendiendo y hacer otro corte: el segundo turno arranca con lo que dejó el primero (el fondo)
+        assertThat(c.getEfectivoDejadoOFondo()).isEqualTo(300);
         ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)), Venta.FormaPago.EFECTIVO, 100);
-        Corte c2 = cajaService.hacerCorte(efectivoEsperado + 100, null);
+        Corte c2 = cajaService.hacerCorte(300 + 100, null);
+        assertThat(c2.getEfectivoInicialOFondo()).isEqualTo(300);
+        assertThat(c2.getInicio()).isEqualTo(c.getRealizadoEn());
         assertThat(c2.getDiferencia()).isCloseTo(0, within(0.001));
         assertThat(cajaService.cortesDeHoy()).hasSizeGreaterThanOrEqualTo(2);
     }

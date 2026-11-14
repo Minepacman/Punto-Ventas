@@ -660,10 +660,19 @@ public class VentaService {
     /** Resumen de un día de una caja ({@code caja} null = todas las cajas), con los permisos de corte */
     @Transactional(readOnly = true)
     public ResumenCorte resumenDe(LocalDate dia, Integer caja) {
+        return resumenEntre(dia.atStartOfDay(), dia.plusDays(1).atStartOfDay(), caja);
+    }
+
+    /**
+     * Resumen de un periodo [inicio, fin) de una caja (corte por turno), con los
+     * permisos de corte: HACER_CORTE o VER_GANANCIAS; la ganancia solo con VER_GANANCIAS.
+     */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenEntre(LocalDateTime inicio, LocalDateTime fin, Integer caja) {
         if (!sesionService.tienePermiso(Permiso.HACER_CORTE)) {
             sesionService.verificarPermiso(Permiso.VER_GANANCIAS);
         }
-        ResumenCorte r = resumenCompletoDe(dia, caja);
+        ResumenCorte r = resumenCompletoEntre(inicio, fin, caja);
         if (!sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
             r.ganancia = 0;
             r.gananciaVisible = false;
@@ -692,10 +701,22 @@ public class VentaService {
      */
     @Transactional(readOnly = true)
     public ResumenCorte resumenCompletoDe(LocalDate dia, Integer caja) {
-        LocalDateTime inicio = dia.atStartOfDay();
-        LocalDateTime fin = inicio.plusDays(1);
+        return resumenCompletoEntre(dia.atStartOfDay(), dia.plusDays(1).atStartOfDay(), caja);
+    }
+
+    /**
+     * Resumen de un periodo [inicio, fin) sin filtro de permisos (uso interno:
+     * CajaService arma con él el corte por turno y el del día).
+     */
+    @Transactional(readOnly = true)
+    public ResumenCorte resumenCompletoEntre(LocalDateTime inicio, LocalDateTime fin, Integer caja) {
+        if (inicio == null || fin == null || fin.isBefore(inicio)) {
+            throw new NegocioException("El periodo del corte no es válido.");
+        }
         ResumenCorte r = new ResumenCorte();
         r.caja = caja;
+        r.inicio = inicio;
+        r.fin = fin;
 
         Object[] activas = ventaRepo.resumenActivas(inicio, fin, caja).get(0);
         r.numVentas     = ((Number) activas[0]).intValue();
@@ -760,10 +781,13 @@ public class VentaService {
         }
     }
 
-    /** Totales del día agrupados; es un simple contenedor de datos */
+    /** Totales de un periodo (día o turno) agrupados; es un simple contenedor de datos */
     public static class ResumenCorte {
         /** Caja a la que corresponde el resumen; null = todas las cajas (corte general) */
         public Integer caja;
+        /** Periodo [inicio, fin) que se sumó */
+        public LocalDateTime inicio;
+        public LocalDateTime fin;
         public double ventasTotales;
         public double subtotal;
         public double iva;

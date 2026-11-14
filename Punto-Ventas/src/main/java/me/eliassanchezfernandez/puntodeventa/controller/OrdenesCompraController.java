@@ -107,6 +107,7 @@ public class OrdenesCompraController implements Initializable {
     @Autowired private ImpresionService impresionService;
     @Autowired private SesionService sesionService;
     @Autowired private AutorizacionService autorizacionService;
+    @Autowired private MovimientoCajaDialogo movimientoCajaDialogo;
 
     private final ObservableList<OrdenCompra> ordenes = FXCollections.observableArrayList();
     private final ObservableList<FilaLinea> lineas = FXCollections.observableArrayList();
@@ -401,6 +402,7 @@ public class OrdenesCompraController implements Initializable {
                 abrir(id);
                 Ventanas.alerta(Alert.AlertType.INFORMATION, "Mercancía recibida",
                         "La orden #" + id + " se recibió y el inventario se actualizó.");
+                ofrecerPagoEnEfectivo(recibida);
                 return;
             } catch (PermisoRequeridoException e) {
                 if (intento == 1 || sesionService.tienePermiso(e.getPermiso())) {
@@ -415,6 +417,23 @@ public class OrdenesCompraController implements Initializable {
                 return;
             }
         }
+    }
+
+    /**
+     * Opcional: si la mercancía se pagó con efectivo del cajón, se registra como
+     * salida de caja (CRT-08) para que el corte cuadre. Nunca obliga.
+     */
+    private void ofrecerPagoEnEfectivo(OrdenCompra o) {
+        if (o == null || o.getProveedor() == null || o.getTotal() <= 0) return;
+        if (!Ventanas.confirmar("Pago al proveedor", String.format(
+                "¿Se pagó esta orden (%s) con efectivo de la caja?\nSi es así se registra como salida de efectivo y aparece en el corte.\n"
+                + "Si se pagó por otro medio o la paga el dueño, elige Cancelar.",
+                me.eliassanchezfernandez.puntodeventa.util.Moneda.formato(o.getTotal())))) {
+            return;
+        }
+        movimientoCajaDialogo.mostrar(raiz.getScene() != null ? raiz.getScene().getWindow() : null,
+                MovimientoCajaDialogo.Prellenado.pagoProveedor(o.getProveedor().getId(), o.getId(), o.getTotal(),
+                        "Orden de compra #" + o.getId() + " — " + o.getProveedor().getNombre()));
     }
 
     @FXML private void onCancelarOrden() {

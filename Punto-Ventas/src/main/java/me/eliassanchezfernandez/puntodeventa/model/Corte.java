@@ -13,6 +13,14 @@ import java.time.LocalDateTime;
  * con faltante/sobrante, quién lo hizo y cuándo. Puede haber varios al día.
  * Con varias cajas cada corte es de UNA caja; el administrador puede además
  * guardar un corte general que suma todas.
+ *
+ * Desde la versión con turnos, un corte de caja cubre el periodo
+ * [{@code inicio}, {@code realizadoEn}) que va desde el corte anterior de esa
+ * caja (o desde el inicio del día con fondo capturado); {@code efectivoInicial}
+ * es con lo que empezó el periodo (el fondo o lo que dejó el corte anterior) y
+ * {@code efectivoDejado} lo que queda en el cajón para el turno siguiente. Las
+ * filas anteriores no tienen estas columnas (null): eran acumuladas del día y
+ * se muestran tal cual.
  */
 @Entity
 @Table(name = "cortes")
@@ -31,6 +39,36 @@ public class Corte {
 
     @Column(name = "realizado_en", nullable = false)
     private LocalDateTime realizadoEn = LocalDateTime.now();
+
+    /** Inicio del periodo que cubre el corte (null en cortes antiguos = 00:00 del día) */
+    @Column(name = "inicio")
+    private LocalDateTime inicio;
+
+    /** Efectivo con el que empezó el periodo: fondo del día o lo dejado por el corte anterior */
+    @Column(name = "efectivo_inicial")
+    private Double efectivoInicial;
+
+    /** Entradas y salidas de efectivo (no ventas) del periodo */
+    @Column(name = "entradas_efectivo")
+    private Double entradasEfectivo;
+
+    @Column(name = "salidas_efectivo")
+    private Double salidasEfectivo;
+
+    /** Efectivo que se dejó en el cajón para el siguiente turno (lo demás se retiró) */
+    @Column(name = "efectivo_dejado")
+    private Double efectivoDejado;
+
+    public LocalDateTime getInicioOInicioDelDia() { return inicio != null ? inicio : fecha.atStartOfDay(); }
+    public double getEfectivoInicialOFondo()      { return efectivoInicial != null ? efectivoInicial : fondoInicial; }
+    public double getEntradasOCero()              { return entradasEfectivo == null ? 0 : entradasEfectivo; }
+    public double getSalidasOCero()               { return salidasEfectivo == null ? 0 : salidasEfectivo; }
+    /** Lo que quedó en caja: lo declarado, o el fondo en cortes antiguos (convención) */
+    public double getEfectivoDejadoOFondo()       { return efectivoDejado != null ? efectivoDejado : fondoInicial; }
+    /** Lo que se retiró del cajón al hacer el corte: contado − dejado */
+    public double getRetiro()                     { return Math.round((efectivoContado - getEfectivoDejadoOFondo()) * 100.0) / 100.0; }
+    /** true si el periodo no empieza a las 00:00 (hubo un corte antes en el día o viene de la noche anterior) */
+    public boolean esTurno()                      { return inicio != null && !inicio.equals(fecha.atStartOfDay()); }
 
     @ManyToOne
     @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
@@ -74,7 +112,7 @@ public class Corte {
     @Column(nullable = false)
     private double iva;
 
-    /** fondo + ventas en efectivo */
+    /** efectivo inicial + ventas en efectivo + entradas − salidas del periodo */
     @Column(name = "efectivo_esperado", nullable = false)
     private double efectivoEsperado;
 
