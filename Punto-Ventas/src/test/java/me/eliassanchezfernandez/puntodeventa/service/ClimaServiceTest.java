@@ -158,4 +158,25 @@ class ClimaServiceTest extends BaseServicioTest {
         assertThat(ClimaService.uriPara(90, -180).toString()).startsWith("https://api.open-meteo.com/");
         assertThat(climaService.ultimoError()).isPresent();
     }
+    /** «Detectar mi ubicación»: lo que estima el servicio por IP se guarda por la misma vía que la captura manual */
+    @Test
+    void unaUbicacionDetectadaSeGuardaYSeVuelveALeer() throws Exception {
+        iniciarComoAdmin();
+        GeolocalizacionIpService.Ubicacion u = GeolocalizacionIpService.parsear("ipwho.is",
+                "{\"success\":true,\"city\":\"Toluca\",\"region\":\"México\",\"country\":\"México\",\"latitude\":19.2926,\"longitude\":-99.6569}")
+                .orElseThrow();
+
+        Configuracion g = configuracionService.guardarUbicacionClima(u.latitud(), u.longitud(), u.nombreParaGuardar(), true);
+        assertThat(g.isClimaActivo()).isTrue();
+
+        Configuracion leida = configuracionService.obtener();
+        assertThat(leida.getCiudad()).isEqualTo("Toluca");
+        assertThat(leida.getLatitud()).isCloseTo(19.2926, within(0.0001));
+        assertThat(leida.getLongitud()).isCloseTo(-99.6569, within(0.0001));
+        assertThat(leida.tieneUbicacion()).isTrue();
+
+        // Volver a guardar sin coordenadas (ubicación omitida) borra la ciudad y apaga el clima
+        configuracionService.guardarUbicacionClima(null, null, null, false);
+        assertThat(configuracionService.obtener().tieneUbicacion()).isFalse();
+    }
 }

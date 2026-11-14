@@ -63,14 +63,15 @@
             <!-- F4 – Inventario -->
             <Tab fx:id="tabInventario" text="F4 · Inventario"><graphic><Icono nombre="paquete"/></graphic></Tab>
 
-            <!-- Configuración (solo ADMIN; MainController la quita para cajeros) -->
-            <Tab fx:id="tabConfig" text="Configuración"><graphic><Icono nombre="ajustes"/></graphic></Tab>
-
             <!-- Corte (solo ADMIN) -->
             <Tab fx:id="tabCorte" text="Corte"><graphic><Icono nombre="tijeras"/></graphic></Tab>
 
             <!-- Estadísticas (solo quien tiene VER_HISTORIAL; MainController la quita para los demás) -->
             <Tab fx:id="tabEstadisticas" text="Estadísticas"><graphic><Icono nombre="grafica"/></graphic></Tab>
+
+            <!-- Configuración: la ÚLTIMA pestaña (solo ADMIN/GERENTE; MainController la quita para cajeros).
+                 No tiene tecla rápida (F1–F5 son las pestañas de trabajo), así que moverla no cambia ningún atajo. -->
+            <Tab fx:id="tabConfig" text="Configuración"><graphic><Icono nombre="ajustes"/></graphic></Tab>
 
         </TabPane>
     </center>

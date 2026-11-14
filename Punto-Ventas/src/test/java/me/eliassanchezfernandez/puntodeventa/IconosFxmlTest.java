@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IconosFxmlTest {
 
     private static final Path FXML = Path.of("src/main/resources/fxml");
-    private static final Pattern ICONO = Pattern.compile("<Icono\\s[^>]*?nombre=\"([^\"]*)\"");
+    /** {@code <Icono nombre="…"/>} y el atributo {@code icono="…"} de {@code <BotonOpcion>} */
+    private static final Pattern ICONO = Pattern.compile("(?:<Icono\\s[^>]*?nombre|\\sicono)=\"([^\"]*)\"");
     /** Pictogramas: flechas de una línea (U+2190-21FF) y "→" como texto no cuentan; los símbolos sí. */
     private static final Pattern EMOJI = Pattern.compile(
             "[\\u2300-\\u23FF\\u25A0-\\u27BF\\u2B00-\\u2BFF\\uFE0F\\x{1F000}-\\x{1FAFF}]");
