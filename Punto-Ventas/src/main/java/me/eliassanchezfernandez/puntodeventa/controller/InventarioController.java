@@ -135,10 +135,14 @@ public class InventarioController implements Initializable {
             lblSinProveedores.setManaged(activos.isEmpty());
 
             List<Proveedor> hoy = proveedorService.queVisitanHoy();
-            lblVisitanHoy.setText(hoy.isEmpty() ? "Hoy no visita ningún proveedor."
-                    : "Proveedores que visitan hoy: " + hoy.stream()
+            java.time.DayOfWeek diaHoy = java.time.LocalDate.now().getDayOfWeek();
+            String preventa = activos.stream().filter(p -> p.preventaEn(diaHoy)).map(Proveedor::getNombre)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            String entregas = hoy.isEmpty() ? "Hoy no entrega ningún proveedor."
+                    : "Proveedores que entregan hoy: " + hoy.stream()
                         .map(p -> p.getNombre() + (p.getContacto() != null ? " (" + p.getContacto() + ")" : ""))
-                        .collect(java.util.stream.Collectors.joining(", ")));
+                        .collect(java.util.stream.Collectors.joining(", "));
+            lblVisitanHoy.setText(entregas + (preventa.isEmpty() ? "" : " · Pasa el preventa de: " + preventa));
         } catch (RuntimeException e) {
             lblVisitanHoy.setText("");
         }

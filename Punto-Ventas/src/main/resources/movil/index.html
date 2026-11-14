@@ -20,7 +20,8 @@
   ----------------------------------------------------------------------------
   - Lo sirve el programa de escritorio (ServidorMovilService) en la red local.
   - Sin dependencias externas ni CDNs: funciona sin internet, solo en la LAN.
-  - LOGIN, SESIÓN y DATOS (estadísticas, ventas, inventario, ajustes) son
+  - LOGIN, SESIÓN y DATOS (estadísticas, ventas, inventario, ajustes,
+    proveedores con su agenda de entrega/preventa) son
     reales: el objeto `api` (sección 3) llama con fetch() a /api/* y el servidor
     vuelve a comprobar los permisos del usuario en cada petición. SOLO la lectura
     del ticket del proveedor (OCR) sigue siendo un DEMO (objeto `ocr`).
@@ -78,7 +79,7 @@ body {
   line-height: 1.4; -webkit-text-size-adjust: 100%;
   min-height: 100vh; min-height: 100dvh;
 }
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
 .oculto { display: none !important; }
 :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
@@ -91,6 +92,7 @@ h1, h2, h3, p { margin: 0; }
   transition: transform .06s ease, background .15s ease;
 }
 .btn:active { transform: scale(.98); }
+a.btn { text-decoration: none; }   /* enlaces con aspecto de botón (p. ej. "Llamar" con tel:) */
 .btn[disabled] { opacity: .55; pointer-events: none; }
 .btn-primario { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn-primario:hover { background: var(--accent-hover); }
@@ -131,6 +133,9 @@ h1, h2, h3, p { margin: 0; }
 }
 .vista { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 1rem 1rem calc(96px + env(safe-area-inset-bottom)); }
 .vista > * + * { margin-top: 1rem; }
+/* Columna de bloques de una vista. minmax(0, 1fr): un nombre largo sin espacios en una fila
+   no ensancha la columna (con la pista `auto` el mínimo sería el texto completo y la página se saldría). */
+.pila { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
 .nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface);
   border-top: 1px solid var(--border-subtle); display: flex; justify-content: center;
@@ -138,9 +143,10 @@ h1, h2, h3, p { margin: 0; }
 }
 .nav-int { display: flex; width: 100%; max-width: 760px; }
 .nav button {
-  flex: 1; min-height: 64px; border: 0; background: none; cursor: pointer;
+  flex: 1; min-width: 0; min-height: 64px; padding: 0 2px; border: 0; background: none; cursor: pointer;
   display: grid; place-items: center; align-content: center; gap: 2px;
-  font-size: .72rem; font-weight: 600; color: var(--muted);
+  font-size: clamp(.6rem, .45rem + .8vw, .72rem); font-weight: 600; color: var(--muted);   /* cinco pestañas caben a 320 px */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .nav button .ico { display: grid; place-items: center; line-height: 1; }
 .nav button .ico svg { width: 24px; height: 24px; }
@@ -230,6 +236,44 @@ h1, h2, h3, p { margin: 0; }
 .interruptor::after { content: ""; position: absolute; top: 4px; left: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
 .interruptor[aria-checked="true"] { background: var(--accent); }
 .interruptor[aria-checked="true"]::after { transform: translateX(24px); }
+
+/* ===== Proveedores: semana, visitas y selector de días ===== */
+.semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.sem-dia { min-height: 72px; padding: .4rem 0 .35rem; border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--surface-alt);
+  display: grid; justify-items: center; align-content: start; gap: 2px; cursor: pointer; min-width: 0; color: inherit; }
+.sem-dia .sem-n { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.sem-dia .sem-f { font-size: 1.05rem; font-weight: 750; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sem-dia .sem-m { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; min-height: 16px; align-items: center; }
+.sem-dia .sem-m span { display: inline-flex; align-items: center; gap: 1px; font-size: .62rem; font-weight: 700; padding: 0 3px; border-radius: 6px;
+  background: var(--accent-subtle); color: var(--accent-text); line-height: 15px; }
+.sem-dia .sem-m span.pre { background: var(--warning-subtle); color: var(--warning-text); }
+.sem-dia.hoy { border-color: var(--accent); }
+.sem-dia.hoy .sem-n, .sem-dia.hoy .sem-f { color: var(--accent-text); }
+.sem-dia[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.sem-dia[aria-pressed="true"] .sem-n, .sem-dia[aria-pressed="true"] .sem-f { color: var(--on-accent); }
+.sem-dia[aria-pressed="true"] .sem-m span { background: rgba(255,255,255,.25); color: var(--on-accent); }
+.sem-detalle { margin-top: .8rem; display: grid; gap: .4rem; min-width: 0; overflow-wrap: anywhere; }
+.sem-titulo { font-weight: 700; }
+.visita { display: flex; align-items: center; gap: .6rem; padding: .5rem .6rem; border-radius: 10px; background: var(--surface-alt); border: 0;
+  width: 100%; text-align: left; cursor: pointer; color: inherit; min-height: 44px; }
+.visita .ico-tipo { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; background: var(--accent-subtle); color: var(--accent-text); }
+.visita.pre .ico-tipo { background: var(--warning-subtle); color: var(--warning-text); }
+.visita .n { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.visita .q { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.leyenda { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .8rem; font-size: .78rem; color: var(--muted); }
+.leyenda span { display: inline-flex; align-items: center; gap: .3rem; }
+.dias { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.dia-chip { min-height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-weight: 650; font-size: .8rem;
+  padding: 0; display: grid; place-items: center; color: var(--muted); }
+button.dia-chip { cursor: pointer; }
+.dia-chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.dia-chip.pre.on { background: var(--warning); border-color: var(--warning); color: #fff; }
+.dias.lectura .dia-chip { min-height: 34px; font-size: .74rem; }
+textarea.entrada { min-height: 88px; padding: .7rem 1rem; resize: vertical; line-height: 1.35; }
+.prox { display: flex; justify-content: space-between; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid var(--border-subtle); }
+.prox:last-child { border-bottom: 0; }
+.prox .q { color: var(--muted); }
+.nota { font-size: .8rem; color: var(--muted); }
 
 /* ===== Escaneo de ticket ===== */
 .tomar { display: grid; place-items: center; gap: .6rem; text-align: center; padding: 2rem 1rem; border: 2px dashed var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
@@ -430,6 +474,11 @@ const ICONOS = {
   baja:       ['M22 17 13.5 8.5 8.5 13.5 2 7', 'M16 17h6v-6'],
   salir:      ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
   tienda:     ['m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7', 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8', 'M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4', 'M2 7h20'],
+  camion:     ['M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2', 'M15 18H9', 'M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14', 'M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0', 'M5 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0'],
+  pedido:     ['M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z', 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'M12 11h4', 'M12 16h4', 'M8 11h.01', 'M8 16h.01'],
+  telefono:   ['M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'],
+  lapiz:      ['M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z', 'm15 5 4 4'],
+  mas:        ['M5 12h14', 'M12 5v14'],
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
@@ -654,6 +703,11 @@ const api = {
   },
   _imagenes: new Map(),
 
+  /** Agenda de proveedores: hoy (según la computadora), permisos y la lista con días, próxima visita y nota media (si puede verla) */
+  proveedores: () => peticion('GET', '/api/proveedores'),
+  /** Crea (sin id) o edita (con id) un proveedor: {id?, nombre, telefono, contacto, diasEntrega:[1..7], diasPreventa:[1..7], notas} */
+  guardarProveedor: datos => peticion('POST', '/api/proveedores/guardar', datos),
+
   /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
   async ajustarStock({ id, tipo, cantidad, motivo, proveedor }) {
     const t = tipo === 'ENTRADA' ? 'entrada' : tipo === 'SALIDA' ? 'merma' : 'ajuste';
@@ -826,6 +880,7 @@ const SECCIONES = [   // `permiso` = clave de `secciones` que devuelve el servid
   { id: 'estadisticas', etiqueta: 'Inicio',     icono: 'grafica', permiso: 'estadisticas',   vista: vistaEstadisticas, titulo: 'Estadísticas' },
   { id: 'historial',    etiqueta: 'Ventas',     icono: 'recibo',  permiso: 'historial',      vista: vistaHistorial,    titulo: 'Historial de ventas' },
   { id: 'inventario',   etiqueta: 'Inventario', icono: 'paquete', permiso: 'inventario',     vista: vistaInventario,   titulo: 'Inventario' },
+  { id: 'proveedores',  etiqueta: 'Proveedores', icono: 'camion', permiso: 'proveedores',    vista: vistaProveedores,  titulo: 'Proveedores' },
   { id: 'escanear',     etiqueta: 'Escanear',   icono: 'camara',  permiso: 'escanearTicket', vista: vistaEscanear,     titulo: 'Escanear ticket' },
   { id: 'config',       etiqueta: 'Ajustes',    icono: 'ajustes', permiso: 'configuracion',  vista: vistaConfig,       titulo: 'Configuración' },
 ];
@@ -1002,7 +1057,7 @@ async function vistaHistorial() {
     } catch (e) { if (e.estado !== 401) lista.replaceChildren(errorConReintento(e, cargar)); }
   }
   cargar();
-  return h('div', { style: 'display:grid;gap:1rem' }, filtros, resumen, lista);
+  return h('div', { class: 'pila' }, filtros, resumen, lista);
 }
 
 function detalleVenta(v) {
@@ -1074,7 +1129,7 @@ async function vistaInventario() {
   }
   busca.addEventListener('input', () => { texto = busca.value; clearTimeout(pendiente); pendiente = setTimeout(buscar, 300); });
   pintar();
-  return h('div', { style: 'display:grid;gap:1rem' }, busca, chips, lista);
+  return h('div', { class: 'pila' }, busca, chips, lista);
 }
 
 function hojaAjuste(producto, alGuardar) {
@@ -1125,6 +1180,197 @@ function hojaAjuste(producto, alGuardar) {
       guardar.disabled = false; guardar.textContent = 'Guardar ajuste';
     }
   });
+}
+
+/* ============================================================================
+   9b. VISTA: PROVEEDORES  (ver: todos · nota media: VER_GANANCIAS o GESTIONAR_PROVEEDORES
+       · crear/editar días: GESTIONAR_PROVEEDORES; el servidor decide en cada petición)
+       - Calendario de ESTA semana (lunes a domingo, hoy resaltado) con entregas y preventas.
+       - Lista con próxima visita, nota media (gasto promedio por visita) y teléfono.
+       - "Hoy"/"Mañana" se calculan contra el `hoy` que manda la computadora, no el del teléfono.
+   ============================================================================ */
+const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];                     // índice 0 = lunes (ISO 1)
+const DIAS_LARGOS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+const fechaIso = iso => { const [a, m, d] = iso.split('-').map(Number); return new Date(a, m - 1, d); };   // fecha local, sin zona
+const diasEntre = (a, b) => Math.round((inicioDia(b) - inicioDia(a)) / 86400000);
+const diaIso = f => (f.getDay() + 6) % 7 + 1;                                              // 1 = lunes … 7 = domingo
+const mayuscula = t => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** "Hoy" / "Mañana" / "Jue 20" (corto) o "hoy" / "mañana" / "el jueves 20" (largo) relativo al hoy de la computadora */
+function cuando(iso, hoyIso, largo = false) {
+  if (!iso) return largo ? 'sin día fijo' : '—';
+  const f = fechaIso(iso), n = diasEntre(fechaIso(hoyIso), f);
+  if (n === 0) return largo ? 'hoy' : 'Hoy';
+  if (n === 1) return largo ? 'mañana' : 'Mañana';
+  return largo ? 'el ' + DIAS_LARGOS[diaIso(f) - 1] + ' ' + f.getDate() : DIAS_CORTOS[diaIso(f) - 1] + ' ' + f.getDate();
+}
+
+/** Fila de 7 días. Con `editable` son botones que se prenden y apagan; si no, solo muestra. */
+function selectorDias(etiqueta, seleccion, { preventa = false, editable = false } = {}) {
+  const cont = h('div', { class: 'dias' + (editable ? '' : ' lectura'), role: 'group', 'aria-label': etiqueta });
+  for (let i = 1; i <= 7; i++) {
+    const clase = () => 'dia-chip' + (preventa ? ' pre' : '') + (seleccion.has(i) ? ' on' : '');
+    if (!editable) {
+      cont.append(h('span', { class: clase(), 'aria-label': DIAS_LARGOS[i - 1] + (seleccion.has(i) ? ': sí' : ': no') }, DIAS_CORTOS[i - 1]));
+      continue;
+    }
+    const b = h('button', { type: 'button', class: clase(), 'aria-pressed': String(seleccion.has(i)), onclick: () => {
+      if (seleccion.has(i)) seleccion.delete(i); else seleccion.add(i);
+      b.className = clase(); b.setAttribute('aria-pressed', String(seleccion.has(i)));
+    } }, DIAS_CORTOS[i - 1]);
+    cont.append(b);
+  }
+  return cont;
+}
+
+const telefonoLimpio = t => (t || '').replace(/[^0-9+]/g, '');
+
+async function vistaProveedores() {
+  let agenda = await api.proveedores();
+  let seleccionado = agenda.hoy;                 // día del calendario que se detalla abajo (AAAA-MM-DD)
+  const caja = h('div', { class: 'pila' });
+  const puedeEditar = () => !!agenda.puedeEditar;
+
+  /** Lunes a domingo de la semana de `hoy`, con quién entrega y quién pasa a preventa cada día */
+  function semana() {
+    const hoy = fechaIso(agenda.hoy), lunes = sumarDias(hoy, 1 - diaIso(hoy));
+    return Array.from({ length: 7 }, (x, i) => {
+      const f = sumarDias(lunes, i), iso = claveDia(f), d = i + 1;
+      return { iso, fecha: f, hoy: iso === agenda.hoy,
+        entregas: agenda.proveedores.filter(p => p.diasEntrega.includes(d)),
+        preventas: agenda.proveedores.filter(p => p.diasPreventa.includes(d)) };
+    });
+  }
+
+  function tarjetaSemana() {
+    const dias = semana();
+    const rejilla = h('div', { class: 'semana', role: 'group', 'aria-label': 'Días de esta semana' });
+    const detalle = h('div', { class: 'sem-detalle' });
+    const pintarDetalle = () => {
+      const d = dias.find(x => x.iso === seleccionado) || dias[0];
+      const visita = (p, pre) => h('button', { class: 'visita' + (pre ? ' pre' : ''), type: 'button', onclick: () => detalleProveedor(p) },
+        h('span', { class: 'ico-tipo', 'aria-hidden': 'true' }, icono(pre ? 'pedido' : 'camion', { tamano: 18 })),
+        h('span', { class: 'n' }, p.nombre), h('span', { class: 'q' }, pre ? 'preventa' : 'entrega'));
+      anexar(vaciar(detalle), [   // anexar() aplana listas y omite null (replaceChildren los pintaría como texto)
+        h('div', { class: 'sem-titulo' }, (d.hoy ? 'Hoy, ' : '') + mayuscula(DIAS_LARGOS[diaIso(d.fecha) - 1]) + ' ' + d.fecha.getDate()),
+        d.entregas.length || d.preventas.length
+          ? [d.entregas.map(p => visita(p, false)), d.preventas.map(p => visita(p, true))]
+          : h('p', { class: 'sub' }, 'No hay visitas programadas este día.')]);
+    };
+    const marca = (n, pre, et) => n ? h('span', { class: pre ? 'pre' : null, 'aria-label': n + ' ' + et }, icono(pre ? 'pedido' : 'camion', { tamano: 11 }), String(n)) : null;
+    for (const d of dias) {
+      const b = h('button', { type: 'button', class: 'sem-dia' + (d.hoy ? ' hoy' : ''), 'aria-pressed': String(d.iso === seleccionado),
+        'aria-label': DIAS_LARGOS[diaIso(d.fecha) - 1] + ' ' + d.fecha.getDate() + (d.hoy ? ' (hoy)' : ''),
+        onclick: () => { seleccionado = d.iso; for (const o of rejilla.children) o.setAttribute('aria-pressed', String(o === b)); pintarDetalle(); } },
+        h('span', { class: 'sem-n' }, d.hoy ? 'Hoy' : DIAS_CORTOS[diaIso(d.fecha) - 1]),
+        h('span', { class: 'sem-f' }, String(d.fecha.getDate())),
+        h('span', { class: 'sem-m' }, marca(d.entregas.length, false, 'entrega(s)'), marca(d.preventas.length, true, 'preventa(s)')));
+      rejilla.append(b);
+    }
+    pintarDetalle();
+    return h('section', { class: 'tarjeta' },
+      h('div', { class: 'seccion-t' }, 'Esta semana'),
+      rejilla, detalle,
+      h('div', { class: 'leyenda' },
+        h('span', null, icono('camion', { tamano: 14 }), 'Entrega: llega la mercancía'),
+        h('span', null, icono('pedido', { tamano: 14 }), 'Preventa: pasa el vendedor a tomar el pedido')));
+  }
+
+  function filaProveedor(p) {
+    const proxEnt = p.proximaEntrega, proxPre = p.proximaPreventa;
+    let proximo = null, tipo = '';
+    if (proxEnt && (!proxPre || proxEnt <= proxPre)) { proximo = proxEnt; tipo = 'entrega'; }
+    else if (proxPre) { proximo = proxPre; tipo = 'preventa'; }
+    const dias = 'Entrega: ' + p.etiquetaEntrega + (p.diasPreventa.length ? ' · Preventa: ' + p.etiquetaPreventa : '');
+    const nota = !agenda.costosVisibles ? null
+      : h('div', { class: 'd' }, 'Nota media: ' + (p.notaMedia ? dinero(p.notaMedia.promedio) + ' · ' + p.notaMedia.notas + ' nota(s)' : 'sin datos aún'));
+    return h('button', { class: 'fila', type: 'button', onclick: () => detalleProveedor(p) },
+      h('div', { class: 'cuerpo' }, h('div', { class: 't' }, p.nombre), h('div', { class: 'd' }, dias), nota),
+      h('div', { class: 'der' }, proximo
+        ? [cuando(proximo, agenda.hoy), h('div', { class: 'sub', style: 'font-size:.75rem;font-weight:600' }, tipo)]
+        : h('span', { class: 'insignia' }, 'Sin días')));
+  }
+
+  function pintar() {
+    const lista = agenda.proveedores.length
+      ? h('div', { class: 'lista-rej' }, agenda.proveedores.map(filaProveedor))
+      : h('div', { class: 'vacio' }, 'Aún no hay proveedores. ' + (puedeEditar() ? 'Agrega el primero con el botón de arriba.' : 'Quien gestiona proveedores los da de alta aquí o en el programa de escritorio.'));
+    anexar(vaciar(caja), [
+      puedeEditar() ? h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: () => formularioProveedor(null) }, icono('mas', { tamano: 20 }), 'Nuevo proveedor') : null,
+      tarjetaSemana(),
+      h('section', null, h('div', { class: 'seccion-t' }, 'Proveedores (' + agenda.proveedores.length + ')'), lista),
+      agenda.costosVisibles ? h('p', { class: 'nota' }, 'Nota media: lo que se le compra en promedio en cada visita, según las entradas de mercancía con costo de los últimos ' + agenda.ventanaDias + ' días.') : null]);
+  }
+
+  async function recargar() {
+    try { agenda = await api.proveedores(); pintar(); }
+    catch (e) { if (e.estado !== 401) caja.replaceChildren(errorConReintento(e, recargar)); }
+  }
+
+  function detalleProveedor(p) {
+    const tel = telefonoLimpio(p.telefono);
+    const prox = (et, iso, aplica) => h('div', { class: 'prox' }, h('span', { class: 'q' }, et),
+      h('span', null, !aplica ? 'No manda preventa' : iso ? mayuscula(cuando(iso, agenda.hoy, true)) : 'Sin días fijos'));
+    const nota = !agenda.costosVisibles ? null : h('div', { class: 'kpi' },
+      h('div', { class: 'e' }, 'Nota media (gasto por visita)'),
+      h('div', { class: 'v' }, p.notaMedia ? dinero(p.notaMedia.promedio) : 'Sin datos aún'),
+      h('div', { class: 'sub' }, p.notaMedia
+        ? 'Promedio de ' + p.notaMedia.notas + ' nota(s) en ' + agenda.ventanaDias + ' días · última el ' + fechaLarga(fechaIso(p.notaMedia.ultima))
+        : 'Se calcula con las entradas de mercancía que tengan costo.'));
+    const d = hoja([
+      h('h2', null, p.nombre),
+      p.contacto ? h('p', { class: 'sub' }, 'Contacto: ' + p.contacto) : null,
+      tel ? h('a', { class: 'btn btn-suave btn-block', href: 'tel:' + tel }, icono('telefono', { tamano: 20 }), 'Llamar · ' + p.telefono) : h('p', { class: 'sub' }, 'Sin teléfono registrado.'),
+      h('div', { class: 'campo' }, h('label', null, 'Días de entrega'), selectorDias('Días de entrega', new Set(p.diasEntrega))),
+      p.diasPreventa.length ? h('div', { class: 'campo' }, h('label', null, 'Días de preventa'), selectorDias('Días de preventa', new Set(p.diasPreventa), { preventa: true })) : null,
+      h('div', null, prox('Próxima entrega', p.proximaEntrega, true), prox('Próxima preventa', p.proximaPreventa, p.diasPreventa.length > 0)),
+      nota,
+      p.notas ? h('p', { class: 'sub' }, p.notas) : null,
+      h('div', { class: puedeEditar() ? 'acciones dos' : 'acciones' },
+        h('button', { class: 'btn', type: 'button', onclick: () => d.cerrar() }, 'Cerrar'),
+        puedeEditar() ? h('button', { class: 'btn btn-primario', type: 'button', onclick: () => { d.cerrar(); formularioProveedor(p); } }, icono('lapiz', { tamano: 18 }), 'Editar') : null),
+    ]);
+  }
+
+  function formularioProveedor(p) {
+    const entrega = new Set(p ? p.diasEntrega : []), preventa = new Set(p ? p.diasPreventa : []);
+    const nombre = h('input', { class: 'entrada', id: 'pv-nombre', type: 'text', maxlength: '150', autocomplete: 'organization', value: p ? p.nombre : '' });
+    const telefono = h('input', { class: 'entrada', id: 'pv-tel', type: 'tel', maxlength: '30', inputmode: 'tel', autocomplete: 'off', placeholder: 'ej: 55 1234 5678', value: p ? p.telefono : '' });
+    const contacto = h('input', { class: 'entrada', id: 'pv-contacto', type: 'text', maxlength: '100', autocomplete: 'off', placeholder: 'Nombre de quien visita', value: p ? p.contacto : '' });
+    const notas = h('textarea', { class: 'entrada', id: 'pv-notas', maxlength: '500', placeholder: 'ej: pedidos antes de las 5 pm', value: p ? p.notas : '' });
+    const err = h('div', { class: 'oculto', role: 'alert' });
+    const guardar = h('button', { class: 'btn btn-primario', type: 'button' }, 'Guardar');
+    const f = hoja([
+      h('h2', null, p ? 'Editar proveedor' : 'Nuevo proveedor'),
+      h('div', { class: 'campo' }, h('label', { for: 'pv-nombre' }, 'Nombre *'), nombre),
+      h('div', { class: 'campo' }, h('label', { for: 'pv-tel' }, 'Teléfono'), telefono),
+      h('div', { class: 'campo' }, h('label', { for: 'pv-contacto' }, 'Contacto o repartidor'), contacto),
+      h('div', { class: 'campo' }, h('label', null, 'Días de entrega (llega la mercancía)'), selectorDias('Días de entrega', entrega, { editable: true })),
+      h('div', { class: 'campo' }, h('label', null, 'Días de preventa (pasa el vendedor a tomar el pedido)'), selectorDias('Días de preventa', preventa, { preventa: true, editable: true }),
+        h('p', { class: 'nota' }, 'Déjalo vacío si el proveedor no manda preventa.')),
+      h('div', { class: 'campo' }, h('label', { for: 'pv-notas' }, 'Notas'), notas),
+      err,
+      h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => f.cerrar() }, 'Cancelar'), guardar),
+    ]);
+    guardar.addEventListener('click', async () => {
+      if (!nombre.value.trim()) { err.className = 'aviso-err'; err.textContent = 'Escribe el nombre del proveedor.'; nombre.focus(); return; }
+      guardar.disabled = true; guardar.textContent = 'Guardando…';
+      try {
+        const r = await api.guardarProveedor({ id: p ? p.id : null, nombre: nombre.value, telefono: telefono.value, contacto: contacto.value,
+          diasEntrega: [...entrega].sort(), diasPreventa: [...preventa].sort(), notas: notas.value });
+        f.cerrar(); vibrar(30);
+        avisar((r.creado ? 'Proveedor agregado: ' : 'Proveedor actualizado: ') + (r.proveedor ? r.proveedor.nombre : nombre.value.trim()));
+        await recargar();
+      } catch (e) {
+        if (e.estado === 401) { f.cerrar(); return; }
+        err.className = 'aviso-err'; err.textContent = e.estado === 403 ? 'Sin permiso. ' + e.message : e.message;
+        guardar.disabled = false; guardar.textContent = 'Guardar';
+      }
+    });
+  }
+
+  pintar();
+  return caja;
 }
 
 /* ============================================================================
@@ -1277,7 +1523,7 @@ async function vistaConfig() {
     h('section', { class: 'tarjeta' },
       h('div', { class: 'seccion-t' }, 'Acerca de'),
       h('div', { style: 'display:flex;gap:.75rem;align-items:center' }, logoApp('cab-logo', 32),
-        h('p', { class: 'sub' }, 'Interfaz móvil de Caja Libre. Las ventas, el inventario y las estadísticas vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.'))),
+        h('p', { class: 'sub' }, 'Interfaz móvil de Caja Libre. Las ventas, el inventario, los proveedores y las estadísticas vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.'))),
     cerrar);
 }
 
@@ -1302,6 +1548,9 @@ const tutorial = {
       inventario: 'Busca productos por nombre o código y filtra los de stock bajo o agotados. Toca un producto para ver su existencia, precio y foto.'
         + (sec.inventarioAjustar ? ' Tienes permiso para registrar entradas, mermas y conteos: cada ajuste queda en la bitácora con tu usuario.'
                                  : ' Tu usuario solo consulta; los ajustes de inventario se hacen desde el programa de escritorio.'),
+      proveedores: 'Agenda de proveedores: el calendario de la semana muestra qué día llega cada entrega y qué día pasa el preventa (el vendedor que toma el pedido), con el día de hoy resaltado. Toca un proveedor para ver su teléfono y sus próximas visitas.'
+        + (sec.proveedoresCostos ? ' Como puedes ver costos, también aparece la nota media: lo que se le compra en promedio por visita.' : '')
+        + (sec.proveedoresEditar ? ' Tienes permiso para dar de alta proveedores y cambiar sus días de entrega y preventa.' : ' Los días los captura quien gestiona proveedores; tú los consultas.'),
       escanear: 'Permite tomar una foto del ticket del proveedor para dar entrada a la mercancía. Importante: por ahora la lectura de la foto es una DEMOSTRACIÓN, las líneas que aparecen son de ejemplo y nada cambia en el inventario hasta que marques y confirmes cada una.',
       config: 'Aquí decides si la sesión se mantiene abierta en este teléfono, eliges el tema claro u oscuro y el texto grande, y cierras sesión. También puedes volver a ver este recorrido.',
     };

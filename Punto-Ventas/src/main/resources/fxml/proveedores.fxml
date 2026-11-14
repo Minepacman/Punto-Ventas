@@ -31,7 +31,8 @@
                     <TableColumn fx:id="colNombre"   text="Proveedor" prefWidth="210"/>
                     <TableColumn fx:id="colContacto" text="Contacto"  prefWidth="130"/>
                     <TableColumn fx:id="colTelefono" text="Teléfono"  prefWidth="110"/>
-                    <TableColumn fx:id="colVisita"   text="Visita"    prefWidth="120"/>
+                    <TableColumn fx:id="colVisita"   text="Entrega"   prefWidth="110"/>
+                    <TableColumn fx:id="colPreventa" text="Preventa"  prefWidth="100"/>
                     <TableColumn fx:id="colEstado"   text="Estado"    prefWidth="80"/>
                 </columns>
             </TableView>
@@ -52,7 +53,7 @@
                     <Label text="Contacto o repartidor:"/>
                     <TextField fx:id="txtContacto" promptText="Nombre de quien visita"/>
 
-                    <Label text="Días de visita:"/>
+                    <Label text="Días de entrega (llega la mercancía):"/>
                     <FlowPane hgap="10" vgap="6">
                         <CheckBox fx:id="chkLun" text="Lun"/>
                         <CheckBox fx:id="chkMar" text="Mar"/>
@@ -62,6 +63,19 @@
                         <CheckBox fx:id="chkSab" text="Sáb"/>
                         <CheckBox fx:id="chkDom" text="Dom"/>
                     </FlowPane>
+
+                    <Label text="Días de preventa (pasa el vendedor a tomar el pedido):"/>
+                    <FlowPane hgap="10" vgap="6">
+                        <CheckBox fx:id="chkPreLun" text="Lun"/>
+                        <CheckBox fx:id="chkPreMar" text="Mar"/>
+                        <CheckBox fx:id="chkPreMie" text="Mié"/>
+                        <CheckBox fx:id="chkPreJue" text="Jue"/>
+                        <CheckBox fx:id="chkPreVie" text="Vie"/>
+                        <CheckBox fx:id="chkPreSab" text="Sáb"/>
+                        <CheckBox fx:id="chkPreDom" text="Dom"/>
+                    </FlowPane>
+                    <Label text="Déjalo vacío si el proveedor no manda preventa. Estos días también se ven en el acceso móvil, en la sección Proveedores."
+                           wrapText="true" styleClass="hint"/>
 
                     <Label text="Notas:"/>
                     <TextArea fx:id="txtNotas" prefRowCount="3" wrapText="true"
