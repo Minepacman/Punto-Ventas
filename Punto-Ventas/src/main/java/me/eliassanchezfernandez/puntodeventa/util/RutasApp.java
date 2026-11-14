@@ -171,6 +171,26 @@ public class RutasApp {
         return rutaDeUrl(urlBd);
     }
 
+    /**
+     * ¿La carpeta (o el primer ancestro que exista) está en el mismo disco que la
+     * base de datos? Sirve para avisar que un respaldo ahí protege contra borrados,
+     * pero no contra una falla del disco. false en modo servidor, con BD en memoria
+     * o si no se puede saber.
+     */
+    public boolean enElMismoDiscoQueLaBd(Path carpeta) {
+        if (carpeta == null || !esSqlite()) return false;
+        try {
+            Path bd = archivoBd();
+            if (!Files.exists(bd)) return false;
+            Path existente = carpeta.toAbsolutePath();
+            while (existente != null && !Files.exists(existente)) existente = existente.getParent();
+            if (existente == null) return false;
+            return Files.getFileStore(existente).equals(Files.getFileStore(bd));
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     /** Carpeta "datos" junto a la BD (logotipo); se crea al usarla */
     public Path carpetaDatos() {
         if (carpetaDatosConfigurada != null && !carpetaDatosConfigurada.isBlank()) {

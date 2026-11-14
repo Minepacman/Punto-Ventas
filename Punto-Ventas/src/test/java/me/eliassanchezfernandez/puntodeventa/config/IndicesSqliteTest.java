@@ -37,7 +37,8 @@ class IndicesSqliteTest {
     void lasConexionesUsanWalBusyTimeoutYClavesForaneas() throws Exception {
         try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
             assertThat(pragma(st, "journal_mode")).isEqualToIgnoringCase("wal");
-            assertThat(pragma(st, "synchronous")).isEqualTo("1");        // NORMAL
+            assertThat(pragma(st, "synchronous")).isEqualTo("2");        // FULL: una venta cobrada sobrevive a un corte de luz
+            assertThat(pragma(st, "journal_size_limit")).isEqualTo("33554432");
             assertThat(pragma(st, "busy_timeout")).isEqualTo("10000");
             assertThat(pragma(st, "foreign_keys")).isEqualTo("1");
             assertThat(pragma(st, "temp_store")).isEqualTo("2");         // MEMORY

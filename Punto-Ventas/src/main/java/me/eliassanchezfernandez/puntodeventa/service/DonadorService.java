@@ -363,6 +363,7 @@ public class DonadorService {
             sb.append("Clave de apoyo: ninguna\n");
         }
         sb.append("Instalación: ").append(idInstalacion()).append(" · ").append(modoCaja()).append('\n');
+        sb.append("Registro de errores: ").append(me.eliassanchezfernandez.puntodeventa.util.RegistroErrores.carpetaLogs()).append('\n');
         sb.append("Problema: ").append(problema == null || problema.isBlank() ? "" : problema.trim());
         return sb.toString();
     }

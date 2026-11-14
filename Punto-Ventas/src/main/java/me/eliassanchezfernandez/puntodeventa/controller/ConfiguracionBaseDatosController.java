@@ -294,12 +294,66 @@ public class ConfiguracionBaseDatosController implements Initializable {
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Base de datos SQLite (*.db)", "*.db"));
         File destino = fc.showSaveDialog(raiz.getScene().getWindow());
         if (destino == null) return;
-        try {
-            Path guardado = baseDatosService.respaldar(destino.toPath());
-            Ventanas.alerta(Alert.AlertType.INFORMATION, "Respaldo creado", "El respaldo se guardó en:\n" + guardado);
-        } catch (NegocioException e) {
-            Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo respaldar", e.getMessage());
-        }
+        // VACUUM INTO de una base grande en un disco duro (o a una memoria USB) tarda: fuera del hilo de JavaFX
+        enSegundoPlano("Respaldando", "Creando el respaldo… En un disco lento o una memoria USB puede tardar un momento.",
+                () -> baseDatosService.respaldar(destino.toPath()),
+                guardado -> Ventanas.alerta(Alert.AlertType.INFORMATION, "Respaldo creado",
+                        "El respaldo se guardó en:\n" + guardado + "\n\nConsejo: guarda una copia en una memoria USB u otro disco."),
+                "No se pudo respaldar");
+    }
+
+    /**
+     * Corre {@code trabajo} en un hilo aparte con una ventana de espera (sin cancelar: un
+     * respaldo a medias no sirve) y los botones de respaldo apagados; el resultado o el
+     * error vuelven al hilo de JavaFX. Un fallo inesperado se registra y se avisa sin pila.
+     */
+    private <T> void enSegundoPlano(String titulo, String mensaje, java.util.concurrent.Callable<T> trabajo,
+                                    java.util.function.Consumer<T> alTerminar, String tituloError) {
+        btnRespaldar.setDisable(true);
+        btnRestaurar.setDisable(true);
+        Dialog<Void> espera = new Dialog<>();
+        espera.setTitle(titulo);
+        espera.setHeaderText(null);
+        javafx.scene.control.ProgressIndicator indicador = new javafx.scene.control.ProgressIndicator(-1);
+        indicador.setPrefSize(36, 36);
+        Label lblEspera = new Label(mensaje);
+        lblEspera.setWrapText(true);
+        lblEspera.setMaxWidth(360);
+        javafx.scene.layout.HBox caja = new javafx.scene.layout.HBox(14, indicador, lblEspera);
+        caja.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        caja.setPadding(new Insets(14));
+        espera.getDialogPane().setContent(caja);
+        espera.getDialogPane().getButtonTypes().add(ButtonType.CANCEL);
+        espera.getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(true);   // no se puede dejar a medias
+        Ventanas.estilizar(espera);
+        if (raiz.getScene() != null) espera.initOwner(raiz.getScene().getWindow());
+
+        javafx.concurrent.Task<T> tarea = new javafx.concurrent.Task<>() {
+            @Override protected T call() throws Exception { return trabajo.call(); }
+        };
+        Runnable cerrarEspera = () -> {
+            espera.getDialogPane().lookupButton(ButtonType.CANCEL).setDisable(false);
+            espera.close();
+            btnRespaldar.setDisable(false);
+            btnRestaurar.setDisable(false);
+        };
+        tarea.setOnSucceeded(ev -> {
+            cerrarEspera.run();
+            alTerminar.accept(tarea.getValue());
+        });
+        tarea.setOnFailed(ev -> {
+            cerrarEspera.run();
+            Throwable e = tarea.getException();
+            if (e instanceof NegocioException) {
+                Ventanas.alerta(Alert.AlertType.ERROR, tituloError, e.getMessage());
+            } else {
+                me.eliassanchezfernandez.puntodeventa.util.RegistroErrores.manejar(Thread.currentThread(), e);
+            }
+        });
+        Thread t = new Thread(tarea, "base-datos-" + titulo.toLowerCase(java.util.Locale.ROOT));
+        t.setDaemon(true);
+        t.start();
+        espera.show();   // modal respecto a la ventana de configuración; se cierra desde la tarea
     }
 
     @FXML
@@ -317,27 +371,29 @@ public class ConfiguracionBaseDatosController implements Initializable {
         }
         Optional<String> clave = pedirContrasena();
         if (clave.isEmpty()) return;
-        try {
-            Path seguridad = baseDatosService.restaurar(origen.toPath(), clave.get());
-            lblPendiente.setVisible(true);
-            lblPendiente.setManaged(true);
-            // Hasta reiniciar no se puede cobrar (VentaService lo rechaza): lo mejor es cerrar ya
-            Alert a = new Alert(Alert.AlertType.INFORMATION,
-                    "La restauración se aplica al volver a abrir el programa. Mientras tanto NO se puede vender "
-                    + "(lo que se registrara ahora no quedaría en la base restaurada).\n\n"
-                    + "Copia de seguridad de los datos actuales:\n" + seguridad + "\n\n¿Cerrar el programa ahora?",
-                    new ButtonType("Cerrar ahora", javafx.scene.control.ButtonBar.ButtonData.OK_DONE),
-                    new ButtonType("Después", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE));
-            a.setTitle("Respaldo listo para restaurar");
-            a.setHeaderText(null);
-            Ventanas.estilizar(a);
-            boolean cerrar = a.showAndWait().filter(b -> b.getButtonData() == javafx.scene.control.ButtonBar.ButtonData.OK_DONE).isPresent();
-            if (cerrar) {
-                ((Stage) raiz.getScene().getWindow()).close();
-                Platform.exit();   // PuntoDeVentaApp.stop() cierra Spring; Launcher aplica el respaldo al abrir
-            }
-        } catch (NegocioException e) {
-            Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo restaurar", e.getMessage());
+        // Validar el respaldo (quick_check) y copiar la base actual tardan en un disco lento: fuera del hilo de JavaFX
+        enSegundoPlano("Preparando la restauración", "Revisando el respaldo y guardando una copia de seguridad de la base actual…",
+                () -> baseDatosService.restaurar(origen.toPath(), clave.get()),
+                this::restauracionPreparada, "No se pudo restaurar");
+    }
+
+    /** El respaldo quedó validado y en espera: avisar y ofrecer cerrar ya (hasta reiniciar no se puede cobrar) */
+    private void restauracionPreparada(Path seguridad) {
+        lblPendiente.setVisible(true);
+        lblPendiente.setManaged(true);
+        Alert a = new Alert(Alert.AlertType.INFORMATION,
+                "La restauración se aplica al volver a abrir el programa. Mientras tanto NO se puede vender "
+                + "(lo que se registrara ahora no quedaría en la base restaurada).\n\n"
+                + "Copia de seguridad de los datos actuales:\n" + seguridad + "\n\n¿Cerrar el programa ahora?",
+                new ButtonType("Cerrar ahora", javafx.scene.control.ButtonBar.ButtonData.OK_DONE),
+                new ButtonType("Después", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE));
+        a.setTitle("Respaldo listo para restaurar");
+        a.setHeaderText(null);
+        Ventanas.estilizar(a);
+        boolean cerrar = a.showAndWait().filter(b -> b.getButtonData() == javafx.scene.control.ButtonBar.ButtonData.OK_DONE).isPresent();
+        if (cerrar) {
+            ((Stage) raiz.getScene().getWindow()).close();
+            Platform.exit();   // PuntoDeVentaApp.stop() cierra Spring; Launcher aplica el respaldo al abrir
         }
     }
 

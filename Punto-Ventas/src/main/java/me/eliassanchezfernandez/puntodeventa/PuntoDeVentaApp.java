@@ -11,6 +11,7 @@ import me.eliassanchezfernandez.puntodeventa.util.CalentadorCds;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
 import me.eliassanchezfernandez.puntodeventa.util.Navegador;
 import me.eliassanchezfernandez.puntodeventa.util.PantallaConexion;
+import me.eliassanchezfernandez.puntodeventa.util.RegistroErrores;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.boot.SpringApplication;
@@ -81,6 +82,7 @@ public class PuntoDeVentaApp extends Application {
 
     // ── Arranque ─────────────────────────────────────────────────────────
     public static void main(String[] args) {
+        RegistroErrores.instalar();   // ya lo hizo el Launcher; aquí por si se arranca directo desde el IDE
         launch(args); // delega a JavaFX que llama a init() → start()
     }
 
@@ -124,6 +126,8 @@ public class PuntoDeVentaApp extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         servicios = getHostServices();
+        // JavaFX reporta las excepciones de sus manejadores al manejador del hilo: el mismo del resto del programa
+        Thread.currentThread().setUncaughtExceptionHandler(RegistroErrores::manejar);
 
         // Aplicar tema moderno AtlantaFX (modo oscuro estilo GitHub)
         //Application.setUserAgentStylesheet(new CupertinoLight().getUserAgentStylesheet());
@@ -155,6 +159,7 @@ public class PuntoDeVentaApp extends Application {
     private void mostrarSegunArranque(Stage stage) throws Exception {
         stage.setOnCloseRequest(null);
         if (springContext != null) {
+            RegistroErrores.anotarArranque();
             // La pantalla de login se abre con el contexto de Spring como
             // fábrica de controladores (ver Ventanas)
             Ventanas.mostrarLogin(stage, springContext);

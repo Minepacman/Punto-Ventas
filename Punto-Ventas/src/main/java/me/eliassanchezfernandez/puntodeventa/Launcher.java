@@ -4,6 +4,7 @@ import me.eliassanchezfernandez.puntodeventa.config.PerfilBaseDatos;
 import me.eliassanchezfernandez.puntodeventa.config.VersionEsquema;
 import me.eliassanchezfernandez.puntodeventa.util.CalentadorCds;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
+import me.eliassanchezfernandez.puntodeventa.util.RegistroErrores;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.VersionApp;
 
@@ -21,6 +22,8 @@ public class Launcher {
             CalentadorArranque.calentarYSalir(args);
             return;
         }
+        // Antes que nada: errores no controlados al registro (carpeta de datos/logs) y aviso amable
+        RegistroErrores.instalar();
         try {
             // Cómo se conecta esta caja (una sola caja = SQLite local; varias = servidor PostgreSQL)
             // y qué número de caja es. Se lee del archivo local ANTES de arrancar Spring.
