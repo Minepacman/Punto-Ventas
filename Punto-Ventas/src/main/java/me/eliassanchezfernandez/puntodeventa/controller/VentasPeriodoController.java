@@ -87,6 +87,7 @@ public class VentasPeriodoController implements Initializable {
     @Autowired private AutorizacionService autorizacionService;
     @Autowired private ImpresionService    impresionService;
     @Autowired private FacturacionDialogos facturacionDialogos;
+    @Autowired private MovimientoCajaDialogo movimientoCajaDialogo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.FacturacionService facturacionService;
     @Autowired private org.springframework.context.ApplicationContext springContext;
 
@@ -239,9 +240,37 @@ public class VentasPeriodoController implements Initializable {
             alerta(Alert.AlertType.INFORMATION, "Venta cancelada",
                     "La venta #" + v.getId() + " fue cancelada y la mercancía regresó al inventario.");
             onBuscar();
+            ofrecerDevolucionEnEfectivo(v);
         } catch (NegocioException e) {
             alerta(Alert.AlertType.ERROR, "No se pudo cancelar", e.getMessage());
         }
+    }
+
+    /**
+     * Opcional: si se devolvió efectivo del cajón al cliente, se registra como
+     * salida de caja (CRT-08). La venta cancelada deja de contar en el corte del
+     * día en que se vendió; el dinero que sale hoy se refleja en el turno de hoy.
+     */
+    private void ofrecerDevolucionEnEfectivo(Venta v) {
+        double efectivo = efectivoCobrado(v);
+        if (efectivo <= 0) return;
+        if (!Ventanas.confirmar("Devolución en efectivo", String.format(
+                "¿Devolviste %s en efectivo al cliente desde el cajón?\nSi es así se registra como salida de efectivo y aparece en el corte.",
+                Moneda.formato(efectivo)))) {
+            return;
+        }
+        movimientoCajaDialogo.mostrar(raiz.getScene() != null ? raiz.getScene().getWindow() : null,
+                MovimientoCajaDialogo.Prellenado.devolucion(v.getId(), efectivo, "Devolución por cancelación de la venta #" + v.getId()));
+    }
+
+    /** Efectivo neto que entró con la venta (pagos en efectivo menos el cambio; ventas viejas: el total si fue efectivo) */
+    static double efectivoCobrado(Venta v) {
+        if (v.getPagos() == null || v.getPagos().isEmpty()) {
+            return v.getFormaPago() == Venta.FormaPago.EFECTIVO || v.getFormaPago() == null ? v.getTotal() : 0;
+        }
+        double efectivo = 0;
+        for (PagoVenta p : v.getPagos()) if (p.getFormaPago() == Venta.FormaPago.EFECTIVO) efectivo += p.getMonto();
+        return Math.max(0, VentaService.redondear(efectivo - v.getCambio()));
     }
 
     /** Reimprime el ticket de la venta seleccionada en la impresora de tickets (fuera del hilo de JavaFX) */

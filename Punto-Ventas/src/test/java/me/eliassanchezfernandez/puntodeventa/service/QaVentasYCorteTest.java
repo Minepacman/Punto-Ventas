@@ -128,32 +128,54 @@ class QaVentasYCorteTest extends BaseServicioTest {
                 .extracting(d -> d.getProducto().getId()).containsExactly(a.getId());
     }
 
-    // ── M-24: corte acumulado (DOCUMENTA) ─────────────────────────────────
+    // ── M-24: corte por turno (RESUELTO) ──────────────────────────────────
 
     /**
-     * DOCUMENTA (decisión a confirmar). El corte siempre suma desde las 00:00:
-     * si la cajera del turno 1 hizo su corte y se llevó su efectivo, el corte
-     * del turno 2 "espera" también el efectivo del turno 1 y marca FALTANTE.
-     * No existe un corte "desde el último corte" (por turno).
+     * M-24 (resuelto). Antes el corte siempre sumaba desde las 00:00: si la
+     * cajera del turno 1 hacía su corte y se llevaba su efectivo, el corte del
+     * turno 2 "esperaba" también el efectivo del turno 1 y marcaba FALTANTE.
+     * Ahora el corte es por TURNO: arranca donde terminó el corte anterior de
+     * esta caja, con lo que ese corte dejó en el cajón (por defecto el fondo).
+     * El reporte del día sigue acumulando todo y descuenta los retiros.
      */
     @Test
-    void elCorteSiempreAcumulaTodoElDiaNoDesdeElUltimoCorte() throws Exception {
+    void elCorteEsPorTurnoDesdeElUltimoCorteYNoDesdeLas00() throws Exception {
         Cajero admin = iniciarComoAdmin();
-        if (cajaService.requiereFondo(admin)) cajaService.registrarFondo(admin, 100);
+        cajaService.registrarFondo(admin, 100);
         double fondo = cajaService.fondoVigenteDelDia(LocalDate.now());
-        VentaService.ResumenCorte base = ventaService.resumenCompletoDe(LocalDate.now());
         Producto p = producto("Refresco", 50, 100);
 
         ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)), Venta.FormaPago.EFECTIVO, 50);
-        Corte turno1 = cajaService.hacerCorte(fondo + base.efectivo + 50, null);
+        Corte turno1 = cajaService.hacerCorte(fondo + 50, null);          // deja el fondo, se lleva 50
         assertThat(turno1.getDiferencia()).isCloseTo(0, within(0.001));
+        assertThat(turno1.getEfectivoDejadoOFondo()).isCloseTo(fondo, within(0.001));
+        assertThat(turno1.getRetiro()).isCloseTo(50, within(0.001));
 
-        // Turno 2: la cajera nueva solo tiene en el cajón el fondo y SU venta
+        // Turno 2: la cajera nueva solo tiene en el cajón el fondo y SU venta, y eso es lo que se espera
         ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)), Venta.FormaPago.EFECTIVO, 50);
-        Corte turno2 = cajaService.hacerCorte(fondo + 50, null);
+        CajaService.EstadoCaja turno = cajaService.estadoTurnoActual();
+        assertThat(turno.turno).isTrue();
+        assertThat(turno.inicio).isEqualTo(turno1.getRealizadoEn());
+        assertThat(turno.corteAnterior.getId()).isEqualTo(turno1.getId());
+        assertThat(turno.efectivoInicial).isCloseTo(fondo, within(0.001));
+        assertThat(turno.ventas.efectivo).isCloseTo(50, within(0.001));
+        assertThat(turno.esperado()).isCloseTo(fondo + 50, within(0.001));
 
-        assertThat(turno2.getEfectivoEsperado()).isCloseTo(fondo + base.efectivo + 100, within(0.001));
-        assertThat(turno2.hayFaltante()).isTrue();   // "faltante" de 50 que en realidad se llevó el turno 1
+        Corte turno2 = cajaService.hacerCorte(fondo + 50, null);
+        assertThat(turno2.getInicio()).isEqualTo(turno1.getRealizadoEn());
+        assertThat(turno2.getEfectivoEsperado()).isCloseTo(fondo + 50, within(0.001));
+        assertThat(turno2.getVentasEfectivo()).isCloseTo(50, within(0.001));
+        assertThat(turno2.getNumVentas()).isEqualTo(1);
+        assertThat(turno2.hayFaltante()).as("el efectivo del turno 1 ya se retiró: no es faltante").isFalse();
+        assertThat(turno2.getDiferencia()).isCloseTo(0, within(0.001));
+
+        // El reporte del día acumula las dos ventas y descuenta lo retirado en los cortes
+        CajaService.EstadoCaja dia = cajaService.estadoDelDia();
+        assertThat(dia.turno).isFalse();
+        assertThat(dia.ventas.efectivo).isCloseTo(100, within(0.001));
+        assertThat(dia.cortes).extracting(Corte::getId).containsExactlyInAnyOrder(turno1.getId(), turno2.getId());
+        assertThat(dia.retiros).isCloseTo(100, within(0.001));
+        assertThat(dia.esperado()).as("en el cajón solo queda el fondo").isCloseTo(fondo, within(0.001));
     }
 
     // ── B-2: el corte guardado conserva transferencia y vales ─────────────

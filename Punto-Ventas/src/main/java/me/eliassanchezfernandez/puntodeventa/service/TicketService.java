@@ -3,6 +3,7 @@ package me.eliassanchezfernandez.puntodeventa.service;
 import me.eliassanchezfernandez.puntodeventa.impresion.DocumentoImpresion;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.Corte;
+import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.OrdenCompra;
 import me.eliassanchezfernandez.puntodeventa.model.OrdenCompraLinea;
@@ -135,27 +136,58 @@ public class TicketService {
     }
 
     /**
-     * Reporte del corte de caja del día. La ganancia solo aparece si
-     * {@code r.gananciaVisible}. {@code corte} (el último guardado hoy) es opcional.
+     * Reporte del corte de caja: el turno en curso, el día completo o el periodo
+     * de un corte guardado ({@code e}). La ganancia solo aparece si
+     * {@code e.ventas.gananciaVisible}. {@code corte} (el guardado para ese
+     * periodo) es opcional.
      */
-    public DocumentoImpresion documentoCorte(VentaService.ResumenCorte r, double fondo, Corte corte,
-                                             Configuracion c, String impresoPor) {
+    public DocumentoImpresion documentoCorte(CajaService.EstadoCaja e, Corte corte, Configuracion c, String impresoPor) {
+        VentaService.ResumenCorte r = e.ventas;
         int cols = columnas(c.getTicketAnchoMm());
         String raya = "-".repeat(cols);
+        DateTimeFormatter fmtHora = DateTimeFormatter.ofPattern("HH:mm");
+        DateTimeFormatter fmtFecha = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
         DocumentoImpresion d = new DocumentoImpresion();
         d.titulo(c.getNombreTienda());
         String titulo = r.esGeneral() ? "CORTE GENERAL (TODAS LAS CAJAS)"
                 : multiCaja() ? "CORTE DE " + IdentidadCaja.etiqueta(r.caja).toUpperCase() : "CORTE DE CAJA";
         d.agregar(titulo, DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.centrada(e.turno ? "Turno" : "Día completo");
         d.linea(raya);
-        d.linea(dosColumnas("Fecha", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        if (corte != null) d.linea(dosColumnas("Corte #" + corte.getId(), "por " + corte.getCajeroNombre(), cols));
+        d.linea(dosColumnas("Desde", e.inicio.format(e.inicio.toLocalDate().equals(e.fin.toLocalDate()) ? fmtHora : fmtFecha), cols));
+        d.linea(dosColumnas("Hasta", e.fin.format(fmtFecha), cols));
         d.linea("Impreso por: " + (impresoPor != null ? impresoPor : "—"));
         d.linea(raya);
-        d.linea(dosColumnas("Fondo inicial", Moneda.formato(fondo), cols));
-        d.linea(dosColumnas("Ventas en efectivo", Moneda.formato(r.efectivo), cols));
-        d.agregar(dosColumnas("Efectivo esperado", Moneda.formato(fondo + r.efectivo), cols),
+        d.negrita("Efectivo en caja");
+        d.linea(dosColumnas(e.efectivoInicialEsFondo ? "Fondo inicial" : "Dejado por el corte anterior", Moneda.formato(e.efectivoInicial), cols));
+        d.linea(dosColumnas("+ Ventas en efectivo", Moneda.formato(r.efectivo), cols));
+        if (e.entradas > 0) d.linea(dosColumnas("+ Entradas de efectivo", Moneda.formato(e.entradas), cols));
+        if (e.salidas > 0)  d.linea(dosColumnas("- Salidas de efectivo", Moneda.formato(e.salidas), cols));
+        if (e.retiros != 0) d.linea(dosColumnas("- Retirado en cortes", Moneda.formato(e.retiros), cols));
+        d.agregar(dosColumnas("Efectivo esperado", Moneda.formato(e.esperado()), cols),
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
+        if (corte != null) {
+            d.linea(dosColumnas("Efectivo contado", Moneda.formato(corte.getEfectivoContado()), cols));
+            d.agregar(dosColumnas(corte.hayFaltante() ? "FALTANTE" : corte.haySobrante() ? "SOBRANTE" : "Diferencia",
+                    Moneda.formato(corte.getDiferencia()), cols), DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
+            if (corte.getEfectivoDejado() != null) {
+                d.linea(dosColumnas("Queda en caja", Moneda.formato(corte.getEfectivoDejado()), cols));
+                d.linea(dosColumnas("Retiro", Moneda.formato(corte.getRetiro()), cols));
+            }
+            if (corte.getObservaciones() != null) ajustar("Obs.: " + corte.getObservaciones(), cols).forEach(d::linea);
+        }
+        if (!e.movimientos.isEmpty()) {
+            d.linea(raya);
+            d.negrita("Entradas y salidas");
+            for (MovimientoCaja m : e.movimientos) {
+                String signo = m.esEntrada() ? "+" : "-";
+                d.linea(dosColumnas(m.getFecha().format(fmtHora) + " " + recortar(m.getConcepto(), Math.max(8, cols - 18)),
+                        signo + Moneda.formato(m.getMonto()), cols));
+            }
+        }
         d.linea(raya);
+        d.negrita("Ventas por forma de pago");
         d.linea(dosColumnas("Efectivo", Moneda.formato(r.efectivo), cols));
         d.linea(dosColumnas("Tarjeta", Moneda.formato(r.tarjeta), cols));
         if (r.transferencia > 0) d.linea(dosColumnas("Transferencia", Moneda.formato(r.transferencia), cols));
@@ -186,24 +218,60 @@ public class TicketService {
             d.linea(raya);
             d.negrita("Vouchers de tarjeta");
             for (VentaService.VoucherTarjeta v : r.vouchers) {
-                d.linea(dosColumnas("#" + v.folio() + " " + v.fecha().format(DateTimeFormatter.ofPattern("HH:mm")),
-                        Moneda.formato(v.monto()), cols));
+                d.linea(dosColumnas("#" + v.folio() + " " + v.fecha().format(fmtHora), Moneda.formato(v.monto()), cols));
                 String det = (v.terminal() != null ? v.terminal() : "s/terminal")
                         + (v.ultimos4() != null ? " ****" + v.ultimos4() : "")
                         + (v.autorizacion() != null ? " aut. " + v.autorizacion() : "");
                 ajustar("  " + det, cols).forEach(d::linea);
             }
         }
-        if (corte != null) {
+        if (!e.cortes.isEmpty() && !e.turno) {
             d.linea(raya);
-            d.negrita("Último corte guardado");
-            d.linea(dosColumnas("Esperado", Moneda.formato(corte.getEfectivoEsperado()), cols));
-            d.linea(dosColumnas("Contado", Moneda.formato(corte.getEfectivoContado()), cols));
-            d.linea(dosColumnas(corte.hayFaltante() ? "FALTANTE" : corte.haySobrante() ? "SOBRANTE" : "Diferencia",
-                    Moneda.formato(corte.getDiferencia()), cols));
+            d.negrita("Cortes del día");
+            for (Corte ct : e.cortes) {
+                d.linea(dosColumnas(ct.getRealizadoEn().format(fmtHora) + " " + recortar(ct.getCajeroNombre(), Math.max(6, cols - 24)),
+                        "dif. " + Moneda.formato(ct.getDiferencia()), cols));
+            }
         }
         d.linea(raya);
         return d;
+    }
+
+    /**
+     * Comprobante de una entrada o salida de efectivo (CRT-08), para guardarlo
+     * en el cajón o entregarlo a quien recibió el dinero.
+     */
+    public DocumentoImpresion documentoMovimientoCaja(MovimientoCaja m, Configuracion c) {
+        int cols = columnas(c.getTicketAnchoMm());
+        String raya = "-".repeat(cols);
+        DocumentoImpresion d = new DocumentoImpresion();
+        d.titulo(c.getNombreTienda());
+        d.agregar(m.esEntrada() ? "ENTRADA DE EFECTIVO" : "SALIDA DE EFECTIVO", DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.linea(raya);
+        d.linea(dosColumnas("Folio: " + m.getId(), m.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        if (multiCaja()) d.linea(IdentidadCaja.etiqueta(m.getCaja()));
+        d.linea("Cajero: " + (m.getCajeroNombre() != null ? m.getCajeroNombre() : "—"));
+        if (m.getAutorizadoPor() != null) d.linea("Autorizó: " + m.getAutorizadoPor());
+        d.linea(raya);
+        d.linea(m.getCategoria().getEtiqueta());
+        ajustar(m.getConcepto(), cols).forEach(d::linea);
+        if (m.getProveedorNombre() != null) d.linea("Proveedor: " + m.getProveedorNombre());
+        if (m.getOrdenCompraId() != null) d.linea("Orden de compra #" + m.getOrdenCompraId());
+        if (m.getVentaId() != null) d.linea("Venta #" + m.getVentaId());
+        d.linea(raya);
+        d.agregar(dosColumnas(m.esEntrada() ? "ENTRA" : "SALE", Moneda.formato(m.getMonto()), cols),
+                DocumentoImpresion.Alineacion.IZQUIERDA, true, true);
+        d.linea(raya);
+        d.vacia();
+        d.vacia();
+        d.centrada("_".repeat(Math.min(cols - 4, 28)));
+        d.centrada(m.esEntrada() ? "Recibió" : "Entregó / Recibió");
+        return d;
+    }
+
+    private static String recortar(String texto, int max) {
+        if (texto == null) return "";
+        return texto.length() <= max ? texto : texto.substring(0, Math.max(1, max - 1)) + "…";
     }
 
     /** Orden de compra para llevar o mandar impresa al proveedor (sin precios de venta ni ganancias) */

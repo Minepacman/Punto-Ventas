@@ -129,17 +129,24 @@ class CajasMultiplesTest extends BaseServicioTest {
         assertThat(r1.efectivo).isCloseTo(100, within(0.001));
         assertThat(cajaService.cortesDeHoyDeEstaCaja()).isEmpty();           // el corte de la 2 no es de la 1
 
-        // Corte general: fondos 200 + 50, efectivo 100 + 200, tarjeta 100, 3 ventas
+        // Corte general: fondos 200 + 50, efectivo 100 + 200, tarjeta 100, 3 ventas.
+        // Lo esperado es lo que debe haber AHORA en los cajones: caja 1 = 200 + 100; caja 2 ya hizo
+        // corte y dejó su fondo (50), los 200 se los llevó la cajera → 350 (no 550)
         VentaService.ResumenCorte general = ventaService.resumenGeneralDe(LocalDate.now());
         assertThat(general.esGeneral()).isTrue();
         assertThat(general.numVentas).isEqualTo(3);
         assertThat(general.porCaja).extracting(VentaService.VentasCaja::caja).containsExactly(1, 2);
         assertThat(general.porCaja.get(1).total()).isCloseTo(300, within(0.001));
-        Corte cg = cajaService.hacerCorteGeneral(560, "Cuadre de todas");
+        CajaService.EstadoCaja estadoGeneral = cajaService.estadoGeneralDelDia();
+        assertThat(estadoGeneral.ventas.efectivo).isCloseTo(300, within(0.001));
+        assertThat(estadoGeneral.retiros).isCloseTo(200, within(0.001));
+        assertThat(estadoGeneral.esperado()).isCloseTo(350, within(0.001));
+        Corte cg = cajaService.hacerCorteGeneral(360, "Cuadre de todas");
         assertThat(cg.isGeneral()).isTrue();
         assertThat(cg.getEtiquetaCaja()).isEqualTo("Todas las cajas");
         assertThat(cg.getFondoInicial()).isCloseTo(250, within(0.001));
-        assertThat(cg.getEfectivoEsperado()).isCloseTo(550, within(0.001));
+        assertThat(cg.getVentasEfectivo()).isCloseTo(300, within(0.001));
+        assertThat(cg.getEfectivoEsperado()).isCloseTo(350, within(0.001));
         assertThat(cg.getDiferencia()).isCloseTo(10, within(0.001));
         assertThat(cg.getVentasTarjeta()).isCloseTo(100, within(0.001));
         assertThat(cajaService.cortesDeHoy()).extracting(Corte::getId).contains(c2.getId(), cg.getId());

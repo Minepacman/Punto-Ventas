@@ -39,6 +39,8 @@
                 <Button fx:id="btnReimprimir" text="Reimprimir"    onAction="#onReimprimirUltimo" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="impresora"/></graphic></Button>
                 <Button fx:id="btnAbrirCajon" text="Cajón"         onAction="#onAbrirCajon"
                         visible="false" managed="false" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="efectivo"/></graphic></Button>
+                <Button fx:id="btnEfectivo"   text="Efectivo"      onAction="#onMovimientoEfectivo"
+                        styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="subir"/></graphic></Button>
             </HBox>
         </VBox>
     </top>
