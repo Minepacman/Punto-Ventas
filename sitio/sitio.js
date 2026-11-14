@@ -28,7 +28,9 @@
   }
   $$('[data-dato]').forEach(el => {
     const v = valor(el.dataset.dato);
-    if (pendiente(v)) {
+    if (pendiente(v) && el.dataset.pendiente === undefined && !el.closest('.cuenta')) {
+      el.hidden = true;   // dato opcional sin llenar: se oculta, no se muestra «por confirmar»
+    } else if (pendiente(v)) {
       el.textContent = el.dataset.pendiente || 'Por confirmar';
       el.classList.add(el.closest('.cuenta') ? 'pendiente' : 'pendiente-chip');
     } else {
@@ -112,23 +114,68 @@
   }
 
   // ── 2. Sistema operativo del visitante ─────────────────────────────
+  // Devuelve { clave, nombre, alt, altNombre, incierto, movil, dispositivo, nota }.
+  //  - clave: instalador recomendado ('windows-x64', 'macos-arm64', ...); null si es una Mac cuyo chip no se pudo saber.
+  //  - movil: teléfono/tableta/Chromebook. Regla del dueño: se muestra la descarga de Windows y una nota.
+  const WIN64 = { clave: 'windows-x64', nombre: 'Windows (64 bits)', alt: 'windows-x86', altNombre: 'Windows (32 bits)' };
+  function esMac(ua, plat) { return /Macintosh|Mac OS X|MacIntel|MacPPC/i.test(ua) || /^Mac/i.test(plat); }
   function detectarSO() {
     const ua = navigator.userAgent || '';
-    const plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
-    if (/Windows/i.test(ua) || /Win/i.test(plat)) {
-      const x64 = /WOW64|Win64|x64|amd64/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.platform === 'Windows');
-      return { clave: x64 ? 'windows-x64' : 'windows-x86', nombre: x64 ? 'Windows (64 bits)' : 'Windows (32 bits)', alt: x64 ? 'windows-x86' : 'windows-x64' };
+    const uad = navigator.userAgentData;
+    const plat = (uad && uad.platform) || navigator.platform || '';
+    const toques = navigator.maxTouchPoints || 0;
+    // Teléfonos y tabletas. iPadOS se presenta como Mac: una Mac de verdad no tiene pantalla táctil.
+    if (/iPhone|iPod/i.test(ua)) return Object.assign({ movil: true, dispositivo: 'un iPhone' }, WIN64);
+    if (/Android/i.test(ua)) return Object.assign({ movil: true, dispositivo: /Mobile/i.test(ua) ? 'un teléfono Android' : 'una tableta Android' }, WIN64);
+    if (/iPad/i.test(ua) || (esMac(ua, plat) && toques > 1)) return Object.assign({ movil: true, dispositivo: 'una tableta (iPad)' }, WIN64);
+    if (/CrOS/i.test(ua)) return Object.assign({ movil: true, dispositivo: 'una Chromebook' }, WIN64);
+    if (/Windows|Win32|Win64/i.test(ua) || /^Win/i.test(plat)) {
+      // «Win32» a secas (sin Win64, WOW64, x64 ni ARM) es un Windows de 32 bits; con WOW64 el sistema es de 64 bits.
+      const x86 = /Win32/i.test(ua) && !/Win64|WOW64|x64|amd64|ARM/i.test(ua) && !/Windows NT 1[01]\.0; Win64/i.test(ua);
+      return x86 ? { clave: 'windows-x86', nombre: 'Windows (32 bits)', alt: 'windows-x64', altNombre: 'Windows (64 bits)' } : Object.assign({}, WIN64);
     }
-    if (/Macintosh|Mac OS X/i.test(ua) || /Mac/i.test(plat)) {
-      // El navegador no distingue Apple Silicon de Intel: se ofrece el de Apple Silicon y el otro al lado.
-      return { clave: 'macos-arm64', nombre: 'Mac (Apple Silicon)', alt: 'macos-x64' };
+    if (esMac(ua, plat)) {
+      // Safari y Firefox dicen «Intel» aunque sea Apple Silicon: la UA no sirve. Se prueba la GPU (WebGL).
+      const arq = arquitecturaMacPorGpu();
+      if (arq === 'arm') return { clave: 'macos-arm64', nombre: 'Mac (Apple Silicon)', alt: 'macos-x64', altNombre: 'Mac Intel' };
+      if (arq === 'x64') return { clave: 'macos-x64', nombre: 'Mac (Intel)', alt: 'macos-arm64', altNombre: 'Mac Apple Silicon' };
+      return { clave: null, nombre: 'Mac', incierto: true, alt: 'macos-arm64', altNombre: 'Mac Apple Silicon (M1, M2, M3, M4…)', alt2: 'macos-x64', alt2Nombre: 'Mac Intel' };
     }
-    if (/Linux/i.test(ua) && !/Android/i.test(ua)) {
-      return { clave: 'linux-x64.deb', nombre: 'Linux (Ubuntu / Debian)', alt: 'linux-x64.tar.gz' };
+    if (/Linux|X11|Ubuntu|Fedora|Debian/i.test(ua) || /Linux/i.test(plat)) {
+      const rpm = /Fedora|SUSE|Red Hat|CentOS/i.test(ua);
+      const nota = /aarch64|armv|arm64/i.test(ua) ? 'Los instaladores de Linux son para procesadores de 64 bits Intel/AMD; en ARM (p. ej. Raspberry Pi) no hay versión todavía.' : '';
+      return rpm
+        ? { clave: 'linux-x64.rpm', nombre: 'Linux (Fedora / openSUSE)', alt: 'linux-x64.deb', altNombre: 'Ubuntu / Debian (.deb)', nota }
+        : { clave: 'linux-x64.deb', nombre: 'Linux (Ubuntu / Debian)', alt: 'linux-x64.rpm', altNombre: 'Fedora / openSUSE (.rpm)', nota };
     }
-    return null;   // teléfono u otro: se manda a la lista completa
+    return Object.assign({ movil: true, dispositivo: 'un dispositivo que no reconocemos' }, WIN64);
   }
-  const so = detectarSO();
+  function arquitecturaMacPorGpu() {
+    try {
+      const c = document.createElement('canvas');
+      const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+      if (!gl) return null;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+      if (/Apple M\d/i.test(r)) return 'arm';
+      if (/Intel|AMD|Radeon|NVIDIA|GeForce/i.test(r)) return 'x64';
+    } catch (e) { /* sin WebGL: no se sabe */ }
+    return null;   // «Apple GPU» (Safari) no distingue chip
+  }
+  let so = detectarSO();
+  // Chrome/Edge/Opera dicen la arquitectura real; si responde, manda sobre la prueba de GPU.
+  if (so.incierto || (so.clave && so.clave.indexOf('macos') === 0)) {
+    const uad = navigator.userAgentData;
+    if (uad && uad.getHighEntropyValues) {
+      uad.getHighEntropyValues(['architecture']).then(v => {
+        const a = String(v.architecture || '').toLowerCase();
+        if (a === 'arm') so = { clave: 'macos-arm64', nombre: 'Mac (Apple Silicon)', alt: 'macos-x64', altNombre: 'Mac Intel' };
+        else if (a === 'x86') so = { clave: 'macos-x64', nombre: 'Mac (Intel)', alt: 'macos-arm64', altNombre: 'Mac Apple Silicon' };
+        else return;
+        pintarDeteccion();
+      }).catch(() => {});
+    }
+  }
 
   // ── 3. Última versión publicada ────────────────────────────────────
   const SUFIJOS = {
@@ -149,12 +196,82 @@
     try { return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }); }
     catch (e) { return ''; }
   }
+  // Estado de la última versión (null mientras no llegue o si la API falla)
+  let ultima = null;   // { version, activos, url }
+  const EXTENSION = { 'windows-x64': '.exe', 'windows-x86': '.exe', 'macos-arm64': '.dmg', 'macos-x64': '.dmg', 'linux-x64.deb': '.deb', 'linux-x64.rpm': '.rpm', 'linux-x64.tar.gz': '.tar.gz' };
+
+  function configurarBoton(a, clave, textoBase) {
+    if (!a) return;
+    const act = ultima && ultima.activos[clave];
+    const t = a.lastElementChild;
+    if (act) {
+      a.href = act.browser_download_url; a.setAttribute('download', '');
+      if (t) t.textContent = textoBase + ' · v' + ultima.version + ' (' + tamano(act.size) + ')';
+    } else {
+      a.href = ultima ? ultima.url : RELEASES_URL; a.removeAttribute('download');
+      if (t) t.textContent = ultima ? 'Ver en la página de versiones' : textoBase;
+    }
+  }
+  function pintarDeteccion() {
+    const dt = $('#detecta-so');
+    const btn = $('#btn-descarga-principal');
+    const hay = clave => !ultima || !!ultima.activos[clave];   // sin datos de la API se supone que existe
+    const version = ultima ? ' · v' + ultima.version : '';
+    // Tarjeta recomendada
+    $$('.tarjeta-descarga').forEach(t => t.classList.remove('recomendada'));
+    if (so.clave) { const a = $('[data-activo="' + so.clave + '"]'); if (a) a.closest('.tarjeta-descarga').classList.add('recomendada'); }
+    else if (so.incierto) { const a = $('[data-activo="macos-arm64"]'); if (a) a.closest('.tarjeta-descarga').classList.add('recomendada'); }
+
+    // Botón principal del hero
+    if (btn) {
+      const sub = $('.sub', btn);
+      if (so.incierto) {
+        btn.href = '#descargas';
+        sub.textContent = 'para Mac · elige Apple Silicon o Intel';
+      } else {
+        const act = ultima && ultima.activos[so.clave];
+        btn.href = act ? act.browser_download_url : (ultima ? '#descargas' : '#descargas');
+        if (act) btn.setAttribute('download', ''); else btn.removeAttribute('download');
+        sub.textContent = (so.movil ? 'para Windows (en computadora)' : 'para ' + so.nombre) + version + (act ? ' · ' + tamano(act.size) : '');
+      }
+    }
+    if (!dt) return;
+    const h3 = $('h3', dt), p = $('p', dt), nota = $('#detecta-nota'), alt = $('#detecta-alt'), wa = $('#detecta-wa');
+    const boton = $('a.btn', dt);
+    const textoOtras = 'Si tu equipo es distinto, elige otro en la lista de abajo.';
+    const waCaja = $('#detecta-wa-caja');
+    nota.hidden = true; alt.hidden = true; waCaja.hidden = true;
+    if (so.movil) {
+      h3.textContent = 'Estás en ' + so.dispositivo + ': el programa es para computadora';
+      p.textContent = 'Caja Libre se instala en la computadora de la tienda, no en el celular. Te dejamos la descarga de Windows (la más común); ' + textoOtras.toLowerCase().replace('si tu equipo es distinto', 'si tu PC es Mac o Linux');
+      configurarBoton(boton, 'windows-x64', 'Descargar para Windows');
+      waCaja.hidden = false;
+      const enlace = 'https://minepacman.github.io/Punto-Ventas/';
+      wa.href = 'https://wa.me/?text=' + encodeURIComponent('Caja Libre, punto de venta gratis para tu tienda: ' + enlace);
+    } else if (so.incierto) {
+      h3.textContent = 'Detectamos que usas una Mac';
+      p.textContent = 'Tu navegador no nos dice si es Apple Silicon (M1, M2, M3, M4…) o Intel. Para saberlo: menú Apple › Acerca de esta Mac; si dice «Chip Apple…» baja la primera, si dice «Procesador Intel» la segunda.';
+      configurarBoton(boton, 'macos-arm64', 'Mac Apple Silicon');
+      alt.hidden = false; configurarBoton(alt, 'macos-x64', 'Mac Intel');
+    } else {
+      h3.textContent = 'Detectamos que usas ' + so.nombre;
+      if (hay(so.clave)) {
+        p.textContent = 'Este es el instalador que te toca. ' + textoOtras;
+        configurarBoton(boton, so.clave, 'Descargar');
+      } else {
+        p.textContent = 'Esta versión no incluye el instalador para ' + so.nombre + '; elige otro de la lista o entra a la página de versiones.';
+        configurarBoton(boton, so.clave, 'Descargar');
+      }
+      if (so.nota) { nota.textContent = so.nota; nota.hidden = false; }
+    }
+  }
   function aplicarVersion(release) {
     const version = (release.tag_name || '').replace(/^v/, '');
     const activos = {};
     (release.assets || []).forEach(a => {
       Object.keys(SUFIJOS).forEach(k => { if (SUFIJOS[k].test(a.name)) activos[k] = a; });
     });
+    ultima = { version, activos, url: release.html_url || RELEASES_URL };
     $$('[data-version]').forEach(el => { el.textContent = version; });
     $$('[data-fecha-version]').forEach(el => { el.textContent = fechaLarga(release.published_at); });
     $$('[data-activo]').forEach(a => {
@@ -174,43 +291,19 @@
       }
     });
     $$('[data-notas]').forEach(a => { a.href = release.html_url || RELEASES_URL; });
-    // Botón principal
-    const btn = $('#btn-descarga-principal');
-    if (btn && so && activos[so.clave]) {
-      btn.href = activos[so.clave].browser_download_url;
-      btn.setAttribute('download', '');
-      $('.sub', btn).textContent = 'para ' + so.nombre + ' · v' + version + ' · ' + tamano(activos[so.clave].size);
-    }
-    const dt = $('#detecta-so');
-    if (dt) {
-      const boton = $('a.btn', dt);
-      if (so && activos[so.clave]) {
-        $('h3', dt).textContent = 'Detectamos que usas ' + so.nombre;
-        $('p', dt).textContent = 'Este es el instalador que te toca. Si tu equipo es distinto, elige otro abajo.';
-        boton.href = activos[so.clave].browser_download_url;
-        boton.setAttribute('download', '');
-        boton.lastElementChild.textContent = 'Descargar v' + version + ' (' + tamano(activos[so.clave].size) + ')';
-      } else if (so) {
-        $('h3', dt).textContent = 'Detectamos que usas ' + so.nombre;
-        $('p', dt).textContent = 'Esta versión no incluye ese instalador; elige otro de la lista o entra a la página de versiones.';
-        boton.href = release.html_url || RELEASES_URL;
-      } else {
-        $('h3', dt).textContent = '¿Estás en el teléfono?';
-        $('p', dt).textContent = 'El programa se instala en la computadora de la tienda. Abre esta página desde esa PC y el botón elegirá el instalador correcto.';
-        boton.href = release.html_url || RELEASES_URL;
-      }
-    }
+    pintarDeteccion();
   }
   function sinApi() {
     $$('[data-version]').forEach(el => { el.textContent = 'más reciente'; });
     $$('[data-fecha-version]').forEach(el => { el.textContent = 'ver página de versiones'; });
+    pintarDeteccion();
     const dt = $('#detecta-so');
-    if (dt && so) {
-      $('h3', dt).textContent = 'Detectamos que usas ' + so.nombre;
-      $('p', dt).textContent = 'No pudimos consultar la última versión en este momento: en la página de versiones busca el archivo ' +
-        'que termina en "' + so.clave + (so.clave.indexOf('.') < 0 ? (so.clave.indexOf('windows') === 0 ? '.exe' : '.dmg') : '') + '".';
+    if (dt && so.clave) {
+      $('p', dt).textContent = 'No pudimos consultar la última versión en este momento: en la página de versiones busca el archivo que termina en «' +
+        so.clave.replace('linux-x64.', 'linux-x64.').replace(/^(windows|macos)-/, '-$1-') + (EXTENSION[so.clave] && so.clave.indexOf('linux') !== 0 ? EXTENSION[so.clave] : '') + '».';
     }
   }
+  pintarDeteccion();
   if (window.fetch) {
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     if (ctl) setTimeout(() => ctl.abort(), 8000);
@@ -225,9 +318,6 @@
   } else {
     sinApi();
   }
-  // Sin API todavía, el botón principal al menos nombra el sistema detectado
-  const btn0 = $('#btn-descarga-principal');
-  if (btn0 && so) $('.sub', btn0).textContent = 'para ' + so.nombre;
 
   // ── 4. Menú móvil, copiar comando ──────────────────────────────────
   const menuBtn = $('.menu-boton');

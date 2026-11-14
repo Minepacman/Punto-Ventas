@@ -1,6 +1,6 @@
 /*
  * datos.js — ÚNICO lugar que hay que editar para llenar los datos del sitio.
- * Todo lo que diga PENDIENTE se muestra en la página como "por confirmar".
+ * Un dato vacío o PENDIENTE no se muestra (se oculta) en la página.
  *
  * Después de cambiar algo aquí no hay que tocar nada más: index.html lee estos
  * valores al cargar (atributos data-dato="clave").
@@ -12,7 +12,7 @@ window.DATOS_SITIO = {
 
   autor: {
     nombre: 'Elias Oziel Sánchez Fernández',   // también es el beneficiario que debe mostrar el banco al donar
-    ocupacion: 'PENDIENTE',                    // REVISAR: p. ej. "Desarrollador de software"
+    ocupacion: 'Desarrollador de software',
     ciudad: 'PENDIENTE',                       // opcional: "Ciudad de México"
   },
 
@@ -28,9 +28,9 @@ window.DATOS_SITIO = {
   //    sitio.js lo descarga, verifica la firma Ed25519 del autor cuando el navegador puede y pone esos datos
   //    aquí. Estos solo se muestran si el archivo no se pudo leer.
   donacion: {
-    clabe: 'PENDIENTE',        // 18 dígitos
-    banco: 'PENDIENTE',
-    beneficiario: 'PENDIENTE', // tal como lo muestra el banco al transferir
+    clabe: '722969010047831308',   // 18 dígitos
+    banco: 'Mercado Pago',
+    beneficiario: 'Elias Oziel Sánchez Fernández', // tal como lo muestra el banco al transferir
     concepto: 'PDV + nombre de tu negocio'   // lo que el donador escribe en el concepto de la transferencia
   },
   // Llave pública Ed25519 del autor (la misma de ClaveDonador.CLAVE_PUBLICA_OFICIAL, kid 0d2a501a)

@@ -465,3 +465,8 @@ h2.titulo { font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.03em; }
 .pagina-404 { min-height: 70vh; display: grid; place-items: center; text-align: center; padding: 60px var(--gutter); }
 .pagina-404 h1 { font-size: clamp(2.4rem, 8vw, 4.5rem); margin-bottom: 12px; }
 .pagina-404 p { color: var(--text-2); font-size: 1.1rem; }
+
+.detecta-botones { display: grid; gap: 10px; }
+.detecta .version a { color: var(--accent-2); text-decoration: underline; }
+.tarjeta-descarga.recomendada { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2); }
+[hidden] { display: none !important; }

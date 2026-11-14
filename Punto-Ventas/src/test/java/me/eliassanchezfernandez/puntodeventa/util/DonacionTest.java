@@ -52,13 +52,15 @@ class DonacionTest {
     }
 
     @Test
-    void elRecursoDelProyectoCargaYSigueMarcadoComoPendiente() {
+    void elRecursoDelProyectoTraeLaClabeRealDelAutor() {
         Donacion.Datos d = Donacion.cargar();
         assertThat(d.clabe()).hasSize(18);
         assertThat(d.banco()).isNotBlank();
         assertThat(d.beneficiario()).isNotBlank();
-        // Mientras el dueño no entregue su CLABE, la ventana debe decir "CLABE no configurada"
-        assertThat(d.clabeConfigurada()).isFalse();
+        // CLABE real del autor (Mercado Pago), con dígito verificador válido
+        assertThat(d.clabeConfigurada()).isTrue();
+        assertThat(d.banco()).isNotEqualTo("PENDIENTE");
+        assertThat(d.beneficiario()).isNotEqualTo("PENDIENTE");
     }
 
     @Test

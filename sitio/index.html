@@ -447,11 +447,16 @@
         <div>
           <h3>Elige tu sistema</h3>
           <p>Si entras desde la computadora de la tienda, el botón elegirá el instalador correcto por ti.</p>
+          <p class="version" id="detecta-nota" hidden></p>
+          <p class="version"><a href="#descargas-lista">Otras versiones para Windows, Mac y Linux</a> · <a data-enlace="releases" href="https://github.com/Minepacman/Punto-Ventas/releases">Todas las versiones</a> <span id="detecta-wa-caja" hidden>· <a id="detecta-wa" target="_blank" rel="noopener" href="https://wa.me/">Mandarme el enlace por WhatsApp</a></span></p>
         </div>
-        <a class="btn btn-primario btn-grande" data-notas href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg><span>Descargar</span></a>
+        <div class="detecta-botones">
+          <a class="btn btn-primario btn-grande" data-notas href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg><span>Descargar</span></a>
+          <a class="btn btn-secundario btn-grande" id="detecta-alt" hidden href="https://github.com/Minepacman/Punto-Ventas/releases/latest"><svg class="icono"><use href="#i-descargar"/></svg><span>Descargar</span></a>
+        </div>
       </div>
 
-      <div class="rejilla">
+      <div class="rejilla" id="descargas-lista">
         <article class="tarjeta tarjeta-descarga reveal">
           <div class="so"><div class="ico"><svg class="icono"><use href="#i-monitor"/></svg></div><div><h3>Windows</h3><div class="para">Windows 10 y 11</div></div></div>
           <p>Instalador normal: siguiente, siguiente, listo. Crea un acceso en el escritorio y en el menú Inicio.</p>
@@ -642,9 +647,9 @@
         <aside class="cuenta reveal retraso-1" aria-labelledby="titulo-cuenta">
           <h3 id="titulo-cuenta"><svg class="icono"><use href="#i-corazon"/></svg>Donar por transferencia (SPEI)</h3>
           <dl>
-            <dt>Banco</dt><dd class="texto" data-dato="donacion.banco" data-pendiente="Por confirmar">PENDIENTE</dd>
-            <dt>CLABE</dt><dd data-dato="donacion.clabe" data-pendiente="Por confirmar">PENDIENTE</dd>
-            <dt>Beneficiario</dt><dd class="texto" data-dato="donacion.beneficiario" data-pendiente="Por confirmar">PENDIENTE</dd>
+            <dt>Banco</dt><dd class="texto" data-dato="donacion.banco">Mercado Pago</dd>
+            <dt>CLABE</dt><dd data-dato="donacion.clabe">722 969 01004783130 8</dd>
+            <dt>Beneficiario</dt><dd class="texto" data-dato="donacion.beneficiario">Elias Oziel Sánchez Fernández</dd>
             <dt>Concepto</dt><dd class="texto"><span data-dato="donacion.concepto">PDV + nombre de tu negocio</span></dd>
           </dl>
           <p class="texto" id="donacion-estado" style="margin:14px 0 0;font-size:.9rem;color:#525C6A">Los datos de esta cuenta se publican firmados por el autor en el repositorio (<code>claves/donacion.pdvd</code>).</p>
@@ -674,7 +679,7 @@
           <li><svg class="icono"><use href="#i-externo"/></svg><span><b>Este sitio:</b> <a href="https://minepacman.github.io/Punto-Ventas/">minepacman.github.io/Punto-Ventas</a>.</span></li>
           <li><svg class="icono"><use href="#i-github"/></svg><span><b>El repositorio y sus versiones:</b> <a data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">github.com/Minepacman/Punto-Ventas</a>, con <code>SHA256SUMS.txt</code> y attestations de GitHub en cada versión.</span></li>
           <li><svg class="icono"><use href="#i-terminal"/></svg><span><b>Homebrew (Mac):</b> <code>brew tap minepacman/tap &amp;&amp; brew install --cask punto-de-venta</code>.</span></li>
-          <li><svg class="icono"><use href="#i-correo"/></svg><span><b>Contacto:</b> <a data-enlace="correo" href="#contacto">PENDIENTE</a> · WhatsApp <a data-enlace="whatsapp" href="#contacto">PENDIENTE</a>.</span></li>
+          <li><svg class="icono"><use href="#i-correo"/></svg><span><b>Contacto:</b> <a data-enlace="correo" href="mailto:elias.osiel@hotmail.com">elias.osiel@hotmail.com</a> · WhatsApp <a data-enlace="whatsapp" href="https://wa.me/522821416799">282 141 6799</a>.</span></li>
         </ul>
         <div class="dos">
           <div>
@@ -705,11 +710,11 @@
       <div class="encabezado reveal">
         <span class="sobretitulo">Contacto</span>
         <h2 class="titulo" id="titulo-contacto">¿Dudas, fallas o ideas?</h2>
-        <p><strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong> · <span data-dato="autor.ocupacion" data-pendiente="Por confirmar">PENDIENTE</span></p>
+        <p><strong data-dato="autor.nombre">Elias Oziel Sánchez Fernández</strong> · <span data-dato="autor.ocupacion">Desarrollador de software</span></p>
       </div>
       <div class="contacto-rejilla">
-        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-correo"/></svg></div><h3>Correo</h3><p>Para dudas, comprobantes de donación y soporte.</p><a class="valor" data-enlace="correo" href="#contacto">PENDIENTE</a></article>
-        <article class="tarjeta reveal retraso-1"><div class="ico verde"><svg class="icono"><use href="#i-llamada"/></svg></div><h3>WhatsApp</h3><p>Soporte personal para quienes apoyan el proyecto.</p><a class="valor" data-enlace="whatsapp" href="#contacto">PENDIENTE</a></article>
+        <article class="tarjeta reveal"><div class="ico"><svg class="icono"><use href="#i-correo"/></svg></div><h3>Correo</h3><p>Para dudas, comprobantes de donación y soporte.</p><a class="valor" data-enlace="correo" href="mailto:elias.osiel@hotmail.com">elias.osiel@hotmail.com</a></article>
+        <article class="tarjeta reveal retraso-1"><div class="ico verde"><svg class="icono"><use href="#i-llamada"/></svg></div><h3>WhatsApp</h3><p>Soporte personal para quienes apoyan el proyecto.</p><a class="valor" data-enlace="whatsapp" href="https://wa.me/522821416799">282 141 6799</a></article>
         <article class="tarjeta reveal retraso-2"><div class="ico"><svg class="icono"><use href="#i-github"/></svg></div><h3>Código en GitHub</h3><p>Todo el programa es público: puedes leerlo, copiarlo y mejorarlo.</p><a class="valor" data-enlace="repo" href="https://github.com/Minepacman/Punto-Ventas">github.com/Minepacman/Punto-Ventas</a></article>
         <article class="tarjeta reveal retraso-3"><div class="ico ambar"><svg class="icono"><use href="#i-ayuda"/></svg></div><h3>Reportar un problema</h3><p>Si algo no funciona, cuéntalo aquí con todo detalle; sirve para todos.</p><a class="valor" data-enlace="issues" href="https://github.com/Minepacman/Punto-Ventas/issues">Abrir un reporte</a></article>
       </div>
