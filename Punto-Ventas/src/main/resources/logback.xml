@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Registro de la aplicación: consola (igual que la configuración por defecto de Spring Boot) y un
+    archivo rotativo en la carpeta de registros (util/RegistroErrores fija app.logs.dir = carpeta de
+    datos/logs antes de que nadie escriba en el registro; sin esa propiedad, p. ej. en el proceso que
+    genera el archivo CDS, va a la carpeta temporal del sistema).
+
+    Se llama logback.xml (no logback-spring.xml) a propósito: así Logback lo aplica desde el primer
+    mensaje, antes de que Spring arranque, y los errores del arranque también quedan en el archivo.
+    Spring Boot vuelve a cargar este mismo archivo al iniciar su registro.
+
+    Rotación por tamaño: caja-libre.log (actual) + caja-libre.1.log … caja-libre.4.log, 2 MB cada uno
+    (10 MB como máximo en disco: pensado para PCs viejas con poco espacio).
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <property name="CARPETA_LOGS" value="${app.logs.dir:-${java.io.tmpdir:-/tmp}/CajaLibre-logs}"/>
+
+    <appender name="ARCHIVO" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${CARPETA_LOGS}/caja-libre.log</file>
+        <append>true</append>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] %-40.40logger{39} : %m%n%wEx</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+            <fileNamePattern>${CARPETA_LOGS}/caja-libre.%i.log</fileNamePattern>
+            <minIndex>1</minIndex>
+            <maxIndex>4</maxIndex>
+        </rollingPolicy>
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+            <maxFileSize>2MB</maxFileSize>
+        </triggeringPolicy>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ARCHIVO"/>
+    </root>
+</configuration>

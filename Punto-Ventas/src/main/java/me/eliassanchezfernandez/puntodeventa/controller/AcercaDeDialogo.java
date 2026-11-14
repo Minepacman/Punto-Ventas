@@ -280,7 +280,11 @@ public class AcercaDeDialogo {
                 : "Sin apoyo vigente el desarrollador atiende según le alcance el tiempo; con apoyo, tienes prioridad.");
         pista.setWrapText(true);
         pista.getStyleClass().add("hint");
-        caja.getChildren().addAll(pedir, pista);
+        Label registro = new Label("Si hubo un error, el archivo con los detalles está en: "
+                + me.eliassanchezfernandez.puntodeventa.util.RegistroErrores.carpetaLogs());
+        registro.setWrapText(true);
+        registro.getStyleClass().add("hint");
+        caja.getChildren().addAll(pedir, pista, registro);
         return caja;
     }
 

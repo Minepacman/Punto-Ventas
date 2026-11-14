@@ -1,6 +1,7 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
+import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
@@ -42,6 +43,7 @@ class BaseDatosServiceTest {
     @Autowired private CajeroRepository     cajeroRepo;
     @Autowired private CajeroService        cajeroService;
     @Autowired private RutasApp             rutas;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ConfiguracionRepository configuracionRepo;
 
     @TempDir Path temporal;
 
@@ -253,11 +255,59 @@ class BaseDatosServiceTest {
     }
 
     @Test
+    void elRespaldoAutomaticoVieneEncendidoDeFabricaSalvoQueAlguienLoHayaApagado() throws Exception {
+        entrarComo("admin", "admin123");
+        // Instalación nueva o base de una versión anterior: nadie ha decidido (NULL). Al arrancar
+        // (ApplicationReadyEvent → ArranqueDiferido; aquí a mano) se activa con la carpeta sugerida.
+        sinDecidir();
+        assertThat(baseDatosService.activarRespaldoAutomaticoSiNoDecidido()).isTrue();
+        Configuracion c = configuracionService.obtener();
+        assertThat(c.getRespaldoAuto()).isTrue();
+        assertThat(c.getRespaldoCarpeta()).isEqualTo(rutas.carpetaRespaldosSugerida().toString());
+        assertThat(c.getRespaldoCopias()).isEqualTo(Configuracion.RESPALDO_COPIAS_POR_DEFECTO);
+        // Ya decidido: una segunda pasada no cambia nada
+        assertThat(baseDatosService.activarRespaldoAutomaticoSiNoDecidido()).isFalse();
+
+        // Un administrador lo apaga a mano: el arranque siguiente lo respeta (false no es NULL)
+        configuracionService.guardarRespaldoAutomatico(false, "", 3);
+        assertThat(baseDatosService.activarRespaldoAutomaticoSiNoDecidido()).isFalse();
+        assertThat(configuracionService.obtener().getRespaldoAuto()).isFalse();
+        assertThat(baseDatosService.respaldoAutomaticoAlCerrar()).isEmpty();
+
+        // Si ya había carpeta elegida pero sin decisión, se conserva esa carpeta
+        sinDecidir();
+        Configuracion viva = configuracionService.obtenerParaEditar();
+        viva.setRespaldoCarpeta(temporal.resolve("mia").toString());
+        configuracionRepo.save(viva);
+        configuracionService.invalidarCache();
+        assertThat(baseDatosService.activarRespaldoAutomaticoSiNoDecidido()).isTrue();
+        assertThat(configuracionService.obtener().getRespaldoCarpeta()).isEqualTo(temporal.resolve("mia").toString());
+        configuracionService.guardarRespaldoAutomatico(false, "", 3);
+    }
+
+    /** Deja la columna respaldo_auto en NULL, como una base donde nadie abrió la pantalla de respaldo */
+    private void sinDecidir() {
+        Configuracion viva = configuracionService.obtenerParaEditar();
+        viva.setRespaldoAuto(null);
+        viva.setRespaldoCarpeta(null);
+        configuracionRepo.save(viva);
+        configuracionService.invalidarCache();
+    }
+
+    @Test
+    void laCarpetaSugeridaEstaEnElMismoDiscoQueLaBaseYUnaRutaRaraNoRompe() {
+        assertThat(rutas.enElMismoDiscoQueLaBd(rutas.carpetaRespaldosSugerida())).isTrue();   // aunque aún no exista
+        assertThat(rutas.enElMismoDiscoQueLaBd(temporal.resolve("sub").resolve("otra"))).isTrue();   // misma carpeta temporal
+        assertThat(rutas.enElMismoDiscoQueLaBd(null)).isFalse();
+    }
+
+    @Test
     void elRespaldoAutomaticoSoloCorreActivoYConservaNCopias() throws Exception {
         entrarComo("admin", "admin123");
         Path carpeta = temporal.resolve("auto");
 
-        // apagado: no hace nada
+        // apagado a mano: no hace nada
+        configuracionService.guardarRespaldoAutomatico(false, "", 3);
         assertThat(baseDatosService.respaldoAutomaticoAlCerrar()).isEmpty();
         assertThat(baseDatosService.respaldoAutomaticoDelDia()).isEmpty();
 

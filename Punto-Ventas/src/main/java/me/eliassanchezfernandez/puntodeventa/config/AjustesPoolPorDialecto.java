@@ -26,6 +26,8 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
 
     public static final int POOL_SQLITE = 3;
     public static final int POOL_POSTGRESQL = 5;
+    /** Propiedad de sqlite-jdbc que fija el BEGIN que abre cada transacción (DEFERRED/IMMEDIATE/EXCLUSIVE) */
+    public static final String TRANSACTION_MODE = "transaction_mode";
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
@@ -43,8 +45,19 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
         if (ds.getMinimumIdle() < 0) ds.setMinimumIdle(1);
         if (perfil.esSqlite()) {
             propiedadSiFalta(ds, "journal_mode", "WAL");
-            propiedadSiFalta(ds, "synchronous", "NORMAL");
+            // FULL: cada commit se sincroniza al disco (fsync del -wal). Con NORMAL en WAL una venta ya
+            // cobrada podía perderse si se iba la luz antes del siguiente checkpoint; un POS no puede.
+            // Cuesta un fsync por commit (~10-20 ms en disco duro), que una venta no nota.
+            propiedadSiFalta(ds, "synchronous", "FULL");
+            // BEGIN IMMEDIATE: toda transacción toma el bloqueo de escritura al empezar (y espera
+            // busy_timeout si otro lo tiene). Con DEFERRED una transacción que leía y luego escribía
+            // fallaba de inmediato con SQLITE_BUSY_SNAPSHOT si otra había escrito entre medias (el
+            // busy handler no aplica ahí). El precio: las transacciones se serializan también entre
+            // lectores; con una caja y transacciones de milisegundos no se nota.
+            propiedadSiFalta(ds, TRANSACTION_MODE, "IMMEDIATE");
             propiedadSiFalta(ds, "busy_timeout", "10000");
+            // El -wal no crece sin límite tras una operación grande (se recorta al cerrar la transacción)
+            propiedadSiFalta(ds, "journal_size_limit", "33554432");
             propiedadSiFalta(ds, "cache_size", "-8000");
             propiedadSiFalta(ds, "temp_store", "MEMORY");
             // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro

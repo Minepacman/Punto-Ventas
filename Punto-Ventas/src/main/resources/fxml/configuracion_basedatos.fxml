@@ -78,7 +78,7 @@
 
                 <Separator/>
                 <Label text="Respaldo" styleClass="form-section-title"/>
-                <Label fx:id="lblRespaldoHint" text="Crea una copia completa de la base de datos en el lugar que elijas."
+                <Label fx:id="lblRespaldoHint" text="Crea una copia completa de la base de datos en el lugar que elijas. Lo ideal es una memoria USB u otro disco: si falla el disco de esta PC, el respaldo sobrevive. El respaldo automático diario se configura en Configuración → Respaldo automático."
                        wrapText="true" styleClass="hint"/>
                 <TextArea fx:id="txtRespaldoServidor" editable="false" wrapText="true" prefRowCount="7"
                           managed="false" visible="false"/>

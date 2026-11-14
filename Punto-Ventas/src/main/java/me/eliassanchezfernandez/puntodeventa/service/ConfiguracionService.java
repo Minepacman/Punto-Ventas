@@ -453,6 +453,28 @@ public class ConfiguracionService {
         return g;
     }
 
+    /**
+     * Respaldo automático encendido de fábrica: si nadie ha decidido aún (la columna
+     * {@code respaldo_auto} sigue en NULL: instalación nueva o anterior que nunca abrió
+     * esa pantalla) lo activa con la carpeta indicada y las copias por defecto. Un
+     * administrador que lo apagó a mano dejó {@code false}, y eso se respeta. Lo llama
+     * el sistema al arrancar, sin sesión.
+     * @return true si lo activó en esta llamada
+     */
+    @Transactional
+    public boolean activarRespaldoAutomaticoDeFabrica(String carpeta) {
+        if (carpeta == null || carpeta.isBlank()) return false;
+        Configuracion c = obtenerParaEditar();
+        if (c.getRespaldoAuto() != null) return false;   // ya decidido (encendido o apagado) por alguien
+        c.setRespaldoAuto(true);
+        if (c.getRespaldoCarpeta() == null || c.getRespaldoCarpeta().isBlank()) c.setRespaldoCarpeta(carpeta.trim());
+        c.setRespaldoCopias(c.getRespaldoCopias());   // el getter ya aplica las copias por defecto si no había
+        Configuracion g = guardarConfig(c);
+        auditoriaService.registrarSistema("RESPALDO_AUTOMATICO_ACTIVADO", String.format(
+                "de fábrica: carpeta=%s, copias=%d", g.getRespaldoCarpeta(), g.getRespaldoCopias()));
+        return true;
+    }
+
     /** Anota el día del último respaldo automático (lo llama el sistema, sin sesión) */
     @Transactional
     public void marcarRespaldoAutomatico(LocalDate dia) {

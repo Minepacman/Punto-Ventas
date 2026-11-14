@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
+import me.eliassanchezfernandez.puntodeventa.config.ArranqueDiferido;
 import me.eliassanchezfernandez.puntodeventa.config.PerfilBaseDatos;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
@@ -11,6 +12,8 @@ import me.eliassanchezfernandez.puntodeventa.repository.ProductoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -71,6 +74,7 @@ public class BaseDatosService {
 
     @Autowired private DataSource dataSource;
     @Autowired private RutasApp rutas;
+    @Autowired private ArranqueDiferido arranqueDiferido;
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
     @Autowired private ConfiguracionService configuracionService;
@@ -301,6 +305,24 @@ public class BaseDatosService {
     }
 
     // ── Respaldo automático ───────────────────────────────────────────────
+
+    /**
+     * Encendido de fábrica: al arrancar (en el hilo diferido, cuando la ventana ya se
+     * dibujó) se activa el respaldo automático si nadie lo ha decidido aún, con la
+     * carpeta "respaldos" junto a la base. Solo SQLite: en modo servidor el respaldo
+     * es del servidor. Quien lo apagó a mano queda apagado.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void activarRespaldoAutomaticoDeFabricaAlArrancar() {
+        if (!rutas.esSqlite()) return;
+        arranqueDiferido.ejecutar("respaldo automático de fábrica", this::activarRespaldoAutomaticoSiNoDecidido);
+    }
+
+    /** @return true si en esta llamada quedó activado (ver {@link ConfiguracionService#activarRespaldoAutomaticoDeFabrica}) */
+    public boolean activarRespaldoAutomaticoSiNoDecidido() {
+        if (!rutas.esSqlite()) return false;
+        return configuracionService.activarRespaldoAutomaticoDeFabrica(rutas.carpetaRespaldosSugerida().toString());
+    }
 
     /** Primer inicio de sesión del día: respalda si está activo y hoy no se ha hecho */
     public Optional<Path> respaldoAutomaticoDelDia() {

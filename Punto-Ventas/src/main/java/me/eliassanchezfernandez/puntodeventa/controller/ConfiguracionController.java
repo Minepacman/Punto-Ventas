@@ -187,16 +187,38 @@ public class ConfiguracionController implements Initializable {
         Label ultimo = new Label(c.getRespaldoUltimo() != null
                 ? "Último respaldo automático: " + c.getRespaldoUltimo() : "Aún no se ha hecho un respaldo automático.");
         ultimo.getStyleClass().add("hint");
-        Label nota = new Label("Se guarda un archivo por día (respaldo-auto-AAAAMMDD.db) en el primer inicio de sesión del día "
-                + "y al cerrar el programa. Se conservan solo las copias más recientes.");
+        Label nota = new Label("Viene encendido de fábrica. Se guarda un archivo por día (respaldo-auto-AAAAMMDD.db) en el "
+                + "primer inicio de sesión del día y al cerrar el programa. Se conservan solo las copias más recientes.");
         nota.setWrapText(true);
         nota.setPrefWidth(380);
         nota.getStyleClass().add("hint");
+        // Consejo: otro disco. Un respaldo en el mismo disco salva de borrados y archivos dañados, no de un disco muerto.
+        Label consejo = new Label("Consejo: elige una carpeta en una memoria USB u otro disco. Si los respaldos están en el "
+                + "mismo disco que la base de datos, una falla del disco se lleva los dos.");
+        consejo.setWrapText(true);
+        HBox cajaConsejo = new HBox(consejo);
+        cajaConsejo.getStyleClass().addAll("callout", "callout-info");
+        cajaConsejo.setMaxWidth(400);
+        Label mismoDisco = new Label("Esta carpeta está en el mismo disco que la base de datos.");
+        mismoDisco.setWrapText(true);
+        HBox cajaMismoDisco = new HBox(mismoDisco);
+        cajaMismoDisco.getStyleClass().addAll("callout", "callout-warning");
+        cajaMismoDisco.setMaxWidth(400);
+        Runnable revisarDisco = () -> {
+            boolean mismo = false;
+            try {
+                mismo = !carpeta.getText().isBlank() && rutas.enElMismoDiscoQueLaBd(java.nio.file.Path.of(carpeta.getText().trim()));
+            } catch (RuntimeException rutaInvalida) { /* se avisará al guardar */ }
+            cajaMismoDisco.setVisible(mismo);
+            cajaMismoDisco.setManaged(mismo);
+        };
+        carpeta.textProperty().addListener((o, a, b) -> revisarDisco.run());
+        revisarDisco.run();
         GridPane grid = rejilla();
         grid.addRow(0, new Label("Carpeta:"), new HBox(6, carpeta, elegir));
         grid.addRow(1, new Label("Copias a conservar:"), copias);
         dialogoGuardar("Respaldo automático", "Copias de seguridad automáticas",
-                new VBox(10, activo, grid, nota, ultimo), () -> {
+                new VBox(10, activo, grid, cajaConsejo, cajaMismoDisco, nota, ultimo), () -> {
                     Ventanas.confirmarSpinner(copias, "Copias a conservar");   // lo escrito a mano en el campo
                     configuracionService.guardarRespaldoAutomatico(activo.isSelected(), carpeta.getText(), copias.getValue());
                 });
