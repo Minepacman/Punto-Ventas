@@ -67,6 +67,27 @@ public class MovimientoCajaService {
     @Transactional
     public MovimientoCaja registrar(Solicitud s, Collection<Autorizacion> autorizaciones) {
         sesionService.verificarPermiso(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
+        Autorizacion aut = sesionService.autorizacionUsada(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
+        MovimientoCaja guardado = guardar(s, aut, null);
+        if (aut != null) aut.consumir();
+        return guardado;
+    }
+
+    /**
+     * Movimiento que un cajero SIN el permiso de abrir el cajón declara al abrirlo
+     * ("sale $200, retiro"). No exige MOVIMIENTOS_CAJA ni autorización: el dueño
+     * prefiere que el cajero diga qué hizo y quede constancia a que no quede nada.
+     * El concepto se marca como declarado al abrir el cajón para distinguirlo en el
+     * corte y en la bitácora. Solo lo usa {@link ImpresionService}.
+     */
+    @Transactional
+    public MovimientoCaja registrarAlAbrirCajon(Tipo tipo, Categoria categoria, double monto, String motivo) {
+        String concepto = motivo == null ? "" : motivo.trim();
+        return guardar(new Solicitud(tipo, categoria, monto, concepto, null, null, null), null, "Al abrir el cajón: ");
+    }
+
+    /** Valida y guarda; {@code prefijoConcepto} (opcional) antecede al concepto final */
+    private MovimientoCaja guardar(Solicitud s, Autorizacion aut, String prefijoConcepto) {
         Cajero quien = sesionService.requerirSesion();
         if (s == null || s.tipo() == null || s.categoria() == null) {
             throw new NegocioException("Indica si es entrada o salida y para qué es.");
@@ -99,6 +120,7 @@ public class MovimientoCajaService {
                 throw new NegocioException("Escribe el motivo del movimiento (por ejemplo «Pago de luz»).");
             }
         }
+        if (prefijoConcepto != null) concepto = prefijoConcepto + concepto;
         if (concepto.length() > 250) concepto = concepto.substring(0, 250);
 
         int caja = cajaService.cajaActual();
@@ -120,7 +142,6 @@ public class MovimientoCajaService {
         m.setVentaId(s.ventaId());
         m.setEfectivoAntes(VentaService.redondear(antes));
         m.setEfectivoDespues(VentaService.redondear(antes + m.getMontoConSigno()));
-        Autorizacion aut = sesionService.autorizacionUsada(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
         if (aut != null && aut.administrador() != null) {
             m.setAutorizadoPorId(aut.administrador().getId());
             m.setAutorizadoPor(aut.nombreAdministrador());
@@ -131,7 +152,6 @@ public class MovimientoCajaService {
                 s.categoria().getEtiqueta(), Moneda.formato(m.getMonto()), concepto,
                 m.getProveedorNombre() != null ? " [" + m.getProveedorNombre() + "]" : "",
                 Moneda.formato(m.getEfectivoAntes()), Moneda.formato(m.getEfectivoDespues())), aut);
-        if (aut != null) aut.consumir();
         return guardado;
     }
 

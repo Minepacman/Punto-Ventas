@@ -3,8 +3,10 @@ package me.eliassanchezfernandez.puntodeventa.service;
 import me.eliassanchezfernandez.puntodeventa.impresion.DocumentoImpresion;
 import me.eliassanchezfernandez.puntodeventa.impresion.ImpresionException;
 import me.eliassanchezfernandez.puntodeventa.impresion.ImpresoraTickets;
+import me.eliassanchezfernandez.puntodeventa.model.Auditoria;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.ConfiguracionDispositivos.ModoImpresora;
+import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
@@ -22,17 +24,22 @@ import java.util.concurrent.ExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Impresión de tickets y corte, cajón y su configuración: con una impresora falsa
  * (ninguna prueba toca una impresora real). Lo central: una impresora que falla
- * NUNCA afecta la venta ya cobrada.
+ * NUNCA afecta la venta ya cobrada. Del cajón: toda apertura queda en la bitácora
+ * (automática con folio; manual con permiso o con motivo) y el dinero declarado al
+ * abrirlo sin permiso entra al corte del turno.
  */
 class ImpresionServiceTest extends BaseServicioTest {
 
     @Autowired private ImpresionService impresionService;
     @Autowired private DispositivosService dispositivosService;
     @Autowired private ConfiguracionService configuracionService;
+    @Autowired private MovimientoCajaService movimientoCajaService;
+    @Autowired private CajaService cajaService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.VentaRepository ventaRepo;
     @Autowired private AuditoriaService auditoriaService;
 
@@ -327,6 +334,160 @@ class ImpresionServiceTest extends BaseServicioTest {
         Resultado r = impresionService.abrirCajonAsync(null).get();
         assertThat(r.esFallo()).isTrue();
         assertThat(r.mensaje()).contains("No se pudo abrir el cajón");
+    }
+
+    @Test
+    void conPermisoSeAbreSinDarMotivoYLaBitacoraDiceQuienYComo() throws Exception {
+        configurarTermica(true, true, 1);
+        iniciarComoCajero("cajeroConPermiso", EnumSet.of(Permiso.ABRIR_CAJON));
+        Resultado r = impresionService.abrirCajonAsync(List.of()).get();
+        assertThat(r.estado()).isEqualTo(Resultado.Estado.IMPRESO);
+        assertThat(impresora.aperturasDeCajon).isEqualTo(1);
+        Auditoria a = ultimaApertura();
+        assertThat(a.getUsuarioLogin()).isEqualTo("cajeroConPermiso");
+        assertThat(a.getDetalle()).contains("Manual").contains("sin motivo");
+        assertThat(a.getAutorizadoPor()).isNull();
+    }
+
+    @Test
+    void sinPermisoSeAbreDandoMotivoYQuedaEnLaBitacoraSinMoverEfectivo() throws Exception {
+        configurarTermica(true, true, 1);
+        iniciarComoCajero("cajeroSinPermiso", EnumSet.noneOf(Permiso.class));
+
+        Resultado r = impresionService.abrirCajonConMotivoAsync(ImpresionService.AperturaCajon.soloCambio("Dar cambio al cliente")).get();
+
+        assertThat(r.estado()).isEqualTo(Resultado.Estado.IMPRESO);
+        assertThat(impresora.aperturasDeCajon).isEqualTo(1);
+        Auditoria a = ultimaApertura();
+        assertThat(a.getUsuarioLogin()).isEqualTo("cajeroSinPermiso");
+        assertThat(a.getDetalle()).contains("Manual, con motivo").contains("Dar cambio al cliente").contains("solo cambio de billetes");
+        // Solo cambio de billetes: ningún movimiento de efectivo
+        iniciarComoAdmin();
+        assertThat(movimientoCajaService.movimientosDeHoy()).isEmpty();
+        assertThat(auditoriaService.ultimas()).noneMatch(x -> x.getAccion().startsWith("EFECTIVO_"));
+    }
+
+    @Test
+    void elMotivoEsObligatorioYElMontoCuandoSeMueveDinero() throws Exception {
+        configurarTermica(true, true, 1);
+        iniciarComoCajero("cajeroValida", EnumSet.noneOf(Permiso.class));
+
+        assertThatThrownBy(() -> impresionService.abrirCajonConMotivoAsync(ImpresionService.AperturaCajon.soloCambio("   ")))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("motivo");
+        assertThatThrownBy(() -> impresionService.abrirCajonConMotivoAsync(null))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("motivo");
+        assertThatThrownBy(() -> impresionService.abrirCajonConMotivoAsync(
+                new ImpresionService.AperturaCajon("Retiro", null, 100.0, null)))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("entra dinero");
+        assertThatThrownBy(() -> impresionService.abrirCajonConMotivoAsync(
+                new ImpresionService.AperturaCajon("Meter cambio", ImpresionService.MovimientoAlAbrir.ENTRA, null, null)))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("cuánto dinero entra");
+        assertThatThrownBy(() -> impresionService.abrirCajonConMotivoAsync(ImpresionService.AperturaCajon.sale("Retiro", 0)))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("cuánto dinero sale");
+        assertThatThrownBy(() -> impresionService.abrirCajonConMotivoAsync(
+                new ImpresionService.AperturaCajon("Dar cambio", ImpresionService.MovimientoAlAbrir.SOLO_CAMBIO, 50.0, null)))
+                .isInstanceOf(NegocioException.class).hasMessageContaining("no hay monto");
+
+        // Nada se abrió ni se anotó
+        assertThat(impresora.aperturasDeCajon).isZero();
+        assertThat(auditoriaService.ultimas()).noneMatch(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion()));
+    }
+
+    @Test
+    void siSaleOEntraDineroAlAbrirSeRegistraComoMovimientoYSaleEnElCorteDelTurno() throws Exception {
+        configurarTermica(true, true, 1);
+        Cajero admin = iniciarComoAdmin();
+        cajaService.registrarFondo(admin, 1000);
+        iniciarComoCajero("cajeroRetira", EnumSet.noneOf(Permiso.class));   // sin MOVIMIENTOS_CAJA ni ABRIR_CAJON
+
+        Resultado salida = impresionService.abrirCajonConMotivoAsync(new ImpresionService.AperturaCajon(
+                "Retiro de efectivo", ImpresionService.MovimientoAlAbrir.SALE, 200.0, MovimientoCaja.Categoria.RETIRO)).get();
+        Resultado entrada = impresionService.abrirCajonConMotivoAsync(
+                ImpresionService.AperturaCajon.entra("Morralla que trajo el dueño", 150)).get();
+
+        assertThat(salida.estado()).isEqualTo(Resultado.Estado.IMPRESO);
+        assertThat(entrada.estado()).isEqualTo(Resultado.Estado.IMPRESO);
+        assertThat(impresora.aperturasDeCajon).isEqualTo(2);
+        List<Auditoria> aperturas = auditoriaService.ultimas().stream()
+                .filter(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion())).toList();
+        assertThat(aperturas).hasSize(2);
+        assertThat(aperturas).anyMatch(x -> x.getDetalle().contains("Retiro de efectivo") && x.getDetalle().contains("sale $200.00"));
+        assertThat(aperturas).anyMatch(x -> x.getDetalle().contains("Morralla") && x.getDetalle().contains("entra $150.00"));
+        assertThat(aperturas).allMatch(x -> "cajeroRetira".equals(x.getUsuarioLogin()));
+
+        iniciarComoAdmin();
+        List<MovimientoCaja> movimientos = movimientoCajaService.movimientosDeHoy();
+        assertThat(movimientos).hasSize(2);
+        MovimientoCaja retiro = movimientos.stream().filter(MovimientoCaja::esSalida).findFirst().orElseThrow();
+        assertThat(retiro.getCategoria()).isEqualTo(MovimientoCaja.Categoria.RETIRO);
+        assertThat(retiro.getConcepto()).isEqualTo("Al abrir el cajón: Retiro de efectivo");
+        assertThat(retiro.getCajeroNombre()).isEqualTo("Usuario cajeroRetira");
+        assertThat(retiro.getAutorizadoPor()).isNull();
+        MovimientoCaja morralla = movimientos.stream().filter(MovimientoCaja::esEntrada).findFirst().orElseThrow();
+        assertThat(morralla.getCategoria()).isEqualTo(MovimientoCaja.Categoria.OTRA_ENTRADA);   // sin categoría: la genérica
+
+        CajaService.EstadoCaja e = cajaService.estadoTurnoActual();
+        assertThat(e.salidas).isCloseTo(200, within(0.001));
+        assertThat(e.entradas).isCloseTo(150, within(0.001));
+        assertThat(e.esperado()).isCloseTo(950, within(0.001));
+    }
+
+    @Test
+    void sinImpresoraTermicaNoSeRegistraNadaAlAbrirConMotivo() throws Exception {
+        // La configuración por defecto es "Ninguna": no hay pulso posible
+        Cajero admin = iniciarComoAdmin();
+        cajaService.registrarFondo(admin, 500);
+        iniciarComoCajero("cajeroSinImpresora", EnumSet.noneOf(Permiso.class));
+
+        Resultado r = impresionService.abrirCajonConMotivoAsync(ImpresionService.AperturaCajon.sale("Retiro", 100)).get();
+
+        assertThat(r.esFallo()).isTrue();
+        assertThat(r.mensaje()).contains("No hay impresora térmica").contains("No se registró nada");
+        assertThat(impresora.aperturasDeCajon).isZero();
+        iniciarComoAdmin();
+        assertThat(movimientoCajaService.movimientosDeHoy()).isEmpty();
+        assertThat(auditoriaService.ultimas()).noneMatch(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion()));
+    }
+
+    @Test
+    void laAperturaAutomaticaAlCobrarEnEfectivoQuedaEnLaBitacoraConElFolio() {
+        configurarTermica(true, true, 1);
+        Producto p = producto("Jabón", 18, 10);
+        Venta conEfectivo = cobrarEfectivo(p);
+        impresionService.despuesDeCobrar(conEfectivo.getId());
+
+        Auditoria a = ultimaApertura();
+        assertThat(a.getDetalle()).contains("Venta #" + conEfectivo.getFolioMostrado()).contains("automático");
+        assertThat(a.getUsuarioLogin()).isEqualTo(SesionService.ADMIN_USUARIO);
+
+        // Con tarjeta el cajón no se abre y no se anota nada más
+        dispositivosService.guardarTerminales("Terminal 1", false);
+        Venta soloTarjeta = ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)), List.of(
+                new PagoVenta(Venta.FormaPago.TARJETA, 18)), null);
+        impresionService.despuesDeCobrar(soloTarjeta.getId());
+        assertThat(auditoriaService.ultimas().stream().filter(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion()))).hasSize(1);
+
+        // Si la impresión está apagada pero el cajón sí, también queda anotado
+        configurarTermica(false, true, 1);
+        Venta otra = cobrarEfectivo(p);
+        impresionService.despuesDeCobrar(otra.getId());
+        assertThat(auditoriaService.ultimas().stream().filter(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion())
+                && x.getDetalle().contains("Venta #" + otra.getFolioMostrado()))).hasSize(1);
+    }
+
+    @Test
+    void siLaImpresoraFallaAlCobrarNoSeAnotaUnaAperturaQueNoOcurrio() {
+        configurarTermica(true, true, 1);
+        Venta v = cobrarEfectivo(producto("Sal", 12, 10));
+        impresora.fallar = true;
+        assertThat(impresionService.despuesDeCobrar(v.getId()).esFallo()).isTrue();
+        assertThat(auditoriaService.ultimas()).noneMatch(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion()));
+    }
+
+    private Auditoria ultimaApertura() {
+        return auditoriaService.ultimas().stream()
+                .filter(x -> ImpresionService.ACCION_CAJON_ABIERTO.equals(x.getAccion()))
+                .findFirst().orElseThrow();
     }
 
     // ── Configuración ─────────────────────────────────────────────────────

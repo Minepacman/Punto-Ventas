@@ -81,6 +81,8 @@ public class ConfiguracionController implements Initializable {
 
     // ── Pantallas con FXML (solo ADMIN) ───────────────────────────────────
 
+    /** Bitácora de acciones sensibles: aperturas del cajón, efectivo, cancelaciones, usuarios... */
+    @FXML void onBitacora()   { abrirAdmin("/fxml/bitacora.fxml", "Bitácora", 1100, 640); }
     @FXML void onOpciones()   { abrirAdmin("/fxml/configuracion_opciones.fxml", "Opciones habilitadas", 540, 520); }
     /** Datos del negocio, IVA y plazo de cancelación */
     @FXML void onImpuestos()  { abrirAdmin("/fxml/configuracion_negocio.fxml", "Configuración del negocio", 560, 460); }

@@ -271,8 +271,11 @@ public class VentasController implements Initializable {
     }
 
     private static void soloTooltip(Button b, Atajo a, boolean mac) {
-        b.setTooltip(new Tooltip(a.getDescripcion() + "  —  " + a.etiquetaTeclas(mac)
-                + (a.getPermiso() != null ? "\nRequiere: " + a.getPermiso().getDescripcion() + " (o autorización)" : "")));
+        // Sin ABRIR_CAJON no se pide autorización sino el motivo (lo explica la nota del atajo)
+        String requiere = a.getPermiso() == null ? ""
+                : "\nRequiere: " + a.getPermiso().getDescripcion() + (a == Atajo.ABRIR_CAJON ? "" : " (o autorización)");
+        b.setTooltip(new Tooltip(a.getDescripcion() + "  —  " + a.etiquetaTeclas(mac) + requiere
+                + (a.getNota() != null ? "\n" + a.getNota() : "")));
     }
 
     /**

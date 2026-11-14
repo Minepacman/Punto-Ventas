@@ -24,6 +24,8 @@
                             prefWidth="110" prefHeight="80"><graphic><Icono nombre="ajustes"/></graphic></Button>
                     <Button text="Cajeros"                  onAction="#onCajeros"
                             prefWidth="110" prefHeight="80"><graphic><Icono nombre="usuario"/></graphic></Button>
+                    <Button text="Bitácora"                 onAction="#onBitacora"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="lista"/></graphic></Button>
                     <Button text="Base de Datos"            onAction="#onBaseDatos"
                             prefWidth="110" prefHeight="80"><graphic><Icono nombre="baseDatos"/></graphic></Button>
                     <Button text="Artículos&#10;Precargados"   onAction="#onArticulosPrec"

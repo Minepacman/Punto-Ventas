@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    bitacora.fxml  –  Bitácora de acciones sensibles (solo administrador):
+    aperturas del cajón, entradas/salidas de efectivo, cancelaciones, autorizaciones,
+    cambios de usuarios y configuración, intentos fallidos de login...
+    Controlador: BitacoraController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.BitacoraController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <!-- La barra se desplaza horizontalmente si la ventana es angosta (1024×768) -->
+        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
+                    style="-fx-background-color: transparent; -fx-padding: 0;">
+        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets topRightBottomLeft="10"/></padding>
+            <Label text="Desde:"/>
+            <DatePicker fx:id="dpDesde" prefWidth="140"/>
+            <Label text="Hasta:"/>
+            <DatePicker fx:id="dpHasta" prefWidth="140"/>
+            <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
+            <Separator orientation="VERTICAL"/>
+            <Label text="Acción:"/>
+            <ComboBox fx:id="cmbAccion" prefWidth="210"/>
+            <ToggleButton fx:id="tgCajon" text="Solo cajón" onAction="#onSoloCajon"><graphic><Icono nombre="efectivo"/></graphic></ToggleButton>
+            <TextField fx:id="txtFiltro" promptText="Filtrar por usuario o detalle..." HBox.hgrow="ALWAYS"/>
+            <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
+            <Button text="Cerrar" onAction="#onCerrar"/>
+        </HBox>
+        </ScrollPane>
+    </top>
+
+    <center>
+        <TableView fx:id="tabla">
+            <columns>
+                <TableColumn fx:id="colFecha"    text="Fecha y hora" prefWidth="135"/>
+                <TableColumn fx:id="colUsuario"  text="Usuario"      prefWidth="150"/>
+                <TableColumn fx:id="colAccion"   text="Acción"       prefWidth="190"/>
+                <TableColumn fx:id="colDetalle"  text="Detalle"      prefWidth="420"/>
+                <TableColumn fx:id="colAutorizo" text="Autorizó"     prefWidth="140"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
+            <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+            <Label fx:id="lblResumen" text="0 registro(s)" styleClass="text-bold"/>
+            <Label fx:id="lblNota" text="" styleClass="hint" wrapText="true" HBox.hgrow="ALWAYS"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>
