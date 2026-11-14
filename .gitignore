@@ -43,3 +43,6 @@ donadores-emitidos.csv
 
 # Libro del desarrollador (datos personales de donadores): nunca en el repo
 donadores.jsonl
+
+# Carpetas de trabajo de skills de diseño
+.taste-skill/

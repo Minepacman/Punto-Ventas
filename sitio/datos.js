@@ -12,8 +12,9 @@ window.DATOS_SITIO = {
 
   autor: {
     nombre: 'Elias Oziel Sánchez Fernández',   // también es el beneficiario que debe mostrar el banco al donar
-    ocupacion: 'Desarrollador de software',
+    ocupacion: 'Ingeniero en Ciencias de la Computación',
     ciudad: 'PENDIENTE',                       // opcional: "Ciudad de México"
+    github: 'https://github.com/Minepacman',   // perfil con todos los proyectos (página «Sobre el creador»)
   },
 
   // ── Contacto (los ve todo el mundo en la sección Contacto y Donaciones) ──
