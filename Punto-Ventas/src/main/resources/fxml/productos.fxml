@@ -102,9 +102,18 @@
                     <!-- ── CÓDIGO DE BARRAS ─────────────────────── -->
                     <VBox spacing="4">
                         <Label text="Código de Barras *" styleClass="field-label"/>
-                        <TextField fx:id="txtCodigoBarras"
-                                   promptText="Escanea o escribe el código"
-                                   onKeyReleased="#onCodigoBarrasChanged"/>
+                        <HBox spacing="6">
+                            <TextField fx:id="txtCodigoBarras"
+                                       promptText="Escanea o escribe el código"
+                                       HBox.hgrow="ALWAYS"
+                                       onKeyReleased="#onCodigoBarrasChanged"
+                                       onAction="#onCodigoBarrasEnter"/>
+                            <!-- Autollenado por código de barras (catálogo codigos-barras-mx / Open Food Facts) -->
+                            <Button fx:id="btnBuscarCatalogo" text="Buscar datos" onAction="#onBuscarCatalogo">
+                                <tooltip><Tooltip text="Busca el código en el catálogo de productos de México y propone descripción, departamento e imagen"/></tooltip>
+                                <graphic><Icono nombre="buscar"/></graphic>
+                            </Button>
+                        </HBox>
                         <HBox fx:id="hboxYaExiste"
                               visible="false" managed="false"
                               spacing="6" alignment="CENTER_LEFT"
@@ -124,6 +133,25 @@
                         <Label text="Descripción *" styleClass="field-label"/>
                         <TextField fx:id="txtDescripcion"
                                    promptText="Nombre del producto"/>
+                        <!-- Aviso del autollenado: qué se encontró en el catálogo, qué se llenó y cómo deshacerlo -->
+                        <HBox fx:id="hboxCatalogo"
+                              visible="false" managed="false"
+                              spacing="6" alignment="TOP_LEFT"
+                              styleClass="callout, callout-info">
+                            <Label><graphic><Icono nombre="etiqueta"/></graphic></Label>
+                            <VBox spacing="4" HBox.hgrow="ALWAYS">
+                                <Label fx:id="lblCatalogoTitulo" text="" wrapText="true" styleClass="text-bold"/>
+                                <Label fx:id="lblCatalogoDetalle" text="" wrapText="true"/>
+                                <HBox spacing="8" alignment="CENTER_LEFT">
+                                    <Button fx:id="btnCatalogoUsar" text="Usar estos datos" onAction="#onCatalogoUsar"
+                                            visible="false" managed="false"/>
+                                    <Button fx:id="btnCatalogoDeshacer" text="Deshacer" onAction="#onCatalogoDeshacer"
+                                            visible="false" managed="false"/>
+                                    <Button text="Ocultar" onAction="#onCatalogoCerrar"/>
+                                    <Label fx:id="lblCatalogoAtribucion" text="Datos de Open Food Facts (ODbL)" styleClass="hint"/>
+                                </HBox>
+                            </VBox>
+                        </HBox>
                     </VBox>
 
                     <!-- ── IMAGEN (opcional) ───────────────────── -->

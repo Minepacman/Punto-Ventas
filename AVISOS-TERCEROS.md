@@ -41,9 +41,13 @@ MPL 2.0 <https://www.mozilla.org/MPL/2.0/>; GPL v2 con Classpath Exception
 `NOTICE` dentro de `META-INF/`.
 
 **Datos.** El catálogo de códigos de barras de productos comunes de México es un proyecto aparte
-(repositorio `codigos-barras-mx`, datos de Open Food Facts bajo ODbL 1.0 con atribución); si una
-versión del programa lo incluye, su aviso va junto al archivo de datos. El pronóstico del clima
-viene de Open-Meteo (<https://open-meteo.com>, CC BY 4.0) cuando el usuario activa esa función.
+(repositorio <https://github.com/Minepacman/codigos-barras-mx>, datos de Open Food Facts y proyectos
+hermanos bajo la Open Database License, ODbL 1.0). El programa lo descarga por internet, a petición
+del usuario o una vez por semana en segundo plano, para proponer descripción, departamento e imagen al
+dar de alta un producto por su código de barras; donde se muestran esos datos aparece la atribución
+«Datos de Open Food Facts (ODbL)» (Configuración → Códigos de barras permite apagar la consulta).
+El pronóstico del clima viene de Open-Meteo (<https://open-meteo.com>, CC BY 4.0) cuando el usuario
+activa esa función.
 
 Si falta alguna biblioteca o algún aviso en esta lista, repórtalo en
 <https://github.com/Minepacman/Punto-Ventas/issues>.

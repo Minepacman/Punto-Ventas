@@ -582,6 +582,42 @@ public class ConfiguracionService {
         return g;
     }
 
+    // ── Catálogo de códigos de barras ─────────────────────────────────────
+
+    public boolean isCodigosEnLinea() { return obtener().isCodigosEnLinea(); }
+
+    /** Permitir que el catálogo de códigos de barras salga a internet (solo ADMIN, auditado) */
+    @Transactional
+    public Configuracion guardarCodigosEnLinea(boolean activo) {
+        sesionService.verificarAdmin();
+        Configuracion c = obtenerParaEditar();
+        boolean antes = c.isCodigosEnLinea();
+        c.setCodigosEnLinea(activo);
+        Configuracion g = guardarConfig(c);
+        if (antes != activo) auditar("Códigos de barras", "en línea=" + antes, "en línea=" + activo);
+        return g;
+    }
+
+    /** Lo anota el sistema al cargar una copia nueva del catálogo (sin permiso ni bitácora: la pone CatalogoCodigosService) */
+    @Transactional
+    public void guardarEstadoCatalogoCodigos(String version, String sha256, int productos, java.time.LocalDateTime cuando) {
+        Configuracion c = obtenerParaEditar();
+        c.setCatalogoCodigosVersion(limpiar(version));
+        c.setCatalogoCodigosSha256(limpiar(sha256));
+        c.setCatalogoCodigosProductos(productos);
+        c.setCatalogoCodigosDescargado(cuando);
+        c.setCatalogoCodigosRevisado(cuando);
+        guardarConfig(c);
+    }
+
+    /** Se consultó version.json y no había nada nuevo */
+    @Transactional
+    public void marcarCatalogoCodigosRevisado(java.time.LocalDateTime cuando) {
+        Configuracion c = obtenerParaEditar();
+        c.setCatalogoCodigosRevisado(cuando);
+        guardarConfig(c);
+    }
+
     private void auditar(String seccion, String antes, String despues) {
         auditoriaService.registrar(sesionService.getCajeroActual(), "CONFIGURACION_MODIFICADA",
                 "[" + seccion + "] antes: " + antes + " | después: " + despues, (Cajero) null);

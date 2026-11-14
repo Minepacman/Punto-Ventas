@@ -36,6 +36,8 @@
                             prefWidth="110" prefHeight="80"><graphic><Icono nombre="climaSol"/></graphic></Button>
                     <Button text="Acceso&#10;móvil"             onAction="#onAccesoMovil"
                             prefWidth="110" prefHeight="80"><graphic><Icono nombre="celular"/></graphic></Button>
+                    <Button text="Códigos de&#10;barras"        onAction="#onCatalogoCodigos"
+                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="etiqueta"/></graphic></Button>
                 </TilePane>
 
                 <Separator/>
