@@ -192,8 +192,13 @@ class VentaServiceTest extends BaseServicioTest {
         Venta venta = ventaService.cobrar(List.of(manipulado), Venta.FormaPago.EFECTIVO, 100);
 
         assertThat(venta.getTotal()).isCloseTo(90, within(0.001));
-        assertThat(manipulado.getPrecioVenta()).isEqualTo(100);
-        assertThat(manipulado.getDescuento()).isCloseTo(10, within(0.001));
+        DetalleVenta guardado = venta.getDetalles().get(0);
+        assertThat(guardado.getPrecioVenta()).isEqualTo(100);
+        assertThat(guardado.getDescuento()).isCloseTo(10, within(0.001));
+        // El renglón recibido no se toca: la venta guarda una copia (si el guardado falla, el ticket sigue íntegro)
+        assertThat(guardado).isNotSameAs(manipulado);
+        assertThat(manipulado.getVenta()).isNull();
+        assertThat(manipulado.getId()).isNull();
     }
 
     @Test

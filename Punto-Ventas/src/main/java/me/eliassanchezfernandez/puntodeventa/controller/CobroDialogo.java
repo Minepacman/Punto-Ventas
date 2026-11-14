@@ -13,6 +13,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -23,6 +25,7 @@ import javafx.stage.Window;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.RafagaLector;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 
 import java.util.ArrayList;
@@ -39,7 +42,11 @@ import java.util.Optional;
  *  - F8/F9/F10 pasan todo el total a tarjeta / transferencia / vales;
  *  - Tab cambia de forma de pago (pago dividido: la suma debe cubrir el total y
  *    lo que no es efectivo no puede excederlo);
- *  - Esc regresa al ticket sin cobrar nada.
+ *  - Esc regresa al ticket sin cobrar nada;
+ *  - un pago sospechoso (cambio de $1,000 o más, o efectivo tecleado al ritmo de un
+ *    lector de códigos: {@link RafagaLector}) no se cobra con Enter: se muestra el
+ *    motivo y hay que confirmar con F12 o un clic en "Sí, cobrar"
+ *    ({@link CalculoCobro#motivoParaConfirmar}).
  * Las cuentas (pagado, falta, cambio) son de {@link CalculoCobro}; el servicio
  * vuelve a validar al guardar. Devuelve los montos por forma de pago, o vacío
  * si el cajero canceló.
@@ -58,6 +65,17 @@ public final class CobroDialogo {
     public static Optional<Map<Venta.FormaPago, Double>> mostrar(Window owner, double total,
                                                                  List<Venta.FormaPago> habilitadas,
                                                                  Map<Venta.FormaPago, Double> iniciales) {
+        return mostrar(owner, total, habilitadas, iniciales, false);
+    }
+
+    /**
+     * @param inicialesPorLector los montos iniciales se teclearon al ritmo de un lector de códigos
+     *        (el panel de Ventas lo detectó): se pide confirmación antes de cobrarlos
+     */
+    public static Optional<Map<Venta.FormaPago, Double>> mostrar(Window owner, double total,
+                                                                 List<Venta.FormaPago> habilitadas,
+                                                                 Map<Venta.FormaPago, Double> iniciales,
+                                                                 boolean inicialesPorLector) {
         Dialog<Map<Venta.FormaPago, Double>> dlg = new Dialog<>();
         dlg.setTitle("Cobrar");
         dlg.setHeaderText(null);
@@ -167,7 +185,19 @@ public final class CobroDialogo {
 
         // ── Cuentas en vivo ──────────────────────────────────────────────
         final CalculoCobro.Resultado[] actual = { null };
+        // Confirmación explícita de un pago sospechoso (cambio enorme o monto tecleado por el lector):
+        // el primer intento de cobrar solo muestra el aviso; se completa con F12 o clic, nunca con Enter
+        final boolean[] capturadoPorLector   = { inicialesPorLector };
+        final boolean[] confirmacionPendiente = { false };
+        final boolean[] confirmadoPorUsuario  = { false };
+        final String textoCobrar = "Cobrar  (Enter)", textoConfirmar = "Sí, cobrar  (F12)";
+        RafagaLector lector = new RafagaLector();
         Runnable recalcular = () -> {
+            if (confirmacionPendiente[0]) {           // el cajero cambió un monto: el aviso ya no aplica
+                confirmacionPendiente[0] = false;
+                confirmadoPorUsuario[0] = false;
+                btnCobrar.setText(textoCobrar);
+            }
             Map<Venta.FormaPago, String> textos = new LinkedHashMap<>();
             campos.forEach((f, c) -> textos.put(f, c.getText()));
             Map<Venta.FormaPago, Double> montos = CalculoCobro.leerMontos(textos);
@@ -196,11 +226,44 @@ public final class CobroDialogo {
                 btnCobrar.setDisable(true);
             }
         };
-        campos.values().forEach(c -> c.textProperty().addListener((o, a, b) -> recalcular.run()));
+        campos.values().forEach(c -> c.textProperty().addListener((o, a, b) -> {
+            capturadoPorLector[0] = false;            // la ráfaga, si la hay, lo vuelve a marcar en su Enter
+            recalcular.run();
+        }));
         recalcular.run();
+
+        // Ritmo de las teclas en los campos: un código escaneado ahí llega como ráfaga + Enter
+        campos.values().forEach(c -> {
+            c.addEventFilter(KeyEvent.KEY_TYPED, e -> {
+                String ch = e.getCharacter();
+                if (ch != null && !ch.isEmpty()) lector.caracter(ch.charAt(0), System.nanoTime());
+            });
+            c.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                // Solo marca (nunca desmarca): el "false" lo pone cualquier edición del monto. Así un
+                // Enter humano no borra la sospecha que traían los montos iniciales del panel.
+                if (e.getCode() == KeyCode.ENTER && lector.enter(System.nanoTime()).isPresent()) capturadoPorLector[0] = true;
+            });
+        });
 
         // Enter en cualquier campo = Cobrar (el botón por defecto no recibe el Enter del TextField)
         campos.values().forEach(c -> c.setOnAction(e -> { if (!btnCobrar.isDisable()) btnCobrar.fire(); }));
+        // Solo un clic del ratón o F12 cuentan como confirmación del aviso (el lector solo sabe mandar Enter)
+        btnCobrar.addEventFilter(MouseEvent.MOUSE_PRESSED, e -> { if (confirmacionPendiente[0]) confirmadoPorUsuario[0] = true; });
+        Runnable confirmarConF12 = () -> {
+            if (confirmacionPendiente[0] && !btnCobrar.isDisable()) {
+                confirmadoPorUsuario[0] = true;
+                btnCobrar.fire();
+            }
+        };
+        java.util.function.Consumer<String> pedirConfirmacion = motivo -> {
+            confirmacionPendiente[0] = true;
+            lblError.setText(motivo + "\nSi es correcto, pulsa F12 o haz clic en \"" + textoConfirmar.trim()
+                    + "\"; si no, corrige el monto.");
+            btnCobrar.setText(textoConfirmar);
+            TextField campo = txtEfectivo != null ? txtEfectivo : campos.values().iterator().next();
+            campo.requestFocus();
+            campo.selectAll();
+        };
 
         // Validación final: con todo vacío se cobra con efectivo exacto; si no alcanza no se cierra
         btnCobrar.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
@@ -212,8 +275,19 @@ public final class CobroDialogo {
                 ev.consume();
                 if (actual[0] != null && lblError.getText().isEmpty()) lblError.setText(actual[0].error());
                 (txtEfectivo != null ? txtEfectivo : campos.values().iterator().next()).requestFocus();
+                return;
+            }
+            String motivo = CalculoCobro.motivoParaConfirmar(actual[0], capturadoPorLector[0]);
+            boolean confirmado = confirmadoPorUsuario[0];
+            confirmadoPorUsuario[0] = false;
+            if (motivo != null && !confirmado) {
+                ev.consume();
+                pedirConfirmacion.accept(motivo);
             }
         });
+        // Si los montos que traía el panel ya son sospechosos, el aviso se ve desde que abre la ventana
+        String motivoInicial = CalculoCobro.motivoParaConfirmar(actual[0], capturadoPorLector[0]);
+        if (motivoInicial != null) pedirConfirmacion.accept(motivoInicial);
         dlg.setResultConverter(b -> {
             if (b != cobrar || actual[0] == null || !actual[0].esValido()) return null;
             Map<Venta.FormaPago, String> textos = new LinkedHashMap<>();
@@ -226,6 +300,7 @@ public final class CobroDialogo {
             Scene scene = dlg.getDialogPane().getScene();
             if (scene != null) {
                 teclasRapidas.forEach((tecla, accion) -> scene.getAccelerators().put(new KeyCodeCombination(tecla), accion));
+                scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F12), confirmarConF12);
             }
             TextField primero = txtEfectivo != null ? txtEfectivo : campos.values().iterator().next();
             Platform.runLater(() -> { primero.requestFocus(); primero.selectAll(); });

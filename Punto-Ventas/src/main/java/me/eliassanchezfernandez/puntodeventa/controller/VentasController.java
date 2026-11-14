@@ -14,7 +14,6 @@ import javafx.scene.control.*;
 import javafx.scene.Node;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.BorderPane;
@@ -51,7 +50,10 @@ import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
 import me.eliassanchezfernandez.puntodeventa.util.Atajo;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.EntradaCodigo;
+import me.eliassanchezfernandez.puntodeventa.util.LectorEnModales;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.PantallaConexion;
+import me.eliassanchezfernandez.puntodeventa.util.RafagaLector;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -148,6 +150,12 @@ public class VentasController implements Initializable {
     @FXML private Label    lblSugerenciasEstado;
     @FXML private Button   btnOcultarSugerencias;
     @FXML private FlowPane contenedorSugerencias;
+    @FXML private HBox     boxVentaCobrada;
+    @FXML private Label    lblVentaCobradaTitulo;
+    @FXML private Label    lblVentaCobradaDetalle;
+    @FXML private Label    lblVentaCobradaCambio;
+    @FXML private Button   btnFacturarVenta;
+    @FXML private Button   btnCerrarAvisoVenta;
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private VentaService           ventaService;
@@ -192,6 +200,17 @@ public class VentasController implements Initializable {
     /** Autorizaciones de administrador obtenidas para ESTE ticket (se agotan al cobrar) */
     private final List<Autorizacion> autorizaciones = new ArrayList<>();
 
+    /** Venta del aviso "Venta cobrada" que está a la vista (para Facturar) */
+    private Venta ultimaVentaCobrada;
+    /** El aviso "Venta cobrada" se oculta solo pasado este tiempo */
+    private static final Duration DURACION_AVISO_VENTA = Duration.seconds(20);
+    private final PauseTransition ocultarAvisoVenta = new PauseTransition(DURACION_AVISO_VENTA);
+
+    /** Ritmo de las teclas en los campos de pago: un código escaneado ahí no debe cobrarse como efectivo */
+    private final RafagaLector lectorPagos = new RafagaLector();
+    /** El Enter que disparó el cobro cerró una ráfaga del lector en un campo de pago */
+    private boolean pagoTecleadoPorLector;
+
     // ── Inicialización ────────────────────────────────────────────────────
     @Override
     public void initialize(URL url, ResourceBundle rb) {
@@ -207,8 +226,12 @@ public class VentasController implements Initializable {
 
         // Los montos se recalculan al cambiar el texto (también al pegar con el ratón)
         camposPago.values().forEach(c -> c.textProperty().addListener((o, a, b) -> actualizarCambio()));
+        configurarLectorEnPagos();
         configurarTeclado();
         etiquetarBotones();
+        ocultarAvisoVenta.setOnFinished(e -> ocultarAvisoVentaCobrada());
+        // Códigos que el lector escaneó mientras un aviso modal estaba abierto: entran al ticket al cerrarse
+        LectorEnModales.registrarDestino(this::recibirCodigoDelLector);
 
         configurarSugerencias();
         restaurarTicketPendiente();
@@ -263,6 +286,47 @@ public class VentasController implements Initializable {
         raiz.addEventFilter(KeyEvent.KEY_TYPED, this::teclaEscrita);
     }
 
+    /**
+     * Mide el ritmo de las teclas en los campos de pago. Un código corto escaneado con el
+     * cursor en "Efectivo" ($12,345 por un refresco) pasa el tope de CalculoCobro; al llegar
+     * su Enter se anota que vino de una ráfaga y onCobrar pide confirmación en vez de cobrar.
+     */
+    private void configurarLectorEnPagos() {
+        for (TextField campo : camposPago.values()) {
+            campo.addEventFilter(KeyEvent.KEY_TYPED, e -> {
+                String ch = e.getCharacter();
+                if (ch != null && !ch.isEmpty()) lectorPagos.caracter(ch.charAt(0), System.nanoTime());
+            });
+            campo.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                if (e.getCode() == KeyCode.ENTER) pagoTecleadoPorLector = lectorPagos.enter(System.nanoTime()).isPresent();
+            });
+        }
+    }
+
+    /**
+     * Código que el lector escaneó mientras una ventana modal estaba abierta
+     * ({@link LectorEnModales}): entra al ticket como si se hubiera escaneado ahora.
+     * Devuelve false si esta pantalla no está a la vista (otra pestaña, otra ventana).
+     */
+    private boolean recibirCodigoDelLector(String codigo) {
+        if (!estaEnPantalla()) return false;
+        String previo = txtCodigo.getText();
+        txtCodigo.setText((previo == null ? "" : previo) + codigo);   // respeta un "3*" ya tecleado
+        onAgregarProducto();
+        return true;
+    }
+
+    /** ¿La pestaña de Ventas está visible en una ventana abierta? */
+    private boolean estaEnPantalla() {
+        if (raiz.getScene() == null || raiz.getScene().getWindow() == null || !raiz.getScene().getWindow().isShowing()) {
+            return false;
+        }
+        for (Node n = raiz; n != null; n = n.getParent()) {
+            if (!n.isVisible()) return false;
+        }
+        return true;
+    }
+
     private void teclaPulsada(KeyEvent e) {
         Node foco = raiz.getScene() != null ? raiz.getScene().getFocusOwner() : null;
         boolean enTexto = foco instanceof TextInputControl;
@@ -271,6 +335,7 @@ public class VentasController implements Initializable {
         KeyCode c = e.getCode();
 
         if (c == KeyCode.ESCAPE) {
+            ocultarAvisoVentaCobrada();
             if (enCodigo && !txtCodigo.getText().isEmpty()) {
                 txtCodigo.clear();
             } else if (enTexto && foco != txtCodigo) {
@@ -355,6 +420,7 @@ public class VentasController implements Initializable {
             case RECUPERAR_ESPERA  -> onRecuperarEspera();
             case COBRAR            -> onCobrar();
             case REIMPRIMIR_ULTIMO -> onReimprimirUltimo();
+            case FACTURAR_ULTIMA   -> onFacturarUltimaVenta();
             case CANCELAR_TICKET   -> onCancelarTicket();
             case QUITAR_RENGLON    -> onQuitarLinea();
             case MAS_UNO           -> ajustarCantidad(1);
@@ -380,7 +446,10 @@ public class VentasController implements Initializable {
     @FXML
     private void onAgregarProducto() {
         String texto = txtCodigo.getText();
-        if (texto.isBlank()) return;
+        if (texto == null || texto.isBlank()) {
+            ocultarAvisoVentaCobrada();               // Enter en el código vacío: "ya vi el cambio"
+            return;
+        }
         // Un código que de por sí parece "cantidad x código" (p. ej. la bolsa "40X60")
         // gana: si existe tal cual, se agrega una pieza de ese producto
         if (EntradaCodigo.traeCantidad(texto)) {
@@ -677,6 +746,9 @@ public class VentasController implements Initializable {
      */
     @FXML
     private void onCobrar() {
+        // ¿El Enter que llegó aquí cerró una ráfaga del lector en un campo de pago? (código escaneado como efectivo)
+        boolean porLector = pagoTecleadoPorLector;
+        pagoTecleadoPorLector = false;
         if (itemsTicket.isEmpty()) {
             alerta(Alert.AlertType.INFORMATION, "Ticket vacío",
                     "Agrega al menos un producto antes de cobrar.");
@@ -693,11 +765,14 @@ public class VentasController implements Initializable {
         }
         Map<Venta.FormaPago, Double> montos;
         CalculoCobro.Resultado cuentas = CalculoCobro.calcular(total, montosPanel);
-        if (cuentas.esValido() && !configuracionService.isConfirmarCobro()) {
+        if (cuentas.esValido() && !configuracionService.isConfirmarCobro()
+                && CalculoCobro.motivoParaConfirmar(cuentas, porLector) == null) {
             montos = montosPanel;
         } else {
+            // Un pago sospechoso (cambio enorme o tecleado por el lector) pasa por la ventana de cobro,
+            // que lo muestra y exige una confirmación distinta del Enter
             Optional<Map<Venta.FormaPago, Double>> elegido = CobroDialogo.mostrar(
-                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel);
+                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector);
             if (elegido.isEmpty()) {                  // Esc: nada cambia, el ticket sigue en captura
                 txtCodigo.requestFocus();
                 return;
@@ -730,19 +805,11 @@ public class VentasController implements Initializable {
             }
         }
 
+        Venta venta;
         try {
-            // El cajero y los permisos los verifica el servicio
-            Venta venta = ventaService.cobrar(new ArrayList<>(itemsTicket), pagos, autorizaciones);
-
-            imprimirTicketSinBloquear(venta);
-            limpiarTicket();                          // el ticket queda limpio antes de cualquier diálogo
-            mostrarCambioUltimaVenta(venta);
-            actualizarVendidoHoy();
-            actualizarEnEspera();
-
-            avisarVentaCobrada(venta);
-            avisarStockBajo(venta);
-
+            // El cajero y los permisos los verifica el servicio. Trabaja sobre copias de los
+            // renglones: si falla, itemsTicket queda exactamente como estaba.
+            venta = ventaService.cobrar(new ArrayList<>(itemsTicket), pagos, autorizaciones);
         } catch (PermisoRequeridoException e) {
             // Falta un permiso del ticket (p. ej. renglón restaurado con mayoreo o
             // existencia que otra caja se llevó): pedir autorización y reintentar con los mismos montos
@@ -751,13 +818,53 @@ public class VentasController implements Initializable {
                 return;
             }
             refrescarTicket();
+            txtCodigo.requestFocus();
+            return;
         } catch (NegocioException e) {
             // Stock, promoción o precio cambiaron desde que se armó el ticket:
             // releer productos, recalcular y avisar
             refrescarTicket();
             alerta(Alert.AlertType.ERROR, "No se pudo cobrar", e.getMessage());
+            txtCodigo.requestFocus();
+            return;
+        } catch (RuntimeException e) {
+            // Falla inesperada (base de datos, disco lleno, bloqueo): la transacción se revirtió,
+            // nada quedó guardado y el ticket sigue en pantalla para volver a cobrarlo
+            avisarVentaNoGuardada(e);
+            txtCodigo.requestFocus();
+            return;
+        }
+
+        // De aquí en adelante la venta YA está guardada: un fallo posterior no la deshace
+        // y nunca debe decirle al cajero lo contrario
+        try {
+            imprimirTicketSinBloquear(venta);
+            limpiarTicket();                          // el ticket queda limpio antes de cualquier diálogo
+            mostrarCambioUltimaVenta(venta);
+            actualizarVendidoHoy();
+            actualizarEnEspera();
+
+            mostrarAvisoVentaCobrada(venta);          // no modal: el siguiente escaneo ya entra al ticket nuevo
+            avisarStockBajo(venta);
+        } catch (RuntimeException e) {
+            System.err.println("Después de cobrar la venta " + venta.getId() + ": " + e);
+            alerta(Alert.AlertType.WARNING, "Venta cobrada",
+                    "La venta " + venta.getFolioMostrado() + " SÍ quedó registrada (cambio: "
+                    + Moneda.formato(venta.getCambio()) + "), pero falló algo al refrescar la pantalla: "
+                    + PantallaConexion.causaRaiz(e) + "\n\nRevisa que el ticket en pantalla esté vacío antes de seguir.");
         }
         txtCodigo.requestFocus();
+    }
+
+    /** La venta no se guardó por un error inesperado: decirlo claro y dejar el ticket tal cual para reintentar */
+    private void avisarVentaNoGuardada(RuntimeException e) {
+        System.err.println("No se pudo guardar la venta: " + e);
+        e.printStackTrace();
+        alerta(Alert.AlertType.ERROR, "La venta NO se guardó",
+                "La venta NO se guardó.\n\n"
+                + "Ocurrió un error al registrarla: " + PantallaConexion.causaRaiz(e) + "\n\n"
+                + "No se descontó inventario ni se imprimió nada. El ticket sigue en pantalla tal como estaba: "
+                + "revisa que todo esté bien e intenta cobrar de nuevo (F12). Si vuelve a fallar, avisa al encargado.");
     }
 
     /** En el panel queda a la vista el cambio de la venta recién cobrada (hasta que se agregue otro producto) */
@@ -768,49 +875,55 @@ public class VentasController implements Initializable {
     }
 
     /**
-     * Ventana "Venta cobrada" con el cambio en grande. Enter o Esc continúan; si la
-     * facturación está configurada y el usuario puede facturar, "Facturar" (F).
+     * Aviso "Venta cobrada" con el cambio en grande, encima del ticket y SIN ventana
+     * modal: no toma el foco, así el lector puede seguir escaneando y el siguiente
+     * artículo entra al ticket nuevo (antes el Enter del lector cerraba la ventana y
+     * el artículo se perdía). Se oculta solo a los {@link #DURACION_AVISO_VENTA}, con
+     * Esc, con Enter en el código vacío o al agregar el siguiente producto. Si la
+     * facturación está configurada y el usuario puede facturar: "Facturar" (Ctrl/Cmd+F).
      */
-    private void avisarVentaCobrada(Venta venta) {
-        Dialog<ButtonType> dlg = new Dialog<>();
-        dlg.setTitle("Venta cobrada");
-        dlg.setHeaderText("Venta " + venta.getFolioMostrado() + " registrada");
-        dlg.initOwner(raiz.getScene().getWindow());
-        Ventanas.estilizar(dlg);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(16);
-        grid.setVgap(6);
-        grid.setPadding(new Insets(10));
-        grid.addRow(0, new Label("Total:"), new Label(Moneda.formato(venta.getTotal())));
-        grid.addRow(1, new Label("Pagó:"), new Label(Moneda.formato(venta.getPagoCon())));
-        Label cambioTitulo = new Label("CAMBIO");
-        cambioTitulo.getStyleClass().add("total-label-title");
-        Label cambio = new Label(Moneda.formato(venta.getCambio()));
-        cambio.getStyleClass().add("total-amount");
-        VBox contenido = new VBox(8, grid, cambioTitulo, cambio);
-        contenido.setAlignment(javafx.geometry.Pos.CENTER);
-        contenido.setPadding(new Insets(6, 20, 6, 20));
-        dlg.getDialogPane().setContent(contenido);
-
-        // CANCEL_CLOSE: así la X de la ventana también continúa (JavaFX exige un botón de cancelar para cerrarla)
-        ButtonType continuar = new ButtonType("Continuar  (Enter)", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
-        ButtonType facturar = new ButtonType("Facturar  (F)", javafx.scene.control.ButtonBar.ButtonData.OTHER);
-        boolean puedeFacturar = facturacionDialogos.puedeFacturar();
-        if (puedeFacturar) dlg.getDialogPane().getButtonTypes().addAll(continuar, facturar);
-        else dlg.getDialogPane().getButtonTypes().add(continuar);
-        Button btnContinuar = (Button) dlg.getDialogPane().lookupButton(continuar);
-        btnContinuar.getStyleClass().add("button-primary");
-        btnContinuar.setDefaultButton(true);   // Enter continúa
-        dlg.setOnShown(e -> {
-            var acc = dlg.getDialogPane().getScene().getAccelerators();
-            acc.put(new KeyCodeCombination(KeyCode.ESCAPE), () -> { dlg.setResult(continuar); dlg.close(); });
-            if (puedeFacturar) acc.put(new KeyCodeCombination(KeyCode.F), () -> { dlg.setResult(facturar); dlg.close(); });
-            Platform.runLater(() -> dlg.getDialogPane().lookupButton(continuar).requestFocus());
-        });
-        if (dlg.showAndWait().filter(b -> b == facturar).isPresent()) {
-            facturacionDialogos.facturarVenta(raiz.getScene().getWindow(), venta);
+    private void mostrarAvisoVentaCobrada(Venta venta) {
+        ultimaVentaCobrada = venta;
+        lblVentaCobradaTitulo.setText("Venta " + venta.getFolioMostrado() + " cobrada");
+        lblVentaCobradaDetalle.setText("Total " + Moneda.formato(venta.getTotal())
+                + "  ·  Pagó " + Moneda.formato(venta.getPagoCon()));
+        lblVentaCobradaCambio.setText(Moneda.formato(venta.getCambio()));
+        boolean puedeFacturar = false;
+        try {
+            puedeFacturar = facturacionDialogos.puedeFacturar();
+        } catch (RuntimeException e) {
+            // sin configuración fiscal legible: simplemente no se ofrece
         }
+        btnFacturarVenta.setVisible(puedeFacturar);
+        btnFacturarVenta.setManaged(puedeFacturar);
+        if (puedeFacturar) btnFacturarVenta.setText("Facturar  " + Atajo.FACTURAR_ULTIMA.etiquetaCorta(Atajo.esMac()));
+        boxVentaCobrada.setVisible(true);
+        boxVentaCobrada.setManaged(true);
+        ocultarAvisoVenta.playFromStart();
+    }
+
+    private void ocultarAvisoVentaCobrada() {
+        if (boxVentaCobrada == null || !boxVentaCobrada.isVisible()) return;
+        ocultarAvisoVenta.stop();
+        boxVentaCobrada.setVisible(false);
+        boxVentaCobrada.setManaged(false);
+        ultimaVentaCobrada = null;
+    }
+
+    @FXML
+    private void onCerrarAvisoVenta() {
+        ocultarAvisoVentaCobrada();
+        txtCodigo.requestFocus();
+    }
+
+    /** Facturar la venta del aviso (botón o Ctrl/Cmd+F); sin aviso a la vista no hace nada */
+    @FXML
+    private void onFacturarUltimaVenta() {
+        Venta venta = ultimaVentaCobrada;
+        if (venta == null || !boxVentaCobrada.isVisible() || !btnFacturarVenta.isVisible()) return;
+        ocultarAvisoVentaCobrada();
+        facturacionDialogos.facturarVenta(raiz.getScene().getWindow(), venta);
+        txtCodigo.requestFocus();
     }
 
     /**
@@ -1256,6 +1369,7 @@ public class VentasController implements Initializable {
     }
 
     private void agregarAlTicket(Producto producto, double cantidad) {
+        ocultarAvisoVentaCobrada();                   // empieza el siguiente ticket
         // ¿Ya está en el ticket? → sumar cantidad
         Optional<DetalleVenta> existente = itemsTicket.stream()
                 .filter(d -> d.getProducto().getId().equals(producto.getId()))

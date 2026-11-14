@@ -46,6 +46,8 @@ public enum Atajo {
     COBRAR          (Ambito.VENTAS, Tecla.de(KeyCode.F12), Tecla.atajo(KeyCode.ENTER), "Cobrar el ticket", null,
                      "En la ventana de cobro: Enter cobra, Esc regresa"),
     REIMPRIMIR_ULTIMO(Ambito.VENTAS, Tecla.atajo(KeyCode.I), null, "Reimprimir el último ticket cobrado en esta caja", Permiso.VER_HISTORIAL),
+    FACTURAR_ULTIMA (Ambito.VENTAS, Tecla.atajo(KeyCode.F), null, "Facturar la venta recién cobrada", null,
+                     "Mientras se muestra el aviso \"Venta cobrada\" y la facturación está configurada"),
     ABRIR_CAJON     (Ambito.VENTAS, Tecla.atajo(KeyCode.J), null, "Abrir el cajón de dinero (solo con impresora térmica)", Permiso.ABRIR_CAJON),
     LEER_PESO       (Ambito.VENTAS, Tecla.atajoMayus(KeyCode.P), null, "Leer el peso de la báscula en el renglón a granel", null),
     CANCELAR_TICKET (Ambito.VENTAS, Tecla.atajoMayus(KeyCode.C), Tecla.atajo(KeyCode.DELETE), "Cancelar el ticket en captura (pide confirmación)", null),

@@ -291,13 +291,25 @@ public class VentaService {
      *    formas distintas de efectivo no pueden exceder el total; el cambio
      *    sale del efectivo.
      *  - Si algo falla se lanza NegocioException y NO se guarda nada.
+     *  - Los renglones recibidos NO se tocan: se trabaja sobre copias, que son las
+     *    que quedan en la venta guardada. Así, si la base falla a media operación
+     *    (disco, bloqueo, apagón), el ticket en pantalla sigue íntegro y se puede
+     *    volver a cobrar tal cual; antes los renglones quedaban con id y venta de
+     *    una transacción revertida y el reintento fallaba siempre.
      */
     @Transactional
-    public Venta cobrar(List<DetalleVenta> detalles, List<PagoVenta> pagos,
+    public Venta cobrar(List<DetalleVenta> renglonesDelTicket, List<PagoVenta> pagos,
                         Collection<Autorizacion> autorizaciones) {
 
-        if (detalles == null || detalles.isEmpty()) {
+        if (renglonesDelTicket == null || renglonesDelTicket.isEmpty()) {
             throw new NegocioException("El ticket está vacío.");
+        }
+        List<DetalleVenta> detalles = new ArrayList<>(renglonesDelTicket.size());
+        for (DetalleVenta d : renglonesDelTicket) {
+            if (d == null || d.getProducto() == null || d.getProducto().getId() == null) {
+                throw new NegocioException("Hay un renglón del ticket sin producto.");
+            }
+            detalles.add(copiarDetalle(d));
         }
         if (rutas.hayRestauracionPendiente()) {
             // Al reiniciar, el respaldo restaurado reemplaza la base: una venta cobrada ahora no quedaría en ella
@@ -314,9 +326,6 @@ public class VentaService {
         Map<Long, Double>   cantidadPorProducto = new LinkedHashMap<>();
         Map<Long, Double>   piezasPromoUsadas   = new java.util.HashMap<>();
         for (DetalleVenta d : detalles) {
-            if (d.getProducto() == null || d.getProducto().getId() == null) {
-                throw new NegocioException("Hay un renglón del ticket sin producto.");
-            }
             Long id = d.getProducto().getId();
             Producto p = productosPorId.computeIfAbsent(id, k ->
                     productoRepo.findById(k).orElseThrow(() -> new NegocioException(
@@ -400,6 +409,15 @@ public class VentaService {
             existencias.put(p.getId(), new double[] { redondearCantidad(despues + cantidad), despues });
         }
 
+        // 3c) Cupo de las promociones ("hasta agotar"), consumido en la base ANTES de insertar la venta
+        //     y en la misma transacción: si se agotó entre armar el ticket y cobrar, falla aquí y no queda
+        //     nada escrito; si el guardado falla después, el rollback también devuelve el cupo.
+        for (DetalleVenta d : detalles) {
+            if (d.getPromocionId() != null && d.getPiezasPromocion() != null) {
+                promocionService.registrarUso(d.getPromocionId(), d.getPiezasPromocion());
+            }
+        }
+
         // 4) Armar la venta
         Venta venta = new Venta();
         venta.setFecha(LocalDateTime.now());
@@ -427,7 +445,7 @@ public class VentaService {
         Venta guardada = ventaRepo.save(venta);
         guardada.setFolio(config.folioDe(guardada.getId()));
 
-        // 5) Bitácora del inventario ya descontado y consumo del cupo de promociones
+        // 5) Bitácora del inventario ya descontado
         for (Map.Entry<Long, double[]> e : existencias.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
             double antes = e.getValue()[0], despues = e.getValue()[1];
@@ -436,11 +454,6 @@ public class VentaService {
             // Aviso solo si ESTA venta lo hizo cruzar el mínimo (INV-03)
             if (antes > p.getCantidadMinima() && despues <= p.getCantidadMinima()) {
                 guardada.getAlertasStockBajo().add(p);
-            }
-        }
-        for (DetalleVenta d : detalles) {
-            if (d.getPromocionId() != null && d.getPiezasPromocion() != null) {
-                promocionService.registrarUso(d.getPromocionId(), d.getPiezasPromocion());
             }
         }
 
@@ -457,6 +470,26 @@ public class VentaService {
         // Las autorizaciones del ticket se agotan al cobrarlo (un solo uso)
         Autorizacion.consumirTodas(autorizaciones);
         return guardada;
+    }
+
+    /**
+     * Copia "limpia" de un renglón del ticket para guardarla en la venta: lleva lo
+     * que decidió el cajero (producto, cantidad, mayoreo, descuento manual); precio,
+     * promoción y autorizador se recalculan en {@link #cobrar}. Sin id ni venta.
+     */
+    static DetalleVenta copiarDetalle(DetalleVenta d) {
+        DetalleVenta c = new DetalleVenta();
+        c.setProducto(d.getProducto());
+        c.setCantidad(d.getCantidad());
+        c.setMayoreo(d.isMayoreo() ? Boolean.TRUE : null);
+        c.setDescuentoManualPct(d.getDescuentoManualPct());
+        c.setDescuentoManualImporte(d.getDescuentoManualImporte());
+        c.setPrecioVenta(d.getPrecioVenta());
+        c.setPrecioLista(d.getPrecioLista());
+        c.setCostoUnitario(d.getCostoUnitario());
+        c.setDescuento(d.getDescuento());
+        c.setTipoDescuento(d.getTipoDescuento());
+        return c;
     }
 
     /** Pagos: montos válidos, formas habilitadas (sin crédito), suma ≥ total y no-efectivo ≤ total */

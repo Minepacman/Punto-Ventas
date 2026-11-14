@@ -46,6 +46,28 @@
     <!-- ── TABLA DE PRODUCTOS EN TICKET + SUGERENCIAS ── -->
     <center>
         <VBox spacing="0">
+            <!-- Aviso NO modal de la venta recién cobrada (cambio en grande). No roba el foco: el
+                 siguiente escaneo entra directo al ticket nuevo. Antes era una ventana modal y el Enter
+                 que manda el lector la cerraba llevándose el artículo. Se oculta solo, con Esc, con Enter
+                 en el código vacío o al agregar el siguiente producto. -->
+            <HBox fx:id="boxVentaCobrada" styleClass="callout, callout-success, venta-cobrada" spacing="14"
+                  alignment="CENTER_LEFT" visible="false" managed="false">
+                <Label><graphic><Icono nombre="listo" tamano="22"/></graphic></Label>
+                <VBox spacing="2">
+                    <Label fx:id="lblVentaCobradaTitulo" text="Venta cobrada" styleClass="venta-cobrada-titulo"/>
+                    <Label fx:id="lblVentaCobradaDetalle" text=""/>
+                </VBox>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label text="Cambio:" styleClass="venta-cobrada-titulo"/>
+                <Label fx:id="lblVentaCobradaCambio" text="\$0.00" styleClass="venta-cobrada-cambio"/>
+                <Button fx:id="btnFacturarVenta" text="Facturar" onAction="#onFacturarUltimaVenta"
+                        styleClass="button-sm" focusTraversable="false" visible="false" managed="false"><graphic><Icono nombre="documento"/></graphic></Button>
+                <Button fx:id="btnCerrarAvisoVenta" onAction="#onCerrarAvisoVenta"
+                        styleClass="button-ghost, button-sm" focusTraversable="false"><graphic><Icono nombre="cerrar"/></graphic>
+                    <tooltip><Tooltip text="Cerrar el aviso (Esc)"/></tooltip>
+                </Button>
+            </HBox>
+
             <!-- CONSTRAINED: las columnas se reparten el ancho disponible (a 1024 px la tabla recibe ~700 px);
                  Descripción es la que crece. Sin esto "Importe" y "Existencia" quedaban fuera de vista. -->
             <TableView fx:id="tablaProductos" styleClass="ticket-table" VBox.vgrow="ALWAYS">
