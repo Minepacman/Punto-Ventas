@@ -137,8 +137,11 @@ public class UsuariosController implements Initializable {
         if (!sesionService.esAdmin()) return;
         try {
             chkMostrarEnLogin.setSelected(configuracionService.isLoginMostrarUsuarios());
-            lblCodigoEstado.setText(recuperacionService.hayCodigo()
-                    ? "Hay un código de recuperación vigente."
+            // El código es de cada administrador: aquí se informa del PROPIO
+            lblCodigoEstado.setText(recuperacionService.hayCodigoPropio()
+                    ? "Tienes un código de recuperación vigente (solo restablece tu contraseña)."
+                    : recuperacionService.hayCodigoHeredado()
+                    ? "Hay un código de una versión anterior, sin dueño: genera el tuyo."
                     : "Sin código de recuperación: si olvidas tu contraseña no podrás recuperarla.");
         } catch (RuntimeException e) {
             lblCodigoEstado.setText("");
@@ -165,14 +168,17 @@ public class UsuariosController implements Initializable {
     private void onCodigoRecuperacion() {
         boolean habia;
         try {
-            habia = recuperacionService.hayCodigo();
+            habia = recuperacionService.hayCodigoPropio();
         } catch (RuntimeException e) {
             habia = false;
         }
+        Cajero actual = sesionService.getCajeroActual();
+        String usuario = actual != null ? actual.getUsuario() : "";
         if (!Ventanas.confirmar("Código de recuperación",
-                (habia ? "Ya hay un código vigente; al generar otro el anterior deja de servir.\n\n" : "")
-                + "Se generará un código con el que podrás restablecer tu contraseña de administrador "
-                + "desde el inicio de sesión si la olvidas.\nSe muestra UNA sola vez: anótalo y guárdalo "
+                (habia ? "Ya tienes un código vigente; al generar otro el anterior deja de servir.\n\n" : "")
+                + "Se generará un código con el que podrás restablecer TU contraseña (usuario \""
+                + usuario + "\") desde el inicio de sesión si la olvidas. "
+                + "Solo sirve para tu usuario; cada administrador genera el suyo.\nSe muestra UNA sola vez: anótalo y guárdalo "
                 + "en un lugar seguro, fuera de esta computadora.\n\n¿Generar el código?")) {
             return;
         }
@@ -195,7 +201,8 @@ public class UsuariosController implements Initializable {
         txt.setEditable(false);
         txt.setStyle("-fx-font-family: monospace; -fx-font-size: 18px; -fx-alignment: center;");
         Label ayuda = new Label("Para usarlo: en el inicio de sesión elige \"¿Olvidaste tu contraseña?\", escribe tu usuario, "
-                + "este código y una contraseña nueva. Sirve una sola vez; después genera otro aquí.");
+                + "este código y una contraseña nueva. Solo sirve para tu usuario y una sola vez; después genera otro aquí. "
+                + "Deja de servir si otro administrador te desactiva, te quita el rol o te restablece la contraseña.");
         ayuda.setWrapText(true);
         ayuda.setMaxWidth(420);
         VBox caja = new VBox(10, txt, ayuda);

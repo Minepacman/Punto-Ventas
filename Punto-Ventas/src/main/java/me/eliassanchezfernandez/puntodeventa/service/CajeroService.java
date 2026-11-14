@@ -44,6 +44,7 @@ public class CajeroService {
     @Autowired private SesionMovilService sesionMovilService;
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private ConexionService      conexionService;
+    @Autowired private RecuperacionService  recuperacionService;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -180,6 +181,12 @@ public class CajeroService {
             aplicarPermisos(c, permisosEfectivos);
             cambios += ", permisos " + c.getPermisosEfectivos();
         }
+        // Su código de recuperación muere con su condición de administrador o si OTRO le restablece la
+        // contraseña (cambiar la propia no lo toca: el código sigue siendo suyo)
+        if (eraAdmin && (!activo || rol != Cajero.Rol.ADMIN || (cambiaContrasena && !esElMismo))) {
+            recuperacionService.anularAlCambiarAdministrador(c, !activo ? "usuario desactivado"
+                    : rol != Cajero.Rol.ADMIN ? "dejó de ser administrador" : "contraseña restablecida por otro administrador");
+        }
         Cajero guardado = cajeroRepo.save(c);
         if (!activo || cambiaContrasena) {
             sesionMovilService.revocarDeCajero(guardado.getId(), !activo ? "usuario desactivado" : "contraseña restablecida");
@@ -202,6 +209,11 @@ public class CajeroService {
         String hashAntes = c.getContrasenaHash();
         c.setContrasenaHash(passwordEncoder.encode(nuevaContrasena));
         c.setDebeCambiarContrasena(true);
+        Cajero enSesion = sesionService.getCajeroActual();
+        boolean esElMismo = enSesion != null && enSesion.getId().equals(c.getId());
+        if (c.getRol() == Cajero.Rol.ADMIN && !esElMismo) {
+            recuperacionService.anularAlCambiarAdministrador(c, "contraseña restablecida por otro administrador");
+        }
         cajeroRepo.save(c);
         sesionMovilService.revocarDeCajero(c.getId(), "contraseña restablecida");
         if (c.getRol() == Cajero.Rol.ADMIN) conexionService.olvidarAdministradorSi(hashAntes);
@@ -237,6 +249,8 @@ public class CajeroService {
             // Reactivar también desbloquea y reinicia el conteo de intentos
             c.setBloqueadoHasta(null);
             c.setIntentosFallidos(0);
+        } else if (c.getRol() == Cajero.Rol.ADMIN) {
+            recuperacionService.anularAlCambiarAdministrador(c, "usuario desactivado");
         }
         Cajero guardado = cajeroRepo.save(c);
         if (!activo) sesionMovilService.revocarDeCajero(c.getId(), "usuario desactivado");
@@ -273,6 +287,7 @@ public class CajeroService {
             throw new NegocioException("No se puede eliminar a \"" + c.getUsuario()
                     + "\" porque tiene ventas, cortes, fondos o movimientos registrados. Desactívalo en su lugar.");
         }
+        if (c.getRol() == Cajero.Rol.ADMIN) recuperacionService.anularAlCambiarAdministrador(c, "usuario eliminado");
         cajeroRepo.delete(c);
         sesionMovilService.revocarDeCajero(c.getId(), "usuario eliminado");
         if (c.getRol() == Cajero.Rol.ADMIN) conexionService.olvidarAdministradorSi(c.getContrasenaHash());

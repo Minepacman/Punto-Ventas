@@ -39,14 +39,19 @@ class RecuperacionServiceTest extends BaseServicioTest {
         assertThatThrownBy(() -> recuperacionService.generarCodigo()).isInstanceOf(NegocioException.class);
         assertThat(recuperacionService.hayCodigo()).isFalse();
 
-        iniciarComoAdmin();
+        Cajero admin = iniciarComoAdmin();
         String codigo = recuperacionService.generarCodigo();
 
         assertThat(recuperacionService.hayCodigo()).isTrue();
-        String hash = configuracionService.obtener().getRecuperacionHash();
+        assertThat(recuperacionService.hayCodigoPropio()).isTrue();
+        // El hash vive en la fila del administrador que lo generó, no en la configuración (ahí solo quedan los heredados)
+        Cajero enBd = cajeroRepo.findById(admin.getId()).orElseThrow();
+        String hash = enBd.getRecuperacionHash();
         assertThat(hash).startsWith("$2").doesNotContain(codigo);
         assertThat(passwordEncoder.matches(RecuperacionService.normalizar(codigo), hash)).isTrue();
-        assertThat(configuracionService.obtener().getRecuperacionGenerado()).isAfter(LocalDateTime.now().minusMinutes(1));
+        assertThat(enBd.getRecuperacionGenerado()).isAfter(LocalDateTime.now().minusMinutes(1));
+        assertThat(configuracionService.obtener().getRecuperacionHash()).isNull();
+        assertThat(recuperacionService.hayCodigoHeredado()).isFalse();
         assertThat(auditoriaRepo.findTop200ByOrderByFechaDesc()).extracting(Auditoria::getAccion)
                 .contains("CODIGO_RECUPERACION_GENERADO");
     }
