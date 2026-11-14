@@ -46,7 +46,7 @@ import java.util.ResourceBundle;
  *
  * Responsabilidades:
  *  - Actualizar el reloj de la cabecera (hora y fecha)
- *  - Controlar accesos por rol/permiso (pestañas Configuración y Corte)
+ *  - Controlar accesos por rol/permiso (pestañas Configuración —la última— y Corte)
  *  - Registrar los atajos de teclado del catálogo util/Atajo (F1–F5 cambian de
  *    pestaña, F10 muestra la lista; los de Ventas se delegan a VentasController
  *    solo cuando esa pestaña está activa)
@@ -227,8 +227,8 @@ public class MainController implements Initializable {
         todas.put("tabVentas", tabVentas);
         todas.put("tabProductos", tabProductos);
         todas.put("tabInventario", tabInventario);
-        todas.put("tabEstadisticas", tabEstadisticas);
         todas.put("tabCorte", tabCorte);
+        todas.put("tabEstadisticas", tabEstadisticas);
         todas.put("tabConfig", tabConfig);
         java.util.Map<String, Tab> visibles = new java.util.LinkedHashMap<>();
         todas.forEach((id, t) -> { if (tabPane.getTabs().contains(t)) visibles.put(id, t); });

@@ -90,10 +90,10 @@ public class ConfiguracionController implements Initializable {
     @FXML void onLogotipo()   { abrirAdmin("/fxml/configuracion_logotipo.fxml", "Logotipo", 440, 440); }
     @FXML void onUnidades()   { abrirAdmin("/fxml/configuracion_unidades.fxml", "Unidades de medida", 780, 500); }
     @FXML void onBaseDatos()  { abrirAdmin("/fxml/configuracion_basedatos.fxml", "Base de datos", 560, 640); }
-    /** Coordenadas del negocio y clima (Estadísticas y sugerencias) */
-    /** Servidor web local para teléfonos y sus sesiones */
-    @FXML void onAccesoMovil() { abrirAdmin("/fxml/configuracion_movil.fxml", "Acceso móvil", 820, 680); }
-    @FXML void onClima()      { abrirAdmin("/fxml/configuracion_clima.fxml", "Ubicación del negocio y clima", 560, 620); }
+    /** Servidor web local para teléfonos y sus sesiones (QR primero, interruptor, teléfonos, avanzadas) */
+    @FXML void onAccesoMovil() { abrirAdmin("/fxml/configuracion_movil.fxml", "Acceso móvil", 820, 720); }
+    /** Ubicación del negocio (detectar / buscar ciudad) y clima (Estadísticas y sugerencias) */
+    @FXML void onClima()      { abrirAdmin("/fxml/configuracion_clima.fxml", "Ubicación del negocio y clima", 640, 620); }
 
     private void abrirAdmin(String fxml, String titulo, double ancho, double alto) {
         if (!sesionService.esAdmin()) {
@@ -401,7 +401,7 @@ public class ConfiguracionController implements Initializable {
     // ── Dispositivos (solo ADMIN; cada servicio lo vuelve a verificar y audita) ──
 
     @FXML void onImpresora() { abrirAdmin("/fxml/configuracion_impresora.fxml", "Impresora de tickets", 600, 760); }
-    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", "Báscula", 600, 780); }
+    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", "Báscula", 600, 620); }
     @FXML void onLector()    { if (soloAdmin()) dispositivosDialogos.lector(raiz.getScene().getWindow()); }
     @FXML void onCajon()     { if (soloAdmin()) dispositivosDialogos.cajon(raiz.getScene().getWindow()); }
     @FXML void onTerminalBancaria() { if (soloAdmin()) dispositivosDialogos.terminalBancaria(raiz.getScene().getWindow()); }

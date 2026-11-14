@@ -46,8 +46,15 @@ hermanos bajo la Open Database License, ODbL 1.0). El programa lo descarga por i
 del usuario o una vez por semana en segundo plano, para proponer descripción, departamento e imagen al
 dar de alta un producto por su código de barras; donde se muestran esos datos aparece la atribución
 «Datos de Open Food Facts (ODbL)» (Configuración → Códigos de barras permite apagar la consulta).
-El pronóstico del clima viene de Open-Meteo (<https://open-meteo.com>, CC BY 4.0) cuando el usuario
-activa esa función.
+El pronóstico del clima y la búsqueda de ciudades por nombre vienen de Open-Meteo
+(<https://open-meteo.com>, datos bajo CC BY 4.0) cuando el usuario activa esa función o busca su ciudad.
+El botón «Detectar mi ubicación» (asistente inicial y Configuración → Ubicación y clima) estima la ciudad a
+partir de la conexión a internet consultando, solo al pulsarlo y por HTTPS, uno de estos servicios gratuitos
+y sin llave, en orden hasta que uno responde: ipwho.is (<https://ipwho.is>, plan gratuito de uso justo),
+GeoJS (<https://www.geojs.io>, proyecto abierto) e ipapi.co (<https://ipapi.co>, plan gratuito). A ninguno se
+le envía dato alguno de la tienda; cada uno ve únicamente la dirección IP pública desde la que se le consulta,
+igual que cualquier sitio web. Lo que se guarda en el programa es la ciudad y las coordenadas que el
+administrador confirma.
 
 Si falta alguna biblioteca o algún aviso en esta lista, repórtalo en
 <https://github.com/Minepacman/Punto-Ventas/issues>.

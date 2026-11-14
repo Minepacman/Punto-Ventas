@@ -2,96 +2,109 @@
 
 <?import javafx.scene.control.*?>
 <?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
+<?import me.eliassanchezfernandez.puntodeventa.util.BotonOpcion?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
 <!--
-    configuracion.fxml  –  Configuración del sistema
+    configuracion.fxml  –  Configuración del sistema (pestaña, la última)
     Controlador: ConfiguracionController.java
+
+    Cuatro tarjetas (lo básico, funciones, dispositivos, datos y mantenimiento), cada una con
+    un título, una línea que dice qué hay dentro y botones BotonOpcion (icono + título +
+    descripción llana). Los botones fluyen en columnas según el ancho (4 a 1024 px); el
+    ancho de cada uno está en app.css (.boton-opcion). Cabe en 1024×768 casi sin desplazar.
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionController">
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox spacing="24">
-                <padding><Insets topRightBottomLeft="24"/></padding>
+            <VBox styleClass="config-page" spacing="12">
+                <padding><Insets top="14" right="18" bottom="14" left="18"/></padding>
 
-                <!-- ── General ──────────────────────────────────── -->
-                <Label text="General" styleClass="config-section-title"/>
-                <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="Opciones&#10;Habilitadas"   onAction="#onOpciones"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="ajustes"/></graphic></Button>
-                    <Button text="Cajeros"                  onAction="#onCajeros"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="usuario"/></graphic></Button>
-                    <Button text="Bitácora"                 onAction="#onBitacora"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="lista"/></graphic></Button>
-                    <Button text="Base de Datos"            onAction="#onBaseDatos"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="baseDatos"/></graphic></Button>
-                    <Button text="Artículos&#10;Precargados"   onAction="#onArticulosPrec"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="paquete"/></graphic></Button>
-                    <Button text="Facturación"              onAction="#onFacturacion"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="recibo"/></graphic></Button>
-                    <Button text="Modificar&#10;Folios"        onAction="#onFolios"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="numeros"/></graphic></Button>
-                    <Button text="Ubicación&#10;y Clima"        onAction="#onClima"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="climaSol"/></graphic></Button>
-                    <Button text="Acceso&#10;móvil"             onAction="#onAccesoMovil"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="celular"/></graphic></Button>
-                    <Button text="Códigos de&#10;barras"        onAction="#onCatalogoCodigos"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="etiqueta"/></graphic></Button>
-                </TilePane>
+                <HBox alignment="CENTER_LEFT" spacing="12">
+                    <Label text="Configuración" styleClass="title"/>
+                    <Label text="Todo lo del negocio en un solo lugar. Solo el administrador puede cambiar estas opciones."
+                           styleClass="subtitle" wrapText="true"/>
+                </HBox>
 
-                <Separator/>
+                <!-- ── Lo básico ─────────────────────────────────── -->
+                <VBox styleClass="config-card">
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="tienda" tamano="18"/></graphic></Label>
+                        <VBox spacing="0">
+                            <Label text="Lo básico de la tienda" styleClass="config-card-title"/>
+                            <Label text="Nombre, quién usa la caja, cómo se cobra y cómo sale el ticket." styleClass="hint"/>
+                        </VBox>
+                    </HBox>
+                    <FlowPane hgap="8" vgap="6">
+                        <BotonOpcion icono="tienda"  titulo="Negocio e IVA"       descripcion="Nombre, dirección e IVA" onAction="#onImpuestos"/>
+                        <BotonOpcion icono="usuario" titulo="Cajeros"             descripcion="Usuarios y permisos"              onAction="#onCajeros"/>
+                        <BotonOpcion icono="tarjeta" titulo="Formas de pago"      descripcion="Efectivo, tarjeta, vales…"       onAction="#onFormasPago"/>
+                        <BotonOpcion icono="boleto"  titulo="Ticket"              descripcion="Qué se imprime y cómo se ve"                   onAction="#onTicket"/>
+                        <BotonOpcion icono="imagen"  titulo="Logotipo"            descripcion="Imagen del ticket y el inicio"             onAction="#onLogotipo"/>
+                        <BotonOpcion icono="numeros" titulo="Folios"              descripcion="Numeración de los tickets"                     onAction="#onFolios"/>
+                        <BotonOpcion icono="efectivo" titulo="Moneda"             descripcion="Símbolo y código ($ MXN)"                      onAction="#onMoneda"/>
+                        <BotonOpcion icono="regla"   titulo="Unidades de medida"  descripcion="Pieza, kilo, litro, paquete"                  onAction="#onUnidades"/>
+                    </FlowPane>
+                </VBox>
 
-                <!-- ── Personalización ──────────────────────────── -->
-                <Label text="Personalización" styleClass="config-section-title"/>
-                <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="Logotipo"                  onAction="#onLogotipo"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="imagen"/></graphic></Button>
-                    <Button text="Ticket"                    onAction="#onTicket"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="boleto"/></graphic></Button>
-                    <Button text="Formas de&#10;Pago"           onAction="#onFormasPago"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="tarjeta"/></graphic></Button>
-                    <Button text="(%) Impuestos"                  onAction="#onImpuestos"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="($) Moneda"                     onAction="#onMoneda"
-                            prefWidth="110" prefHeight="80"/>
-                    <Button text="Unidades de&#10;Medida"       onAction="#onUnidades"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="regla"/></graphic></Button>
-                </TilePane>
-
-                <Separator/>
+                <!-- ── Funciones ─────────────────────────────────── -->
+                <VBox styleClass="config-card">
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="energia" tamano="18"/></graphic></Label>
+                        <VBox spacing="0">
+                            <Label text="Funciones" styleClass="config-card-title"/>
+                            <Label text="Enciende o apaga lo que la tienda usa: celular, clima, facturas, catálogo de productos." styleClass="hint"/>
+                        </VBox>
+                    </HBox>
+                    <FlowPane hgap="8" vgap="6">
+                        <BotonOpcion icono="ajustes"  titulo="Opciones habilitadas"  descripcion="Qué funciones usa la caja"            onAction="#onOpciones"/>
+                        <BotonOpcion icono="celular"  titulo="Acceso móvil"          descripcion="Usar el programa en el celular"            onAction="#onAccesoMovil"/>
+                        <BotonOpcion icono="climaSol" titulo="Ubicación y clima"     descripcion="Tu ciudad, para sugerir mejor"         onAction="#onClima"/>
+                        <BotonOpcion icono="etiqueta" titulo="Códigos de barras"     descripcion="Datos de productos en línea"             onAction="#onCatalogoCodigos"/>
+                        <BotonOpcion icono="recibo"   titulo="Facturación"           descripcion="Factura electrónica (CFDI)"              onAction="#onFacturacion"/>
+                        <BotonOpcion icono="paquete"  titulo="Artículos precargados" descripcion="Productos de ejemplo"           onAction="#onArticulosPrec"/>
+                    </FlowPane>
+                </VBox>
 
                 <!-- ── Dispositivos ──────────────────────────────── -->
-                <Label text="Dispositivos" styleClass="config-section-title"/>
-                <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="Impresora&#10;de Tickets"     onAction="#onImpresora"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="impresora"/></graphic></Button>
-                    <Button text="Lector de&#10;Códigos"        onAction="#onLector"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="camara"/></graphic></Button>
-                    <Button text="Cajón de&#10;Dinero"          onAction="#onCajon"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="efectivo"/></graphic></Button>
-                    <Button text="Báscula"                    onAction="#onBascula"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="bascula"/></graphic></Button>
-                    <Button text="Terminal&#10;Bancaria"        onAction="#onTerminalBancaria"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="tarjeta"/></graphic></Button>
-                </TilePane>
+                <VBox styleClass="config-card">
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="impresora" tamano="18"/></graphic></Label>
+                        <VBox spacing="0">
+                            <Label text="Dispositivos" styleClass="config-card-title"/>
+                            <Label text="Lo que está conectado a la computadora. Cada pantalla tiene un botón para probarlo." styleClass="hint"/>
+                        </VBox>
+                    </HBox>
+                    <FlowPane hgap="8" vgap="6">
+                        <BotonOpcion icono="impresora" titulo="Impresora de tickets" descripcion="Elegir impresora y probar"        onAction="#onImpresora"/>
+                        <BotonOpcion icono="camara"    titulo="Lector de códigos"    descripcion="Probar que escanee bien"                     onAction="#onLector"/>
+                        <BotonOpcion icono="efectivo"  titulo="Cajón de dinero"      descripcion="Se abre al cobrar en efectivo"               onAction="#onCajon"/>
+                        <BotonOpcion icono="bascula"   titulo="Báscula"              descripcion="Pesar productos a granel"                    onAction="#onBascula"/>
+                        <BotonOpcion icono="tarjeta"   titulo="Terminal bancaria"    descripcion="Terminales para tarjeta"          onAction="#onTerminalBancaria"/>
+                    </FlowPane>
+                </VBox>
 
-                <Separator/>
-
-                <!-- ── Mantenimiento ─────────────────────────────── -->
-                <Label text="Mantenimiento" styleClass="config-section-title"/>
-                <TilePane hgap="16" vgap="16" prefColumns="4">
-                    <Button text="Respaldo&#10;Automático"       onAction="#onRespaldo"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="guardar"/></graphic></Button>
-                    <Button text="Licencia"                   onAction="#onLicencia"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="llave"/></graphic></Button>
-                    <Button text="Actualizaciones"            onAction="#onActualizaciones"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="actualizar"/></graphic></Button>
-                    <Button text="Donador y&#10;soporte"        onAction="#onDonador"
-                            prefWidth="110" prefHeight="80"><graphic><Icono nombre="corazon"/></graphic></Button>
-                </TilePane>
+                <!-- ── Datos y mantenimiento ─────────────────────── -->
+                <VBox styleClass="config-card">
+                    <HBox spacing="10" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="guardar" tamano="18"/></graphic></Label>
+                        <VBox spacing="0">
+                            <Label text="Datos y mantenimiento" styleClass="config-card-title"/>
+                            <Label text="Respaldos, versión del programa y soporte." styleClass="hint"/>
+                        </VBox>
+                    </HBox>
+                    <FlowPane hgap="8" vgap="6">
+                        <BotonOpcion icono="guardar"    titulo="Respaldo automático" descripcion="Copias de seguridad diarias"          onAction="#onRespaldo"/>
+                        <BotonOpcion icono="baseDatos"  titulo="Base de datos"       descripcion="Restaurar y varias cajas"         onAction="#onBaseDatos"/>
+                        <BotonOpcion icono="lista"      titulo="Bitácora"            descripcion="Quién hizo qué y cuándo abrió el cajón" onAction="#onBitacora"/>
+                        <BotonOpcion icono="actualizar" titulo="Actualizaciones"     descripcion="Versión del programa"                        onAction="#onActualizaciones"/>
+                        <BotonOpcion icono="corazon"    titulo="Donador y soporte"   descripcion="Apoya el proyecto, pide ayuda"              onAction="#onDonador"/>
+                        <BotonOpcion icono="llave"      titulo="Licencia"            descripcion="Software libre (GPL v3)"                 onAction="#onLicencia"/>
+                    </FlowPane>
+                </VBox>
 
             </VBox>
         </ScrollPane>

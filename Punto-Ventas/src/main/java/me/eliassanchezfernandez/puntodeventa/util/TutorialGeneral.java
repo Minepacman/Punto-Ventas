@@ -56,11 +56,6 @@ public final class TutorialGeneral {
                 "Existencias y movimientos: entradas de mercancía, ajustes, productos bajos de stock, "
                 + "proveedores y órdenes de compra. Cada venta descuenta existencias automáticamente.",
                 List.of(Atajo.IR_INVENTARIO)));
-        p.add(new Paso("tabEstadisticas", "Estadísticas",
-                "Qué se vende, cuánto y a qué horas: ventas por día, por cajero y por hora, productos más "
-                + "vendidos, canasta de compra y recomendaciones. Incluye el clima, si lo activas. "
-                + "Al abrirla por primera vez tiene su propio recorrido.",
-                List.of(Atajo.IR_ESTADISTICAS)));
         p.add(new Paso("tabCorte", "Corte",
                 "El corte de esta caja por turno: lo que debe haber en el cajón desde el corte anterior "
                 + "(fondo o lo que dejó el turno pasado, más ventas en efectivo, más entradas, menos salidas), "
@@ -68,10 +63,16 @@ public final class TutorialGeneral {
                 + "salidas de efectivo (cambio, retiros, pagos a proveedores) y ves el reporte del día completo "
                 + "y el historial de cortes. Todo se imprime o exporta.",
                 List.of(Atajo.MOVIMIENTO_EFECTIVO)));
+        p.add(new Paso("tabEstadisticas", "Estadísticas",
+                "Qué se vende, cuánto y a qué horas: ventas por día, por cajero y por hora, productos más "
+                + "vendidos, canasta de compra y recomendaciones. Incluye el clima, si lo activas. "
+                + "Al abrirla por primera vez tiene su propio recorrido.",
+                List.of(Atajo.IR_ESTADISTICAS)));
         p.add(new Paso("tabConfig", "Configuración",
-                "Todo lo demás: usuarios y permisos, datos del negocio y logotipo, ticket e impresora, "
-                + "formas de pago, moneda, folios, respaldos, báscula, cajón, acceso desde el celular, "
-                + "ubicación y clima, y facturación electrónica.",
+                "La última pestaña, para el administrador: usuarios y permisos, datos del negocio y logotipo, "
+                + "ticket e impresora, formas de pago, moneda, folios, respaldos, báscula, cajón, acceso desde el "
+                + "celular, ubicación y clima, y facturación electrónica. Está ordenada por temas y cada botón dice "
+                + "para qué sirve; lo técnico queda en «Opciones avanzadas».",
                 List.of()));
         p.add(new Paso(null, "Barra superior y bloqueo",
                 "Arriba ves la hora, la caja y el usuario en sesión. «Bloquear» regresa al inicio de sesión "

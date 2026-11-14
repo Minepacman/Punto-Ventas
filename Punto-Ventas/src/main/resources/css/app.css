@@ -1156,6 +1156,126 @@ TilePane > .button:armed,
     -fx-padding: 0 0 2 10;
 }
 
+/* ── Pestaña Configuración: tarjetas por tema y botones de opción ────────
+   La página es el lienzo; cada tema es una tarjeta plana con icono, título
+   y una línea de explicación; dentro, botones BotonOpcion (util/BotonOpcion)
+   que fluyen en columnas: 4 a 1024 px de ancho. El botón reutiliza las
+   variables -color-button-* para que hover/foco/presionado sigan la regla
+   general de los botones. */
+.config-page {
+    -fx-background-color: -pos-bg-app;
+}
+
+.config-card {
+    -fx-background-color:  -pos-border, -pos-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 10, 9;
+    -fx-padding: 10 14 12 14;
+    -fx-spacing: 8;
+}
+
+.config-card-icon {
+    -fx-text-fill: -pos-accent-text;
+    -fx-background-color: -pos-accent-subtle;
+    -fx-background-radius: 8;
+    -fx-padding: 6;
+}
+
+.config-card-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.boton-opcion {
+    -color-button-bg:             -pos-surface-alt;
+    -color-button-border:         -pos-border-subtle;
+    -color-button-edge:           -pos-border;
+    -color-button-bg-hover:       -pos-accent-subtle;
+    -color-button-border-hover:   -pos-accent-muted;
+    -color-button-bg-focused:     -pos-surface-alt;
+    -color-button-bg-pressed:     -pos-accent-muted;
+    -color-button-border-pressed: -pos-accent;
+    -fx-pref-width: 220;
+    -fx-min-height: 50;
+    -fx-pref-height: 50;
+    -fx-padding: 5 10 5 8;
+    -fx-background-radius: 8, 8, 7;
+}
+
+.boton-opcion:focused {
+    -fx-background-radius: 10, 8, 8, 7;
+}
+
+.boton-opcion .opcion-icono {
+    -fx-text-fill: -pos-accent-text;
+    -fx-padding: 0;
+}
+
+.boton-opcion .opcion-titulo {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+.boton-opcion .opcion-desc {
+    -fx-font-size: 11px;
+    -fx-text-fill: -pos-text-muted;
+}
+
+/* «Opciones avanzadas» plegadas: el título del TitledPane al tamaño normal del texto.
+   La región del encabezado de un TitledPane lleva la clase .title, la misma de la
+   tipografía de títulos (20 px) de más abajo, y además atlantafx la pone a 1.25em:
+   aquí vuelve a 13 px y en negritas, como un subtítulo. Solo para estos bloques, para
+   no mover las secciones de Estadísticas. */
+.opciones-avanzadas > .title {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 12 8 12;
+}
+
+.opciones-avanzadas > .title > .text {
+    -fx-font-size: 1em;
+}
+
+/* Interruptor (atlantafx ToggleSwitch) con su texto a la izquierda: fila "Permitir acceso…" */
+.fila-interruptor {
+    -fx-spacing: 12;
+    -fx-alignment: center-left;
+}
+
+.fila-interruptor .interruptor-titulo {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
+/* Marco del código QR grande en Acceso móvil */
+.qr-marco {
+    -fx-background-color: -pos-border, -pos-surface;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 10, 9;
+    -fx-padding: 12;
+    -fx-alignment: center;
+}
+
+.qr-marco-vacio {
+    -fx-background-color: -pos-surface-alt;
+    -fx-background-radius: 10;
+    -fx-border-color: -pos-border-strong;
+    -fx-border-style: dashed;
+    -fx-border-width: 2;
+    -fx-border-radius: 10;
+    -fx-alignment: center;
+    -fx-padding: 16;
+}
+
+.qr-url {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+}
+
 
 /* ======================================================================
    9. VENTAS (ticket + cobro)
