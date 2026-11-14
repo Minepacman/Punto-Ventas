@@ -13,6 +13,7 @@ import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.ProductoImagen;
+import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService;
 import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Periodo;
@@ -20,6 +21,7 @@ import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService.Totales
 import me.eliassanchezfernandez.puntodeventa.service.PermisoRequeridoException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoImagenService;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
+import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.TutorialesService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.service.AuditoriaService;
@@ -45,6 +47,7 @@ import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -88,6 +91,10 @@ import java.util.function.Supplier;
  *   GET  /api/productos/{id}/imagen[?mini=1]         (cualquier usuario) -> JPEG con ETag; 404 si no tiene
  *   POST /api/inventario/ajuste {productoId, tipo: entrada|ajuste|merma, cantidad, motivo, proveedor?, costo?}
  *                                                    (AJUSTAR_INVENTARIO)
+ *   GET  /api/proveedores                             (cualquier usuario) -> agenda: días de entrega/preventa, próxima visita
+ *                                                    y nota media (esta solo con VER_GANANCIAS o GESTIONAR_PROVEEDORES)
+ *   POST /api/proveedores/guardar {id?, nombre, telefono?, contacto?, diasEntrega:[1..7], diasPreventa:[1..7], notas?}
+ *                                                    (GESTIONAR_PROVEEDORES) -> crea o edita; el RFC solo se captura en el escritorio
  *   GET  /api/tutorial                                (cualquier usuario) -> {visto}: recorrido móvil ya visto por ESTE usuario
  *   POST /api/tutorial/visto {visto: true|false}       (cualquier usuario) -> lo marca/reinicia (columna cajeros.tutorial_movil_visto)
  *
@@ -152,6 +159,7 @@ public class ServidorMovilService {
     @Autowired private VentaService         ventaService;
     @Autowired private ProductoService      productoService;
     @Autowired private ProductoImagenService productoImagenService;
+    @Autowired private ProveedorService     proveedorService;
     @Autowired private AnunciadorMdns       anunciador;
     @Autowired private TutorialesService    tutorialesService;
 
@@ -443,6 +451,8 @@ public class ServidorMovilService {
                 case "/api/ventas"          -> { exigir(metodo, "GET");  ventas(ex); }
                 case "/api/inventario"      -> { exigir(metodo, "GET");  inventario(ex); }
                 case "/api/inventario/ajuste" -> { exigir(metodo, "POST"); ajusteInventario(ex); }
+                case "/api/proveedores"     -> { exigir(metodo, "GET");  proveedores(ex); }
+                case "/api/proveedores/guardar" -> { exigir(metodo, "POST"); guardarProveedor(ex); }
                 case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
                 case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
                 case "/favicon.ico", "/icono-32.png", "/icono-256.png", "/manifest.webmanifest" -> estatico(ex, metodo, ruta);
@@ -802,6 +812,10 @@ public class ServidorMovilService {
         secciones.put("historial", historial);
         secciones.put("inventario", true);
         secciones.put("inventarioAjustar", ajustar);
+        boolean gestionarProveedores = c.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
+        secciones.put("proveedores", true);
+        secciones.put("proveedoresEditar", gestionarProveedores);
+        secciones.put("proveedoresCostos", gestionarProveedores || c.tienePermiso(Permiso.VER_GANANCIAS));
         // "Escanear ticket" sigue siendo una DEMO (las líneas son de ejemplo): apagada hasta tener OCR real.
         // Para probar la pantalla en desarrollo: cambiar a `ajustar`.
         secciones.put("escanearTicket", ESCANEAR_TICKET_HABILITADO && ajustar);
@@ -1151,6 +1165,112 @@ public class ServidorMovilService {
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("ok", true);
             r.put("producto", mapaProducto(despues, cajero.tienePermiso(Permiso.VER_GANANCIAS)));
+            return r;
+        });
+    }
+
+    // ── Proveedores (agenda semanal: entrega y preventa) ──────────────────
+
+    private static List<Integer> numerosDias(java.util.Collection<DayOfWeek> dias) {
+        List<Integer> r = new ArrayList<>();           // en orden lunes → domingo (1..7)
+        for (DayOfWeek d : DayOfWeek.values()) if (dias != null && dias.contains(d)) r.add(d.getValue());
+        return r;
+    }
+
+    private static Map<String, Object> mapaProveedor(ProveedorService.ResumenProveedor rp, boolean costos) {
+        Proveedor p = rp.proveedor();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", p.getId());
+        m.put("nombre", p.getNombre());
+        m.put("telefono", p.getTelefono() == null ? "" : p.getTelefono());
+        m.put("contacto", p.getContacto() == null ? "" : p.getContacto());
+        m.put("notas", p.getNotas() == null ? "" : p.getNotas());
+        m.put("diasEntrega", numerosDias(p.getDias()));
+        m.put("diasPreventa", numerosDias(p.getPreventa()));
+        m.put("etiquetaEntrega", p.etiquetaDias());
+        m.put("etiquetaPreventa", p.etiquetaPreventa());
+        m.put("proximaEntrega", rp.proximaEntrega() == null ? null : rp.proximaEntrega().toString());
+        m.put("proximaPreventa", rp.proximaPreventa() == null ? null : rp.proximaPreventa().toString());
+        if (costos) {
+            ProveedorService.NotaMedia n = rp.notaMedia();
+            if (n == null) {
+                m.put("notaMedia", null);        // "sin datos aún": el cliente lo distingue de "no puedes verlo" por costosVisibles
+            } else {
+                Map<String, Object> nm = new LinkedHashMap<>();
+                nm.put("promedio", n.promedio());
+                nm.put("notas", n.notas());
+                nm.put("ultima", n.ultima().toString());
+                m.put("notaMedia", nm);
+            }
+        }
+        return m;
+    }
+
+    private Map<String, Object> mapaAgenda(ProveedorService.Agenda a) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("hoy", a.hoy().toString());
+        r.put("diaSemanaHoy", a.hoy().getDayOfWeek().getValue());
+        r.put("costosVisibles", a.costosVisibles());
+        r.put("puedeEditar", a.puedeEditar());
+        r.put("ventanaDias", ProveedorService.DIAS_NOTA_MEDIA);
+        List<Map<String, Object>> lista = new ArrayList<>();
+        for (ProveedorService.ResumenProveedor rp : a.proveedores()) lista.add(mapaProveedor(rp, a.costosVisibles()));
+        r.put("proveedores", lista);
+        return r;
+    }
+
+    /** Agenda completa para cualquier usuario con sesión; el servicio decide si entrega la nota media */
+    private void proveedores(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> mapaAgenda(proveedorService.agenda()));
+    }
+
+    /** Lista JSON de días ISO (1 = lunes … 7 = domingo) → conjunto; cualquier otra cosa es 400 */
+    private static java.util.Set<DayOfWeek> dias(Object o, String campo) {
+        java.util.Set<DayOfWeek> r = java.util.EnumSet.noneOf(DayOfWeek.class);
+        if (o == null) return r;
+        if (!(o instanceof List<?> lista) || lista.size() > 7) throw new CuerpoInvalido(400, "El campo " + campo + " debe ser una lista de días (1 a 7).");
+        for (Object x : lista) {
+            if (!(x instanceof Number n) || n.doubleValue() != Math.rint(n.doubleValue()) || n.intValue() < 1 || n.intValue() > 7) {
+                throw new CuerpoInvalido(400, "El campo " + campo + " solo admite días del 1 (lunes) al 7 (domingo).");
+            }
+            r.add(DayOfWeek.of(n.intValue()));
+        }
+        return r;
+    }
+
+    /**
+     * Crea o edita un proveedor desde el teléfono. Permiso comprobado ANTES de leer el cuerpo y de
+     * nuevo en el servicio; los largos se acotan aquí y el servicio vuelve a validar todo. El RFC
+     * no se captura en el móvil: al editar se conserva el que tenga.
+     */
+    private void guardarProveedor(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        if (!v.get().cajero().tienePermiso(Permiso.GESTIONAR_PROVEEDORES)) { sinPermiso(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        Long id = null;
+        if (cuerpo.get("id") != null) {
+            if (!(cuerpo.get("id") instanceof Number idNum) || idNum.doubleValue() != Math.rint(idNum.doubleValue()) || idNum.longValue() <= 0) {
+                throw new CuerpoInvalido(400, "Proveedor inválido.");
+            }
+            id = idNum.longValue();
+        }
+        String nombre = texto(cuerpo.get("nombre"), 150);
+        String telefono = texto(cuerpo.get("telefono"), 30);
+        String contacto = texto(cuerpo.get("contacto"), 100);
+        String notas = texto(cuerpo.get("notas"), 500);
+        java.util.Set<DayOfWeek> entrega = dias(cuerpo.get("diasEntrega"), "diasEntrega");
+        java.util.Set<DayOfWeek> preventa = dias(cuerpo.get("diasPreventa"), "diasPreventa");
+        Long idFinal = id;
+        protegido(ex, Permiso.GESTIONAR_PROVEEDORES, cajero -> {
+            String rfc = idFinal == null ? null : proveedorService.obtener(idFinal).getRfc();
+            Proveedor g = proveedorService.guardar(idFinal, nombre, rfc, telefono, contacto, entrega, preventa, notas);
+            ProveedorService.Agenda a = proveedorService.agenda();
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("creado", idFinal == null);
+            a.proveedores().stream().filter(rp -> rp.proveedor().getId().equals(g.getId())).findFirst()
+                    .ifPresent(rp -> r.put("proveedor", mapaProveedor(rp, a.costosVisibles())));
             return r;
         });
     }
