@@ -16,6 +16,8 @@
 #    etiquetas v*. Nada de pull_request_target ni workflow_dispatch con entradas que lleguen a un shell.
 #  - permissions mínimos: lectura en todo; escritura de contenidos solo en el trabajo que crea la release.
 #  - Acciones fijadas por SHA completo (el comentario dice la versión). Para subirlas: cambiar el SHA y el comentario.
+#  - actions/checkout con persist-credentials: false en todos los trabajos (ninguno hace push con GITHUB_TOKEN);
+#    solo el clon del tap de Homebrew conserva su token, porque ese sí hace push y usa TAP_TOKEN, no GITHUB_TOKEN.
 #  - No se ejecuta nada que venga de fuera (ni del cuerpo de la release ni de entradas); sin "curl | sh".
 #  - Se publica SHA256SUMS.txt con las sumas de todos los instaladores, y cada archivo lleva una attestation de
 #    procedencia de GitHub (actions/attest-build-provenance; se comprueba con `gh attestation verify <archivo>
@@ -45,6 +47,8 @@ jobs:
       prerelease: ${{ steps.datos.outputs.prerelease }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: La etiqueta debe coincidir con build.gradle
         id: datos
         shell: bash
@@ -71,6 +75,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
@@ -108,12 +114,16 @@ jobs:
 
   windows-x86:
     # 32 bits: JavaFX 17.0.8 (último con artefacto win-x86) + runtime de un JDK 17 de 32 bits. Frágil: puede fallar sin detener la publicación.
+    # jpackage corre desde el JDK de 32 bits (lanzador, runtime y "-arch x86" de WiX salen de él) y toma la plantilla
+    # packaging/windows-x86/main.wxs (Platform="x86"); sin ella el MSI quedaba marcado x64 y Windows de 32 bits lo rechazaba.
     name: Windows x86 (exe, opcional)
     needs: version
     runs-on: windows-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: JDK 17 de 32 bits (solo para jpackage)
         id: jdkx86
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
@@ -135,9 +145,34 @@ jobs:
           choco install wixtoolset --version 3.14.1 -y --no-progress
           "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: Instalador de 32 bits
+        # bash (Git Bash del runner) a propósito: con pwsh, el shell por defecto en Windows, "-PjavafxVersion=17.0.8" llegaba
+        # a Gradle partido en "-PjavafxVersion=17" y ".0.8" (v1.0.3: "Task '.0.8' not found"). Cada -P va además entre comillas.
+        shell: bash
         env:
           JDK_X86: ${{ steps.jdkx86.outputs.path }}
-        run: .\gradlew.bat jpackageTask -x test --no-daemon -PjavafxVersion=17.0.8 -PjavafxPlatform=win-x86 "-PjdkJpackage=$env:JDK_X86"
+        run: ./gradlew.bat jpackageTask -x test --no-daemon "-PjavafxVersion=17.0.8" "-PjavafxPlatform=win-x86" "-PjdkJpackage=$JDK_X86"
+      - name: Comprobar que el instalador es de 32 bits
+        # Si algo quedó de 64 bits es mejor no publicar el x86 (el trabajo es opcional) que publicar uno que Windows de 32 bits rechaza.
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build\installer\*.exe | Select-Object -First 1
+          if (-not $exe) { throw "No hay .exe en build\installer" }
+          # Cabecera PE: en 0x3C está el desplazamiento de "PE\0\0" y 4 bytes después el campo Machine (0x14C = i386, 0x8664 = x64)
+          $bytes = [System.IO.File]::ReadAllBytes($exe.FullName)
+          $pe = [System.BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [System.BitConverter]::ToUInt16($bytes, $pe + 4)
+          "Machine de $($exe.Name): 0x{0:X}" -f $machine
+          if ($machine -ne 0x14C) { throw "El instalador no es un ejecutable de 32 bits (Machine=0x$($machine.ToString('X')))" }
+          # El MSI que va dentro del exe se conserva en la carpeta --temp (build.gradle solo la pasa en x86): su propiedad
+          # "Template" (PID 7) dice la arquitectura; debe empezar con "Intel" (x86), no con "x64".
+          $msi = Get-ChildItem build\jpackage-x86-temp -Recurse -Filter *.msi | Select-Object -First 1
+          if (-not $msi) { throw "No se encontró el MSI intermedio en build\jpackage-x86-temp" }
+          $inst = New-Object -ComObject WindowsInstaller.Installer
+          $db = $inst.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $inst, @($msi.FullName, 0))
+          $si = $db.GetType().InvokeMember('SummaryInformation', 'GetProperty', $null, $db, @(0))
+          $template = $si.GetType().InvokeMember('Property', 'GetProperty', $null, $si, @(7))
+          "Template de $($msi.Name): $template"
+          if ($template -notmatch '^Intel;') { throw "El MSI está marcado para otra arquitectura (Template='$template'); debía ser Intel;1033" }
       - name: Renombrar
         shell: pwsh
         env:
@@ -156,6 +191,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
@@ -185,6 +222,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
@@ -213,6 +252,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
@@ -276,6 +317,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           path: repo
+          persist-credentials: false   # solo se lee (git archive); la release la sube action-gh-release con GITHUB_TOKEN
       - name: Código fuente y guía de descarga
         working-directory: .
         env:

@@ -32,7 +32,8 @@ repositories {
 // adelante no existe. El plugin de JavaFX 0.1.0 no conoce la plataforma win-x86, así que para el
 // instalador de 32 bits se declaran los jars a mano:
 //   gradlew.bat jpackageTask -x test -PjavafxVersion=17.0.8 -PjavafxPlatform=win-x86 -PjdkJpackage=C:\ruta\jdk-17-x86
-// (Gradle corre con un JDK de 64 bits; el JDK 17 de 32 bits solo lo usa jpackage para el runtime).
+// (Gradle corre con un JDK de 64 bits; el JDK 17 de 32 bits solo lo usa jpackage para el runtime). Con
+// -PjavafxPlatform=win-x86 jpackageTask además usa packaging/windows-x86/main.wxs (MSI marcado x86; ver ahí).
 def javafxVersion = project.findProperty('javafxVersion') ?: '17.0.10'
 def javafxPlataforma = project.findProperty('javafxPlatform')
 if (javafxPlataforma) {
@@ -277,6 +278,28 @@ tasks.register('testPostgres', Test) {
 // El UUID de actualización de Windows es FIJO: así una versión nueva reemplaza a la anterior en vez de
 // instalarse al lado. No cambiarlo nunca.
 ext.winUpgradeUuid = '56ef728e-9b2b-48ab-909a-1687f6bfcf0a'
+
+// El JDK que corre jpackage decide la arquitectura del instalador de Windows (lanzador, runtime y "-arch" de WiX),
+// así que para -PjavafxPlatform=win-x86 tiene que ser un JDK de 32 bits. El archivo "release" de todo OpenJDK
+// trae OS_ARCH="x86" en 32 bits (en 64 bits dice "x86_64"/"amd64"); si no está no se puede comprobar y se avisa.
+def comprobarJdkDe32Bits(File jdk) {
+    def release = new File(jdk, 'release')
+    if (!release.isFile()) {
+        logger.warn("No se pudo comprobar la arquitectura del JDK de jpackage ($jdk: sin archivo release)")
+        return
+    }
+    def coincidencia = release.text =~ /(?m)^OS_ARCH="?([^"\r\n]+)"?/
+    def arch = coincidencia.find() ? coincidencia.group(1) : null
+    if (arch == null) {
+        logger.warn("No se pudo comprobar la arquitectura del JDK de jpackage ($release: sin OS_ARCH)")
+    } else if (arch != 'x86') {
+        throw new GradleException("-PjavafxPlatform=win-x86 exige un JDK de 32 bits para jpackage y $jdk es '$arch' " +
+                "(OS_ARCH en $release). Indica uno con -PjdkJpackage=C:\\ruta\\jdk-17-x86.")
+    } else {
+        logger.lifecycle("jpackage con JDK de 32 bits: $jdk (OS_ARCH=$arch)")
+    }
+}
+
 tasks.register('jpackageTask') {
     group = 'distribution'
     description = 'Crea el instalador nativo del sistema actual con jpackage (dmg / exe / msi)'
@@ -335,6 +358,20 @@ tasks.register('jpackageTask') {
             args += ['--type', (project.findProperty('winType') ?: 'exe'),
                      '--win-menu', '--win-shortcut', '--win-per-user-install', '--win-dir-chooser',
                      '--win-upgrade-uuid', winUpgradeUuid]
+            if (javafxPlataforma == 'win-x86') {
+                // Instalador de 32 bits. jpackage 17 en un JDK de 32 bits ya compila WiX con "-arch x86" y marca los
+                // componentes Win64="no" (JDK-8258755), pero su main.wxs interno trae Platform="x64" fijo y ese
+                // atributo manda sobre -arch: el MSI quedaba marcado x64 y Windows de 32 bits lo rechazaba. Se le da
+                // la misma plantilla con Platform="x86" (packaging/windows-x86/main.wxs). --temp conserva el MSI
+                // intermedio para que release.yml compruebe su "Template"; --verbose muestra que tomó la plantilla
+                // ("Using custom package resource [Main WiX project file] (main.wxs)") y la línea de candle.
+                comprobarJdkDe32Bits(jdkRuta)
+                def temporal = layout.buildDirectory.dir('jpackage-x86-temp').get().asFile
+                temporal.deleteDir()
+                args += ['--resource-dir', file('packaging/windows-x86').absolutePath,
+                         '--temp', temporal.absolutePath,
+                         '--verbose']
+            }
         } else {
             // Linux. Nombre de paquete en minúsculas (lo exigen dpkg/rpm); se instala en /opt/punto-de-venta.
             // deb necesita fakeroot + dpkg-deb; rpm necesita rpmbuild (paquete "rpm"); tar.gz solo "tar".
