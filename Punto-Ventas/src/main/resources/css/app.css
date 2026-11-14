@@ -1610,6 +1610,23 @@ TilePane > .button:armed,
     -fx-border-color: transparent transparent transparent -pos-accent;
 }
 
+/* Aviso "Venta cobrada" de Ventas (no modal, encima del ticket): el cambio en grande */
+.venta-cobrada {
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-padding: 8 14 8 12;
+}
+
+.venta-cobrada .venta-cobrada-titulo {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.venta-cobrada .venta-cobrada-cambio {
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+}
+
 .callout-info .label {
     -fx-text-fill: -pos-accent-text;
 }

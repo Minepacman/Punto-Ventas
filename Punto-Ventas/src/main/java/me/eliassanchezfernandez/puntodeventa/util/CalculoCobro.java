@@ -29,6 +29,13 @@ public final class CalculoCobro {
      */
     public static final double MONTO_MAXIMO = 1_000_000;
 
+    /**
+     * Cambio a partir del cual se pide confirmar antes de cobrar. Un código corto
+     * (4–6 dígitos) escaneado en "Efectivo" queda por debajo de {@link #MONTO_MAXIMO}
+     * y pasa como pago ($12,345 por un refresco): nadie da ese cambio sin pensarlo.
+     */
+    public static final double CAMBIO_A_CONFIRMAR = 1_000;
+
     /** Denominaciones de billetes para los botones rápidos (pesos mexicanos) */
     public static final List<Integer> BILLETES = List.of(20, 50, 100, 200, 500, 1000);
 
@@ -81,6 +88,30 @@ public final class CalculoCobro {
                     Moneda.formato(faltante), Moneda.formato(pagado), Moneda.formato(totalR));
         }
         return new Resultado(totalR, pagado, efectivo, noEfectivo, faltante, cambio, error);
+    }
+
+    /**
+     * Motivo para pedir una confirmación explícita (no basta el Enter) antes de
+     * cobrar un pago que ya es válido, o {@code null} si se puede cobrar directo:
+     *  - el efectivo se escribió como lo hace un lector de códigos (ráfaga + Enter):
+     *    casi seguro se escaneó un producto con el cursor en el campo de pago;
+     *  - el cambio es de {@link #CAMBIO_A_CONFIRMAR} o más: un código corto tomado
+     *    como billete.
+     * Un pago inválido no necesita confirmación: ya no se cobra.
+     *
+     * @param capturadoPorLector el monto se tecleó al ritmo de un lector ({@link RafagaLector})
+     */
+    public static String motivoParaConfirmar(Resultado r, boolean capturadoPorLector) {
+        if (r == null || !r.esValido()) return null;
+        if (capturadoPorLector) {
+            return String.format("El efectivo (%s) se escribió como lo haría un lector de códigos de barras: "
+                    + "¿se escaneó un producto con el cursor en el campo de pago?", Moneda.formato(r.pagado()));
+        }
+        if (r.cambio() >= CAMBIO_A_CONFIRMAR) {
+            return String.format("El cambio sería de %s (pagó %s de un total de %s): ¿es correcto el efectivo?",
+                    Moneda.formato(r.cambio()), Moneda.formato(r.pagado()), Moneda.formato(r.total()));
+        }
+        return null;
     }
 
     /**

@@ -123,6 +123,41 @@ class CalculoCobroTest {
     }
 
     @Test
+    void unCodigoCortoEscaneadoComoEfectivoPideConfirmacionPorElCambio() {
+        // "12345" (código interno de 5 dígitos) + Enter en Efectivo: pasa el tope del EAN pero el cambio delata el error
+        CalculoCobro.Resultado r = CalculoCobro.calcular(18.5, montos(FormaPago.EFECTIVO, 12345));
+        assertThat(r.esValido()).isTrue();
+        assertThat(CalculoCobro.motivoParaConfirmar(r, false))
+                .contains("cambio").contains("$12326.50").contains("$12345.00");
+    }
+
+    @Test
+    void unCambioNormalNoPideConfirmacion() {
+        assertThat(CalculoCobro.motivoParaConfirmar(CalculoCobro.calcular(137.5, montos(FormaPago.EFECTIVO, 200)), false)).isNull();
+        // Justo por debajo del umbral
+        assertThat(CalculoCobro.motivoParaConfirmar(CalculoCobro.calcular(0.5, montos(FormaPago.EFECTIVO, 1000)), false)).isNull();
+        // En el umbral exacto sí
+        assertThat(CalculoCobro.motivoParaConfirmar(CalculoCobro.calcular(0.0 + 10, montos(FormaPago.EFECTIVO, 1010)), false)).isNotNull();
+    }
+
+    @Test
+    void unMontoTecleadoAlRitmoDelLectorPideConfirmacionAunqueElCambioSeaChico() {
+        // El lector escribió "200" + Enter (un código de 3 dígitos) con un total de $150: cambio $50, pero fue ráfaga
+        CalculoCobro.Resultado r = CalculoCobro.calcular(150, montos(FormaPago.EFECTIVO, 200));
+        assertThat(CalculoCobro.motivoParaConfirmar(r, true)).contains("lector");
+        assertThat(CalculoCobro.motivoParaConfirmar(r, false)).isNull();
+    }
+
+    @Test
+    void unPagoInvalidoONuloNoNecesitaConfirmacion() {
+        // Ya no se cobra: el error de validación manda
+        assertThat(CalculoCobro.motivoParaConfirmar(CalculoCobro.calcular(150, montos(FormaPago.EFECTIVO, 100)), true)).isNull();
+        assertThat(CalculoCobro.motivoParaConfirmar(null, true)).isNull();
+        // Tarjeta exacta con cambio cero: nada que confirmar
+        assertThat(CalculoCobro.motivoParaConfirmar(CalculoCobro.calcular(150, montos(FormaPago.TARJETA, 150)), false)).isNull();
+    }
+
+    @Test
     void losBilletesRapidosVanDeMenorAMayor() {
         // Antes salía 2.30, 10, 50, 20, 100: F3 = $50 y F4 = $20 confundía al cajero
         assertThat(CalculoCobro.sugerenciasDeEfectivo(2.3)).containsExactly(2.3, 10.0, 20.0, 50.0, 100.0);

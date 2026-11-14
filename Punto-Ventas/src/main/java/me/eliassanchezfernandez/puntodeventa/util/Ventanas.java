@@ -278,12 +278,17 @@ public final class Ventanas {
 
     // ── Diálogos ──────────────────────────────────────────────────────────
 
-    /** Aplica app.css a un Alert/Dialog (no heredan los estilos de la escena) */
+    /**
+     * Aplica app.css a un Alert/Dialog (no heredan los estilos de la escena) e instala el
+     * guardia del lector de códigos ({@link LectorEnModales}): el Enter de una ráfaga del
+     * lector no "confirma" el diálogo y el código leído pasa al ticket al cerrarse.
+     */
     public static void estilizar(Dialog<?> dialog) {
         URL css = Ventanas.class.getResource(CSS_APP);
         if (css != null && !dialog.getDialogPane().getStylesheets().contains(css.toExternalForm())) {
             dialog.getDialogPane().getStylesheets().add(css.toExternalForm());
         }
+        LectorEnModales.proteger(dialog);
         Scene escena = dialog.getDialogPane().getScene();
         if (escena != null && escena.getWindow() instanceof Stage s) aplicarIcono(s);
     }
