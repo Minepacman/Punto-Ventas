@@ -998,8 +998,10 @@ public class ServidorMovilService {
                 for (DetalleVenta d : v.getDetalles()) {
                     Map<String, Object> l = new LinkedHashMap<>();
                     l.put("productoId", d.getProducto().getId());
-                    l.put("descripcion", d.getProducto().getDescripcion());
-                    l.put("unidad", unidadDe(d.getProducto()));
+                    l.put("descripcion", d.getDescripcionMostrada());   // producto común: el nombre tecleado
+                    l.put("unidad", d.esProductoComun() ? (d.getCantidad() == Math.floor(d.getCantidad()) ? "pza" : "kg")
+                            : unidadDe(d.getProducto()));
+                    if (d.esProductoComun()) l.put("comun", true);
                     l.put("cantidad", d.getCantidad());
                     l.put("precio", d.getPrecioVenta());
                     l.put("importe", d.getImporte());

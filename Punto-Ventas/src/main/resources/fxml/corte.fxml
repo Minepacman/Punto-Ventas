@@ -220,6 +220,7 @@
             <VBox alignment="CENTER" spacing="4">
                 <Label fx:id="lblGananciaTitulo" text="Ganancia del turno" styleClass="corte-footer-title"/>
                 <Label fx:id="lblGanancia"      text="\$0.00" styleClass="corte-footer-value"/>
+                <Label fx:id="lblGananciaComunes" text="" styleClass="hint" visible="false" managed="false"/>
             </VBox>
         </HBox>
     </bottom>

@@ -119,6 +119,7 @@ public class VentasController implements Initializable {
     @FXML private Button     btnTodoTransferencia;
     @FXML private Button     btnTodoVales;
     @FXML private Button     btnBuscar;
+    @FXML private Button     btnProductoComun;
     @FXML private Button     btnCantidad;
     @FXML private Button     btnQuitar;
     @FXML private Button     btnDescuento;
@@ -257,6 +258,7 @@ public class VentasController implements Initializable {
         etiquetar(btnEnEspera,   "En espera",      Atajo.PONER_EN_ESPERA, mac);
         etiquetar(btnCobrar,     "Cobrar",        Atajo.COBRAR, mac);
         // Combinaciones con Ctrl/Cmd: la tecla va solo en el tooltip (caben en 1024 px)
+        soloTooltip(btnProductoComun, Atajo.PRODUCTO_COMUN, mac);
         soloTooltip(btnLeerPeso,   Atajo.LEER_PESO, mac);
         soloTooltip(btnReimprimir, Atajo.REIMPRIMIR_ULTIMO, mac);
         soloTooltip(btnAbrirCajon, Atajo.ABRIR_CAJON, mac);
@@ -419,6 +421,7 @@ public class VentasController implements Initializable {
     public void ejecutarAtajo(Atajo atajo) {
         switch (atajo) {
             case BUSCAR_PRODUCTO   -> onBuscar();
+            case PRODUCTO_COMUN    -> onProductoComun();
             case CANTIDAD          -> onCambiarCantidad();
             case DESCUENTO_MANUAL  -> onDescuentoManual();
             case MAYOREO           -> onMayoreo();
@@ -622,6 +625,30 @@ public class VentasController implements Initializable {
         txtCodigo.requestFocus();
     }
 
+    /**
+     * Producto común (Ctrl/Cmd+P): algo que no está en el catálogo. Pide nombre,
+     * precio y cantidad y lo agrega como un renglón más (siempre nuevo: dos
+     * "productos comunes" pueden ser cosas distintas, no se suman).
+     */
+    @FXML
+    private void onProductoComun() {
+        Optional<ProductoComunDialogo.Captura> captura = ProductoComunDialogo.mostrar(tablaProductos.getScene().getWindow());
+        if (captura.isPresent()) {
+            ocultarAvisoVentaCobrada();               // empieza el siguiente ticket
+            try {
+                DetalleVenta d = ventaService.crearDetalleProductoComun(
+                        captura.get().nombre(), captura.get().precio(), captura.get().cantidad());
+                itemsTicket.add(d);
+                tablaProductos.getSelectionModel().select(d);
+                tablaProductos.scrollTo(d);
+            } catch (NegocioException e) {
+                alerta(Alert.AlertType.ERROR, "Producto común", e.getMessage());
+            }
+            recalcularTodo();
+        }
+        txtCodigo.requestFocus();
+    }
+
     /** Alterna el renglón seleccionado entre precio de lista y precio de mayoreo (APLICAR_MAYOREO) */
     @FXML
     private void onMayoreo() {
@@ -646,8 +673,8 @@ public class VentasController implements Initializable {
 
         Dialog<double[]> dlg = new Dialog<>();
         dlg.setTitle("Descuento manual");
-        dlg.setHeaderText(d.getProducto().getDescripcion() + "  —  importe actual " + Moneda.formato(
-                d.getProducto().getPrecioVenta() * d.getCantidad()));
+        dlg.setHeaderText(d.getDescripcionMostrada() + "  —  importe actual " + Moneda.formato(
+                (d.esProductoComun() ? d.getPrecioListaODefault() : d.getProducto().getPrecioVenta()) * d.getCantidad()));
         dlg.initOwner(tablaProductos.getScene().getWindow());
         Ventanas.estilizar(dlg);
         TextField txtPct = new TextField(d.getDescuentoManualPct() != null ? formatoCantidad(d.getDescuentoManualPct()) : "");
@@ -690,11 +717,12 @@ public class VentasController implements Initializable {
         DetalleVenta d = seleccionado("Selecciona un renglón del ticket para cambiar la cantidad.");
         if (d == null) return;
 
-        boolean granel = d.getProducto().permiteDecimales();
+        boolean granel = d.esProductoComun() || d.getProducto().permiteDecimales();
         TextInputDialog dlg = new TextInputDialog(formatoCantidad(d.getCantidad()));
         dlg.setTitle("Cantidad");
-        dlg.setHeaderText(d.getProducto().getDescripcion()
-                + (granel ? "  (a granel: acepta decimales, ej. 1.250)" : "  (por pieza: número entero)"));
+        dlg.setHeaderText(d.getDescripcionMostrada()
+                + (d.esProductoComun() ? "  (producto común: acepta decimales, ej. 1.5)"
+                   : granel ? "  (a granel: acepta decimales, ej. 1.250)" : "  (por pieza: número entero)"));
         dlg.setContentText("Nueva cantidad:");
         dlg.initOwner(tablaProductos.getScene().getWindow());
         Ventanas.estilizar(dlg);
@@ -956,9 +984,9 @@ public class VentasController implements Initializable {
     private void onLeerPeso() {
         DetalleVenta d = seleccionado("Selecciona el renglón a granel del ticket y pulsa Leer peso.");
         if (d == null) return;
-        if (!d.getProducto().permiteDecimales()) {
+        if (!d.esProductoComun() && !d.getProducto().permiteDecimales()) {   // un producto común sí puede ir por kilo
             alerta(Alert.AlertType.INFORMATION, "Leer peso",
-                    "\"" + d.getProducto().getDescripcion() + "\" se vende por pieza. Leer peso es para productos a granel.");
+                    "\"" + d.getDescripcionMostrada() + "\" se vende por pieza. Leer peso es para productos a granel.");
             return;
         }
         btnLeerPeso.setDisable(true);
@@ -1388,9 +1416,9 @@ public class VentasController implements Initializable {
 
     private void agregarAlTicket(Producto producto, double cantidad) {
         ocultarAvisoVentaCobrada();                   // empieza el siguiente ticket
-        // ¿Ya está en el ticket? → sumar cantidad
+        // ¿Ya está en el ticket? → sumar cantidad (los productos comunes nunca se suman entre sí)
         Optional<DetalleVenta> existente = itemsTicket.stream()
-                .filter(d -> d.getProducto().getId().equals(producto.getId()))
+                .filter(d -> !d.esProductoComun() && d.getProducto().getId().equals(producto.getId()))
                 .findFirst();
 
         if (existente.isPresent()) {
@@ -1506,9 +1534,9 @@ public class VentasController implements Initializable {
 
     private void configurarColumnas() {
         colCodigo.setCellValueFactory(c ->
-                new SimpleStringProperty(c.getValue().getProducto().getCodigoBarras()));
+                new SimpleStringProperty(c.getValue().getCodigoMostrado()));
         colDescripcion.setCellValueFactory(c ->
-                new SimpleStringProperty(c.getValue().getProducto().getDescripcion()));
+                new SimpleStringProperty(c.getValue().getDescripcionMostrada()));
         colPrecio.setCellValueFactory(c ->
                 new SimpleDoubleProperty(c.getValue().getPrecioVenta()).asObject());
         colCantidad.setCellValueFactory(c ->

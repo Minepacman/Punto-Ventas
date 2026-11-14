@@ -36,6 +36,14 @@ public class DetalleVenta {
     @JoinColumn(name = "producto_id")
     private Producto producto;
 
+    /**
+     * Nombre tecleado por el cajero cuando el renglón es un "producto común"
+     * ({@link ProductoComun}): el producto apunta al del sistema y aquí queda lo
+     * que se vendió de verdad. Null en los renglones de productos del catálogo.
+     */
+    @Column(name = "descripcion", length = ProductoComun.MAX_LARGO_NOMBRE)
+    private String descripcion;
+
     /** Precio unitario cobrado como base (lista o mayoreo) */
     @Column(name = "precio_venta")
     private double precioVenta;
@@ -124,6 +132,26 @@ public class DetalleVenta {
         return producto != null ? producto.getPrecioCosto() : 0;
     }
 
+    /** ¿Es un "producto común" (artículo fuera del catálogo tecleado en Ventas)? */
+    public boolean esProductoComun() {
+        return ProductoComun.es(this);
+    }
+
+    /**
+     * Nombre para ticket, pantallas, móvil y factura: el tecleado por el cajero
+     * si es un producto común; si no, la descripción del producto del catálogo.
+     */
+    public String getDescripcionMostrada() {
+        if (descripcion != null && !descripcion.isBlank()) return descripcion;
+        return producto != null && producto.getDescripcion() != null ? producto.getDescripcion() : "(producto)";
+    }
+
+    /** Código para pantallas: el del producto, o "—" en un producto común (no tiene) */
+    public String getCodigoMostrado() {
+        if (esProductoComun() || producto == null || producto.getCodigoBarras() == null) return "—";
+        return producto.getCodigoBarras();
+    }
+
     public enum TipoDescuento {
         NINGUNO("—"), PROMOCION("Promoción"), MAYOREO("Mayoreo"), MANUAL("Manual");
 
@@ -137,6 +165,7 @@ public class DetalleVenta {
     @Override
     public String toString() {
         return "DetalleVenta{producto=" + (producto != null ? producto.getCodigoBarras() : null)
+                + (descripcion != null ? ", descripcion=" + descripcion : "")
                 + ", cantidad=" + cantidad + ", precio=" + precioVenta + ", descuento=" + descuento
                 + ", tipo=" + tipoDescuento + "}";
     }

@@ -274,7 +274,8 @@ public class AgregadosService {
             if (v.isCancelada()) continue;
             TreeMap<Long, Producto> enTicket = new TreeMap<>();
             for (DetalleVenta d : v.getDetalles()) {
-                if (d.getProducto() != null && d.getProducto().getId() != null) {
+                // El "producto común" (artículos sueltos fuera del catálogo) no forma pares: no es un producto real
+                if (d.getProducto() != null && d.getProducto().getId() != null && !d.esProductoComun()) {
                     enTicket.put(d.getProducto().getId(), d.getProducto());
                 }
             }
@@ -350,7 +351,7 @@ public class AgregadosService {
                                 ProductoClima.Tipo.BANDA + "|" + c.getBanda() };
             for (DetalleVenta d : v.getDetalles()) {
                 Producto p = d.getProducto();
-                if (p == null || p.getId() == null) continue;
+                if (p == null || p.getId() == null || d.esProductoComun()) continue;   // el común no "depende" del clima
                 productos.put(p.getId(), p);
                 piezasProducto.merge(p.getId(), d.getCantidad(), Double::sum);
                 piezasTotal += d.getCantidad();

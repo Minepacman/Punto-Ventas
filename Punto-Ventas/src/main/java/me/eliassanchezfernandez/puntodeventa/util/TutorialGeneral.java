@@ -44,8 +44,9 @@ public final class TutorialGeneral {
                 "La pantalla de todos los días. Teclea o escanea el código, ajusta cantidades, aplica mayoreo o "
                 + "descuentos (si tienes permiso) y cobra en efectivo, tarjeta, transferencia o pago dividido. "
                 + "Puedes dejar un ticket en espera para atender a otro cliente, y abajo aparecen sugerencias "
-                + "de productos que suelen comprarse juntos.",
-                List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
+                + "de productos que suelen comprarse juntos. Si te piden algo que no está en el catálogo, "
+                + "«Producto común» lo cobra con solo teclear el nombre y el precio.",
+                List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.PRODUCTO_COMUN, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
                         Atajo.RECUPERAR_ESPERA, Atajo.COBRAR)));
         p.add(new Paso("tabProductos", "Productos",
                 "Tu catálogo: códigos de barras, descripción, precio de costo y de venta, departamento, "

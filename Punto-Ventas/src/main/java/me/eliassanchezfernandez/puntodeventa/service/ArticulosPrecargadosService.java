@@ -55,9 +55,9 @@ public class ArticulosPrecargadosService {
         new Muestra("Limpieza y hogar", "Cloro 1 L", 22, 15, "Pieza"),
     };
 
-    /** Solo se ofrece mientras no haya ningún producto */
+    /** Solo se ofrece mientras no haya ningún producto (el producto del sistema "Producto común" no cuenta) */
     public boolean puedeCargar() {
-        return productoRepo.count() == 0;
+        return productoRepo.contarCatalogo() == 0;
     }
 
     public int cantidadDeMuestra() {

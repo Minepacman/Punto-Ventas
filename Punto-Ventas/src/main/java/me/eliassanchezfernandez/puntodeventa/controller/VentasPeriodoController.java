@@ -338,8 +338,8 @@ public class VentasPeriodoController implements Initializable {
                     + (f.isPendiente() ? " ?" : ""));
         });
 
-        colDetCodigo.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProducto().getCodigoBarras()));
-        colDetDescripcion.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getProducto().getDescripcion()));
+        colDetCodigo.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getCodigoMostrado()));
+        colDetDescripcion.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getDescripcionMostrada()));
         colDetCantidad.setCellValueFactory(c -> new SimpleStringProperty(formatoCantidad(c.getValue().getCantidad())));
         colDetPrecio.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getPrecioVenta())));
         colDetDescuento.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getDescuento())));

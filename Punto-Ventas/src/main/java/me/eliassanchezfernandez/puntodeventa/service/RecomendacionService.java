@@ -156,6 +156,7 @@ public class RecomendacionService {
         Map<Long, Producto> productos = new HashMap<>();
         for (Producto p : productoRepo.findAllById(candidatos.keySet())) {
             if (!p.isActivo()) continue;
+            if (me.eliassanchezfernandez.puntodeventa.model.ProductoComun.es(p)) continue;   // no se sugiere: no tiene precio
             if (p.isUsaInventario() && p.getCantidadActual() <= 0) continue;
             productos.put(p.getId(), p);
         }
