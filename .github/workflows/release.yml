@@ -120,6 +120,8 @@ jobs:
     needs: version
     runs-on: windows-latest
     continue-on-error: true
+    # v1.0.4: jpackage de 32 bits se quedó colgado 36 min sin escribir nada; el x64 tarda ~1 min. Con el límite la release no espera.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
