@@ -23,4 +23,10 @@ public interface CajeroRepository extends JpaRepository<Cajero, Long> {
     long countByRolAndActivoTrue(Cajero.Rol rol);
 
     List<Cajero> findAllByOrderByUsuarioAsc();
+
+    /** ¿Algún administrador activo tiene código de recuperación? (lo consulta el login, sin sesión) */
+    boolean existsByRolAndActivoTrueAndRecuperacionHashIsNotNull(Cajero.Rol rol);
+
+    /** Usuarios con código de recuperación vigente (para anularlos todos tras restaurar un respaldo) */
+    List<Cajero> findByRecuperacionHashIsNotNull();
 }

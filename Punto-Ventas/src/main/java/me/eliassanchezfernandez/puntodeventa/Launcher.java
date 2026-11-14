@@ -2,6 +2,7 @@ package me.eliassanchezfernandez.puntodeventa;
 
 import me.eliassanchezfernandez.puntodeventa.config.PerfilBaseDatos;
 import me.eliassanchezfernandez.puntodeventa.config.VersionEsquema;
+import me.eliassanchezfernandez.puntodeventa.service.RecuperacionService;
 import me.eliassanchezfernandez.puntodeventa.util.CalentadorCds;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
@@ -32,8 +33,11 @@ public class Launcher {
             }
             String url = RutasApp.prepararUrl(args, conexion);
             if (PerfilBaseDatos.deUrl(url).esSqlite()) {
-                // Un respaldo restaurado desde Configuración se aplica aquí, antes de abrir la BD (solo SQLite)
-                RutasApp.aplicarRestauracionPendiente(RutasApp.rutaDeUrl(url));
+                // Un respaldo restaurado desde Configuración se aplica aquí, antes de abrir la BD (solo SQLite).
+                // Se deja constancia para que RecuperacionService anule los códigos de recuperación que traiga.
+                if (RutasApp.aplicarRestauracionPendiente(RutasApp.rutaDeUrl(url))) {
+                    System.setProperty(RecuperacionService.PROP_RESPALDO_APLICADO, "true");
+                }
                 omitirActualizacionDeEsquemaSiAlDia(url);
             }
         } catch (RuntimeException e) {

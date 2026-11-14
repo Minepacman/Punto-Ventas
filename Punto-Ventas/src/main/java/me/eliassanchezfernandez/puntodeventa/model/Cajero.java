@@ -91,6 +91,20 @@ public class Cajero {
     @Column(name = "tutorial_movil_visto")
     private Boolean tutorialMovilVisto;
 
+    /**
+     * Hash BCrypt del código de recuperación de ESTE administrador (null = no
+     * tiene). Vive en su propia fila para que el código solo pueda restablecer
+     * su contraseña y muera con él: se anula al desactivarlo, eliminarlo,
+     * degradarlo o restablecerle la contraseña (RecuperacionService). Nullable
+     * para que ddl-auto=update agregue la columna en bases existentes.
+     */
+    @Column(name = "recuperacion_hash", length = 255)
+    private String recuperacionHash;
+
+    /** Cuándo generó su código de recuperación vigente */
+    @Column(name = "recuperacion_generado")
+    private LocalDateTime recuperacionGenerado;
+
     /** Permisos agregados a los del rol */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "cajero_permisos", joinColumns = @JoinColumn(name = "cajero_id"))
@@ -127,6 +141,19 @@ public class Cajero {
 
     public boolean isTutorialMovilVisto() {
         return Boolean.TRUE.equals(tutorialMovilVisto);
+    }
+
+    /** ¿Este usuario tiene un código de recuperación vigente? */
+    public boolean tieneCodigoRecuperacion() {
+        return recuperacionHash != null && !recuperacionHash.isBlank();
+    }
+
+    /** Borra su código de recuperación (si tenía). Devuelve true si había uno. */
+    public boolean quitarCodigoRecuperacion() {
+        boolean habia = tieneCodigoRecuperacion();
+        recuperacionHash = null;
+        recuperacionGenerado = null;
+        return habia;
     }
 
     /** Permisos efectivos = (por defecto del rol ∪ concedidos) − revocados. ADMIN: todos. */

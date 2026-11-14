@@ -11,7 +11,12 @@ técnico.
    números, por ejemplo `K7PM-3HRA-WQ2E-9DNB`.
 3. **Anótalo y guárdalo fuera de la computadora** (libreta del dueño, caja fuerte,
    gestor de contraseñas). Se muestra una sola vez; en la base de datos queda solo
-   su hash, como una contraseña más.
+   su hash, como una contraseña más, **en la fila de ese administrador**
+   (`cajeros.recuperacion_hash`).
+
+El código es **personal**: solo restablece la contraseña del administrador que lo
+generó. Si hay dos administradores, cada uno genera y guarda el suyo; el código de
+uno no sirve para el otro aunque esté bien escrito.
 
 Cuando haga falta:
 
@@ -24,14 +29,33 @@ Cuando haga falta:
 Seguridad del mecanismo:
 
 - Solo funciona para usuarios con rol **Administrador** y activos; un cajero no
-  puede usarlo aunque lo tenga.
+  puede usarlo aunque lo tenga, y solo restablece la contraseña de **quien lo generó**.
 - Cada intento (correcto o fallido) queda en la bitácora
-  (`RECUPERACION_RECHAZADA`, `CONTRASENA_RECUPERADA`, `CODIGO_RECUPERACION_GENERADO`).
+  (`RECUPERACION_RECHAZADA`, `CONTRASENA_RECUPERADA`, `CODIGO_RECUPERACION_GENERADO`,
+  `CODIGO_RECUPERACION_ANULADO`).
 - Tras 5 códigos incorrectos seguidos hay que esperar 15 minutos.
-- Al usarlo se quita también el bloqueo por intentos fallidos y se cierran las
-  sesiones móviles de ese administrador.
-- Generar un código nuevo anula el anterior. Un administrador también puede
-  anularlo sin generar otro (`RecuperacionService.anularCodigo`).
+- Al usarlo se quita también el bloqueo por intentos fallidos, se cierran las
+  sesiones móviles de ese administrador y su contraseña vieja deja de abrir la
+  pantalla "sin conexión con el servidor" de la caja (`admin.hash`); al entrar con
+  la nueva se vuelve a recordar.
+- Generar un código nuevo anula el anterior **del mismo administrador**. También
+  puede anularlo sin generar otro (`RecuperacionService.anularCodigo`).
+- El código **se anula solo** cuando a su dueño lo desactivan, lo eliminan, le
+  quitan el rol de administrador o **otro** administrador le restablece la
+  contraseña (cambiar la propia no lo afecta). Queda en la bitácora como
+  `CODIGO_RECUPERACION_ANULADO` con el motivo.
+- Al **restaurar un respaldo** (una caja, SQLite) el programa anula al arrancar
+  todos los códigos que traiga la base restaurada: un código ya usado o anulado no
+  "revive" por volver a una copia vieja. Cada administrador genera el suyo de nuevo.
+  Con PostgreSQL la restauración se hace fuera del programa (`pg_restore`), así que
+  conviene regenerar los códigos a mano después.
+
+Códigos de la versión 1.0.3 o anterior (vivían en `configuracion.recuperacion_hash`,
+sin dueño): se aceptan **una sola vez y solo si quien lo usa es el único
+administrador activo**; con dos o más administradores se rechazan y hay que generar
+uno nuevo. Cualquier generación, anulación, cambio de administrador o restauración
+también los borra. En Configuración → Cajeros aparece "Hay un código de una versión
+anterior, sin dueño: genera el tuyo".
 
 Con varias cajas (PostgreSQL) el código vive en el servidor, así que sirve desde
 cualquier caja.

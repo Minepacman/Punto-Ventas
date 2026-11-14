@@ -684,7 +684,8 @@ public class LoginController implements Initializable {
         txtRecConfirmar.clear();
         if (hayCodigoRecuperacion) {
             lblRecAyuda.setText("Escribe tu usuario de administrador, el código de recuperación que generaste en "
-                    + "Configuración → Cajeros y tu contraseña nueva. El código se usa una sola vez.");
+                    + "Configuración → Cajeros y tu contraseña nueva. El código se usa una sola vez y solo sirve "
+                    + "para el administrador que lo generó.");
         } else {
             lblRecAyuda.setText("No hay un código de recuperación generado en esta tienda (se crea en Configuración → Cajeros). "
                     + "Pide a otro administrador que restablezca tu contraseña, o consulta "
