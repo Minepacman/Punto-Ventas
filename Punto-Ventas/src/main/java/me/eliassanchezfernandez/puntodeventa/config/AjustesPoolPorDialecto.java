@@ -49,11 +49,11 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
             // cobrada podía perderse si se iba la luz antes del siguiente checkpoint; un POS no puede.
             // Cuesta un fsync por commit (~10-20 ms en disco duro), que una venta no nota.
             propiedadSiFalta(ds, "synchronous", "FULL");
-            // BEGIN IMMEDIATE: toda transacción toma el bloqueo de escritura al empezar (y espera
-            // busy_timeout si otro lo tiene). Con DEFERRED una transacción que leía y luego escribía
-            // fallaba de inmediato con SQLITE_BUSY_SNAPSHOT si otra había escrito entre medias (el
-            // busy handler no aplica ahí). El precio: las transacciones se serializan también entre
-            // lectores; con una caja y transacciones de milisegundos no se nota.
+            // BEGIN IMMEDIATE: toda transacción que pueda escribir toma el bloqueo de escritura al
+            // empezar (y espera busy_timeout si otro lo tiene). Con DEFERRED una transacción que leía y
+            // luego escribía fallaba de inmediato con SQLITE_BUSY_SNAPSHOT si otra había escrito entre
+            // medias (el busy handler no aplica ahí). Las @Transactional(readOnly = true) abren con BEGIN
+            // (DEFERRED) y no esperan a nadie: lo decide ConexionSqlite por el setReadOnly de Spring.
             propiedadSiFalta(ds, TRANSACTION_MODE, "IMMEDIATE");
             propiedadSiFalta(ds, "busy_timeout", "10000");
             // El -wal no crece sin límite tras una operación grande (se recorta al cerrar la transacción)
@@ -63,6 +63,9 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
             // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro
             propiedadSiFalta(ds, "mmap_size", "67108864");
             propiedadSiFalta(ds, "foreign_keys", "true");
+            // Las conexiones físicas las crea FuenteConexionesSqlite (ConexionSqlite: BEGIN según la
+            // transacción y recuperación si el BEGIN falla por BUSY)
+            FuenteConexionesSqlite.instalar(ds);
         } else {
             if (ds.getConnectionTimeout() == 30_000L) ds.setConnectionTimeout(5_000L);
             propiedadSiFalta(ds, "connectTimeout", "5");

@@ -191,7 +191,9 @@ public class ImpresionService {
     }
 
     private boolean huboEfectivo(Long ventaId) {
-        return new TransactionTemplate(transacciones).execute(st -> {
+        TransactionTemplate tx = new TransactionTemplate(transacciones);
+        tx.setReadOnly(true);   // solo lee: no debe esperar al bloqueo de escritura (corre tras cada cobro)
+        return tx.execute(st -> {
             Venta v = ventaRepo.findConDetallesById(ventaId).orElse(null);
             if (v == null) return false;
             ventaRepo.cargarPagos(List.of(v));

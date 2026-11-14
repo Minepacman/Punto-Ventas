@@ -78,7 +78,8 @@ dependencies {
     implementation 'org.springframework.security:spring-security-crypto'
 
     // Database dependencies: SQLite (una sola caja) y PostgreSQL (varias cajas contra un servidor en la red local)
-    runtimeOnly 'org.xerial:sqlite-jdbc:3.45.3.0'
+    // implementation (no runtimeOnly): config/ConexionSqlite extiende la conexión del driver
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
     implementation 'org.hibernate.orm:hibernate-community-dialects:6.4.4.Final'
     runtimeOnly 'org.postgresql:postgresql'
 

@@ -268,8 +268,8 @@ public class OrdenCompraService {
         return filas;
     }
 
-    /** Guarda la orden como CSV (UTF-8 con BOM, para Excel) y lo anota en la bitácora */
-    @Transactional(readOnly = true)
+    /** Guarda la orden como CSV (UTF-8 con BOM, para Excel) y lo anota en la bitácora (escribe: no es readOnly) */
+    @Transactional
     public void exportarCsv(Long ordenId, Path destino) throws IOException {
         sesionService.verificarPermiso(Permiso.GESTIONAR_PROVEEDORES);
         OrdenCompra o = cargar(ordenId);
