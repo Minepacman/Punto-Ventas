@@ -170,6 +170,17 @@ En Windows igual con `gradlew.bat` (requiere WiX 3 en el PATH). El de 32 bits:
 gradlew.bat jpackageTask -x test -PjavafxVersion=17.0.8 -PjavafxPlatform=win-x86 -PjdkJpackage=C:\ruta\jdk-17-x86
 ```
 
+- `-PjdkJpackage` debe ser un JDK 17 **de 32 bits** (el lanzador, el runtime y el `-arch` de WiX salen del JDK
+  que corre jpackage); `jpackageTask` lo comprueba con el `OS_ARCH` de su archivo `release`.
+- Con `-PjavafxPlatform=win-x86` jpackage usa `packaging/windows-x86/main.wxs` (`--resource-dir`): es la
+  plantilla interna de jpackage 17 con `Platform="x86"`. Sin ella el MSI quedaba marcado x64 (jpackage 17 trae
+  `Platform="x64"` fijo y ese atributo gana sobre `-arch`) y Windows de 32 bits lo rechazaba. El flujo comprueba
+  después que el `.exe` sea de 32 bits y que el MSI intermedio (`build/jpackage-x86-temp`) tenga `Template=Intel;1033`.
+- En PowerShell escribe cada `-P` entre comillas (`"-PjavafxVersion=17.0.8"`): sin ellas pwsh parte el argumento
+  en el punto (`-PjavafxVersion=17` y `.0.8`). El flujo usa `shell: bash` por eso.
+- Mismo `--win-upgrade-uuid` que el x64: en una PC de 64 bits, instalar el x64 encima del x86 (o al revés) reemplaza
+  al anterior.
+
 ## Icono
 
 `packaging/icono/GeneradorIcono.java` dibuja el icono (canasta sobre azul
