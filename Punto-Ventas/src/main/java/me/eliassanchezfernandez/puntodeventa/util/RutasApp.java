@@ -40,6 +40,31 @@ public class RutasApp {
     @Value("${app.datos-dir:}")
     private String carpetaDatosConfigurada;
 
+    /**
+     * Servidor al que se migró el archivo SQLite EN ESTA SESIÓN (null = ninguno). Hasta reiniciar, el
+     * programa sigue conectado al archivo viejo: lo que se cobrara o moviera aquí no llegaría al servidor
+     * y se perdería. Las operaciones que escriben dinero o inventario consultan {@link #migradaAlServidor()}
+     * y se rehúsan. Vive solo en memoria: al reiniciar, conexion.properties ya apunta al servidor.
+     */
+    private volatile String migradaA;
+
+    /** Marca (o desmarca con null) que esta base ya se copió al servidor y la caja debe reiniciarse */
+    public void marcarMigradaAlServidor(String servidor) {
+        this.migradaA = servidor;
+    }
+
+    /** ¿Esta base ya se migró al servidor en esta sesión? (ver {@link #mensajeMigrada()}) */
+    public boolean migradaAlServidor() {
+        return migradaA != null;
+    }
+
+    /** Texto para el usuario cuando una operación se rehúsa por {@link #migradaAlServidor()} */
+    public String mensajeMigrada() {
+        return "Los datos de esta caja ya se copiaron al servidor" + (migradaA != null ? " (" + migradaA + ")" : "")
+                + ": cierra y vuelve a abrir el programa para trabajar contra el servidor. Lo que se registre ahora "
+                + "quedaría solo en el archivo viejo y se perdería.";
+    }
+
     // ── Dónde viven los datos por defecto ─────────────────────────────────
 
     /** Nombre de la carpeta de datos de la aplicación */

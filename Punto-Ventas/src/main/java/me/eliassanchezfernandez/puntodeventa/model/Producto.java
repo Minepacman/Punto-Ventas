@@ -7,9 +7,16 @@ import lombok.NoArgsConstructor;
 /**
  * Entidad JPA que representa un producto del catálogo.
  * Hibernate crea la tabla "productos" en SQLite automáticamente.
+ *
+ * {@code @DynamicUpdate}: el UPDATE lleva SOLO las columnas que cambiaron en esta sesión, no la fila
+ * completa. Con varias cajas, si una edita la descripción mientras otra vende (o da entrada), un UPDATE
+ * de fila completa pisaría la existencia (y cualquier otra columna) con el valor viejo que esa caja leyó;
+ * con columnas dinámicas cada caja escribe solo lo suyo. La existencia además se mueve con UPDATE
+ * atómicos (ProductoRepository), que nunca pasan por la entidad.
  */
 @Entity
 @Table(name = "productos")
+@org.hibernate.annotations.DynamicUpdate
 @Data
 @NoArgsConstructor
 public class Producto {
