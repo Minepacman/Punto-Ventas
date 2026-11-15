@@ -115,10 +115,22 @@ public class Producto {
     @Column(name = "cantidad_minima")
     private double cantidadMinima;
 
+    /**
+     * "Controlar caducidad": al darle entrada se puede anotar la fecha de caducidad y el
+     * producto aparece en "Por caducar" (CaducidadService). Null en los productos anteriores
+     * a este campo = no.
+     */
+    @Column(name = "controla_caducidad")
+    private Boolean controlaCaducidad;
+
     // ── Lógica de dominio ────────────────────────────────────────────────
 
     public boolean isActivo() {
         return activo == null || activo;
+    }
+
+    public boolean isControlaCaducidad() {
+        return controlaCaducidad != null && controlaCaducidad;
     }
 
     /** IVA del producto sin null: los productos sin IVA capturado usan el de la tienda */

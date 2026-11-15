@@ -175,7 +175,7 @@ public class NotificacionesPushService {
             for (int i = 0; i <= propias.size() - MAX_POR_USUARIO; i++) repo.delete(propias.get(i));
         } else if (!s.getCajeroId().equals(cajero.getId())) {
             // Otro usuario entró en el mismo teléfono: la suscripción pasa a ser suya, con sus preferencias por defecto
-            s.setProveedores(true); s.setStock(true); s.setHoraPico(true); s.setActiva(true);
+            s.setProveedores(true); s.setStock(true); s.setHoraPico(true); s.setCaducidad(true); s.setActiva(true);
             s.setSilencioDesde(SuscripcionPush.SILENCIO_DESDE_POR_DEFECTO);
             s.setSilencioHasta(SuscripcionPush.SILENCIO_HASTA_POR_DEFECTO);
             s.setEnviadosDia(null); s.setEnviadosIds(null);
@@ -213,6 +213,15 @@ public class NotificacionesPushService {
     @Transactional
     public SuscripcionPush preferencias(Cajero cajero, String endpoint, boolean activa, boolean proveedores, boolean stock, boolean horaPico,
                                         int silencioDesde, int silencioHasta) {
+        SuscripcionPush actual = propia(cajero, endpoint).orElse(null);
+        return preferencias(cajero, endpoint, activa, proveedores, stock, horaPico,
+                actual == null || actual.isCaducidad(), silencioDesde, silencioHasta);
+    }
+
+    /** Igual, con el tipo "Por caducar" */
+    @Transactional
+    public SuscripcionPush preferencias(Cajero cajero, String endpoint, boolean activa, boolean proveedores, boolean stock, boolean horaPico,
+                                        boolean caducidad, int silencioDesde, int silencioHasta) {
         if (silencioDesde < 0 || silencioDesde > 23 || silencioHasta < 0 || silencioHasta > 23) {
             throw new NegocioException("Las horas de silencio deben estar entre 0 y 23.");
         }
@@ -221,6 +230,7 @@ public class NotificacionesPushService {
         s.setProveedores(proveedores);
         s.setStock(stock);
         s.setHoraPico(horaPico);
+        s.setCaducidad(caducidad);
         s.setSilencioDesde(silencioDesde);
         s.setSilencioHasta(silencioHasta);
         return repo.save(s);
@@ -230,7 +240,7 @@ public class NotificacionesPushService {
     public Envio enviarPrueba(Cajero cajero, String endpoint) {
         SuscripcionPush s = propia(cajero, endpoint).orElseThrow(() -> new NegocioException("Este teléfono no tiene notificaciones activadas."));
         return enviar(s, new Mensaje("Caja Libre: notificaciones activas",
-                "Así llegarán los avisos de " + nombreNegocioCorto() + ": proveedores, productos que se acaban y hora pico.",
+                "Así llegarán los avisos de " + nombreNegocioCorto() + ": proveedores, productos que se acaban, caducidades y hora pico.",
                 "prueba", "/#/config"), false);
     }
 

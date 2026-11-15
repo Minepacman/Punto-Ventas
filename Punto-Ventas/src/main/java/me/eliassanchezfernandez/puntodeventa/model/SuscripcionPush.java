@@ -92,6 +92,14 @@ public class SuscripcionPush {
     @Column(name = "tipo_hora_pico", nullable = false)
     private boolean horaPico = true;
 
+    /** Avisos de caducidad; null (suscripciones anteriores a este tipo) = sí */
+    @Column(name = "tipo_caducidad")
+    private Boolean caducidad = Boolean.TRUE;
+
+    public boolean isCaducidad() {
+        return caducidad == null || caducidad;
+    }
+
     /** Hora local (0-23) desde la que no se manda nada; igual a silencioHasta = sin silencio */
     @Column(name = "silencio_desde", nullable = false)
     private int silencioDesde = SILENCIO_DESDE_POR_DEFECTO;
@@ -141,6 +149,7 @@ public class SuscripcionPush {
             case "PROVEEDOR" -> proveedores;
             case "STOCK"     -> stock;
             case "HORA_PICO" -> horaPico;
+            case "CADUCIDAD" -> isCaducidad();
             default -> false;
         };
     }

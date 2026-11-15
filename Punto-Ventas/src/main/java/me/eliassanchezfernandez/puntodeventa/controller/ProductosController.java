@@ -142,6 +142,8 @@ public class ProductosController implements Initializable {
     @FXML private ComboBox<me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.Entrada> comboObjetoImp;
     @FXML private Label       lblClavesDefecto;
     @FXML private CheckBox    chkUsaInventario;
+    @FXML private CheckBox    chkControlaCaducidad;
+    @FXML private Label       lblLotesCaducidad;
     @FXML private GridPane    gridInventario;
     @FXML private TextField   txtCantidadActual;
     @FXML private Label       lblAvisoStock;
@@ -151,6 +153,7 @@ public class ProductosController implements Initializable {
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private ProductoService    productoService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CaducidadService caducidadService;
     @Autowired private ProductoImagenService productoImagenService;
     @Autowired private CatalogoCodigosService catalogoCodigosService;
     @Autowired private ImagenProductoCache   imagenes;
@@ -614,6 +617,7 @@ public class ProductosController implements Initializable {
             p.setClaveUnidad(txtClaveUnidad.getText());
             p.setObjetoImp(comboObjetoImp.getValue() != null ? comboObjetoImp.getValue().clave() : null);
             p.setUsaInventario(chkUsaInventario.isSelected());
+            p.setControlaCaducidad(chkControlaCaducidad.isSelected());
             p.setCantidadActual(cantActual);
             p.setCantidadMinima(cantMinima);
             p.setActivo(productoEnEdicion != null ? productoEnEdicion.isActivo() : Boolean.TRUE);
@@ -1418,6 +1422,8 @@ public class ProductosController implements Initializable {
                 .filter(e -> e.clave().equals(p.getObjetoImp())).findFirst().orElse(null));
         chkUsaInventario.setSelected(p.isUsaInventario());
         gridInventario.setDisable(!p.isUsaInventario());
+        chkControlaCaducidad.setSelected(p.isControlaCaducidad());
+        mostrarLotesCaducidad(p);
         txtCantidadActual.setText(String.valueOf(p.getCantidadActual()));
         txtCantidadMinima.setText(String.valueOf(p.getCantidadMinima()));
 
@@ -1426,6 +1432,22 @@ public class ProductosController implements Initializable {
         txtCantidadActual.setEditable(!bloquearStock);
         lblAvisoStock.setVisible(bloquearStock);
         lblAvisoStock.setManaged(bloquearStock);
+    }
+
+    /** Fechas de caducidad estimadas de lo que hay (solo si el producto las controla) */
+    private void mostrarLotesCaducidad(Producto p) {
+        String texto = "";
+        if (p != null && p.getId() != null && p.isControlaCaducidad()) {
+            try {
+                texto = caducidadService.resumenLotes(p.getId());
+                if (!texto.isEmpty()) texto += " (aprox.; detalle en Inventario → Por caducar)";
+            } catch (RuntimeException e) {
+                texto = "";
+            }
+        }
+        lblLotesCaducidad.setText(texto);
+        lblLotesCaducidad.setVisible(!texto.isEmpty());
+        lblLotesCaducidad.setManaged(!texto.isEmpty());
     }
 
     private void limpiarFormulario() {
@@ -1453,6 +1475,8 @@ public class ProductosController implements Initializable {
         comboObjetoImp.setValue(null);
         chkUsaInventario.setSelected(true);
         gridInventario.setDisable(false);
+        chkControlaCaducidad.setSelected(false);
+        mostrarLotesCaducidad(null);
         txtCantidadActual.clear();
         txtCantidadActual.setEditable(true);
         lblAvisoStock.setVisible(false);
@@ -1485,6 +1509,7 @@ public class ProductosController implements Initializable {
         btnNuevoProveedor.setDisable(bloquear);
         comboUnidad.setDisable(bloquear);
         chkUsaInventario.setDisable(bloquear);
+        chkControlaCaducidad.setDisable(bloquear);
         gridInventario.setDisable(bloquear || !chkUsaInventario.isSelected());
         btnGuardar.setDisable(bloquear);
     }

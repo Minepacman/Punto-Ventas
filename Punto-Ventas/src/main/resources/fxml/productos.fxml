@@ -357,6 +357,12 @@
                            visible="false" managed="false"
                            styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic></Label>
 
+                    <!-- Caducidades (versión sencilla): fecha opcional al dar entrada y lista "Por caducar" en Inventario -->
+                    <CheckBox fx:id="chkControlaCaducidad"
+                              text="Controlar caducidad (anotar la fecha al darle entrada)"/>
+                    <Label fx:id="lblLotesCaducidad" text="" wrapText="true" styleClass="hint"
+                           visible="false" managed="false"/>
+
                     <Region minHeight="12"/>
 
                     <!-- ── BOTONES FINALES ─────────────────────── -->

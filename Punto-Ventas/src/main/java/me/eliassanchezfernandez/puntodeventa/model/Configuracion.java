@@ -279,6 +279,18 @@ public class Configuracion {
 
     public boolean isCodigosEnLinea() { return codigosEnLinea == null || codigosEnLinea; }
 
+    // ── Caducidades ──────────────────────────────────────────────────────
+
+    /** Días de anticipación de "Por caducar" y del aviso de caducidades (null = {@link #DIAS_AVISO_CADUCIDAD_POR_DEFECTO}) */
+    @Column(name = "dias_aviso_caducidad")
+    private Integer diasAvisoCaducidad;
+
+    public static final int DIAS_AVISO_CADUCIDAD_POR_DEFECTO = 7;
+
+    public int getDiasAvisoCaducidad() {
+        return diasAvisoCaducidad == null || diasAvisoCaducidad <= 0 ? DIAS_AVISO_CADUCIDAD_POR_DEFECTO : diasAvisoCaducidad;
+    }
+
     public boolean isActualizacionesAuto() { return actualizacionesAuto == null || actualizacionesAuto; }
     public boolean tieneClaveDonador()     { return claveDonador != null && !claveDonador.isBlank(); }
 

@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
+import me.eliassanchezfernandez.puntodeventa.model.Caducidad;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.HistorialPrecio;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -56,6 +58,7 @@ public class ProductoService {
     @Autowired private IdentidadCaja                  identidadCaja;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProductoImagenRepository imagenRepo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.CaducidadRepository caducidadRepo;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
@@ -231,6 +234,8 @@ public class ProductoService {
         if (producto.getActivo() == null) producto.setActivo(enBd.isActivo());
         // Quien no manda el IVA (importación, móvil) no lo borra: se conserva el que tenía
         if (producto.getIva() == null) producto.setIva(enBd.getIva());
+        // Igual con "Controlar caducidad": quien no lo manda no lo apaga
+        if (producto.getControlaCaducidad() == null) producto.setControlaCaducidad(enBd.getControlaCaducidad());
 
         Producto guardado = productoRepo.save(producto);
 
@@ -335,10 +340,22 @@ public class ProductoService {
     @Transactional
     public Producto registrarEntrada(Long productoId, double cantidad, String proveedor,
                                      double costoUnitario, Collection<Autorizacion> autorizaciones) {
+        return registrarEntrada(productoId, cantidad, proveedor, costoUnitario, autorizaciones, null, Caducidad.Origen.MANUAL);
+    }
+
+    /**
+     * Igual, con fecha de caducidad opcional ({@code caducaEl}, solo cuenta si el producto
+     * controla caducidad; ver {@link CaducidadService}).
+     */
+    @Transactional
+    public Producto registrarEntrada(Long productoId, double cantidad, String proveedor,
+                                     double costoUnitario, Collection<Autorizacion> autorizaciones,
+                                     LocalDate caducaEl, Caducidad.Origen origen) {
         if (proveedor == null || proveedor.isBlank()) {
             throw new NegocioException("Indica el proveedor de la entrada.");
         }
-        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones, true);
+        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones, true,
+                caducaEl, origen);
     }
 
     /**
@@ -350,6 +367,14 @@ public class ProductoService {
     public Producto registrarEntradaDeProveedor(Long productoId, double cantidad, Long proveedorId,
                                                 String motivo, double costoUnitario,
                                                 Collection<Autorizacion> autorizaciones) {
+        return registrarEntradaDeProveedor(productoId, cantidad, proveedorId, motivo, costoUnitario, autorizaciones, null);
+    }
+
+    /** Igual, con fecha de caducidad opcional (ver {@link CaducidadService}) */
+    @Transactional
+    public Producto registrarEntradaDeProveedor(Long productoId, double cantidad, Long proveedorId,
+                                                String motivo, double costoUnitario,
+                                                Collection<Autorizacion> autorizaciones, LocalDate caducaEl) {
         if (proveedorId == null) throw new NegocioException("Elige el proveedor de la entrada.");
         Proveedor proveedor = proveedorRepo.findById(proveedorId)
                 .orElseThrow(() -> new NegocioException("El proveedor ya no existe."));
@@ -357,7 +382,7 @@ public class ProductoService {
             throw new NegocioException("El proveedor \"" + proveedor.getNombre() + "\" está desactivado.");
         }
         return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
-                costoUnitario, autorizaciones, true);
+                costoUnitario, autorizaciones, true, caducaEl, Caducidad.Origen.MANUAL);
     }
 
     /**
@@ -371,9 +396,17 @@ public class ProductoService {
     public Producto registrarEntradaDeOrden(Long productoId, double cantidad, Proveedor proveedor,
                                             String motivo, double costoUnitario,
                                             Collection<Autorizacion> autorizaciones) {
+        return registrarEntradaDeOrden(productoId, cantidad, proveedor, motivo, costoUnitario, autorizaciones, null);
+    }
+
+    /** Igual, con fecha de caducidad opcional (ver {@link CaducidadService}) */
+    @Transactional
+    public Producto registrarEntradaDeOrden(Long productoId, double cantidad, Proveedor proveedor,
+                                            String motivo, double costoUnitario,
+                                            Collection<Autorizacion> autorizaciones, LocalDate caducaEl) {
         if (proveedor == null) throw new NegocioException("La orden no tiene proveedor.");
         return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
-                costoUnitario, autorizaciones, false);
+                costoUnitario, autorizaciones, false, caducaEl, Caducidad.Origen.ORDEN);
     }
 
     /**
@@ -386,7 +419,7 @@ public class ProductoService {
      */
     private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Proveedor proveedor,
                                     String motivo, double costoUnitario, Collection<Autorizacion> autorizaciones,
-                                    boolean consumirAutorizacion) {
+                                    boolean consumirAutorizacion, LocalDate caducaEl, Caducidad.Origen origen) {
         Long proveedorId = proveedor != null ? proveedor.getId() : null;
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
@@ -402,6 +435,9 @@ public class ProductoService {
             throw new NegocioException("\"" + p.getDescripcion() + "\" está desactivado: actívalo en Productos antes de darle entrada.");
         }
         validarDecimales(p, cantidad);
+        // Fecha de caducidad: solo cuenta en productos que la controlan (en los demás se ignora)
+        LocalDate caduca = p.isControlaCaducidad() ? caducaEl : null;
+        CaducidadService.validarFecha(caduca, LocalDate.now());
         if (costoUnitario > 0 && Math.abs(costoUnitario - p.getPrecioCosto()) > 0.0001) {
             registrarCambioPrecio(p, "COSTO", p.getPrecioCosto(), costoUnitario);
             p.setPrecioCosto(costoUnitario);
@@ -421,6 +457,9 @@ public class ProductoService {
         if (proveedorId != null) {
             m.setProveedorId(proveedorId);
             movimientoRepo.save(m);
+        }
+        if (caduca != null) {
+            caducidadRepo.save(CaducidadService.nueva(guardado, cantidad, caduca, origen, m.getId(), LocalDateTime.now()));
         }
         auditarSiAutorizado("ENTRADA_INVENTARIO", guardado, aut, consumirAutorizacion);
         return guardado;
