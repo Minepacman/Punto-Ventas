@@ -9,9 +9,12 @@
 <!--
     estadisticas.fxml  –  Estadísticas y recomendaciones (CRT-10)
     Controlador: EstadisticasController.java
-    Los datos salen de los agregados precalculados (AgregadosService); el
-    periodo elegido arriba aplica a todas las pestañas. Los gráficos, tablas,
-    tarjetas de comparación y el mapa de calor se llenan en el controlador.
+
+    Arriba, la vista simple «Hoy» (venta y tickets de hoy contra ayer, la
+    semana pasada y hace un año; la arma SeccionHoy en boxHoy y se actualiza
+    cada minuto). Debajo, «Más detalles»: el periodo y todas las gráficas,
+    tablas y secciones en TitledPanes cerrados. Los datos salen de los agregados
+    precalculados (AgregadosService) más "hoy" en vivo; se llenan en el controlador.
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.EstadisticasController">
@@ -29,51 +32,59 @@
                     <tooltip><Tooltip text="Abre el tutorial: qué muestra cada sección y cómo mejora con el tiempo"/></tooltip>
                 </Button>
                 <Region HBox.hgrow="ALWAYS"/>
-                <Label fx:id="lblActualizado" text="Agregados: —" styleClass="hint"/>
-                <Button fx:id="btnRecalcular" text="Recalcular" onAction="#onRecalcular"/>
-                <Button text="?" onAction="#onAyudaSeccion" userData="recalcular" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
-                <Separator orientation="VERTICAL"/>
-                <Label text="Nivel de datos:" styleClass="text-muted"/>
-                <Label fx:id="lblNivel" text="—" styleClass="badge"/>
-                <Button text="?" onAction="#onAyudaSeccion" userData="nivel" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
             </HBox>
-
-            <VBox spacing="8">
-                <padding><Insets top="12" right="16" bottom="0" left="16"/></padding>
-                <!-- Indicador de madurez: días de ventas, aviso de confiabilidad y confianza; el color lo pone el controlador -->
-                <HBox fx:id="boxNivel" styleClass="callout" alignment="CENTER_LEFT" spacing="10">
-                    <Label fx:id="lblNivelMensaje" text="Calculando el nivel de datos…"
-                           wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
-                    <Label fx:id="lblConfianza" text="" styleClass="badge"/>
-                </HBox>
-
-                <HBox spacing="8" alignment="CENTER_LEFT">
-                    <Label text="Periodo:" styleClass="text-muted"/>
-                    <ToggleButton fx:id="tgHoy"          text="Hoy"          toggleGroup="$grupoPeriodo" selected="true" onAction="#onPeriodo"/>
-                    <ToggleButton fx:id="tgSemana"       text="Semana"       toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
-                    <ToggleButton fx:id="tgMes"          text="Mes"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
-                    <ToggleButton fx:id="tgAnio"         text="Año"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
-                    <ToggleButton fx:id="tgPersonalizado" text="Personalizado" toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
-                    <HBox fx:id="boxPersonalizado" spacing="6" alignment="CENTER_LEFT" visible="false" managed="false">
-                        <DatePicker fx:id="dpDesde" promptText="Desde" prefWidth="130"/>
-                        <DatePicker fx:id="dpHasta" promptText="Hasta" prefWidth="130"/>
-                        <Button fx:id="btnAplicar" text="Aplicar" onAction="#onAplicarPersonalizado" styleClass="button-primary"/>
-                    </HBox>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Label fx:id="lblPeriodo" text="" styleClass="hint"/>
-                </HBox>
-            </VBox>
         </VBox>
     </top>
 
     <center>
-        <TabPane tabClosingPolicy="UNAVAILABLE">
+        <ScrollPane fitToWidth="true">
+            <VBox spacing="16">
+                <padding><Insets topRightBottomLeft="16"/></padding>
 
-            <!-- ── Resumen ─────────────────────────────── -->
-            <Tab text="Resumen">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Hoy: la vista simple (SeccionHoy, Ubicacion.HOY) ──────── -->
+                <VBox fx:id="boxHoy" spacing="12"/>
+
+                <!-- ── Más detalles ────────────────────────────────────────── -->
+                <VBox spacing="8">
+                    <Separator/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label text="Más detalles" styleClass="card-title"/>
+                        <Label text="Gráficas y reportes por periodo. Abre la sección que quieras ver." styleClass="hint"/>
+                    </HBox>
+
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label text="Periodo:" styleClass="text-muted"/>
+                        <ToggleButton fx:id="tgHoy"          text="Hoy"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                        <ToggleButton fx:id="tgSemana"       text="Semana"       toggleGroup="$grupoPeriodo" selected="true" onAction="#onPeriodo"/>
+                        <ToggleButton fx:id="tgMes"          text="Mes"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                        <ToggleButton fx:id="tgAnio"         text="Año"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                        <ToggleButton fx:id="tgPersonalizado" text="Personalizado" toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
+                        <HBox fx:id="boxPersonalizado" spacing="6" alignment="CENTER_LEFT" visible="false" managed="false">
+                            <DatePicker fx:id="dpDesde" promptText="Desde" prefWidth="130"/>
+                            <DatePicker fx:id="dpHasta" promptText="Hasta" prefWidth="130"/>
+                            <Button fx:id="btnAplicar" text="Aplicar" onAction="#onAplicarPersonalizado" styleClass="button-primary"/>
+                        </HBox>
+                        <Label fx:id="lblPeriodo" text="" styleClass="hint"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Label fx:id="lblActualizado" text="Agregados: —" styleClass="hint"/>
+                        <Button fx:id="btnRecalcular" text="Recalcular" onAction="#onRecalcular"/>
+                        <Button text="?" onAction="#onAyudaSeccion" userData="recalcular" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                    </HBox>
+
+                    <!-- Madurez de los datos: días de ventas, aviso de confiabilidad y confianza; el color lo pone el controlador -->
+                    <HBox fx:id="boxNivel" styleClass="callout" alignment="CENTER_LEFT" spacing="10">
+                        <Label fx:id="lblNivelMensaje" text="Calculando el nivel de datos…"
+                               wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        <Label fx:id="lblConfianza" text="" styleClass="badge"/>
+                        <Label fx:id="lblNivel" text="—" styleClass="badge"/>
+                        <Button text="?" onAction="#onAyudaSeccion" userData="nivel" styleClass="button-ghost, button-sm, ayuda-button" focusTraversable="false"/>
+                    </HBox>
+                </VBox>
+
+                <!-- ── Resumen del periodo ─────────────────── -->
+                <TitledPane text="Resumen del periodo" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="16">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
 
                         <HBox spacing="12">
                             <VBox styleClass="card" spacing="6" HBox.hgrow="ALWAYS" maxWidth="Infinity">
@@ -125,14 +136,12 @@
                             </VBox>
                         </HBox>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-            <!-- ── Horarios pico ───────────────────────── -->
-            <Tab text="Horarios pico">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Horarios pico ───────────────────────── -->
+                <TitledPane text="Horarios pico" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="16">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
 
                         <VBox styleClass="card" spacing="8">
                             <HBox spacing="8" alignment="CENTER_LEFT">
@@ -161,14 +170,12 @@
                             </HBox>
                         </VBox>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-            <!-- ── Cajeros y horas ─────────────────────── -->
-            <Tab text="Cajeros y horas">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Cajeros y horas ─────────────────────── -->
+                <TitledPane text="Cajeros y horas" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="16">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
 
                         <HBox fx:id="boxCajas" spacing="8" alignment="CENTER_LEFT" visible="false" managed="false">
                             <Label text="Caja:" styleClass="text-muted"/>
@@ -211,14 +218,12 @@
                             <TableView fx:id="tablaHoras" prefHeight="320"/>
                         </VBox>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-            <!-- ── Productos más vendidos ──────────────── -->
-            <Tab text="Productos más vendidos">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Productos más vendidos ──────────────── -->
+                <TitledPane text="Productos más vendidos" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="16">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
 
                         <VBox styleClass="card" spacing="8">
                             <HBox spacing="8" alignment="CENTER_LEFT">
@@ -238,14 +243,12 @@
                         <!-- Secciones registradas en EstadisticasController.secciones() con Ubicacion.PRODUCTOS -->
                         <VBox fx:id="boxSeccionesProductos" spacing="16"/>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-            <!-- ── Reabastecimiento ────────────────────── -->
-            <Tab text="Reabastecimiento">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Reabastecimiento ────────────────────── -->
+                <TitledPane text="Reabastecimiento: qué pedir y qué dejar de pedir" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="16">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
                         <HBox styleClass="callout-info" alignment="CENTER_LEFT">
                             <Label text="Qué dejar de pedir y qué, cuánto y a quién pedir. Se calcula con la venta promedio de los últimos 30 días, la existencia y el mínimo de cada producto; no depende del periodo elegido arriba. Las cantidades son una sugerencia: revísalas antes de pedir."
                                    wrapText="true" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
@@ -253,14 +256,12 @@
                         <!-- Secciones registradas en EstadisticasController.secciones() con Ubicacion.REABASTECIMIENTO -->
                         <VBox fx:id="boxSeccionesReabastecimiento" spacing="16"/>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-            <!-- ── Recomendaciones ─────────────────────── -->
-            <Tab text="Recomendaciones">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Recomendaciones ─────────────────────── -->
+                <TitledPane text="Recomendaciones" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="12">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
 
                         <HBox spacing="12">
                             <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS" maxWidth="Infinity">
@@ -312,14 +313,12 @@
                         <!-- Secciones registradas con Ubicacion.RECOMENDACIONES -->
                         <VBox fx:id="boxSeccionesRecomendaciones" spacing="12"/>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-            <!-- ── Clima ───────────────────────────────── -->
-            <Tab text="Clima">
-                <ScrollPane fitToWidth="true">
+                <!-- ── Clima ───────────────────────────────── -->
+                <TitledPane text="Clima" expanded="false" animated="false" styleClass="seccion-detalle">
                     <VBox spacing="16">
-                        <padding><Insets topRightBottomLeft="16"/></padding>
+                        <padding><Insets topRightBottomLeft="12"/></padding>
 
                         <VBox styleClass="card" spacing="8">
                             <Label text="Condiciones actuales" styleClass="card-title"/>
@@ -350,10 +349,10 @@
                         <!-- Secciones registradas con Ubicacion.CLIMA -->
                         <VBox fx:id="boxSeccionesClima" spacing="16"/>
                     </VBox>
-                </ScrollPane>
-            </Tab>
+                </TitledPane>
 
-        </TabPane>
+            </VBox>
+        </ScrollPane>
     </center>
 
 </BorderPane>

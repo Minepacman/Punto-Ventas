@@ -923,6 +923,12 @@ TilePane > .button:armed,
     -fx-border-color: -pos-border;
 }
 
+/* Secciones cerradas de «Más detalles» en Estadísticas: título del tamaño de una tarjeta */
+.titled-pane.seccion-detalle > .title {
+    -fx-font-size: 14px;
+    -fx-padding: 8 12 8 12;
+}
+
 .progress-indicator {
     -fx-progress-color: -pos-accent;
 }
@@ -1694,6 +1700,13 @@ TilePane > .button:armed,
     -fx-font-size: 12px;
     -fx-font-weight: bold;
     -fx-text-fill: -pos-text-muted;
+}
+
+/* Cifra grande de la vista «Hoy» de Estadísticas (venta y tickets de hoy) */
+.metric-value-xl {
+    -fx-font-size: 34px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
 }
 
 /* Avisos (callout): la clase va en el HBox; las etiquetas hijas toman el

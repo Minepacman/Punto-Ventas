@@ -16,6 +16,7 @@ import me.eliassanchezfernandez.puntodeventa.repository.ProductoClimaRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ResumenDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
+import me.eliassanchezfernandez.puntodeventa.util.FechasComparacion;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -397,6 +398,102 @@ public class EstadisticasService {
         for (LocalDate d : vivo.sueltos) calculados.putAll(agregadosService.calcularDias(d, d));
         for (AgregadosService.DiaCalculado d : calculados.values()) lista.addAll(d.productos());
         return lista;
+    }
+
+    // ── Vista "Hoy": venta y tickets de hoy contra ayer, la semana pasada y hace un año ──
+
+    /** Total vendido y número de tickets (ventas activas) de un día o de parte de él */
+    public record CifrasDia(double total, int tickets) {
+        public static final CifrasDia CERO = new CifrasDia(0, 0);
+    }
+
+    /** Con qué parte del día de referencia se compara "hoy" */
+    public enum AlcanceComparacion {
+        /** Hay tickets de ese día: se compara hasta la misma hora de hoy */
+        HASTA_LA_HORA,
+        /** Solo quedó el resumen del día (sin tickets): se compara el día completo */
+        DIA_COMPLETO,
+        /** La tienda ya vendía, pero ese día no hubo ventas */
+        SIN_VENTAS,
+        /** Ese día la tienda aún no había registrado su primera venta */
+        LA_TIENDA_NO_VENDIA
+    }
+
+    /**
+     * Una fila de comparación de la vista Hoy. La variación se calcula contra
+     * las cifras de hoy que le pase la pantalla; es null cuando no hay con qué
+     * comparar (sin referencia o referencia en cero: nunca se divide entre 0).
+     */
+    public record ComparacionDia(String etiqueta, LocalDate dia, CifrasDia referencia, AlcanceComparacion alcance) {
+
+        public boolean hayReferencia() {
+            return alcance == AlcanceComparacion.HASTA_LA_HORA || alcance == AlcanceComparacion.DIA_COMPLETO;
+        }
+
+        public Double variacionTotalPct(CifrasDia hoy) {
+            if (!hayReferencia() || referencia.total() <= 0) return null;
+            return (hoy.total() - referencia.total()) / referencia.total() * 100.0;
+        }
+
+        public Double variacionTicketsPct(CifrasDia hoy) {
+            if (!hayReferencia() || referencia.tickets() <= 0) return null;
+            return (hoy.tickets() - referencia.tickets()) / (double) referencia.tickets() * 100.0;
+        }
+
+        public double diferenciaTotal(CifrasDia hoy)  { return ResumenDiario.VentaRedondeo.centavos(hoy.total() - referencia.total()); }
+        public int    diferenciaTickets(CifrasDia hoy) { return hoy.tickets() - referencia.tickets(); }
+    }
+
+    /**
+     * Lo que muestra la vista Hoy: las cifras de hoy (todo lo vendido hasta ahora)
+     * y tres comparaciones. {@code hasta} es la hora a la que se cortan los días
+     * de referencia (la hora de ahora).
+     */
+    public record ResumenHoy(LocalDate hoy, java.time.LocalTime hasta, CifrasDia cifras, List<ComparacionDia> comparaciones) { }
+
+    /** Vista Hoy con la hora actual. VER_HISTORIAL (los totales, como en el historial de ventas). */
+    @Transactional(readOnly = true)
+    public ResumenHoy resumenHoy() {
+        return resumenHoy(LocalDateTime.now(reloj));
+    }
+
+    /**
+     * Vista Hoy a una hora dada (la pantalla pasa "ahora"; las pruebas, una hora fija).
+     * Cuatro consultas de una fila cada una (hoy y los tres días de referencia) más
+     * la primera venta; nunca se cargan tickets. Las ventas canceladas no cuentan,
+     * igual que en el corte; el "producto común" es una venta como cualquier otra.
+     */
+    @Transactional(readOnly = true)
+    public ResumenHoy resumenHoy(LocalDateTime ahora) {
+        sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
+        LocalDate hoy = ahora.toLocalDate();
+        java.time.LocalTime hora = ahora.toLocalTime();
+        Object[] f = ventaRepository.resumenActivas(hoy.atStartOfDay(), hoy.plusDays(1).atStartOfDay(), null).get(0);
+        CifrasDia deHoy = new CifrasDia(ResumenDiario.VentaRedondeo.centavos(((Number) f[1]).doubleValue()), ((Number) f[0]).intValue());
+        LocalDate primeraVenta = ventaRepository.findPrimeraActiva().map(v -> v.getFecha().toLocalDate()).orElse(null);
+        List<ComparacionDia> comparaciones = List.of(
+                compararDia(FechasComparacion.etiquetaAyer(), FechasComparacion.ayer(hoy), hora, primeraVenta),
+                compararDia(FechasComparacion.etiquetaSemanaPasada(hoy), FechasComparacion.mismoDiaSemanaPasada(hoy), hora, primeraVenta),
+                compararDia(FechasComparacion.etiquetaHaceUnAnio(), FechasComparacion.hoyHaceUnAnio(hoy), hora, primeraVenta));
+        return new ResumenHoy(hoy, hora, deHoy, comparaciones);
+    }
+
+    private ComparacionDia compararDia(String etiqueta, LocalDate dia, java.time.LocalTime hora, LocalDate primeraVenta) {
+        if (!FechasComparacion.laTiendaYaVendia(primeraVenta, dia)) {
+            return new ComparacionDia(etiqueta, dia, CifrasDia.CERO, AlcanceComparacion.LA_TIENDA_NO_VENDIA);
+        }
+        Object[] f = ventaRepository.resumenActivasConCorte(dia.atStartOfDay(), dia.plusDays(1).atStartOfDay(), dia.atTime(hora)).get(0);
+        if (((Number) f[0]).intValue() > 0) {
+            CifrasDia hastaLaHora = new CifrasDia(ResumenDiario.VentaRedondeo.centavos(((Number) f[3]).doubleValue()), ((Number) f[2]).intValue());
+            return new ComparacionDia(etiqueta, dia, hastaLaHora, AlcanceComparacion.HASTA_LA_HORA);
+        }
+        // Sin tickets de ese día en la tabla de ventas: si quedó el resumen diario, se compara el día completo
+        Optional<ResumenDiario> resumen = resumenRepo.findByFecha(dia);
+        if (resumen.isPresent() && resumen.get().getTransacciones() > 0) {
+            return new ComparacionDia(etiqueta, dia, new CifrasDia(resumen.get().getTotal(), resumen.get().getTransacciones()),
+                    AlcanceComparacion.DIA_COMPLETO);
+        }
+        return new ComparacionDia(etiqueta, dia, CifrasDia.CERO, AlcanceComparacion.SIN_VENTAS);
     }
 
     // ── Comparaciones ────────────────────────────────────────────────────
