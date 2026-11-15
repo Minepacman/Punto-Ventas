@@ -507,9 +507,20 @@ public class VentaService {
         venta.setTotal(total);
         venta.setPagoCon(totalPagado);
         venta.setCambio(redondear(totalPagado - total));
+        // IVA renglón por renglón (TipoIva del producto; "usar el de la tienda" = la tasa configurada):
+        // cada renglón guarda su tasa y su IVA y la venta suma las bases y los impuestos ya redondeados,
+        // así subtotal + iva = total exacto y el ticket, el corte y la factura cuadran (util/CalculoIva).
+        // La tasa de la tienda se guarda en la venta como respaldo para renglones viejos sin tasa.
         venta.setTasaIva(config.getTasaIva());
-        venta.setSubtotal(redondear(config.subtotalDe(total)));
-        venta.setIva(redondear(total - venta.getSubtotal()));
+        double subtotal = 0, ivaTotal = 0;
+        for (DetalleVenta d : detalles) {
+            me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Desglose g =
+                    me.eliassanchezfernandez.puntodeventa.util.CalculoIva.aplicar(d, config.getTasaIva());
+            subtotal += g.base();
+            ivaTotal += g.iva();
+        }
+        venta.setSubtotal(redondear(subtotal));
+        venta.setIva(redondear(ivaTotal));
         venta.setPlazoCancelacionHoras(config.getPlazoCancelacionHoras());
         venta.setCajero(cajeroRepo.findById(cajeroSesion.getId()).orElse(null));
         venta.setCajeroNombre(cajeroSesion.getNombreCompleto());
@@ -841,6 +852,17 @@ public class VentaService {
         r.subtotal      = ((Number) activas[2]).doubleValue();
         r.iva           = ((Number) activas[3]).doubleValue();
 
+        // IVA por tasa (16 %, 0 %, exento) sumado en SQL sobre los renglones; los renglones anteriores
+        // al IVA por producto entran con la tasa de su venta (util/CalculoIva)
+        for (Object[] f : ventaRepo.ivaPorTasa(inicio, fin, caja)) {
+            double base = ((Number) f[2]).doubleValue();
+            double ivaGrupo = ((Number) f[3]).doubleValue();
+            if (Math.abs(base) < 0.005 && Math.abs(ivaGrupo) < 0.005) continue;
+            r.porTasaIva.add(new me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo(
+                    ((Number) f[0]).doubleValue(), Boolean.TRUE.equals(f[1]), redondear(base), redondear(ivaGrupo)));
+        }
+        me.eliassanchezfernandez.puntodeventa.util.CalculoIva.ordenar(r.porTasaIva);
+
         Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin, caja).get(0);
         r.numCanceladas   = ((Number) canceladas[0]).intValue();
         r.totalCanceladas = ((Number) canceladas[1]).doubleValue();
@@ -922,6 +944,11 @@ public class VentaService {
         public double ventasTotales;
         public double subtotal;
         public double iva;
+        /**
+         * Desglose del IVA por tasa (gravado 16 %, tasa 0 %, exento): base e impuesto de cada grupo.
+         * Con una sola tasa en el periodo el corte no lo muestra (ya está en {@link #iva}).
+         */
+        public final List<me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo> porTasaIva = new ArrayList<>();
         public double efectivo;
         public double tarjeta;
         public double credito;

@@ -220,4 +220,31 @@ class FacturamaProveedorTest {
         new FacturamaProveedor(new CredencialesPac("u", "p", false), t).probarConexion();
         assertThat(t.ultima().uri().toString()).startsWith("https://api.facturama.mx/");
     }
+    @Test
+    void tasaCeroYExentoSeEnvianComoTrasladosDistintos() throws Exception {
+        TransporteFicticio t = new TransporteFicticio(s -> TransporteFicticio.recurso(201, "timbrado_ok.json"));
+        Concepto leche = new Concepto("50131700", "750002", "Leche", "H87", "Pieza", BigDecimal.ONE,
+                new BigDecimal("28.500000"), new BigDecimal("28.50"), null, "02",
+                List.of(new Impuesto("IVA", new BigDecimal("28.50"), new BigDecimal("0.000000"), new BigDecimal("0.00"))),
+                new BigDecimal("28.50"));
+        Concepto revista = new Concepto("55101500", "750004", "Revista", "H87", "Pieza", BigDecimal.ONE,
+                new BigDecimal("45.000000"), new BigDecimal("45.00"), null, "02",
+                List.of(Impuesto.exento(new BigDecimal("45.00"))), new BigDecimal("45.00"));
+        CfdiDocumento d = documento();
+        CfdiDocumento doc = new CfdiDocumento(d.serie(), d.folio(), d.lugarExpedicion(), d.formaPago(), d.metodoPago(),
+                d.receptor(), List.of(leche, revista), null, "V-43", null);
+
+        new FacturamaProveedor(CRED, t).timbrar(doc);
+
+        JsonNode items = JSON.readTree(t.ultima().cuerpo()).path("Items");
+        JsonNode cero = items.get(0).path("Taxes").get(0);
+        assertThat(cero.path("Name").asText()).isEqualTo("IVA");
+        assertThat(cero.path("Rate").decimalValue()).isEqualByComparingTo("0");
+        assertThat(cero.path("Base").decimalValue()).isEqualByComparingTo("28.50");
+        assertThat(cero.path("Total").decimalValue()).isEqualByComparingTo("0");
+        JsonNode exento = items.get(1).path("Taxes").get(0);
+        assertThat(exento.path("Name").asText()).isEqualTo("IVA Exento");
+        assertThat(exento.path("Base").decimalValue()).isEqualByComparingTo("45.00");
+        assertThat(exento.path("Total").decimalValue()).isEqualByComparingTo("0");
+    }
 }

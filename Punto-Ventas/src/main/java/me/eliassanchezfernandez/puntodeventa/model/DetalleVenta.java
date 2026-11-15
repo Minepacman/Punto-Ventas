@@ -96,6 +96,25 @@ public class DetalleVenta {
     @Column(name = "autorizado_por_usuario", length = 60)
     private String autorizadoPorUsuario;
 
+    // ── IVA del renglón (snapshot al cobrar; util/CalculoIva) ────────────
+    // Null en los renglones anteriores a este campo: entonces aplica la tasa de la venta.
+
+    /** Tasa aplicada al renglón como fracción (0.16, 0.0) */
+    @Column(name = "tasa_iva")
+    private Double tasaIva;
+
+    /** true si el producto era exento (tasa 0 pero en la factura va como TipoFactor Exento) */
+    @Column(name = "iva_exento")
+    private Boolean ivaExento;
+
+    /** IVA del renglón ya desglosado del importe (importe − base), a centavos */
+    @Column(name = "iva")
+    private Double iva;
+
+    public boolean isIvaExento() {
+        return Boolean.TRUE.equals(ivaExento);
+    }
+
     // ── Lógica de dominio ────────────────────────────────────────────────
 
     /**

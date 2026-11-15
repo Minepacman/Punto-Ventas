@@ -197,8 +197,10 @@ public class FacturamaProveedor implements ProveedorCfdi {
                 ArrayNode taxes = i.putArray("Taxes");
                 for (Impuesto imp : c.impuestos()) {
                     ObjectNode t = taxes.addObject();
-                    t.put("Name", imp.nombre());
-                    t.put("Rate", imp.tasa());
+                    // Exento: Facturama lo pide como Name "IVA Exento" con tasa y total 0 y la base;
+                    // así el XML lleva TipoFactor Exento sin TasaOCuota ni Importe (CFDI 4.0)
+                    t.put("Name", imp.esExento() ? "IVA Exento" : imp.nombre());
+                    t.put("Rate", imp.esExento() ? BigDecimal.ZERO : imp.tasa());
                     t.put("Base", imp.base());
                     t.put("Total", imp.importe());
                     t.put("IsRetention", false);

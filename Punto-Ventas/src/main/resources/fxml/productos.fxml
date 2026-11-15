@@ -256,6 +256,15 @@
                                   maxWidth="Infinity"/>
                     </VBox>
 
+                    <!-- ── IVA (el precio ya lo incluye; solo cambia cómo se desglosa) ── -->
+                    <VBox spacing="4">
+                        <Label text="IVA" styleClass="field-label"/>
+                        <ComboBox fx:id="comboIva" maxWidth="Infinity"/>
+                        <Label fx:id="lblAyudaIva"
+                               text="El precio de venta ya incluye el IVA; esto solo decide cómo se desglosa en el ticket, el corte y la factura. Básicos como tortilla, leche, huevo, frutas y verduras, carne, pan, frijol y arroz: IVA 0 %. Refrescos, botanas, cerveza, cigarros, jabón y casi todo lo demás: 16 %. Si no estás seguro, deja «Usar el de la tienda»."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
+
                     <!-- ── PROVEEDOR HABITUAL (opcional) ───────── -->
                     <VBox spacing="4">
                         <Label text="Proveedor habitual" styleClass="field-label"/>
@@ -411,6 +420,7 @@
                     <TableView fx:id="tablaDepartamentos">
                     <columns>
                         <TableColumn fx:id="colNombreDepartamento"       text="Nombre"       prefWidth="140"/>
+                        <TableColumn fx:id="colIvaDepartamento"          text="IVA propuesto" prefWidth="110"/>
                     </columns>
 
                     <placeholder>
@@ -456,6 +466,16 @@
                             styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic>
                         <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
                     </Label>
+
+                    <Label text="IVA propuesto para sus productos nuevos:" styleClass="field-label">
+                        <padding><Insets top="0" right="10" bottom="0" left="10"/></padding>
+                    </Label>
+                    <VBox spacing="4">
+                        <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
+                        <ComboBox fx:id="comboIvaDepartamento" maxWidth="Infinity"/>
+                        <Label text="Al dar de alta un producto en este departamento, el IVA se llena con este valor (ej. «Frutas y verduras» → IVA 0 %). Se puede cambiar en cada producto y no toca los productos ya existentes."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
 
                 <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
 

@@ -108,8 +108,13 @@
                         <Label fx:id="lblSubtotal"        text="\$0.00" GridPane.rowIndex="4" GridPane.columnIndex="1" styleClass="corte-value"/>
                         <Label text="IVA incluido:"       GridPane.rowIndex="5" GridPane.columnIndex="0"/>
                         <Label fx:id="lblIva"             text="\$0.00" GridPane.rowIndex="5" GridPane.columnIndex="1" styleClass="corte-value"/>
-                        <Label text="Ventas canceladas:"  GridPane.rowIndex="6" GridPane.columnIndex="0"/>
-                        <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="6" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <!-- Solo cuando el periodo mezcla tasas (básicos al 0 % con artículos al 16 %) -->
+                        <Label fx:id="lblIvaPorTasaTitulo" text="Por tasa:" GridPane.rowIndex="6" GridPane.columnIndex="0"
+                               visible="false" managed="false"/>
+                        <Label fx:id="lblIvaPorTasa"      text=""       GridPane.rowIndex="6" GridPane.columnIndex="1" styleClass="hint"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label text="Ventas canceladas:"  GridPane.rowIndex="7" GridPane.columnIndex="0"/>
+                        <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="7" GridPane.columnIndex="1" styleClass="corte-value"/>
                     </GridPane>
                 </VBox>
 

@@ -26,6 +26,7 @@ import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
+import me.eliassanchezfernandez.puntodeventa.model.TipoIva;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
@@ -96,6 +97,8 @@ public class ProductosController implements Initializable {
     //tabla departamentos
     @FXML private TableView<Departamento>           tablaDepartamentos;
     @FXML private TableColumn<Departamento, String> colNombreDepartamento;
+    @FXML private TableColumn<Departamento, String> colIvaDepartamento;
+    @FXML private ComboBox<TipoIva>                 comboIvaDepartamento;
     @FXML private TextField                         txtBuscarDepartamento;
     @FXML private TextField                         txtNombreDepartamento;
     @FXML private Label                             lblErrorDepartamento;
@@ -129,6 +132,8 @@ public class ProductosController implements Initializable {
     @FXML private TextField   txtPrecioMayoreo;
     @FXML private Label       lblErrorPrecio;
     @FXML private ComboBox<Departamento> comboDepartamento;
+    @FXML private ComboBox<TipoIva>      comboIva;
+    @FXML private Label                  lblAyudaIva;
     @FXML private ComboBox<Proveedor> comboProveedor;
     @FXML private Button      btnNuevoProveedor;
     @FXML private ComboBox<Unidad> comboUnidad;
@@ -163,6 +168,8 @@ public class ProductosController implements Initializable {
     /** null = modo nuevo;  non-null = modo editar */
     private Producto productoEnEdicion = null;
     private Departamento departamentoEnEdicion = null;
+    /** true mientras se llena el formulario con un producto existente (no proponer IVA del departamento) */
+    private boolean cargandoFormulario;
 
     // ── Imagen del formulario ────────────────────────────────────────────
     /** Imagen elegida y ya normalizada, pendiente de guardarse con el producto (null = sin cambio) */
@@ -188,6 +195,7 @@ public class ProductosController implements Initializable {
         configurarComboDepartamento();
         configurarComboProveedor();
         configurarComboUnidad();
+        configurarComboIva();
         configurarZonaImagen();
         configurarCatalogo();
         cargarProductos();
@@ -336,6 +344,7 @@ public class ProductosController implements Initializable {
     @FXML void onDepartamentos() {
         departamentoEnEdicion = null;
         txtNombreDepartamento.clear();
+        comboIvaDepartamento.setValue(null);
         txtBuscarDepartamento.clear();
         cargarDepartamentos();
         mostrarVistas(false, false, true);
@@ -346,6 +355,7 @@ public class ProductosController implements Initializable {
         departamentoEnEdicion = null;
         tablaDepartamentos.getSelectionModel().clearSelection();
         txtNombreDepartamento.clear();
+        comboIvaDepartamento.setValue(null);
         txtNombreDepartamento.requestFocus();
     }
 
@@ -361,8 +371,13 @@ public class ProductosController implements Initializable {
         // Objeto nuevo (con el mismo id si es edición): si el servicio rechaza el nombre, la fila
         // de la tabla y el combo siguen mostrando el nombre real, no el que se intentó
         Departamento d = new Departamento();
-        if (departamentoEnEdicion != null) d.setId(departamentoEnEdicion.getId());
+        if (departamentoEnEdicion != null) {
+            d.setId(departamentoEnEdicion.getId());
+            // Conservar lo que esta pantalla no edita (la clave SAT se captura en Configuración → Facturación)
+            d.setClaveProdServ(departamentoEnEdicion.getClaveProdServ());
+        }
         d.setNombre(nombre);
+        d.setIvaPorDefecto(comboIvaDepartamento.getValue());
         try {
             productoService.guardarDepartamento(d);
         } catch (NegocioException e) {
@@ -470,12 +485,22 @@ public class ProductosController implements Initializable {
     private void configurarColumnasDepartamentos(){
         colNombreDepartamento.setCellValueFactory(c ->
             new SimpleStringProperty(c.getValue().getNombre()));
+        colIvaDepartamento.setCellValueFactory(c -> new SimpleStringProperty(
+            c.getValue().getIvaPorDefecto() == null ? "—" : c.getValue().getIvaPorDefecto().getEtiqueta()));
+        // Propuesta de IVA del departamento: nada (null) o una tasa concreta; "usar el de la tienda" sobra aquí
+        comboIvaDepartamento.setItems(FXCollections.observableArrayList(null, TipoIva.TASA_16, TipoIva.TASA_0, TipoIva.EXENTO));
+        comboIvaDepartamento.setConverter(new StringConverter<>() {
+            @Override public String toString(TipoIva t) { return t == null ? "— Sin propuesta (usar el de la tienda) —" : t.getEtiqueta(); }
+            @Override public TipoIva fromString(String s) { return null; }
+        });
+        comboIvaDepartamento.setValue(null);
 
             //cargar formulario al seleccionar
         tablaDepartamentos.getSelectionModel().selectedItemProperty().addListener((obs, old, sel) -> {
             if (sel != null) {
                 departamentoEnEdicion = sel;
                 txtNombreDepartamento.setText(sel.getNombre());
+                comboIvaDepartamento.setValue(sel.getIvaPorDefecto());
                 lblErrorDepartamento.setVisible(false);
                 lblErrorDepartamento.setManaged(false);
             }
@@ -582,6 +607,7 @@ public class ProductosController implements Initializable {
             p.setPrecioVenta(precioVenta);
             p.setPrecioMayoreo(precioMayoreo);
             p.setDepartamento(comboDepartamento.getValue());
+            p.setIva(comboIva.getValue() != null ? comboIva.getValue() : TipoIva.TIENDA);
             p.setProveedor(comboProveedor.getValue());
             p.setUnidad(comboUnidad.getValue());
             p.setClaveProdServ(txtClaveProdServ.getText());
@@ -1304,6 +1330,29 @@ public class ProductosController implements Initializable {
         actualizarClavesPorDefecto();
     }
 
+    /**
+     * Combo de IVA del producto. En un alta, elegir departamento propone el IVA del
+     * departamento (si tiene) mientras el usuario no haya elegido otro a mano.
+     */
+    private void configurarComboIva() {
+        comboIva.setItems(FXCollections.observableArrayList(TipoIva.values()));
+        comboIva.setConverter(new StringConverter<>() {
+            @Override public String toString(TipoIva t) { return t == null ? TipoIva.TIENDA.getEtiqueta() : t.getEtiqueta(); }
+            @Override public TipoIva fromString(String s) { return null; }
+        });
+        comboIva.setValue(TipoIva.TIENDA);
+        comboDepartamento.valueProperty().addListener((o, antes, depto) -> {
+            if (productoEnEdicion != null || cargandoFormulario) return;
+            TipoIva propuestoAntes = antes != null ? antes.getIvaPorDefecto() : null;
+            TipoIva actual = comboIva.getValue();
+            // Solo se pisa lo que no eligió el usuario: "usar el de la tienda" o lo que propuso el departamento anterior
+            boolean sinTocar = actual == null || actual == TipoIva.TIENDA || actual == propuestoAntes;
+            if (!sinTocar) return;
+            TipoIva propuesto = depto != null ? depto.getIvaPorDefecto() : null;
+            comboIva.setValue(propuesto != null ? propuesto : TipoIva.TIENDA);
+        });
+    }
+
     /** Pie de ayuda: qué claves SAT se usarán si el producto no tiene las suyas */
     private void actualizarClavesPorDefecto() {
         if (lblClavesDefecto == null) return;
@@ -1335,6 +1384,15 @@ public class ProductosController implements Initializable {
     }
 
     private void cargarProductoEnFormulario(Producto p) {
+        cargandoFormulario = true;
+        try {
+            llenarFormulario(p);
+        } finally {
+            cargandoFormulario = false;
+        }
+    }
+
+    private void llenarFormulario(Producto p) {
         limpiarFormulario();
         txtCodigoBarras.setText(p.getCodigoBarras());
         txtDescripcion.setText(p.getDescripcion());
@@ -1348,6 +1406,7 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.setText(String.valueOf(p.getPrecioVenta()));
         txtPrecioMayoreo.setText(String.valueOf(p.getPrecioMayoreo()));
         if (p.getDepartamento() != null) comboDepartamento.setValue(p.getDepartamento());
+        comboIva.setValue(p.getIvaOTienda());
         if (p.getProveedor() != null) seleccionarProveedor(p.getProveedor());
         if (p.getUnidad() != null) {
             comboUnidad.getItems().stream().filter(u -> u.getId().equals(p.getUnidad().getId()))
@@ -1385,6 +1444,7 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.clear();
         txtPrecioMayoreo.clear();
         comboDepartamento.setValue(null);
+        comboIva.setValue(TipoIva.TIENDA);
         comboProveedor.setValue(null);
         comboProveedor.getItems().removeIf(x -> x != null && !x.isActivo());   // el desactivado de una edición anterior
         comboUnidad.setValue(null);
@@ -1420,6 +1480,7 @@ public class ProductosController implements Initializable {
         txtPrecioVenta.setDisable(bloquear);
         txtPrecioMayoreo.setDisable(bloquear);
         comboDepartamento.setDisable(bloquear);
+        comboIva.setDisable(bloquear);
         comboProveedor.setDisable(bloquear);
         btnNuevoProveedor.setDisable(bloquear);
         comboUnidad.setDisable(bloquear);

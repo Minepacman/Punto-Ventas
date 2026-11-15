@@ -8,7 +8,9 @@ import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.OrdenCompra;
 import me.eliassanchezfernandez.puntodeventa.model.OrdenCompraLinea;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoComun;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoIva;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import org.springframework.stereotype.Service;
 
@@ -116,8 +118,7 @@ public class TicketService {
         }
         d.linea(raya);
         d.linea(dosColumnas("Subtotal", Moneda.formato(v.getSubtotalODefault()), cols));
-        d.linea(dosColumnas(String.format("IVA %.0f%%", (v.getTasaIva() != null ? v.getTasaIva() : c.getTasaIva()) * 100),
-                Moneda.formato(v.getIvaODefault()), cols));
+        lineasIva(v, c, cols).forEach(d::linea);
         d.agregar(dosColumnas("TOTAL", Moneda.formato(v.getTotal()) + " " + c.getMonedaCodigo(), cols),
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
         for (PagoVenta p : v.getPagos()) {
@@ -133,6 +134,46 @@ public class TicketService {
         ajustar(c.getTicketAgradecimiento() != null ? c.getTicketAgradecimiento() : "¡Gracias por su compra!", cols)
                 .forEach(d::centrada);
         return d;
+    }
+
+    /**
+     * Renglones de IVA del ticket. Con una sola tasa en la venta, una línea como siempre
+     * ("IVA 16%", "IVA 0%" o "Exento de IVA"); con tasas mezcladas (básicos al 0 % junto
+     * con refrescos al 16 %), el desglose por tasa: lo gravado y su IVA, lo de tasa 0 y lo exento.
+     */
+    static List<String> lineasIva(Venta v, Configuracion c, int cols) {
+        double tasaRespaldo = v.getTasaIva() != null ? v.getTasaIva() : c.getTasaIva();
+        List<CalculoIva.Grupo> grupos = CalculoIva.agrupar(v.getDetalles(), tasaRespaldo);
+        List<String> l = new ArrayList<>();
+        if (grupos.isEmpty()) {
+            l.add(dosColumnas(new CalculoIva.Tasa(tasaRespaldo, false).etiqueta().replace(" %", "%"),
+                    Moneda.formato(v.getIvaODefault()), cols));
+            return l;
+        }
+        if (!CalculoIva.esMixto(grupos)) {
+            CalculoIva.Grupo g = grupos.get(0);
+            l.add(dosColumnas(g.etiqueta().replace(" %", "%"), Moneda.formato(g.exento() ? 0 : g.iva()), cols));
+            return l;
+        }
+        l.addAll(desglosePorTasa(grupos, cols));
+        l.add(dosColumnas("IVA", Moneda.formato(v.getIvaODefault()), cols));
+        return l;
+    }
+
+    /** Líneas "Gravado 16% / IVA 16% / Tasa 0% / Exento" con sus importes (ticket y corte) */
+    static List<String> desglosePorTasa(List<CalculoIva.Grupo> grupos, int cols) {
+        List<String> l = new ArrayList<>();
+        for (CalculoIva.Grupo g : grupos) {
+            if (g.gravado()) {
+                l.add(dosColumnas("  Gravado " + g.tasaIva().porcentaje() + "%", Moneda.formato(g.base()), cols));
+                l.add(dosColumnas("  IVA " + g.tasaIva().porcentaje() + "%", Moneda.formato(g.iva()), cols));
+            } else if (g.exento()) {
+                l.add(dosColumnas("  Exento de IVA", Moneda.formato(g.base()), cols));
+            } else {
+                l.add(dosColumnas("  Tasa 0%", Moneda.formato(g.base()), cols));
+            }
+        }
+        return l;
     }
 
     /**
@@ -197,11 +238,19 @@ public class TicketService {
         }
         d.linea(raya);
         d.linea(dosColumnas("Subtotal", Moneda.formato(r.subtotal), cols));
+        if (CalculoIva.esMixto(r.porTasaIva)) desglosePorTasa(r.porTasaIva, cols).forEach(d::linea);
         d.linea(dosColumnas("IVA", Moneda.formato(r.iva), cols));
         d.agregar(dosColumnas("VENTAS (" + r.numVentas + ")", Moneda.formato(r.ventasTotales), cols),
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
         d.linea(dosColumnas("Canceladas (" + r.numCanceladas + ")", Moneda.formato(r.totalCanceladas), cols));
-        if (r.gananciaVisible) d.linea(dosColumnas("Ganancia", Moneda.formato(r.ganancia), cols));
+        if (r.gananciaVisible) {
+            d.linea(dosColumnas("Ganancia", Moneda.formato(r.ganancia), cols));
+            // Productos comunes (Ctrl+P, fuera del catálogo): su costo no es real sino una estimación
+            // del 20 %; misma regla que la pantalla de Corte (solo con la ganancia visible)
+            if (r.productosComunes > 0.004) {
+                ajustar(textoProductosComunes(r), cols).forEach(d::linea);
+            }
+        }
         if (!r.porCaja.isEmpty()) {
             d.linea(raya);
             d.negrita("Por caja");
@@ -267,6 +316,12 @@ public class TicketService {
         d.centrada("_".repeat(Math.min(cols - 4, 28)));
         d.centrada(m.esEntrada() ? "Recibió" : "Entregó / Recibió");
         return d;
+    }
+
+    /** "Incluye $X de productos comunes (ganancia estimada 20 %)" para el corte impreso */
+    public static String textoProductosComunes(VentaService.ResumenCorte r) {
+        return String.format("Incluye %s de productos comunes (ganancia estimada %d %%)",
+                Moneda.formato(r.productosComunes), Math.round(ProductoComun.MARGEN_GANANCIA * 100));
     }
 
     private static String recortar(String texto, int max) {

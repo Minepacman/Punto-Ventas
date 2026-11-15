@@ -22,6 +22,7 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoIva;
 import me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -105,6 +106,8 @@ public class CorteController implements Initializable {
     @FXML private Label lblVales;
     @FXML private Label lblSubtotal;
     @FXML private Label lblIva;
+    @FXML private Label lblIvaPorTasaTitulo;
+    @FXML private Label lblIvaPorTasa;
     @FXML private Label lblCanceladas;
     // Totales
     @FXML private Label lblVentasTotalesTitulo;
@@ -591,6 +594,11 @@ public class CorteController implements Initializable {
         mostrarFila(lblValesTitulo, lblVales, r.vales);
         lblSubtotal.setText(moneda(r.subtotal));
         lblIva.setText(moneda(r.iva));
+        // Desglose por tasa solo cuando el periodo mezcla tasas (básicos al 0 % con artículos al 16 %)
+        boolean mixto = CalculoIva.esMixto(r.porTasaIva);
+        lblIvaPorTasaTitulo.setVisible(mixto); lblIvaPorTasaTitulo.setManaged(mixto);
+        lblIvaPorTasa.setVisible(mixto);       lblIvaPorTasa.setManaged(mixto);
+        lblIvaPorTasa.setText(mixto ? textoIvaPorTasa(r.porTasaIva) : "");
         lblCanceladas.setText(r.numCanceladas + " (" + moneda(r.totalCanceladas) + ")");
 
         lblVentasTotalesTitulo.setText("Ventas " + que);
@@ -637,6 +645,21 @@ public class CorteController implements Initializable {
             Ventanas.alerta(Alert.AlertType.WARNING, "Monto inválido", mensajeError);
             return null;
         }
+    }
+
+    /** "Gravado 16 %: $100.00 (IVA $16.00) · Tasa 0 %: $84.00 · Exento: $20.00" */
+    static String textoIvaPorTasa(java.util.List<CalculoIva.Grupo> grupos) {
+        java.util.List<String> partes = new java.util.ArrayList<>();
+        for (CalculoIva.Grupo g : grupos) {
+            if (g.gravado()) {
+                partes.add("Gravado " + g.tasaIva().porcentaje() + " %: " + Moneda.formato(g.base()) + " (IVA " + Moneda.formato(g.iva()) + ")");
+            } else if (g.exento()) {
+                partes.add("Exento: " + Moneda.formato(g.base()));
+            } else {
+                partes.add("Tasa 0 %: " + Moneda.formato(g.base()));
+            }
+        }
+        return String.join("  ·  ", partes);
     }
 
     private static void mostrarFila(Label titulo, Label valor, double monto) {

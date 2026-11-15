@@ -116,6 +116,20 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)")
     List<Object[]> resumenActivasConCorte(LocalDateTime inicio, LocalDateTime fin, LocalDateTime corte);
 
+    /**
+     * [tasa, exento, base, iva] por tasa de IVA de los renglones de ventas ACTIVAS del rango.
+     * Los renglones anteriores al IVA por producto (tasa e IVA en null) entran con la tasa de su
+     * venta y su IVA se desglosa aquí mismo (importe − importe / (1 + tasa)).
+     */
+    @Query("SELECT COALESCE(d.tasaIva, v.tasaIva, 0.16), COALESCE(d.ivaExento, false), " +
+           "SUM(d.precioVenta * d.cantidad - d.descuento), " +
+           "SUM(COALESCE(d.iva, (d.precioVenta * d.cantidad - d.descuento) " +
+           "    - (d.precioVenta * d.cantidad - d.descuento) / (1 + COALESCE(d.tasaIva, v.tasaIva, 0.16)))) " +
+           "FROM DetalleVenta d JOIN d.venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA +
+           " GROUP BY COALESCE(d.tasaIva, v.tasaIva, 0.16), COALESCE(d.ivaExento, false)")
+    List<Object[]> ivaPorTasa(LocalDateTime inicio, LocalDateTime fin, Integer caja);
+
     /** [n, total] de las ventas CANCELADAS del rango (una sola fila) */
     @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND v.cancelada = true" + FILTRO_CAJA)
