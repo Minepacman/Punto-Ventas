@@ -243,6 +243,11 @@ public class TicketService {
         d.agregar(dosColumnas("VENTAS (" + r.numVentas + ")", Moneda.formato(r.ventasTotales), cols),
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
         d.linea(dosColumnas("Canceladas (" + r.numCanceladas + ")", Moneda.formato(r.totalCanceladas), cols));
+        if (r.numDevoluciones > 0) {
+            d.linea(dosColumnas("Devoluciones (" + r.numDevoluciones + ")", "-" + Moneda.formato(r.totalDevoluciones), cols));
+            d.agregar(dosColumnas("VENTAS NETAS", Moneda.formato(r.getVentasNetas()), cols),
+                    DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
+        }
         if (r.gananciaVisible) {
             d.linea(dosColumnas("Ganancia", Moneda.formato(r.ganancia), cols));
             // Productos comunes (Ctrl+P, fuera del catálogo): su costo no es real sino una estimación
@@ -315,6 +320,43 @@ public class TicketService {
         d.vacia();
         d.centrada("_".repeat(Math.min(cols - 4, 28)));
         d.centrada(m.esEntrada() ? "Recibió" : "Entregó / Recibió");
+        return d;
+    }
+
+    /**
+     * Comprobante de una devolución de artículos: qué regresó el cliente, cuánto se le reembolsó
+     * (con el IVA incluido) y cómo; con firma de quien recibe el dinero.
+     */
+    public DocumentoImpresion documentoDevolucion(me.eliassanchezfernandez.puntodeventa.model.Devolucion dev, Configuracion c) {
+        int cols = columnas(c.getTicketAnchoMm());
+        String raya = "-".repeat(cols);
+        DocumentoImpresion d = new DocumentoImpresion();
+        d.titulo(c.getNombreTienda());
+        if (c.getTicketRfc() != null) d.centrada("RFC: " + c.getTicketRfc());
+        d.agregar("COMPROBANTE DE DEVOLUCION", DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.linea(raya);
+        d.linea(dosColumnas("Folio: " + dev.getFolio(), dev.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        d.linea("Venta: " + (dev.getVentaFolio() != null ? dev.getVentaFolio() : "#" + dev.getVentaId()));
+        if (multiCaja()) d.linea(IdentidadCaja.etiqueta(dev.getCaja()));
+        d.linea("Cajero: " + (dev.getCajeroNombre() != null ? dev.getCajeroNombre() : "—"));
+        if (dev.getAutorizadoPor() != null) d.linea("Autorizó: " + dev.getAutorizadoPor());
+        d.linea(raya);
+        for (me.eliassanchezfernandez.puntodeventa.model.DevolucionDetalle r : dev.getDetalles()) {
+            d.linea(dosColumnas(cantidad(r.getCantidad()) + " " + r.getDescripcion(), Moneda.formato(r.getImporte()), cols));
+            if (!r.isRegresaAInventario() && r.getProductoId() != null) d.linea("  (no regresa a inventario)");
+        }
+        d.linea(raya);
+        if (dev.getIvaOCero() > 0.004) d.linea(dosColumnas("IVA incluido", Moneda.formato(dev.getIvaOCero()), cols));
+        d.agregar(dosColumnas("REEMBOLSO", Moneda.formato(dev.getTotal()) + " " + c.getMonedaCodigo(), cols),
+                DocumentoImpresion.Alineacion.IZQUIERDA, true, true);
+        d.linea(dosColumnas("Forma", dev.getFormaReembolso().getEtiqueta(), cols));
+        d.linea(raya);
+        d.linea("Motivo:");
+        ajustar(dev.getMotivo(), cols).forEach(d::linea);
+        d.vacia();
+        d.vacia();
+        d.centrada("_".repeat(Math.min(cols - 4, 28)));
+        d.centrada("Recibió el cliente");
         return d;
     }
 

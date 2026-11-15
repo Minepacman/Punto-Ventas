@@ -94,6 +94,8 @@ public class CorteController implements Initializable {
     @FXML private Label lblGastos;
     @FXML private Label lblDevolucionesTitulo;
     @FXML private Label lblDevoluciones;
+    @FXML private Label lblDevArticulosTitulo;
+    @FXML private Label lblDevArticulos;
     @FXML private Label lblOtrasSalidasTitulo;
     @FXML private Label lblOtrasSalidas;
     @FXML private Label lblNetoMovimientos;
@@ -600,10 +602,17 @@ public class CorteController implements Initializable {
         lblIvaPorTasa.setVisible(mixto);       lblIvaPorTasa.setManaged(mixto);
         lblIvaPorTasa.setText(mixto ? textoIvaPorTasa(r.porTasaIva) : "");
         lblCanceladas.setText(r.numCanceladas + " (" + moneda(r.totalCanceladas) + ")");
+        boolean hayDevoluciones = r.numDevoluciones > 0;
+        lblDevArticulosTitulo.setVisible(hayDevoluciones); lblDevArticulosTitulo.setManaged(hayDevoluciones);
+        lblDevArticulos.setVisible(hayDevoluciones);       lblDevArticulos.setManaged(hayDevoluciones);
+        lblDevArticulos.setText(r.numDevoluciones + " (−" + moneda(r.totalDevoluciones) + ")");
 
         lblVentasTotalesTitulo.setText("Ventas " + que);
         lblGananciaTitulo.setText("Ganancia " + que);
-        lblVentasTotales.setText(moneda(r.ventasTotales) + "  (" + r.numVentas + " ventas)");
+        lblVentasTotales.setText(r.numDevoluciones > 0
+                ? moneda(r.getVentasNetas()) + " netas  (" + r.numVentas + " ventas por " + moneda(r.ventasTotales)
+                  + "; devoluciones −" + moneda(r.totalDevoluciones) + ")"
+                : moneda(r.ventasTotales) + "  (" + r.numVentas + " ventas)");
         lblGanancia.setText(r.gananciaVisible ? moneda(r.ganancia) : "—");
         // Productos comunes (Ctrl+P, fuera del catálogo): su costo no es real sino una estimación del 20 %
         boolean hayComunes = r.gananciaVisible && r.productosComunes > 0.004;

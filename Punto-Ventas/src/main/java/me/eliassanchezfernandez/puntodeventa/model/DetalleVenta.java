@@ -111,6 +111,30 @@ public class DetalleVenta {
     @Column(name = "iva")
     private Double iva;
 
+    // ── Devoluciones parciales (DevolucionService) ───────────────────────
+    // Se suman con un UPDATE condicionado (nunca más que lo vendido, aunque devuelvan dos cajas a la vez).
+
+    /** Cantidad ya devuelta por el cliente; null = nada */
+    @Column(name = "cantidad_devuelta")
+    private Double cantidadDevuelta;
+
+    /** Importe ya reembolsado de este renglón (con IVA); null = nada */
+    @Column(name = "importe_devuelto")
+    private Double importeDevuelto;
+
+    public double getCantidadDevueltaOCero() {
+        return cantidadDevuelta != null ? cantidadDevuelta : 0.0;
+    }
+
+    public double getImporteDevueltoOCero() {
+        return importeDevuelto != null ? importeDevuelto : 0.0;
+    }
+
+    /** Lo que aún se puede devolver (a milésimas, granel) */
+    public double getCantidadPorDevolver() {
+        return Math.max(0, Math.round((cantidad - getCantidadDevueltaOCero()) * 1000.0) / 1000.0);
+    }
+
     public boolean isIvaExento() {
         return Boolean.TRUE.equals(ivaExento);
     }

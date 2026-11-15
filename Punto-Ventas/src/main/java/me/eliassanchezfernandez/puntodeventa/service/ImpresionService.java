@@ -60,6 +60,7 @@ public class ImpresionService {
     @Autowired private VentaService ventaService;
     @Autowired private CajaService cajaService;
     @Autowired private MovimientoCajaService movimientoCajaService;
+    @Autowired private DevolucionService devolucionService;
     @Autowired private OrdenCompraService ordenCompraService;
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
@@ -299,6 +300,13 @@ public class ImpresionService {
         me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja m = movimientoCajaService.obtener(movimientoId);
         DocumentoImpresion doc = ticketService.documentoMovimientoCaja(m, configuracionService.obtener());
         return imprimirDocumentoAsync(doc, "EFECTIVO_COMPROBANTE_IMPRESO", "Movimiento #" + movimientoId);
+    }
+
+    /** Comprobante de una devolución de artículos (VER_HISTORIAL o DEVOLVER_VENTAS; auditado) */
+    public CompletableFuture<Resultado> imprimirDevolucionAsync(Long devolucionId) {
+        me.eliassanchezfernandez.puntodeventa.model.Devolucion dev = devolucionService.obtener(devolucionId);
+        DocumentoImpresion doc = ticketService.documentoDevolucion(dev, configuracionService.obtener());
+        return imprimirDocumentoAsync(doc, "DEVOLUCION_COMPROBANTE_IMPRESO", "Devolución " + dev.getFolio());
     }
 
     // ── Documentos sueltos (orden de compra, prueba) ─────────────────────

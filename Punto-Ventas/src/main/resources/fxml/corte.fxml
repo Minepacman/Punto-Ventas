@@ -115,6 +115,11 @@
                                wrapText="true" visible="false" managed="false"/>
                         <Label text="Ventas canceladas:"  GridPane.rowIndex="7" GridPane.columnIndex="0"/>
                         <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="7" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <!-- Devoluciones parciales de artículos (DevolucionService): restan en las ventas netas -->
+                        <Label fx:id="lblDevArticulosTitulo" text="Devoluciones de artículos:" GridPane.rowIndex="8" GridPane.columnIndex="0"
+                               visible="false" managed="false"/>
+                        <Label fx:id="lblDevArticulos"    text="" GridPane.rowIndex="8" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
                     </GridPane>
                 </VBox>
 

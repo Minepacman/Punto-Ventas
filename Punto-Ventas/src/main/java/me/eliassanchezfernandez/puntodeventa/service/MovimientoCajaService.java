@@ -86,6 +86,16 @@ public class MovimientoCajaService {
         return guardar(new Solicitud(tipo, categoria, monto, concepto, null, null, null), null, "Al abrir el cajón: ");
     }
 
+    /**
+     * Reembolso en efectivo de una devolución de artículos: salida de caja «Devolución al cliente»
+     * ligada a la venta. No exige MOVIMIENTOS_CAJA: {@link DevolucionService} ya verificó
+     * DEVOLVER_VENTAS (o la autorización, que queda anotada aquí) dentro de la misma transacción.
+     */
+    @Transactional
+    MovimientoCaja registrarReembolsoDeDevolucion(Long ventaId, double monto, String concepto, Autorizacion aut) {
+        return guardar(Solicitud.devolucion(ventaId, monto, concepto), aut, null);
+    }
+
     /** Valida y guarda; {@code prefijoConcepto} (opcional) antecede al concepto final */
     private MovimientoCaja guardar(Solicitud s, Autorizacion aut, String prefijoConcepto) {
         Cajero quien = sesionService.requerirSesion();
