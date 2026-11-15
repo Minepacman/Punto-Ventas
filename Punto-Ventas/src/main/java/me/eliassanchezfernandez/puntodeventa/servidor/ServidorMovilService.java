@@ -4,6 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsParameters;
+import com.sun.net.httpserver.HttpsServer;
+import me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush;
+import me.eliassanchezfernandez.puntodeventa.service.NotificacionesPushService;
 import jakarta.annotation.PreDestroy;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
@@ -103,8 +108,25 @@ import java.util.function.Supplier;
  *   GET  /api/tutorial                                (cualquier usuario) -> {visto}: recorrido móvil ya visto por ESTE usuario
  *   POST /api/tutorial/visto {visto: true|false}       (cualquier usuario) -> lo marca/reinicia (columna cajeros.tutorial_movil_visto)
  *
- * Archivos estáticos (lista cerrada, sin acceso al disco): /favicon.ico, /icono-32.png, /icono-256.png
- * (icono oficial de resources/icono) y /manifest.webmanifest (generado) para "Agregar a pantalla de inicio".
+ *   Notificaciones (Web Push; la página solo las ofrece abierta por HTTPS):
+ *   GET  /api/push/clave                              (cualquier usuario) -> {clave}: clave pública VAPID de esta instalación
+ *   POST /api/push/suscribir {endpoint, keys:{p256dh, auth}}  -> guarda la suscripción de ESTE teléfono para el usuario
+ *   POST /api/push/desuscribir {endpoint}             -> la quita (idempotente)
+ *   POST /api/push/estado {endpoint}                  -> preferencias de la suscripción, 404 si no existe
+ *   POST /api/push/preferencias {endpoint, activa, proveedores, stock, horaPico, silencioDesde, silencioHasta}
+ *   POST /api/push/prueba {endpoint}                  -> manda una notificación de prueba ahora
+ *
+ * HTTPS: junto al servidor HTTP se abre otro en el puerto HTTP + 1 (o el fijado en Opciones avanzadas)
+ * con un certificado firmado por la CA LOCAL de esta instalación (CertificadosLocales). Mismos
+ * manejadores. Los teléfonos instalan la CA UNA vez desde la página pública /certificado (HTTP):
+ *   GET /certificado                      -> guía con detección de Android / iPhone y la huella de la CA
+ *   GET /certificado/caja-libre.crt       -> DER (application/x-x509-ca-cert), para Android
+ *   GET /certificado/caja-libre.mobileconfig -> perfil de Apple sin firmar, para iPhone/iPad
+ * Sin HSTS (red local; el HTTP sigue funcionando sin notificaciones).
+ *
+ * Archivos estáticos (lista cerrada, sin acceso al disco): /favicon.ico, /icono-32.png, /icono-192.png, /icono-256.png,
+ * /icono-512.png (icono oficial de resources/icono; 192 y 512 se escalan en memoria), /manifest.webmanifest (generado)
+ * para "Agregar a pantalla de inicio" y /sw.js (service worker: solo se registra desde HTTPS).
  *
  * Cada endpoint de datos valida el token, relee al usuario de la BD y ejecuta el
  * servicio dentro de SesionService.ejecutarComo(usuarioMovil, ip, ...): los
@@ -151,7 +173,7 @@ public class ServidorMovilService {
     private static String csp(String hashScript) {
         return "default-src 'none'; script-src " + (hashScript == null ? "'none'" : "'" + hashScript + "'")
                 + "; style-src 'unsafe-inline'; "
-                + "img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; "
+                + "img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
                 + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
     }
 
@@ -168,6 +190,14 @@ public class ServidorMovilService {
     @Autowired private AnunciadorMdns       anunciador;
     @Autowired private TutorialesService    tutorialesService;
     @Autowired private AvisosService        avisosService;
+    @Autowired private CertificadosLocales  certificados;
+    @Autowired private NotificacionesPushService pushService;
+
+    /** Altas de suscripción push por IP (una por teléfono; el límite frena a quien quiera llenar la tabla) */
+    static final int MAX_SUSCRIPCIONES_POR_IP = 20;
+    static final Duration VENTANA_SUSCRIPCIONES = Duration.ofMinutes(10);
+    /** Puertos HTTPS que se prueban después del preferido (HTTP + 1): hasta +10 */
+    static final int INTENTOS_PUERTO_HTTPS = 10;
 
     /** Puertos de respaldo (después del preferido) cuando el elegido está ocupado; 0 = lo asigna el sistema */
     static final List<Integer> PUERTOS_RESPALDO = candidatosRespaldo();
@@ -201,9 +231,13 @@ public class ServidorMovilService {
         return j;
     }
     private volatile HttpServer servidor;
+    private volatile HttpsServer servidorHttps;
     private volatile ExecutorService hilos;
     private volatile LimitadorIntentos limitador;
     private volatile LimitadorIntentos limitadorUsuarios;
+    private volatile LimitadorIntentos limitadorSuscripciones;
+    /** Pruebas: puerto HTTPS a usar (0 = libre; null = según configuración) */
+    volatile Integer puertoHttpsForzado;
     private volatile Pagina paginaCache;
     private volatile String nombreEquipo;
 
@@ -294,6 +328,7 @@ public class ServidorMovilService {
         ExecutorService pool = crearPool();
         limitador = new LimitadorIntentos(reloj, MAX_FALLOS_POR_IP, VENTANA_FALLOS);
         limitadorUsuarios = new LimitadorIntentos(reloj, MAX_FALLOS_POR_USUARIO, VENTANA_FALLOS_USUARIO);
+        limitadorSuscripciones = new LimitadorIntentos(reloj, MAX_SUSCRIPCIONES_POR_IP, VENTANA_SUSCRIPCIONES);
         nuevo.createContext("/", this::atender);
         nuevo.setExecutor(pool);
         nuevo.start();
@@ -301,6 +336,131 @@ public class ServidorMovilService {
         hilos = pool;
         System.out.println("📱 Acceso móvil activo en el puerto " + nuevo.getAddress().getPort());
         aplicarNombreLocal();
+        iniciarHttps();
+    }
+
+    // ── HTTPS (certificado de la CA local) ────────────────────────────────
+
+    /**
+     * Abre el servidor HTTPS con el certificado de la CA local. Nunca tumba el HTTP: si falla
+     * (puerto ocupado, sin red) queda apagado y la página sigue funcionando sin notificaciones.
+     */
+    synchronized void iniciarHttps() {
+        if (servidor == null || servidorHttps != null) return;
+        try {
+            CertificadosLocales.Servidor cert = certificados.servidor(nombresDnsCertificado(), ipsCertificado());
+            javax.net.ssl.SSLContext tls = CertificadosLocales.contextoTls(cert);
+            for (int puerto : candidatosHttps()) {
+                try {
+                    HttpsServer h = HttpsServer.create(new InetSocketAddress(puerto), 0);
+                    h.setHttpsConfigurator(new HttpsConfigurator(tls) {
+                        @Override public void configure(HttpsParameters p) {
+                            javax.net.ssl.SSLParameters sp = getSSLContext().getDefaultSSLParameters();
+                            sp.setProtocols(new String[] { "TLSv1.3", "TLSv1.2" });
+                            p.setSSLParameters(sp);
+                        }
+                    });
+                    h.createContext("/", this::atender);
+                    h.setExecutor(hilos);
+                    h.start();
+                    servidorHttps = h;
+                    System.out.println("🔒 Acceso móvil seguro (HTTPS) en el puerto " + h.getAddress().getPort());
+                    return;
+                } catch (IOException ocupado) {
+                    // siguiente candidato
+                }
+            }
+            System.err.println("⚠ No se encontró un puerto libre para el acceso móvil seguro (HTTPS): sin notificaciones.");
+        } catch (RuntimeException e) {
+            System.err.println("⚠ Acceso móvil seguro (HTTPS) no disponible: " + e.getMessage());
+        }
+    }
+
+    private synchronized void detenerHttps() {
+        HttpsServer h = servidorHttps;
+        if (h == null) return;
+        servidorHttps = null;
+        h.stop(0);
+    }
+
+    /** Puertos HTTPS a probar: el fijado por el administrador, o el HTTP + 1 y los siguientes */
+    private List<Integer> candidatosHttps() {
+        List<Integer> l = new ArrayList<>();
+        if (puertoHttpsForzado != null) { l.add(puertoHttpsForzado); return l; }
+        Integer fijo = null;
+        try {
+            fijo = configuracionService.obtener().getMovilPuertoHttps();
+        } catch (RuntimeException ignorada) { /* sin configuración: automático */ }
+        if (fijo != null) { l.add(fijo); return l; }
+        int base = getPuerto();
+        for (int i = 1; i <= INTENTOS_PUERTO_HTTPS; i++) if (base + i <= 65535) l.add(base + i);
+        return l;
+    }
+
+    /** Nombres que debe cubrir el certificado: localhost, el equipo y el nombre .local configurado */
+    List<String> nombresDnsCertificado() {
+        List<String> r = new ArrayList<>();
+        r.add("localhost");
+        String equipo = nombreDeEquipo();
+        if (!equipo.isEmpty() && equipo.matches("[a-z0-9.-]+")) {
+            r.add(equipo);
+            if (!equipo.endsWith(".local")) r.add(equipo + ".local");
+        }
+        String local = nombreLocal;
+        if (local != null) r.add(local + ".local");
+        return r;
+    }
+
+    List<String> ipsCertificado() {
+        List<String> r = new ArrayList<>();
+        r.add("127.0.0.1");
+        for (Inet4Address a : ipsLan()) r.add(a.getHostAddress());
+        return r;
+    }
+
+    /**
+     * Si cambiaron las direcciones o el certificado está por vencer, lo vuelve a emitir (misma CA)
+     * y reabre el HTTPS. Cada 10 minutos y al cambiar el nombre local; también sirve tras
+     * "Regenerar certificado".
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 600_000, initialDelay = 300_000)
+    public synchronized void revisarCertificado() {
+        if (servidor == null) return;
+        if (servidorHttps != null && certificados.servidorVigentePara(nombresDnsCertificado(), ipsCertificado())) return;
+        detenerHttps();
+        iniciarHttps();
+    }
+
+    /** Reabre el HTTPS (puerto o certificado cambiados) */
+    public synchronized void reiniciarHttps() {
+        detenerHttps();
+        iniciarHttps();
+    }
+
+    public boolean httpsActivo() {
+        return servidorHttps != null;
+    }
+
+    /** Puerto HTTPS en uso (0 si no está abierto) */
+    public int getPuertoHttps() {
+        HttpsServer h = servidorHttps;
+        return h == null ? 0 : h.getAddress().getPort();
+    }
+
+    /** Direcciones seguras para abrir desde el teléfono (vacío si el HTTPS no está abierto) */
+    public List<String> urlsHttps() {
+        List<String> urls = new ArrayList<>();
+        int p = getPuertoHttps();
+        if (p == 0) return urls;
+        for (Inet4Address a : ipsLan()) urls.add("https://" + a.getHostAddress() + ":" + p + "/");
+        return urls;
+    }
+
+    /** Página pública con la guía para instalar el certificado, en cada dirección HTTP */
+    public List<String> urlsCertificado(int puertoHttp) {
+        List<String> urls = new ArrayList<>();
+        for (Inet4Address a : ipsLan()) urls.add("http://" + a.getHostAddress() + ":" + puertoHttp + "/certificado");
+        return urls;
     }
 
     /** 2–4 hilos y cola de 32: con la cola llena se rechaza (el servidor cierra la conexión) en vez de crecer sin límite */
@@ -319,6 +479,7 @@ public class ServidorMovilService {
         if (s == null) return;
         servidor = null;
         anunciador.detener();
+        detenerHttps();
         s.stop(0);
         if (hilos != null) hilos.shutdownNow();
         hilos = null;
@@ -377,6 +538,7 @@ public class ServidorMovilService {
                 return;
             }
             anunciador.iniciar(nombreLocal, getPuerto(), new ArrayList<>(ipsLan()));
+            if (servidorHttps != null && !certificados.servidorVigentePara(nombresDnsCertificado(), ipsCertificado())) reiniciarHttps();
         } catch (RuntimeException e) {
             System.err.println("⚠ Nombre local no disponible: " + e.getMessage());
         }
@@ -462,7 +624,16 @@ public class ServidorMovilService {
                 case "/api/avisos"          -> { exigir(metodo, "GET");  avisos(ex); }
                 case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
                 case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
-                case "/favicon.ico", "/icono-32.png", "/icono-256.png", "/manifest.webmanifest" -> estatico(ex, metodo, ruta);
+                case "/api/push/clave"      -> { exigir(metodo, "GET");  pushClave(ex); }
+                case "/api/push/suscribir"  -> { exigir(metodo, "POST"); pushSuscribir(ex); }
+                case "/api/push/desuscribir" -> { exigir(metodo, "POST"); pushDesuscribir(ex); }
+                case "/api/push/estado"     -> { exigir(metodo, "POST"); pushEstado(ex); }
+                case "/api/push/preferencias" -> { exigir(metodo, "POST"); pushPreferencias(ex); }
+                case "/api/push/prueba"     -> { exigir(metodo, "POST"); pushPrueba(ex); }
+                case "/certificado"         -> paginaCertificado(ex, metodo);
+                case "/certificado/caja-libre.crt", "/certificado/caja-libre.mobileconfig" -> descargaCertificado(ex, metodo, ruta);
+                case "/favicon.ico", "/icono-32.png", "/icono-192.png", "/icono-256.png", "/icono-512.png", "/manifest.webmanifest", "/sw.js"
+                        -> estatico(ex, metodo, ruta);
                 default -> error(ex, 404, "NO_ENCONTRADO", "No encontrado.");
             }
         } catch (MetodoNoPermitido e) {
@@ -573,7 +744,10 @@ public class ServidorMovilService {
     private static final Map<String, String> RECURSOS_ESTATICOS = Map.of(
             "/favicon.ico",   "/icono/icono-32.png",      // PNG servido como favicon: todos los navegadores lo aceptan
             "/icono-32.png",  "/icono/icono-32.png",
-            "/icono-256.png", "/icono/icono-256.png");
+            "/icono-256.png", "/icono/icono-256.png",
+            "/icono-192.png", "/icono/icono-256.png",     // Chrome exige 192 y 512 para instalar la app: se escalan del de 256
+            "/icono-512.png", "/icono/icono-256.png",
+            "/sw.js",         "/movil/sw.js");
 
     /** Color de marca del icono oficial (packaging/icono/GeneradorIcono.MARINO_ARRIBA) */
     static final String COLOR_TEMA = "#2A4566";
@@ -593,12 +767,33 @@ public class ServidorMovilService {
                 if (in == null) return null;
                 cuerpo = in.readAllBytes();
             }
-            tipo = "image/png";
+            if ("/sw.js".equals(ruta)) {
+                tipo = "text/javascript; charset=utf-8";
+            } else {
+                tipo = "image/png";
+                if ("/icono-192.png".equals(ruta)) cuerpo = escalarPng(cuerpo, 192);
+                if ("/icono-512.png".equals(ruta)) cuerpo = escalarPng(cuerpo, 512);
+            }
         }
         String etag = "\"" + Base64.getUrlEncoder().withoutPadding().encodeToString(sha256(cuerpo)).substring(0, 22) + "\"";
         e = new Estatico(cuerpo, tipo, etag);
         estaticosCache.put(ruta, e);
         return e;
+    }
+
+    /** PNG cuadrado reescalado (bicúbico) para los tamaños que exige el manifiesto */
+    static byte[] escalarPng(byte[] png, int tamano) throws IOException {
+        java.awt.image.BufferedImage origen = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png));
+        if (origen == null) return png;
+        java.awt.image.BufferedImage destino = new java.awt.image.BufferedImage(tamano, tamano, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = destino.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+        g.drawImage(origen, 0, 0, tamano, tamano, null);
+        g.dispose();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(destino, "png", out);
+        return out.toByteArray();
     }
 
     /** Manifiesto mínimo para "Agregar a pantalla de inicio" (nombre, icono y color de la app) */
@@ -615,7 +810,7 @@ public class ServidorMovilService {
         m.put("background_color", COLOR_TEMA);
         m.put("theme_color", COLOR_TEMA);
         List<Map<String, Object>> iconos = new ArrayList<>();
-        for (int t : new int[] { 32, 256 }) {
+        for (int t : new int[] { 32, 192, 256, 512 }) {
             Map<String, Object> i = new LinkedHashMap<>();
             i.put("src", "/icono-" + t + ".png");
             i.put("sizes", t + "x" + t);
@@ -634,8 +829,10 @@ public class ServidorMovilService {
         var h = ex.getResponseHeaders();
         h.set("Content-Type", e.tipo());
         cabecerasComunes(ex);
-        // Públicos y casi inmutables: el teléfono los guarda un día y después revalida por ETag
-        h.set("Cache-Control", "public, max-age=86400");
+        // Públicos y casi inmutables: el teléfono los guarda un día y después revalida por ETag.
+        // El service worker siempre se revalida (el navegador busca versiones nuevas por su cuenta).
+        h.set("Cache-Control", "/sw.js".equals(ruta) ? "no-cache" : "public, max-age=86400");
+        if ("/sw.js".equals(ruta)) h.set("Content-Security-Policy", "default-src 'none'; img-src 'self'");
         h.set("ETag", e.etag());
         String inm = ex.getRequestHeaders().getFirst("If-None-Match");
         if (inm != null && inm.contains(e.etag())) {
@@ -832,7 +1029,21 @@ public class ServidorMovilService {
         r.put("expira", v.sesion().getExpira() == null ? null
                 : v.sesion().getExpira().toInstant(ZoneOffset.UTC).toEpochMilli());
         r.put("ahora", reloj.millis());
+        Map<String, Object> seguro = new LinkedHashMap<>();   // para que la página ofrezca "Abre la página segura"
+        seguro.put("activo", httpsActivo());
+        seguro.put("puerto", getPuertoHttps());
+        seguro.put("puertoHttp", getPuerto());
+        seguro.put("huella", huellaCortaSegura());
+        r.put("https", seguro);
         return r;
+    }
+
+    private String huellaCortaSegura() {
+        try {
+            return certificados.huellaCorta();
+        } catch (RuntimeException e) {
+            return "";
+        }
     }
 
     // ── Datos reales (estadísticas, ventas, inventario) ───────────────────
@@ -1330,6 +1541,230 @@ public class ServidorMovilService {
         }
         r.put("avisos", lista);
         return r;
+    }
+
+    // ── Notificaciones push (suscripciones de este teléfono) ───────────────
+
+    private void pushClave(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("clave", pushService.clavePublica());
+            r.put("seguro", ex instanceof com.sun.net.httpserver.HttpsExchange);
+            return r;
+        });
+    }
+
+    /** Lo que la página necesita saber de la suscripción de este teléfono */
+    static Map<String, Object> mapaSuscripcion(SuscripcionPush s) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("activa", s.isActiva());
+        m.put("proveedores", s.isProveedores());
+        m.put("stock", s.isStock());
+        m.put("horaPico", s.isHoraPico());
+        m.put("silencioDesde", s.getSilencioDesde());
+        m.put("silencioHasta", s.getSilencioHasta());
+        m.put("creada", s.getCreada() == null ? null : s.getCreada().toInstant(ZoneOffset.UTC).toEpochMilli());
+        m.put("ultimoOk", s.getUltimoOk() == null ? null : s.getUltimoOk().toInstant(ZoneOffset.UTC).toEpochMilli());
+        m.put("ultimoError", s.getUltimoError() == null ? null : s.getUltimoError().toInstant(ZoneOffset.UTC).toEpochMilli());
+        m.put("errorDetalle", s.getErrorDetalle());
+        return m;
+    }
+
+    private static String endpointDe(Map<String, Object> cuerpo) {
+        String ep = texto(cuerpo.get("endpoint"), SuscripcionPush.MAX_ENDPOINT).trim();
+        if (ep.isEmpty()) throw new CuerpoInvalido(400, "Falta el endpoint de la suscripción.");
+        return ep;
+    }
+
+    private void pushSuscribir(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        String ip = ipDe(ex);
+        long espera = limitadorSuscripciones.segundosDeEspera(ip);
+        if (espera > 0) { demasiadosIntentos(ex, espera); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        String endpoint = endpointDe(cuerpo);
+        Object keys = cuerpo.get("keys");
+        if (!(keys instanceof Map<?, ?> k)) throw new CuerpoInvalido(400, "Faltan las claves de la suscripción.");
+        String p256dh = texto(k.get("p256dh"), 100), auth = texto(k.get("auth"), 30);
+        if (!ValidadorEndpointPush.permitido(endpoint)) {
+            limitadorSuscripciones.registrarFallo(ip);
+            throw new CuerpoInvalido(400, "El servicio de notificaciones de este navegador no está en la lista de servicios conocidos.");
+        }
+        limitadorSuscripciones.registrarFallo(ip);      // cada alta cuenta para el límite por IP
+        String ua = ex.getRequestHeaders().getFirst("User-Agent");
+        Long sesionId = v.get().sesion().getId();
+        protegido(ex, null, cajero -> {
+            SuscripcionPush s = pushService.suscribir(cajero, sesionId, endpoint, p256dh, auth, ua);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("suscripcion", mapaSuscripcion(s));
+            return r;
+        });
+    }
+
+    private void pushDesuscribir(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        String endpoint = endpointDe(leerJson(ex));
+        protegido(ex, null, cajero -> {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("existia", pushService.desuscribir(cajero, endpoint));
+            return r;
+        });
+    }
+
+    private void pushEstado(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        String endpoint = endpointDe(leerJson(ex));
+        Optional<SuscripcionPush> s = pushService.propia(v.get().cajero(), endpoint);
+        if (s.isEmpty()) { error(ex, 404, "SIN_SUSCRIPCION", "Este teléfono no tiene notificaciones activadas."); return; }
+        responder(ex, 200, mapaSuscripcion(s.get()));
+    }
+
+    private static boolean bandera(Map<String, Object> cuerpo, String campo, boolean porDefecto) {
+        Object o = cuerpo.get(campo);
+        if (o == null) return porDefecto;
+        if (!(o instanceof Boolean b)) throw new CuerpoInvalido(400, "El campo " + campo + " debe ser verdadero o falso.");
+        return b;
+    }
+
+    private static int hora(Map<String, Object> cuerpo, String campo, int porDefecto) {
+        Object o = cuerpo.get(campo);
+        if (o == null) return porDefecto;
+        if (!(o instanceof Number n) || n.doubleValue() != Math.rint(n.doubleValue()) || n.intValue() < 0 || n.intValue() > 23) {
+            throw new CuerpoInvalido(400, "El campo " + campo + " debe ser una hora de 0 a 23.");
+        }
+        return n.intValue();
+    }
+
+    private void pushPreferencias(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        String endpoint = endpointDe(cuerpo);
+        SuscripcionPush actual = pushService.propia(v.get().cajero(), endpoint).orElse(null);
+        if (actual == null) { error(ex, 404, "SIN_SUSCRIPCION", "Este teléfono no tiene notificaciones activadas."); return; }
+        boolean activa = bandera(cuerpo, "activa", actual.isActiva());
+        boolean proveedores = bandera(cuerpo, "proveedores", actual.isProveedores());
+        boolean stock = bandera(cuerpo, "stock", actual.isStock());
+        boolean horaPico = bandera(cuerpo, "horaPico", actual.isHoraPico());
+        int desde = hora(cuerpo, "silencioDesde", actual.getSilencioDesde());
+        int hasta = hora(cuerpo, "silencioHasta", actual.getSilencioHasta());
+        protegido(ex, null, cajero -> mapaSuscripcion(
+                pushService.preferencias(cajero, endpoint, activa, proveedores, stock, horaPico, desde, hasta)));
+    }
+
+    private void pushPrueba(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        String ip = ipDe(ex);
+        long espera = limitadorSuscripciones.segundosDeEspera(ip);
+        if (espera > 0) { demasiadosIntentos(ex, espera); return; }
+        limitadorSuscripciones.registrarFallo(ip);      // una prueba cuenta como un alta para el límite
+        String endpoint = endpointDe(leerJson(ex));
+        protegido(ex, null, cajero -> {
+            NotificacionesPushService.Envio e = pushService.enviarPrueba(cajero, endpoint);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", e.ok());
+            r.put("detalle", e.detalle());
+            return r;
+        });
+    }
+
+    // ── Certificado de la CA local (página pública de instalación) ─────────
+
+    private volatile Pagina plantillaCertificado;
+
+    /** Plantilla de /certificado con su CSP (hash del script); los datos se sustituyen por petición */
+    private Pagina plantillaCertificado() throws IOException {
+        Pagina p = plantillaCertificado;
+        if (p != null) return p;
+        byte[] cuerpo;
+        try (InputStream in = ServidorMovilService.class.getResourceAsStream("/movil/certificado.html")) {
+            if (in == null) return null;
+            cuerpo = in.readAllBytes();
+        }
+        String html = new String(cuerpo, StandardCharsets.UTF_8);
+        String hashScript = null;
+        int ini = html.indexOf("<script>");
+        int fin = html.lastIndexOf("</script>");
+        if (ini >= 0 && fin > ini) {
+            hashScript = "sha256-" + Base64.getEncoder().encodeToString(sha256(html.substring(ini + "<script>".length(), fin).getBytes(StandardCharsets.UTF_8)));
+        }
+        String csp = "default-src 'none'; script-src " + (hashScript == null ? "'none'" : "'" + hashScript + "'")
+                + "; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+        p = new Pagina(cuerpo, null, null, csp);
+        plantillaCertificado = p;
+        return p;
+    }
+
+    /** Host de la petición sin puerto (para armar la dirección https de ESTA misma computadora) */
+    private static String hostSinPuerto(HttpExchange ex) {
+        String h = ex.getRequestHeaders().getFirst("Host");
+        if (h == null) return "localhost";
+        h = h.trim();
+        if (h.startsWith("[")) { int fin = h.indexOf(']'); return fin > 0 ? h.substring(0, fin + 1) : h; }
+        int dos = h.lastIndexOf(':');
+        return dos > 0 ? h.substring(0, dos) : h;
+    }
+
+    private static String htmlSeguro(String s) {
+        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    /**
+     * Guía pública (sin sesión) para instalar la CA en el teléfono. Solo muestra lo que cualquiera
+     * de la red ya podría pedir: el certificado público, su huella y la dirección https. Nada del
+     * negocio salvo su nombre, nada de usuarios ni de la clave privada.
+     */
+    private void paginaCertificado(HttpExchange ex, String metodo) throws IOException {
+        if (!"GET".equals(metodo) && !"HEAD".equals(metodo)) throw new MetodoNoPermitido("GET, HEAD");
+        Pagina plantilla = plantillaCertificado();
+        if (plantilla == null) { error(ex, 500, "ERROR", "Falta la página del certificado."); return; }
+        String huella = certificados.huellaCa();
+        int puertoHttps = getPuertoHttps();
+        String host = hostSinPuerto(ex);
+        String urlHttps = puertoHttps == 0 ? "" : "https://" + host + ":" + puertoHttps + "/";
+        String html = new String(plantilla.normal(), StandardCharsets.UTF_8)
+                .replace("{{NEGOCIO}}", htmlSeguro(nombreNegocio()))
+                .replace("{{HUELLA_CORTA}}", CertificadosLocales.huellaCorta(huella))
+                .replace("{{HUELLA}}", CertificadosLocales.huellaConDosPuntos(huella))
+                .replace("{{URL_HTTPS}}", htmlSeguro(urlHttps))
+                .replace("{{HTTPS_ACTIVO}}", puertoHttps == 0 ? "no" : "si");
+        byte[] cuerpo = html.getBytes(StandardCharsets.UTF_8);
+        var h = ex.getResponseHeaders();
+        h.set("Content-Type", "text/html; charset=utf-8");
+        h.set("Content-Security-Policy", plantilla.csp());
+        cabecerasComunes(ex);
+        if ("HEAD".equals(metodo)) { ex.sendResponseHeaders(200, -1); return; }
+        ex.sendResponseHeaders(200, cuerpo.length);
+        ex.getResponseBody().write(cuerpo);
+    }
+
+    /** Descarga del certificado público de la CA: DER para Android, perfil .mobileconfig para iPhone */
+    private void descargaCertificado(HttpExchange ex, String metodo, String ruta) throws IOException {
+        if (!"GET".equals(metodo) && !"HEAD".equals(metodo)) throw new MetodoNoPermitido("GET, HEAD");
+        byte[] cuerpo;
+        String tipo, nombre;
+        if (ruta.endsWith(".mobileconfig")) {
+            cuerpo = certificados.mobileconfig(nombreNegocio()).getBytes(StandardCharsets.UTF_8);
+            tipo = "application/x-apple-aspen-config";
+            nombre = "caja-libre.mobileconfig";
+        } else {
+            cuerpo = certificados.caDer();
+            tipo = "application/x-x509-ca-cert";
+            nombre = "caja-libre.crt";
+        }
+        var h = ex.getResponseHeaders();
+        h.set("Content-Type", tipo);
+        h.set("Content-Disposition", "attachment; filename=\"" + nombre + "\"");
+        cabecerasComunes(ex);
+        if ("HEAD".equals(metodo)) { ex.sendResponseHeaders(200, -1); return; }
+        ex.sendResponseHeaders(200, cuerpo.length);
+        ex.getResponseBody().write(cuerpo);
     }
 
     // ── Utilidades HTTP ───────────────────────────────────────────────────

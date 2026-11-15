@@ -1294,6 +1294,17 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text;
 }
 
+/* Huella corta de la CA local del acceso móvil: se compara a ojo con la que muestra el teléfono */
+.huella-certificado {
+    -fx-font-family: "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-text;
+    -fx-background-color: -pos-surface-alt;
+    -fx-background-radius: 8;
+    -fx-padding: 8 14;
+}
+
 
 /* ======================================================================
    9. VENTAS (ticket + cobro)

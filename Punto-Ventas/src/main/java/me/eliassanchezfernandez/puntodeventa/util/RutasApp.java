@@ -199,6 +199,23 @@ public class RutasApp {
         return carpetaBase().resolve("datos");
     }
 
+    /** Carpeta propia para las claves privadas (opcional, p. ej. en pruebas); vacío = "claves-privadas" junto a la BD */
+    @Value("${app.claves-dir:}")
+    private String carpetaClavesConfigurada;
+
+    /**
+     * Carpeta "claves-privadas" junto a la BD: CA local y certificado del servidor HTTPS del acceso
+     * móvil y clave VAPID de las notificaciones. NO entra en los respaldos (copian solo datos.db) ni
+     * en el repositorio (.gitignore; el "claves/" de la raíz del repo es otra cosa: datos públicos
+     * firmados); se crea al usarla con permisos de solo el usuario (ver CertificadosLocales).
+     */
+    public Path carpetaClaves() {
+        if (carpetaClavesConfigurada != null && !carpetaClavesConfigurada.isBlank()) {
+            return Path.of(carpetaClavesConfigurada).toAbsolutePath();
+        }
+        return carpetaBase().resolve("claves-privadas");
+    }
+
     /** Carpeta donde cuelgan "datos" y "respaldos": la de datos.db, o la de la aplicación si no hay archivo */
     private Path carpetaBase() {
         if (esSqlite()) {

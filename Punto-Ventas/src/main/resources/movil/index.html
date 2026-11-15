@@ -25,6 +25,10 @@
     reales: el objeto `api` (sección 3) llama con fetch() a /api/* y el servidor
     vuelve a comprobar los permisos del usuario en cada petición. SOLO la lectura
     del ticket del proveedor (OCR) sigue siendo un DEMO (objeto `ocr`).
+  - NOTIFICACIONES (objeto `notificaciones`, sección 11c): Web Push con el service
+    worker /sw.js. Solo se ofrecen cuando la página se abrió por HTTPS (con el
+    certificado de la tienda instalado en el teléfono: guía en /certificado); por
+    HTTP la tarjeta de Ajustes explica cómo llegar ahí y todo lo demás funciona igual.
   - Seguridad: todo texto dinámico se inserta con textContent/createTextNode
     (función h()), nunca con innerHTML.
   ============================================================================
@@ -731,6 +735,14 @@ const api = {
   /** Avisos del día (campana): {hoy, total, avisos:[{id, tipo, tipoEtiqueta, prioridad, icono, titulo, detalle, accion}]}. El servidor los guarda 5 min. */
   avisos: () => peticion('GET', '/api/avisos'),
 
+  /* ---------- Notificaciones push (solo tienen sentido abierta la página por HTTPS) ---------- */
+  pushClave: () => peticion('GET', '/api/push/clave'),                                   // -> { clave } (VAPID pública, base64url)
+  pushSuscribir: datos => peticion('POST', '/api/push/suscribir', datos),              // {endpoint, keys:{p256dh, auth}} -> { ok, suscripcion }
+  pushDesuscribir: endpoint => peticion('POST', '/api/push/desuscribir', { endpoint }),
+  pushEstado: endpoint => peticion('POST', '/api/push/estado', { endpoint }),          // -> preferencias; 404 si el servidor no la conoce
+  pushPreferencias: datos => peticion('POST', '/api/push/preferencias', datos),        // {endpoint, activa, proveedores, stock, horaPico, silencioDesde, silencioHasta}
+  pushPrueba: endpoint => peticion('POST', '/api/push/prueba', { endpoint }),          // -> { ok, detalle }
+
   /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
   async ajustarStock({ id, tipo, cantidad, motivo, proveedor }) {
     const t = tipo === 'ENTRADA' ? 'entrada' : tipo === 'SALIDA' ? 'merma' : 'ajuste';
@@ -783,6 +795,25 @@ const ocr = {
 const raiz = document.getElementById('app');
 const E = { sesion: null, vista: 'estadisticas', desfase: 0, temporizador: null, periodo: 'dia' };
 
+/**
+ * "#/inventario?buscar=Coca" -> { id: 'inventario', opciones: { buscar: 'Coca' } }. Lo usan el arranque,
+ * el cambio de hash y las notificaciones (al tocarlas abren la sección del aviso). Solo se aceptan las
+ * opciones que entienden las vistas, recortadas.
+ */
+function rutaDeHash(hash) {
+  const h = String(hash || '').replace(/^[^#]*#\/?/, '');
+  const q = h.indexOf('?');
+  const id = (q < 0 ? h : h.slice(0, q)).slice(0, 30);
+  const opciones = {};
+  if (q >= 0) {
+    for (const [k, v] of new URLSearchParams(h.slice(q + 1))) {
+      if (k === 'proveedorId') { const n = Number(v); if (Number.isFinite(n) && n > 0) opciones.proveedorId = n; }
+      else if (k === 'filtro' || k === 'buscar') opciones[k] = String(v).slice(0, 60);
+    }
+  }
+  return { id, opciones };
+}
+
 function reciente(s) {   // guarda en el teléfono lo que dice el SERVIDOR
   E.sesion = s;
   E.desfase = (s.ahora || Date.now()) - Date.now();
@@ -796,6 +827,7 @@ function cerrarLocal(mensaje) {
   clearInterval(E.temporizador);
   E.tutorialComprobado = false;
   avisos.reiniciar();
+  notificaciones.reiniciar();
   document.querySelectorAll('.velo, .tuto-velo').forEach(v => v.remove());
   pantallaLogin(mensaje);
 }
@@ -929,17 +961,18 @@ function entrarAlSistema() {
     h('nav', { class: 'nav', 'aria-label': 'Secciones' }, contNav));
   const ok = permitidas();
   if (!ok.length) { cerrarLocal('Tu usuario no tiene secciones disponibles.'); return; }
-  const inicial = location.hash.replace('#/', '');
-  irA(ok.some(s => s.id === inicial) ? inicial : ok[0].id).then(tutorial.siEsLaPrimeraVez);
+  const inicial = rutaDeHash(location.hash);
+  irA(ok.some(s => s.id === inicial.id) ? inicial.id : ok[0].id, inicial.opciones).then(tutorial.siEsLaPrimeraVez);
   clearInterval(E.temporizador);
   E.temporizador = setInterval(vigilar, 60000);   // revalida cada minuto
   avisos.cargar();                                 // al entrar; después cada 10 min mientras la página esté visible
   avisos.programar();
+  notificaciones.sincronizar();                    // si este teléfono ya estaba suscrito, el servidor lo vuelve a saber
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && E.sesion) { vigilar(); avisos.cargarSiToca(); } });
 window.addEventListener('hashchange', () => {
-  const id = location.hash.replace('#/', '');
-  if (E.sesion && id !== E.vista && permitidas().some(s => s.id === id)) irA(id);
+  const r = rutaDeHash(location.hash);
+  if (E.sesion && permitidas().some(s => s.id === r.id) && (r.id !== E.vista || Object.keys(r.opciones).length)) irA(r.id, r.opciones);
 });
 
 async function vigilar() {
@@ -1529,6 +1562,7 @@ async function vistaConfig() {
     const q = hoja([h('h2', null, '¿Cerrar sesión?'), h('p', { class: 'sub' }, 'Tendrás que escribir tu usuario y contraseña para volver a entrar.'),
       h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => q.cerrar() }, 'Cancelar'),
         h('button', { class: 'btn btn-peligro', type: 'button', onclick: async () => {
+          await notificaciones.alCerrarSesion();   // este teléfono deja de recibir los avisos de este usuario
           try { await api.logout(); } catch (e) { /* aun sin red, se cierra aquí */ }
           q.cerrar(); cerrarLocal();
         } }, 'Cerrar sesión'))]);
@@ -1547,6 +1581,7 @@ async function vistaConfig() {
           if (v && !E.sesion.permanente && clave === null) throw new Error('cancelado');
           reciente(await api.recordar(v, clave)); pintarVence();
         }, 'Mantener la sesión siempre abierta'))),
+    notificaciones.tarjeta(),
     h('section', { class: 'tarjeta' },
       h('div', { class: 'seccion-t' }, 'Preferencias'),
       h('div', { class: 'fila-conf', style: 'display:grid' }, h('div', { class: 't' }, 'Tema'), segTema),
@@ -1561,15 +1596,15 @@ async function vistaConfig() {
     h('section', { class: 'tarjeta' },
       h('div', { class: 'seccion-t' }, 'Acerca de'),
       h('div', { style: 'display:flex;gap:.75rem;align-items:center' }, logoApp('cab-logo', 32),
-        h('p', { class: 'sub' }, 'Interfaz móvil de Caja Libre. Las ventas, el inventario, los proveedores y las estadísticas vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.'))),
+        h('p', { class: 'sub' }, 'Interfaz móvil de Caja Libre. Las ventas, el inventario, los proveedores, las estadísticas y las notificaciones vienen del programa de escritorio. Solo la lectura de tickets (cámara) es una demostración.'))),
     cerrar);
 }
 
 /* ============================================================================
    11b. AVISOS (la campana de la cabecera)
        - GET /api/avisos al entrar y cada 10 minutos mientras la página esté visible
-         (el servidor los calcula y guarda 5 min; no hay notificaciones push: sin
-         HTTPS no hay service worker ni Notifications API, así que ni se intenta).
+         (el servidor los calcula y guarda 5 min). Los mismos avisos llegan como
+         notificaciones del teléfono si se activan en Ajustes (objeto `notificaciones`).
        - Hoja agrupada por tipo (proveedores, se está acabando, hora pico); tocar un
          aviso lleva a su sección. Los descartados se recuerdan EN EL TELÉFONO por
          usuario y por día (almacen, con try/catch): mañana vuelven si siguen vigentes.
@@ -1695,6 +1730,11 @@ const avisos = {
           cuerpo.append(h('p', { class: 'nota' }, 'Calculado hace ' + Math.round(avisos.datos.antiguedadSegundos / 60) + ' min; se actualiza cada 10 minutos.'));
         }
       }
+      if (avisos.datos && !notificaciones.prefs && notificaciones.soportado() && permitidas().some(s => s.id === 'config')) {
+        cuerpo.append(h('button', { class: 'btn btn-suave', type: 'button', style: 'justify-self:start;min-height:44px',
+          onclick: () => { if (avisos.hojaAbierta) avisos.hojaAbierta.cerrar(); irA('config'); } },
+          icono('campana', { tamano: 18 }), 'Recibir estos avisos en el teléfono'));
+      }
       pie.append(
         h('button', { class: 'btn', type: 'button', onclick: () => avisos.hojaAbierta && avisos.hojaAbierta.cerrar() }, 'Cerrar'),
         pend.length
@@ -1708,6 +1748,261 @@ const avisos = {
     pintar();
   },
 };
+
+/* ============================================================================
+   11c. NOTIFICACIONES (Web Push)
+       - Requisitos que decide el navegador: página abierta por HTTPS (con el
+         certificado de la tienda instalado: guía en /certificado), service worker
+         /sw.js y permiso del usuario. En iPhone además la página debe estar en la
+         pantalla de inicio (iOS 16.4+).
+       - La suscripción (endpoint + claves) se manda al servidor con el token de la
+         sesión; el servidor la guarda para ESTE usuario y decide qué y cuándo manda.
+       - Las preferencias (tipos, horas de silencio) viven en el servidor, por teléfono.
+       - Al cerrar sesión se avisa al servidor para que deje de mandar a este teléfono;
+         la suscripción del navegador se conserva y se vuelve a ligar al entrar.
+   ============================================================================ */
+const notificaciones = {
+  registro: null, suscripcion: null, prefs: null,
+  SW: '/sw.js',
+
+  soportado: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+  esSeguro: () => location.protocol === 'https:',
+  esIos: () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1),
+  instalada: () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true,
+
+  reiniciar() { notificaciones.prefs = null; notificaciones.suscripcion = null; },
+
+  /** Registra el service worker (solo por HTTPS; en HTTP el navegador lo rechazaría) */
+  async registrar() {
+    if (!notificaciones.soportado() || !notificaciones.esSeguro()) return null;
+    if (notificaciones.registro) return notificaciones.registro;
+    try {
+      notificaciones.registro = await navigator.serviceWorker.register(notificaciones.SW, { scope: '/' });
+      return notificaciones.registro;
+    } catch (e) { return null; }
+  },
+
+  /** Suscripción que ya tiene este navegador (o null) */
+  async actual() {
+    const r = await notificaciones.registrar();
+    if (!r) return null;
+    try { notificaciones.suscripcion = await r.pushManager.getSubscription(); } catch (e) { notificaciones.suscripcion = null; }
+    return notificaciones.suscripcion;
+  },
+
+  /** En qué paso está este teléfono: 'no-soportado' | 'http' | 'instalar' | 'bloqueado' | 'permitir' | 'reactivar' | 'activo' */
+  async estado() {
+    if (!notificaciones.soportado()) return notificaciones.esSeguro() ? { paso: 'no-soportado' } : { paso: 'http' };
+    if (!notificaciones.esSeguro()) return { paso: 'http' };
+    if (notificaciones.esIos() && !notificaciones.instalada()) return { paso: 'instalar' };
+    if (Notification.permission === 'denied') return { paso: 'bloqueado' };
+    const s = await notificaciones.actual();
+    if (s) {
+      try { notificaciones.prefs = await api.pushEstado(s.endpoint); return { paso: 'activo', prefs: notificaciones.prefs }; }
+      catch (e) { if (e.estado === 404) return { paso: 'reactivar' }; throw e; }
+    }
+    return { paso: 'permitir' };
+  },
+
+  base64aBytes(b64) {
+    const normal = (b64 + '==='.slice((b64.length + 3) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(normal);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  },
+
+  /** Con un toque del usuario: pide permiso, se suscribe en el navegador y registra la suscripción en el servidor */
+  async activar() {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') return permiso;
+    const r = await notificaciones.registrar();
+    if (!r) throw new Error('No se pudo preparar el servicio de notificaciones en este navegador.');
+    const { clave } = await api.pushClave();
+    const opciones = { userVisibleOnly: true, applicationServerKey: notificaciones.base64aBytes(clave) };
+    let s = await r.pushManager.getSubscription();
+    if (!s) {
+      s = await r.pushManager.subscribe(opciones);
+    } else {
+      // Puede venir de otra clave del servidor (certificado o clave regenerados): se renueva
+      try { await api.pushEstado(s.endpoint); } catch (e) { if (e.estado === 404) { await s.unsubscribe(); s = await r.pushManager.subscribe(opciones); } }
+    }
+    const j = s.toJSON();
+    const d = await api.pushSuscribir({ endpoint: s.endpoint, keys: j.keys });
+    notificaciones.suscripcion = s;
+    notificaciones.prefs = d.suscripcion;
+    return 'granted';
+  },
+
+  /** Quita la suscripción en el servidor y en el navegador */
+  async desactivar() {
+    const s = await notificaciones.actual();
+    if (s) {
+      try { await api.pushDesuscribir(s.endpoint); } catch (e) { /* sin red: se quita igual en el teléfono */ }
+      try { await s.unsubscribe(); } catch (e) { /* ya no existía */ }
+    }
+    notificaciones.reiniciar();
+  },
+
+  /** Al entrar: si el navegador ya está suscrito y el servidor no lo sabe (otro usuario, restauración), lo registra de nuevo */
+  async sincronizar() {
+    try {
+      if (!notificaciones.esSeguro() || !notificaciones.soportado() || Notification.permission !== 'granted') return;
+      const s = await notificaciones.actual();
+      if (!s) return;
+      try { notificaciones.prefs = await api.pushEstado(s.endpoint); }
+      catch (e) {
+        if (e.estado !== 404) return;
+        const j = s.toJSON();
+        const d = await api.pushSuscribir({ endpoint: s.endpoint, keys: j.keys });
+        notificaciones.prefs = d.suscripcion;
+      }
+    } catch (e) { /* sin red o sin soporte: la tarjeta de Ajustes lo mostrará */ }
+  },
+
+  /** Al cerrar sesión: el servidor deja de mandar a este teléfono (la suscripción del navegador se conserva) */
+  async alCerrarSesion() {
+    try {
+      const s = notificaciones.suscripcion || await notificaciones.actual();
+      if (s) await api.pushDesuscribir(s.endpoint);
+    } catch (e) { /* sin red */ }
+    notificaciones.reiniciar();
+  },
+
+  /** Dirección segura de esta misma computadora, según lo que informa el servidor */
+  urlSegura() {
+    const hs = E.sesion && E.sesion.https;
+    if (!hs || !hs.activo || !hs.puerto) return null;
+    return 'https://' + location.hostname + ':' + hs.puerto + '/';
+  },
+  urlCertificado() {
+    const hs = E.sesion && E.sesion.https;
+    const puerto = location.protocol === 'http:' ? location.port : (hs && hs.puertoHttp);
+    return 'http://' + location.hostname + (puerto ? ':' + puerto : '') + '/certificado';
+  },
+
+  /** Tarjeta de Ajustes: muestra el paso en el que está este teléfono y lo que hay que hacer */
+  tarjeta() {
+    const cuerpo = h('div', { style: 'display:grid;gap:.75rem' }, cargando('Revisando…'));
+    const seccion = h('section', { class: 'tarjeta', id: 'notificaciones' }, h('div', { class: 'seccion-t' }, 'Notificaciones'), cuerpo);
+    const horaTexto = n => pad(n) + ':00';
+    const selectorHora = (valor, etiqueta) => {
+      const sel = h('select', { class: 'entrada', 'aria-label': etiqueta, style: 'min-height:44px' });
+      for (let i = 0; i < 24; i++) sel.append(h('option', { value: String(i), selected: i === valor ? true : null }, horaTexto(i)));
+      return sel;
+    };
+    const pintar = async () => {
+      let est;
+      try { est = await notificaciones.estado(); }
+      catch (e) { cuerpo.replaceChildren(errorConReintento(e, pintar)); return; }
+      const msg = h('div', { class: 'oculto', role: 'alert' });
+      const mostrarError = t => { msg.className = 'aviso-err'; msg.textContent = t; };
+      const mostrarOk = t => { msg.className = 'aviso-ok'; msg.textContent = t; };
+      vaciar(cuerpo);
+      const explicacion = 'Los avisos de la campana (proveedores, productos que se acaban, hora pico) llegan al teléfono aunque la página esté cerrada. La computadora necesita internet para enviarlos.';
+      switch (est.paso) {
+        case 'no-soportado':
+          cuerpo.append(h('p', { class: 'sub' }, 'Este navegador no admite notificaciones. Prueba con Chrome (Android) o Safari (iPhone, iOS 16.4 o más reciente).'));
+          break;
+        case 'http': {
+          const segura = notificaciones.urlSegura();
+          cuerpo.append(h('div', { class: 't' }, 'Paso 1: abre la página segura'), h('p', { class: 'sub' }, explicacion),
+            h('p', { class: 'sub' }, 'Primero instala en este teléfono el certificado de la computadora de la tienda (una sola vez) y después abre la dirección segura.'),
+            h('a', { class: 'btn btn-primario btn-block', href: notificaciones.urlCertificado() }, 'Cómo instalar el certificado'),
+            segura ? h('a', { class: 'btn btn-block', href: segura }, 'Abrir la página segura')
+                   : h('p', { class: 'nota' }, 'La conexión segura no está disponible en la computadora en este momento (Configuración → Acceso móvil → Opciones avanzadas).'));
+          break;
+        }
+        case 'instalar':
+          cuerpo.append(h('div', { class: 't' }, 'Paso 2: agrega la página a la pantalla de inicio'), h('p', { class: 'sub' }, explicacion),
+            h('p', { class: 'sub' }, 'En iPhone las notificaciones solo funcionan desde la página instalada: toca el botón Compartir de Safari y luego «Agregar a pantalla de inicio». Después abre Caja Libre desde ese icono y vuelve aquí.'));
+          break;
+        case 'bloqueado':
+          cuerpo.append(h('div', { class: 't' }, 'Bloqueadas en este teléfono'),
+            h('p', { class: 'sub' }, 'El navegador tiene las notificaciones de esta página bloqueadas. Actívalas en los ajustes del navegador (Permisos del sitio → Notificaciones) y vuelve a esta pantalla.'));
+          break;
+        case 'permitir':
+        case 'reactivar': {
+          const b = h('button', { class: 'btn btn-primario btn-block', type: 'button' }, icono('campana', { tamano: 20 }),
+            est.paso === 'reactivar' ? 'Volver a activar las notificaciones' : 'Permitir notificaciones');
+          b.addEventListener('click', async () => {
+            b.disabled = true;
+            try {
+              const r = await notificaciones.activar();
+              if (r === 'granted') { avisar('Notificaciones activadas en este teléfono.'); pintar(); return; }
+              mostrarError('No se concedió el permiso. Si lo rechazaste por error, actívalo en los ajustes del navegador.');
+            } catch (e) { mostrarError(e.message || 'No se pudieron activar.'); }
+            b.disabled = false;
+          });
+          cuerpo.append(h('div', { class: 't' }, est.paso === 'reactivar' ? 'Este teléfono estaba suscrito, pero la computadora ya no lo tiene' : 'Paso 3: permite las notificaciones'),
+            h('p', { class: 'sub' }, explicacion), msg, b);
+          break;
+        }
+        case 'activo': {
+          const pr = est.prefs;
+          const endpoint = notificaciones.suscripcion.endpoint;
+          const guardar = async cambios => {
+            const datos = Object.assign({ endpoint, activa: pr.activa, proveedores: pr.proveedores, stock: pr.stock, horaPico: pr.horaPico,
+              silencioDesde: pr.silencioDesde, silencioHasta: pr.silencioHasta }, cambios);
+            const nuevo = await api.pushPreferencias(datos);
+            Object.assign(pr, nuevo); notificaciones.prefs = pr;
+          };
+          const desde = selectorHora(pr.silencioDesde, 'Silencio desde'), hasta = selectorHora(pr.silencioHasta, 'Silencio hasta');
+          const alCambiarHora = async () => {
+            try { await guardar({ silencioDesde: Number(desde.value), silencioHasta: Number(hasta.value) }); }
+            catch (e) { mostrarError(e.message); }
+          };
+          desde.addEventListener('change', alCambiarHora); hasta.addEventListener('change', alCambiarHora);
+          const prueba = h('button', { class: 'btn btn-suave', type: 'button' }, 'Enviar notificación de prueba');
+          prueba.addEventListener('click', async () => {
+            prueba.disabled = true;
+            try {
+              const r = await api.pushPrueba(endpoint);
+              if (r.ok) mostrarOk('Enviada. Debe aparecer en unos segundos (si no, revisa que la computadora tenga internet).');
+              else mostrarError(r.detalle || 'No se pudo enviar.');
+            } catch (e) { mostrarError(e.message); }
+            prueba.disabled = false;
+          });
+          const quitar = h('button', { class: 'btn', type: 'button' }, 'Desactivar en este teléfono');
+          quitar.addEventListener('click', async () => { quitar.disabled = true; await notificaciones.desactivar(); avisar('Notificaciones desactivadas.'); pintar(); });
+          const filaTipo = (clave, titulo, detalle) => h('div', { class: 'fila-conf' },
+            h('div', null, h('div', { class: 't' }, titulo), h('div', { class: 'd' }, detalle)),
+            interruptor(pr[clave], async v => { try { await guardar({ [clave]: v }); } catch (e) { mostrarError(e.message); throw e; } }, titulo));
+          cuerpo.append(
+            h('div', { class: 'aviso-ok', style: 'display:flex;gap:.5rem;align-items:center' }, icono('listo', { tamano: 20 }), 'Activadas en este teléfono'),
+            pr.ultimoError && !pr.ultimoOk ? h('p', { class: 'nota' }, 'El último envío falló: ' + (pr.errorDetalle || '')) : null,
+            h('div', { class: 'fila-conf' },
+              h('div', null, h('div', { class: 't' }, 'Recibir notificaciones'), h('div', { class: 'd' }, 'Apágalo para pausarlas sin perder la configuración.')),
+              interruptor(pr.activa, async v => { try { await guardar({ activa: v }); } catch (e) { mostrarError(e.message); throw e; } }, 'Recibir notificaciones')),
+            filaTipo('proveedores', 'Proveedores', 'Quién entrega o pasa a preventa hoy (8:00) y mañana (19:00).'),
+            filaTipo('stock', 'Se está acabando', 'Productos con poca existencia, dos veces al día (9:00 y 17:00).'),
+            filaTipo('horaPico', 'Hora pico', 'Media hora antes de la franja con más venta del día.'),
+            h('div', { class: 'fila-conf', style: 'display:grid;gap:.5rem' },
+              h('div', null, h('div', { class: 't' }, 'Horas de silencio'), h('div', { class: 'd' }, 'No se manda nada entre estas horas (por defecto de 21:00 a 7:00). Pon la misma hora en ambas para no silenciar.')),
+              h('div', { style: 'display:grid;grid-template-columns:1fr auto 1fr;gap:.5rem;align-items:center' }, desde, h('span', { class: 'sub' }, 'a'), hasta)),
+            msg,
+            h('div', { class: 'acciones' }, prueba, quitar));
+          break;
+        }
+      }
+    };
+    pintar();
+    return seccion;
+  },
+};
+
+/* Mensajes del service worker: tocar una notificación abre la sección del aviso en esta misma pestaña */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', ev => {
+    const d = ev.data || {};
+    if (d.tipo === 'abrir' && typeof d.url === 'string' && E.sesion) {
+      const r = rutaDeHash(d.url);
+      if (permitidas().some(s => s.id === r.id)) irA(r.id, r.opciones);
+    } else if (d.tipo === 'suscripcion-cambiada' && E.sesion) {
+      notificaciones.sincronizar();
+    }
+  });
+}
 
 /* ============================================================================
    12. RECORRIDO GUIADO (tutorial): una vez por usuario, se repite con "Ayuda"
@@ -1734,7 +2029,7 @@ const tutorial = {
         + (sec.proveedoresCostos ? ' Como puedes ver costos, también aparece la nota media: lo que se le compra en promedio por visita.' : '')
         + (sec.proveedoresEditar ? ' Tienes permiso para dar de alta proveedores y cambiar sus días de entrega y preventa.' : ' Los días los captura quien gestiona proveedores; tú los consultas.'),
       escanear: 'Permite tomar una foto del ticket del proveedor para dar entrada a la mercancía. Importante: por ahora la lectura de la foto es una DEMOSTRACIÓN, las líneas que aparecen son de ejemplo y nada cambia en el inventario hasta que marques y confirmes cada una.',
-      config: 'Aquí decides si la sesión se mantiene abierta en este teléfono, eliges el tema claro u oscuro y el texto grande, y cierras sesión. También puedes volver a ver este recorrido.',
+      config: 'Aquí decides si la sesión se mantiene abierta en este teléfono, activas las notificaciones (los avisos de la campana llegan al teléfono aunque la página esté cerrada), eliges el tema claro u oscuro y el texto grande, y cierras sesión. También puedes volver a ver este recorrido.',
     };
     const lista = [{ icono: 'tienda', titulo: 'Bienvenido al acceso móvil',
       texto: 'Desde tu teléfono puedes consultar el negocio estando en la misma red Wi-Fi que la computadora. Este recorrido dura un minuto y explica qué hace cada sección; puedes repetirlo cuando quieras.' }];

@@ -112,6 +112,71 @@ public class AccesoMovilService {
                 .toList();
     }
 
+    // ── HTTPS, certificado local y notificaciones ─────────────────────────
+
+    @Autowired private me.eliassanchezfernandez.puntodeventa.servidor.CertificadosLocales certificados;
+    @Autowired private NotificacionesPushService pushService;
+
+    public boolean httpsActivo() { return servidor.httpsActivo(); }
+
+    public int puertoHttps() { return servidor.getPuertoHttps(); }
+
+    public List<String> urlsHttps() { return servidor.urlsHttps(); }
+
+    /** Direcciones (HTTP) de la guía para instalar el certificado en el teléfono */
+    public List<String> urlsCertificado(int puertoHttp) { return servidor.urlsCertificado(puertoHttp); }
+
+    /** Huella corta de la CA local, para compararla con la que muestra el teléfono */
+    public String huellaCorta() { return certificados.huellaCorta(); }
+
+    /** Huella SHA-256 completa con dos puntos */
+    public String huellaCompleta() { return me.eliassanchezfernandez.puntodeventa.servidor.CertificadosLocales.huellaConDosPuntos(certificados.huellaCa()); }
+
+    /**
+     * CA y certificado nuevos (ADMIN). Los teléfonos que instalaron la anterior tendrán que instalar
+     * la nueva; mientras no lo hagan, la página segura no les abrirá y no recibirán notificaciones.
+     */
+    public void regenerarCertificado() {
+        sesionService.verificarAdmin();
+        certificados.regenerarCa();
+        servidor.reiniciarHttps();
+        auditoriaService.registrar(sesionService.getCajeroActual(), "CERTIFICADO_MOVIL_REGENERADO",
+                "Nueva CA local del acceso móvil; huella " + certificados.huellaCorta(),
+                (me.eliassanchezfernandez.puntodeventa.model.Cajero) null);
+    }
+
+    /** Puerto HTTPS fijo (null = automático: HTTP + 1); reabre el HTTPS si cambió */
+    public Configuracion guardarPuertoHttps(Integer puerto) {
+        sesionService.verificarAdmin();
+        Integer actual = configuracionService.obtener().getMovilPuertoHttps();
+        Configuracion c = configuracionService.guardarPuertoHttpsMovil(puerto);
+        if (!java.util.Objects.equals(actual, puerto) && servidor.estaActivo()) servidor.reiniciarHttps();
+        return c;
+    }
+
+    /** Teléfono con notificaciones, listo para la tabla del escritorio */
+    public record TelefonoPush(me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush suscripcion, String usuario, String dispositivo) { }
+
+    public List<TelefonoPush> telefonosConNotificaciones() {
+        sesionService.verificarAdmin();
+        return pushService.listarTodas().stream()
+                .map(s -> new TelefonoPush(s,
+                        cajeroRepo.findById(s.getCajeroId()).map(c -> c.getUsuario() + " (" + c.getNombreCompleto() + ")").orElse("(usuario eliminado)"),
+                        NotificacionesPushService.resumenAgente(s.getUserAgent())))
+                .toList();
+    }
+
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository cajeroRepo;
+
+    public void quitarTelefono(Long suscripcionId) {
+        sesionService.verificarAdmin();
+        pushService.quitarPorId(suscripcionId).ifPresent(s ->
+                auditoriaService.registrar(sesionService.getCajeroActual(), "PUSH_SUSCRIPCION_QUITADA",
+                        "Suscripción de notificaciones id " + s.getId() + " (usuario id " + s.getCajeroId() + ", "
+                                + NotificacionesPushService.resumenAgente(s.getUserAgent()) + ") quitada por el administrador",
+                        (me.eliassanchezfernandez.puntodeventa.model.Cajero) null));
+    }
+
     public Configuracion obtenerConfiguracion() {
         return configuracionService.obtener();
     }

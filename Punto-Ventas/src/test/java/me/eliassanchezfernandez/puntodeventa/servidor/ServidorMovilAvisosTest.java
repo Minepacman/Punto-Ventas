@@ -200,7 +200,9 @@ class ServidorMovilAvisosTest {
         assertThat(html).contains("campana:").contains("reloj:").contains("/api/avisos").contains("id: 'avisos'")
                 .contains("class: 'globo").contains("'Avisos'").contains("Descartar todos").contains("pv.avisos.")
                 .contains("visibilitychange").contains("Avisos del día").contains("Sin avisos por ahora");
-        assertThat(html).as("sin notificaciones del navegador: no hay HTTPS").doesNotContain("Notification.").doesNotContain("serviceWorker");
+        // Notificaciones: el service worker solo se registra por HTTPS (la página lo comprueba antes)
+        assertThat(html).contains("notificaciones.").contains("navigator.serviceWorker.register(").contains("location.protocol === 'https:'")
+                .contains("Notification.requestPermission()").contains("Recibir estos avisos en el teléfono");
         assertThat(html.codePoints().anyMatch(cp -> cp >= 0x1F300 && cp <= 0x1FAFF)).as("sin emojis").isFalse();
     }
 }

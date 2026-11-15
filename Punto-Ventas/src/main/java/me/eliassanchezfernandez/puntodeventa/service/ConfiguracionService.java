@@ -586,6 +586,19 @@ public class ConfiguracionService {
         return g;
     }
 
+    /** Puerto HTTPS fijo del acceso móvil (ADMIN, auditado); null = automático (puerto HTTP + 1) */
+    @Transactional
+    public Configuracion guardarPuertoHttpsMovil(Integer puerto) {
+        sesionService.verificarAdmin();
+        if (puerto != null) validarPuertoMovil(puerto);
+        Configuracion c = obtenerParaEditar();
+        String antes = c.getMovilPuertoHttps() == null ? "automático" : String.valueOf(c.getMovilPuertoHttps());
+        c.setMovilPuertoHttps(puerto);
+        Configuracion g = guardarConfig(c);
+        auditar("Acceso móvil (puerto HTTPS)", antes, puerto == null ? "automático" : String.valueOf(puerto));
+        return g;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     // ── Actualizaciones ───────────────────────────────────────────────────

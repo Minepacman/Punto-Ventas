@@ -192,6 +192,10 @@ public class Configuracion {
     @Column(name = "movil_qr_local")
     private Boolean movilQrLocal;
 
+    /** Puerto fijo del servidor HTTPS del acceso móvil (notificaciones); null = automático (puerto HTTP + 1) */
+    @Column(name = "movil_puerto_https")
+    private Integer movilPuertoHttps;
+
     // ── Inicio de sesión ─────────────────────────────────────────────────
 
     /** Mostrar en la pantalla de inicio de sesión la lista de usuarios activos (null = no) */
@@ -287,6 +291,8 @@ public class Configuracion {
     public boolean isMovilPuertoGuardado() { return movilPuerto != null; }
 
     public boolean isMovilActivo() { return movilActivo != null && movilActivo; }
+    /** true si el administrador fijó el puerto HTTPS a mano */
+    public boolean isMovilPuertoHttpsManual() { return movilPuertoHttps != null; }
     public int getMovilPuerto()    { return movilPuerto != null ? movilPuerto : MOVIL_PUERTO_POR_DEFECTO; }
 
     public static final int TICKET_ANCHO_POR_DEFECTO = 80;

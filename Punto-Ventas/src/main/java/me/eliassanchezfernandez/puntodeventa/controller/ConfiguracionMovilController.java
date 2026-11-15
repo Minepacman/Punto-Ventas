@@ -94,6 +94,21 @@ public class ConfiguracionMovilController implements Initializable {
     @FXML private Label      lblEstado;
     @FXML private VBox       cajaUrls;
     @FXML private VBox       cajaQr;
+    @FXML private VBox       cajaQrCertificado;
+    @FXML private Label      lblHuella;
+    @FXML private Label      lblHuellaCompleta;
+    @FXML private Label      lblHttpsEstado;
+    @FXML private CheckBox   chkHttpsManual;
+    @FXML private TextField  txtPuertoHttps;
+    @FXML private TableView<AccesoMovilService.TelefonoPush> tablaPush;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushUsuario;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushDispositivo;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushEntrega;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushEstado;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, AccesoMovilService.TelefonoPush> colPushAccion;
+    private static final int QR_CERTIFICADO_PX = 150;
+    /** URL de la guía del certificado elegida cuando hay varias redes */
+    private String urlCertificadoElegida;
     @FXML private TableView<SesionInfo> tablaSesiones;
     @FXML private TableColumn<SesionInfo, String> colUsuario;
     @FXML private TableColumn<SesionInfo, String> colCreada;
@@ -125,10 +140,29 @@ public class ConfiguracionMovilController implements Initializable {
         });
         tablaSesiones.setPlaceholder(new Label("No hay sesiones móviles abiertas."));
 
+        colPushUsuario.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().usuario()));
+        colPushDispositivo.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().dispositivo()));
+        colPushEntrega.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(
+                c.getValue().suscripcion().getUltimoOk() == null ? "Ninguna aún" : local(c.getValue().suscripcion().getUltimoOk())));
+        colPushEstado.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(estadoPush(c.getValue().suscripcion())));
+        colPushAccion.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
+        colPushAccion.setCellFactory(col -> new TableCell<>() {
+            private final Button quitar = new Button("Quitar");
+            @Override protected void updateItem(AccesoMovilService.TelefonoPush item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setGraphic(null); return; }
+                quitar.setOnAction(e -> onQuitarTelefono(item));
+                setGraphic(quitar);
+            }
+        });
+        tablaPush.setPlaceholder(new Label("Ningún teléfono tiene notificaciones activadas."));
+
         Configuracion c = accesoMovilService.obtenerConfiguracion();
         swActivo.setSelected(accesoMovilService.servidorActivo() || c.isMovilActivo());
         txtPuerto.setText(String.valueOf(c.getMovilPuerto()));
         chkPuertoManual.setSelected(c.isMovilPuertoManual());
+        chkHttpsManual.setSelected(c.isMovilPuertoHttpsManual());
+        txtPuertoHttps.setText(c.getMovilPuertoHttps() == null ? String.valueOf(c.getMovilPuerto() + 1) : String.valueOf(c.getMovilPuertoHttps()));
         txtNombre.setText(c.getMovilNombre() == null ? "" : c.getMovilNombre());
         chkQrLocal.setSelected(c.isMovilQrLocal());
         // El interruptor aplica al momento (sin botón): un cambio hecho desde el código no vuelve a aplicar
@@ -152,8 +186,18 @@ public class ConfiguracionMovilController implements Initializable {
                 return;
             }
         }
+        Integer puertoHttps = null;
+        if (chkHttpsManual.isSelected()) {
+            try {
+                puertoHttps = Integer.parseInt(txtPuertoHttps.getText().trim());
+            } catch (NumberFormatException e) {
+                Ventanas.alerta(Alert.AlertType.ERROR, "Puerto inválido", "El puerto HTTPS debe ser un número entero.");
+                return;
+            }
+        }
         try {
             accesoMovilService.guardarOpciones(manual, txtNombre.getText(), chkQrLocal.isSelected());
+            accesoMovilService.guardarPuertoHttps(puertoHttps);
             if (manual) accesoMovilService.configurar(swActivo.isSelected(), puerto);
             else accesoMovilService.configurarAutomatico(swActivo.isSelected());
         } catch (NegocioException e) {
@@ -203,6 +247,38 @@ public class ConfiguracionMovilController implements Initializable {
             Ventanas.alerta(Alert.AlertType.ERROR, "Acceso móvil", e.getMessage());
         }
         refrescar();
+    }
+
+    @FXML
+    private void onRegenerarCertificado() {
+        if (!Ventanas.confirmar("Regenerar certificado",
+                "Se creará un certificado nuevo para la conexión segura. TODOS los teléfonos que ya lo instalaron tendrán que "
+                + "instalar el nuevo (volver a escanear el código de «Notificaciones en el teléfono») y, mientras no lo hagan, "
+                + "no recibirán notificaciones. La dirección normal (sin candado) sigue funcionando. ¿Continuar?")) return;
+        try {
+            accesoMovilService.regenerarCertificado();
+        } catch (NegocioException | IllegalStateException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Regenerar certificado", e.getMessage());
+        }
+        refrescar();
+    }
+
+    private void onQuitarTelefono(AccesoMovilService.TelefonoPush t) {
+        if (!Ventanas.confirmar("Quitar notificaciones", "El teléfono de " + t.usuario() + " dejará de recibir notificaciones. ¿Continuar?")) return;
+        try {
+            accesoMovilService.quitarTelefono(t.suscripcion().getId());
+        } catch (NegocioException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Acceso móvil", e.getMessage());
+        }
+        refrescar();
+    }
+
+    private static String estadoPush(me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush s) {
+        if (!s.isActiva()) return "En pausa (lo apagó el usuario)";
+        if (s.getUltimoError() != null && (s.getUltimoOk() == null || s.getUltimoError().isAfter(s.getUltimoOk()))) {
+            return "Último envío falló" + (s.getErrorDetalle() == null ? "" : ": " + s.getErrorDetalle());
+        }
+        return "Activas";
     }
 
     @FXML
@@ -277,11 +353,86 @@ public class ConfiguracionMovilController implements Initializable {
             lblNombreEstado.setText(nombreCfg != null ? "El nombre local se publica cuando el servidor está encendido." : "");
         }
         pintarQr(activo, urlsQr);
+        pintarCertificado(activo, puerto);
         try {
             tablaSesiones.setItems(FXCollections.observableArrayList(accesoMovilService.sesionesActivas()));
         } catch (NegocioException e) {
             tablaSesiones.setItems(FXCollections.observableArrayList());
         }
+        try {
+            tablaPush.setItems(FXCollections.observableArrayList(accesoMovilService.telefonosConNotificaciones()));
+        } catch (NegocioException e) {
+            tablaPush.setItems(FXCollections.observableArrayList());
+        }
+    }
+
+    // ── Certificado y notificaciones ──────────────────────────────────────
+
+    private void pintarCertificado(boolean activo, int puertoHttp) {
+        cajaQrCertificado.getChildren().clear();
+        try {
+            lblHuella.setText(accesoMovilService.huellaCorta());
+            lblHuellaCompleta.setText("SHA-256 completa: " + accesoMovilService.huellaCompleta());
+        } catch (RuntimeException e) {
+            lblHuella.setText("");
+            lblHuellaCompleta.setText("No se pudo leer el certificado: " + e.getMessage());
+        }
+        if (!activo) {
+            lblHttpsEstado.setText("Enciende «Permitir acceso desde teléfonos» para ver el código de la guía.");
+            cajaQrCertificado.getChildren().add(hintCentrado("Acceso apagado", QR_CERTIFICADO_PX));
+            return;
+        }
+        boolean https = accesoMovilService.httpsActivo();
+        List<String> seguras = accesoMovilService.urlsHttps();
+        lblHttpsEstado.setText(https
+                ? "Conexión segura encendida (puerto " + accesoMovilService.puertoHttps() + ")."
+                        + (seguras.isEmpty() ? "" : " Dirección segura: " + seguras.get(0))
+                : "La conexión segura no pudo abrirse (puerto ocupado). Revisa el puerto HTTPS en Opciones avanzadas.");
+        lblHttpsEstado.getStyleClass().removeAll("text-success", "hint");
+        lblHttpsEstado.getStyleClass().add(https ? "text-success" : "hint");
+        List<String> urls = accesoMovilService.urlsCertificado(puertoHttp);
+        if (urls.isEmpty()) {
+            cajaQrCertificado.getChildren().add(hintCentrado("Sin red local", QR_CERTIFICADO_PX));
+            return;
+        }
+        String url = urls.contains(urlCertificadoElegida) ? urlCertificadoElegida : urls.get(0);
+        urlCertificadoElegida = url;
+        if (urls.size() > 1) {
+            ComboBox<String> selector = new ComboBox<>(FXCollections.observableArrayList(urls));
+            selector.setValue(url);
+            selector.setOnAction(e -> { urlCertificadoElegida = selector.getValue(); pintarCertificado(true, puertoHttp); });
+            cajaQrCertificado.getChildren().add(selector);
+        }
+        ImageView vista = new ImageView(CodigoQr.imagen(url, CodigoQr.escalaPara(url, QR_CERTIFICADO_PX * 2)));
+        vista.setFitWidth(QR_CERTIFICADO_PX);
+        vista.setFitHeight(QR_CERTIFICADO_PX);
+        vista.setSmooth(false);
+        vista.setPreserveRatio(true);
+        VBox marco = new VBox(vista);
+        marco.getStyleClass().add("qr-marco");
+        marco.setMaxWidth(QR_CERTIFICADO_PX + 24);
+        Label etiqueta = new Label(url);
+        etiqueta.getStyleClass().add("qr-url");
+        etiqueta.setWrapText(true);
+        etiqueta.setMaxWidth(QR_CERTIFICADO_PX + 60);
+        Button copiar = new Button("Copiar", Iconos.de("portapapeles"));
+        copiar.setOnAction(e -> {
+            ClipboardContent cc = new ClipboardContent();
+            cc.putString(url);
+            Clipboard.getSystemClipboard().setContent(cc);
+        });
+        cajaQrCertificado.getChildren().addAll(marco, etiqueta, copiar);
+    }
+
+    private static Label hintCentrado(String texto, int ancho) {
+        Label l = hint(texto);
+        l.getStyleClass().add("qr-marco-vacio");
+        l.setTextAlignment(TextAlignment.CENTER);
+        l.setAlignment(Pos.CENTER);
+        l.setMinSize(ancho, ancho * 0.5);
+        l.setPrefSize(ancho, ancho * 0.5);
+        l.setMaxWidth(ancho);
+        return l;
     }
 
     // ── Código QR ─────────────────────────────────────────────────────────

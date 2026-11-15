@@ -130,6 +130,12 @@ public class AvisosService {
         return new Avisos(b.hoy(), b.generado(), costos, List.copyOf(lista));
     }
 
+    /** Hora pico de hoy (null si no hay patrón): la usa el programador de notificaciones para avisar 30 min antes */
+    @Transactional(readOnly = true)
+    public HoraPico horaPicoHoy(LocalDateTime ahora) {
+        return base(ahora).horaPico();
+    }
+
     // ── Caché ─────────────────────────────────────────────────────────────
 
     private Base base(LocalDateTime ahora) {

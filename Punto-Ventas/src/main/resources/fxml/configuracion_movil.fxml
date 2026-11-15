@@ -11,8 +11,9 @@
 
     Orden pensado para quien abre la tienda: 1) el código QR grande con la dirección,
     2) el interruptor "Permitir acceso desde teléfonos" (se aplica al momento),
-    3) los teléfonos conectados (con "Cerrar"), 4) Opciones avanzadas (nombre .local,
-    puerto fijo, todas las direcciones).
+    3) "Notificaciones en el teléfono": QR a la guía /certificado y huella de la CA local,
+    4) los teléfonos conectados (con "Cerrar"), 5) Opciones avanzadas (nombre .local,
+    puerto fijo, puerto HTTPS, regenerar certificado, teléfonos con notificaciones, direcciones).
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionMovilController"
@@ -52,7 +53,25 @@
 
                 <Separator/>
 
-                <!-- 3. Teléfonos conectados -->
+                <!-- 3. Notificaciones en el teléfono (HTTPS con certificado propio) -->
+                <Label text="Notificaciones en el teléfono" styleClass="form-section-title"/>
+                <Label text="Para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen al teléfono aunque la página esté cerrada, cada teléfono instala UNA vez el certificado de esta computadora y abre la página segura. Escanea este código con el teléfono para ver la guía paso a paso (Android o iPhone)."
+                       wrapText="true" styleClass="hint"/>
+                <HBox spacing="18" alignment="CENTER_LEFT">
+                    <VBox fx:id="cajaQrCertificado" spacing="6" alignment="CENTER"/>
+                    <VBox spacing="8" HBox.hgrow="ALWAYS">
+                        <Label text="Clave del certificado (debe coincidir con la que muestra el teléfono):" styleClass="field-label" wrapText="true"/>
+                        <Label fx:id="lblHuella" text="" styleClass="huella-certificado"/>
+                        <Label fx:id="lblHuellaCompleta" text="" wrapText="true" styleClass="hint"/>
+                        <Label fx:id="lblHttpsEstado" text="" wrapText="true" styleClass="hint"/>
+                        <Label text="La computadora necesita internet para enviar las notificaciones; el iPhone (iOS 16.4 o más reciente) necesita además la página en la pantalla de inicio. Por la dirección normal (sin candado) todo sigue funcionando, solo sin notificaciones."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
+                </HBox>
+
+                <Separator/>
+
+                <!-- 4. Teléfonos conectados -->
                 <Label text="Teléfonos conectados" styleClass="form-section-title"/>
                 <TableView fx:id="tablaSesiones" prefHeight="150">
                     <columns>
@@ -69,7 +88,7 @@
                     <Button text="Cerrar todas las sesiones" onAction="#onCerrarTodas" styleClass="button-danger"/>
                 </HBox>
 
-                <!-- 4. Opciones avanzadas -->
+                <!-- 5. Opciones avanzadas -->
                 <TitledPane text="Opciones avanzadas" expanded="false" animated="false" styleClass="opciones-avanzadas">
                     <VBox spacing="10">
                         <padding><Insets topRightBottomLeft="10"/></padding>
@@ -95,6 +114,33 @@
                         </HBox>
                         <Label text="Normalmente no hace falta: el puerto se elige solo (el último que funcionó y, si está ocupado, otro libre). Solo para casos especiales, como una regla del firewall. Si el puerto fijo está ocupado el acceso no encenderá."
                                wrapText="true" styleClass="hint"/>
+
+                        <Separator/>
+
+                        <Label text="Conexión segura (HTTPS) y certificado" styleClass="field-label"/>
+                        <CheckBox fx:id="chkHttpsManual" text="Usar un puerto fijo para la conexión segura (normalmente es el puerto + 1)"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Puerto HTTPS:"/>
+                            <TextField fx:id="txtPuertoHttps" prefWidth="90"/>
+                        </HBox>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Button text="Regenerar certificado" onAction="#onRegenerarCertificado"/>
+                            <Label text="Solo si sospechas que la clave privada se copió o la computadora cambió de dueño. Todos los teléfonos tendrán que instalar el certificado nuevo."
+                                   wrapText="true" styleClass="hint" HBox.hgrow="ALWAYS"/>
+                        </HBox>
+
+                        <Separator/>
+
+                        <Label text="Teléfonos con notificaciones" styleClass="field-label"/>
+                        <TableView fx:id="tablaPush" prefHeight="120">
+                            <columns>
+                                <TableColumn fx:id="colPushUsuario" text="Usuario" prefWidth="180"/>
+                                <TableColumn fx:id="colPushDispositivo" text="Teléfono" prefWidth="100"/>
+                                <TableColumn fx:id="colPushEntrega" text="Última entrega" prefWidth="130"/>
+                                <TableColumn fx:id="colPushEstado" text="Estado" prefWidth="180"/>
+                                <TableColumn fx:id="colPushAccion" text="" prefWidth="90"/>
+                            </columns>
+                        </TableView>
 
                         <Separator/>
 
