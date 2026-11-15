@@ -41,6 +41,21 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.id = :id")
     Optional<Venta> findConDetallesById(Long id);
 
+    /**
+     * Marca la venta como cancelada SOLO si sigue activa en la base de datos (UPDATE condicionado).
+     * Con varias cajas, dos pueden leer la misma venta "no cancelada" y cancelarla a la vez: la
+     * primera afecta 1 fila; la segunda 0 y debe detenerse sin devolver mercancía otra vez. En
+     * PostgreSQL el UPDATE además bloquea la fila hasta que la transacción termina, así la otra
+     * caja espera y luego ve el estado real. @return 1 si la marcó, 0 si ya estaba cancelada
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE Venta v SET v.cancelada = true, v.fechaCancelacion = :fecha, v.motivoCancelacion = :motivo, " +
+           "v.canceladaPorId = :quienId, v.canceladaPorNombre = :quienNombre, " +
+           "v.cancelacionAutorizadaPorId = :autorizoId, v.cancelacionAutorizadaPor = :autorizoNombre " +
+           "WHERE v.id = :id AND (v.cancelada IS NULL OR v.cancelada = false)")
+    int marcarCancelada(Long id, LocalDateTime fecha, String motivo, Long quienId, String quienNombre,
+                        Long autorizoId, String autorizoNombre);
+
     /** Primera venta registrada (cancelada o no; para recalcular agregados desde el inicio) */
     Optional<Venta> findFirstByOrderByFechaAsc();
 

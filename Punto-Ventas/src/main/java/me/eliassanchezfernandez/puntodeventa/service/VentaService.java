@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Lógica de negocio de ventas.
@@ -398,14 +399,17 @@ public class VentaService {
             throw new NegocioException("Hay un respaldo pendiente de restaurar: cierra y vuelve a abrir el programa "
                     + "antes de seguir vendiendo (lo que se cobre ahora no quedaría en la base restaurada).");
         }
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
         Cajero cajeroSesion = sesionService.requerirSesion();
         Configuracion config = configuracionService.obtener();
         Set<String> autorizadores = new LinkedHashSet<>();
 
         // 1) Releer cada producto y recalcular precio + descuento desde la BD
         //    (los límites de cada promoción se comparten entre los renglones del ticket)
+        //    cantidadPorProducto va ORDENADO por id de producto: es el orden en que se bloquean las filas
+        //    al descontar (3b); ver cantidadesPorProducto.
         Map<Long, Producto> productosPorId      = new LinkedHashMap<>();
-        Map<Long, Double>   cantidadPorProducto = new LinkedHashMap<>();
+        Map<Long, Double>   cantidadPorProducto = new TreeMap<>();
         Map<Long, Double>   piezasPromoUsadas   = new java.util.HashMap<>();
         for (DetalleVenta d : detalles) {
             Long id = d.getProducto().getId();
@@ -464,6 +468,9 @@ public class VentaService {
         //    condicionado: con varias cajas vendiendo el mismo producto a la vez, ninguna puede
         //    llevarse piezas que otra ya vendió. Sin existencia solo con permiso/autorización; si
         //    falta el permiso, la excepción revierte la transacción completa (nada queda descontado).
+        //    Los productos se recorren en orden de id (cantidadPorProducto es un TreeMap): dos cajas que
+        //    venden los mismos productos en distinto orden bloquearían las filas en cruz y PostgreSQL
+        //    abortaría una por interbloqueo; con un orden único, la segunda solo espera a la primera.
         boolean ventaSinStock = false;
         Map<Long, double[]> existencias = new LinkedHashMap<>();   // id → {antes, después}
         for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
@@ -683,13 +690,26 @@ public class VentaService {
                     "La venta #%d ya no se puede cancelar: el plazo de %d horas venció el %s.",
                     v.getId(), v.getPlazoCancelacionHorasOPorDefecto(), limite.format(FMT)));
         }
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
 
-        // Regresar mercancía
-        Map<Long, Double> porProducto = new LinkedHashMap<>();
-        for (DetalleVenta d : v.getDetalles()) {
-            porProducto.merge(d.getProducto().getId(), d.getCantidad(), Double::sum);
+        // 1) La marca de cancelación, PRIMERO y condicionada a que la venta siga activa EN la base. Con
+        //    varias cajas, dos pueden haber leído la venta "no cancelada" y cancelarla a la vez: solo una
+        //    afecta la fila; la otra recibe 0 y termina aquí, sin devolver mercancía ni cupo por segunda
+        //    vez (en PostgreSQL además espera en este UPDATE a que la primera termine). Si algo falla
+        //    después, la transacción revierte también esta marca.
+        Autorizacion aut = sesionService.autorizacionUsada(Permiso.CANCELAR_VENTA, autorizaciones);
+        int marcadas = ventaRepo.marcarCancelada(v.getId(), LocalDateTime.now(), motivo.trim(),
+                quien.getId(), quien.getNombreCompleto(),
+                aut != null ? aut.administrador().getId() : null, aut != null ? aut.nombreAdministrador() : null);
+        if (marcadas == 0) {
+            throw new NegocioException("Esta venta ya fue cancelada en otra caja (venta #" + v.getId()
+                    + "): la mercancía ya regresó al inventario y no se hizo nada más.");
         }
-        for (Map.Entry<Long, Double> e : porProducto.entrySet()) {
+        em.refresh(v);   // la fila ya cambió en la base; la copia en memoria se vuelve a leer
+
+        // 2) Regresar mercancía: productos en orden de id, el mismo orden en que cobrar() los descuenta
+        //    (ver cantidadesPorProducto), para que dos cajas nunca se bloqueen en cruz.
+        for (Map.Entry<Long, Double> e : cantidadesPorProducto(v.getDetalles()).entrySet()) {
             Producto p = productoRepo.findById(e.getKey()).orElse(null);
             if (p == null || !p.isUsaInventario()) continue;
             productoRepo.sumar(p.getId(), e.getValue());   // atómico: no pisa ventas de otras cajas
@@ -697,29 +717,32 @@ public class VentaService {
             productoService.registrarMovimiento(p, MovimientoInventario.Tipo.CANCELACION, e.getValue(),
                     redondearCantidad(despues - e.getValue()), despues, "Cancelación venta #" + v.getId(), null, null, v.getId());
         }
-        // Devolver cupo de promociones "hasta agotar"
+        // 3) Devolver cupo de promociones "hasta agotar"
         for (DetalleVenta d : v.getDetalles()) {
             if (d.getPromocionId() != null && d.getPiezasPromocion() != null) {
                 promocionService.registrarUso(d.getPromocionId(), -d.getPiezasPromocion());
             }
         }
 
-        Autorizacion aut = sesionService.autorizacionUsada(Permiso.CANCELAR_VENTA, autorizaciones);
-        v.setCancelada(true);
-        v.setFechaCancelacion(LocalDateTime.now());
-        v.setMotivoCancelacion(motivo.trim());
-        v.setCanceladaPorId(quien.getId());
-        v.setCanceladaPorNombre(quien.getNombreCompleto());
-        if (aut != null) {
-            v.setCancelacionAutorizadaPorId(aut.administrador().getId());
-            v.setCancelacionAutorizadaPor(aut.nombreAdministrador());
-        }
-        Venta guardada = ventaRepo.save(v);
-
         auditoriaService.registrar(quien, "VENTA_CANCELADA",
                 "Venta #" + v.getId() + " — " + motivo.trim(), aut);
         if (aut != null) aut.consumir();
-        return guardada;
+        return v;
+    }
+
+    /**
+     * Piezas por producto de unos renglones (sumando los repetidos), en ORDEN DE BLOQUEO: id de
+     * producto ascendente. Cobrar, cancelar y recibir órdenes tocan las filas de productos en este
+     * mismo orden; si dos transacciones bloquearan los mismos productos en órdenes distintos, con
+     * PostgreSQL una esperaría a la otra en cruz (interbloqueo) y el servidor abortaría una.
+     */
+    static Map<Long, Double> cantidadesPorProducto(Collection<DetalleVenta> detalles) {
+        Map<Long, Double> porProducto = new TreeMap<>();
+        for (DetalleVenta d : detalles) {
+            if (d.getProducto() == null || d.getProducto().getId() == null) continue;
+            porProducto.merge(d.getProducto().getId(), d.getCantidad(), Double::sum);
+        }
+        return porProducto;
     }
 
     // ── Historial ─────────────────────────────────────────────────────────

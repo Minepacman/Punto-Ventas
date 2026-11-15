@@ -2,13 +2,19 @@ package me.eliassanchezfernandez.puntodeventa.service;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import me.eliassanchezfernandez.puntodeventa.model.ClimaRegistro;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Franja;
+import me.eliassanchezfernandez.puntodeventa.model.ParProductos;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoClima;
 import me.eliassanchezfernandez.puntodeventa.model.ProductoDiario;
 import me.eliassanchezfernandez.puntodeventa.model.ResumenDiario;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
+import me.eliassanchezfernandez.puntodeventa.repository.ClimaRegistroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ConfiguracionRepository;
+import me.eliassanchezfernandez.puntodeventa.repository.ParProductosRepository;
+import me.eliassanchezfernandez.puntodeventa.repository.ProductoClimaRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ResumenDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
@@ -17,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -26,11 +34,22 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Operaciones por lotes de {@link AgregadosService}. Es un bean aparte para que
- * cada llamada sea SU PROPIA transacción (el proxy de Spring no actúa en las
- * llamadas internas de una clase): un mes de ventas por transacción, con el
- * contexto de persistencia vaciado al final, así el recálculo de años de
- * historial no acumula memoria ni retiene el candado de escritura de SQLite.
+ * Transacciones de {@link AgregadosService}. Es un bean aparte para que cada llamada
+ * sea SU PROPIA transacción (el proxy de Spring no actúa en las llamadas internas de
+ * una clase), y separa dos clases de trabajo:
+ *
+ *  - <b>Cálculo</b> ({@link #calcularDias}, {@link #calcularFechas}, {@link #calcularVentana}):
+ *    {@code @Transactional(readOnly = true)}. En SQLite abre con {@code BEGIN} (DEFERRED,
+ *    ver ConexionSqlite): lee las ventas y agrupa SIN tomar el candado de escritura, así
+ *    la caja sigue cobrando mientras se recorren semanas de tickets.
+ *  - <b>Escritura</b> ({@link #reemplazarDias}, {@link #reemplazarPares},
+ *    {@link #reemplazarProductoClima}, {@link #borrarTodo}): transacciones cortas que solo
+ *    borran e insertan lo ya calculado; el candado se retiene milisegundos.
+ *
+ * Antes cada mes se calculaba DENTRO de la transacción de escritura (y la ventana de 28
+ * días también): el {@code BEGIN IMMEDIATE} tomaba el candado al empezar y una venta en
+ * curso esperaba a que terminara todo el recorrido. Los resultados son los mismos: lo
+ * que cambia es cuándo se toma el candado.
  */
 @Service
 public class AgregadosLote {
@@ -38,9 +57,17 @@ public class AgregadosLote {
     @Autowired private VentaRepository          ventaRepo;
     @Autowired private ResumenDiarioRepository  resumenRepo;
     @Autowired private ProductoDiarioRepository productoDiarioRepo;
+    @Autowired private ParProductosRepository   paresRepo;
+    @Autowired private ProductoClimaRepository  productoClimaRepo;
+    @Autowired private ClimaRegistroRepository  climaRepo;
     @Autowired private ConfiguracionRepository  configuracionRepo;
     @Autowired private ConfiguracionService     configuracionService;
     @PersistenceContext private EntityManager   em;
+
+    /** Pares y correlación con el clima de la ventana móvil, ya calculados y listos para guardar */
+    public record Ventana(List<ParProductos> pares, List<ProductoClima> clima) { }
+
+    // ── Escritura (transacciones cortas) ─────────────────────────────────
 
     /** Borra todos los agregados diarios y vacía la marca de actualización (una transacción) */
     @Transactional
@@ -54,31 +81,41 @@ public class AgregadosLote {
         configuracionService.invalidarCache();
     }
 
-    /** Recalcula y guarda los días de [desde, hasta] (reemplazando lo que hubiera). Una transacción. */
+    /**
+     * Reemplaza los agregados de {@code fechas} por los días ya calculados (los días del
+     * rango sin ventas simplemente quedan sin fila). Una transacción corta. @return días guardados
+     */
     @Transactional
-    public int reemplazarRango(LocalDate desde, LocalDate hasta) {
-        List<LocalDate> fechas = new ArrayList<>();
-        for (LocalDate d = desde; !d.isAfter(hasta); d = d.plusDays(1)) fechas.add(d);
-        resumenRepo.deleteByFechas(fechas);
-        productoDiarioRepo.deleteByFechas(fechas);
-        int n = guardarDias(calcularDias(desde, hasta));
-        em.flush();
-        em.clear();        // no arrastrar las ventas del mes a la siguiente vuelta
-        return n;
-    }
-
-    /** Recalcula y guarda solo estas fechas. Una transacción. */
-    @Transactional
-    public int reemplazarFechas(List<LocalDate> fechas) {
+    public int reemplazarDias(List<LocalDate> fechas, Collection<AgregadosService.DiaCalculado> dias) {
         List<LocalDate> copia = new ArrayList<>(fechas);
         resumenRepo.deleteByFechas(copia);
         productoDiarioRepo.deleteByFechas(copia);
         int n = 0;
-        for (LocalDate f : copia) n += guardarDias(calcularDias(f, f));
+        for (AgregadosService.DiaCalculado d : dias) {
+            resumenRepo.save(d.resumen());
+            productoDiarioRepo.saveAll(d.productos());
+            n++;
+        }
         em.flush();
-        em.clear();
+        em.clear();        // no arrastrar lo guardado a la siguiente vuelta
         return n;
     }
+
+    /** Sustituye todos los pares de la canasta por los dados. Una transacción corta. */
+    @Transactional
+    public void reemplazarPares(List<ParProductos> pares) {
+        paresRepo.deleteAllInBatch();
+        paresRepo.saveAll(pares);
+    }
+
+    /** Sustituye toda la correlación producto × clima por la dada. Una transacción corta. */
+    @Transactional
+    public void reemplazarProductoClima(List<ProductoClima> porClima) {
+        productoClimaRepo.deleteAllInBatch();
+        productoClimaRepo.saveAll(porClima);
+    }
+
+    // ── Cálculo (solo lectura: sin candado de escritura) ─────────────────
 
     /** Días con ventas del rango [desde, hasta] (inclusive), cada uno con su resumen y productos */
     @Transactional(readOnly = true)
@@ -113,11 +150,21 @@ public class AgregadosLote {
         return resultado;
     }
 
-    private int guardarDias(Map<LocalDate, AgregadosService.DiaCalculado> dias) {
-        for (AgregadosService.DiaCalculado d : dias.values()) {
-            resumenRepo.save(d.resumen());
-            productoDiarioRepo.saveAll(d.productos());
-        }
-        return dias.size();
+    /** Solo estas fechas (sueltas, quizá de meses distintos), cada una con su consulta; sin guardar */
+    @Transactional(readOnly = true)
+    public Map<LocalDate, AgregadosService.DiaCalculado> calcularFechas(List<LocalDate> fechas) {
+        Map<LocalDate, AgregadosService.DiaCalculado> resultado = new TreeMap<>();
+        for (LocalDate f : fechas) resultado.putAll(calcularDias(f, f));
+        return resultado;
+    }
+
+    /** Canasta y clima de las ventas activas de [inicio, fin), calculados sin guardar */
+    @Transactional(readOnly = true)
+    public Ventana calcularVentana(LocalDateTime inicio, LocalDateTime fin) {
+        List<Venta> ventas = ventaRepo.findActivasConDetallesEntre(inicio, fin);
+        List<ParProductos> pares = AgregadosService.calcularPares(ventas);
+        List<ClimaRegistro> clima = climaRepo
+                .findByFechaHoraGreaterThanEqualAndFechaHoraLessThanOrderByFechaHoraAsc(inicio, fin);
+        return new Ventana(pares, AgregadosService.calcularProductoClima(ventas, clima));
     }
 }

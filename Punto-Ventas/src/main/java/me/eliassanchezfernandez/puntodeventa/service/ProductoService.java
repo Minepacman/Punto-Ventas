@@ -55,6 +55,7 @@ public class ProductoService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.OrdenCompraRepository ordenCompraRepo;
     @Autowired private IdentidadCaja                  identidadCaja;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProductoImagenRepository imagenRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
@@ -383,6 +384,7 @@ public class ProductoService {
                                     boolean consumirAutorizacion) {
         Long proveedorId = proveedor != null ? proveedor.getId() : null;
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
         if (!Double.isFinite(cantidad) || cantidad <= 0) {
             throw new NegocioException("La cantidad a agregar debe ser mayor a cero.");
         }
@@ -428,6 +430,7 @@ public class ProductoService {
     public Producto ajustarStock(Long productoId, double nuevaCantidad, String motivo,
                                  Collection<Autorizacion> autorizaciones) {
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
         if (!Double.isFinite(nuevaCantidad) || nuevaCantidad < 0) {
             throw new NegocioException("La existencia no puede ser negativa.");
         }
