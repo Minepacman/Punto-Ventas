@@ -638,14 +638,19 @@ async function peticion(metodo, ruta, cuerpo, { conToken = true } = {}) {
   if (cuerpo !== undefined) cab['Content-Type'] = 'application/json';
   const s = sesionLocal.leer();
   if (conToken && s && s.token) cab['Authorization'] = 'Bearer ' + s.token;
-  let r;
-  try {
-    r = await fetch(ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo), cache: 'no-store' });
-  } catch (e) {
-    throw new ErrorApi(0, 'SIN_CONEXION', 'No hay conexión con el servidor. Revisa que estés en la misma red Wi-Fi.');
+  let r, datos = null;
+  // 503 OCUPADO: la computadora ya atiende otras consultas pesadas; se reintenta solo, con pausa creciente
+  for (let intento = 0; ; intento++) {
+    try {
+      r = await fetch(ruta, { method: metodo, headers: cab, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo), cache: 'no-store' });
+    } catch (e) {
+      throw new ErrorApi(0, 'SIN_CONEXION', 'No hay conexión con el servidor. Revisa que estés en la misma red Wi-Fi.');
+    }
+    datos = null;
+    try { datos = await r.json(); } catch (e) { /* sin cuerpo JSON */ }
+    if (r.status !== 503 || !datos || datos.codigo !== 'OCUPADO' || intento >= 4) break;
+    await new Promise(listo => setTimeout(listo, 700 * (intento + 1) + Math.random() * 300));
   }
-  let datos = null;
-  try { datos = await r.json(); } catch (e) { /* sin cuerpo JSON */ }
   if (!r.ok) {
     const err = new ErrorApi(r.status, datos && datos.codigo, (datos && datos.error) || 'Error ' + r.status);
     if (r.status === 401 && err.codigo === 'SESION_INVALIDA') document.dispatchEvent(new CustomEvent('sesion-terminada'));
@@ -682,8 +687,10 @@ const api = {
     };
   },
 
-  async ventas({ desde, hasta }) {   // desde/hasta: 'AAAA-MM-DD' (inclusive; máximo 93 días)
-    const d = await peticion('GET', '/api/ventas?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta));
+  /** desde/hasta: 'AAAA-MM-DD' (inclusive; máximo 93 días). Por páginas de 50, más recientes primero. */
+  async ventas({ desde, hasta, pagina = 0 }) {
+    const d = await peticion('GET', '/api/ventas?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta)
+      + '&pagina=' + pagina);
     const r = d.ventas.map(v => ({
       id: v.id, folio: v.folio || String(v.id), fecha: new Date(v.fecha), cajero: v.cajero, pago: v.formaPago,
       cancelada: v.cancelada, total: v.total,
@@ -692,6 +699,8 @@ const api = {
         importe: l.importe != null ? l.importe : l.cantidad * l.precio })),
     }));
     r.truncado = d.truncado; r.totalReal = d.total;
+    r.hayMas = !!d.hayMas;
+    r.totales = d.totales || { ventas: d.total, canceladas: 0, importe: r.filter(v => !v.cancelada).reduce((s, v) => s + v.total, 0) };
     return r;
   },
 
@@ -1099,25 +1108,59 @@ async function vistaHistorial() {
       atajo('Este mes', () => { const n = new Date(); desde.value = claveDia(new Date(n.getFullYear(), n.getMonth(), 1)); hasta.value = hoy; })));
   desde.addEventListener('change', cargar); hasta.addEventListener('change', cargar);
 
+  let consulta = 0;              // cambia con cada filtro: descarta respuestas de una búsqueda anterior
+  let pagina = 0;
+  let vistos = new Set();       // ids ya pintados (si entran ventas nuevas entre páginas no se repiten)
+
+  const filaVenta = v => h('button', { class: 'fila', type: 'button', onclick: () => detalleVenta(v) },
+    h('div', { class: 'cuerpo' },
+      h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada') : null),
+      h('div', { class: 'd' }, fechaHora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero)),
+    h('div', { class: 'der' }, dinero(v.total)));
+
+  function botonMas(miConsulta) {
+    const b = h('button', { class: 'btn btn-suave', type: 'button', style: 'width:100%;margin-top:.8rem' }, 'Cargar más');
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = 'Cargando…';
+      try {
+        const ventas = await api.ventas({ desde: desde.value, hasta: hasta.value, pagina: pagina + 1 });
+        if (miConsulta !== consulta) return;
+        pagina++;
+        b.remove();
+        pintar(ventas, miConsulta);
+      } catch (e) {
+        if (miConsulta !== consulta || e.estado === 401) return;
+        b.disabled = false; b.textContent = 'No se pudo cargar. Toca para reintentar';
+      }
+    };
+    return b;
+  }
+
+  function pintar(ventas, miConsulta) {
+    const nuevas = ventas.filter(v => !vistos.has(v.id));
+    nuevas.forEach(v => vistos.add(v.id));
+    lista.append(...nuevas.map(filaVenta));
+    if (ventas.hayMas) lista.append(botonMas(miConsulta));
+  }
+
   async function cargar() {
     if (!desde.value || !hasta.value) return;
+    const miConsulta = ++consulta;
     if ((new Date(hasta.value) - new Date(desde.value)) / 86400000 + 1 > 93) { lista.replaceChildren(h('div', { class: 'aviso-err' }, 'El rango máximo es de 93 días.')); return; }
     if (desde.value > hasta.value) { lista.replaceChildren(h('div', { class: 'aviso-err' }, 'La fecha inicial no puede ser posterior a la final.')); return; }
     lista.replaceChildren(cargando());
+    resumen.textContent = '';
     try {
-      const ventas = await api.ventas({ desde: desde.value, hasta: hasta.value });
-      const total = ventas.filter(v => !v.cancelada).reduce((s, v) => s + v.total, 0);
-      resumen.textContent = ventas.length + ' venta(s) · ' + dinero(total) + ' (sin canceladas)';
+      const ventas = await api.ventas({ desde: desde.value, hasta: hasta.value, pagina: 0 });
+      if (miConsulta !== consulta) return;
+      pagina = 0; vistos = new Set();
+      // Totales del rango completo (calculados en la computadora), no solo de lo cargado
+      const t = ventas.totales;
+      resumen.textContent = t.ventas + ' venta(s) · ' + dinero(t.importe) + ' (sin canceladas)';
       if (!ventas.length) { lista.replaceChildren(h('div', { class: 'vacio' }, 'No hay ventas en ese rango.')); return; }
-      const tope = 80;
-      lista.replaceChildren(...ventas.slice(0, tope).map(v =>
-        h('button', { class: 'fila', type: 'button', onclick: () => detalleVenta(v) },
-          h('div', { class: 'cuerpo' },
-            h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada') : null),
-            h('div', { class: 'd' }, fechaHora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero)),
-          h('div', { class: 'der' }, dinero(v.total)))),
-        ventas.length > tope || ventas.truncado ? h('p', { class: 'sub', style: 'text-align:center;margin-top:.8rem' }, 'Se muestran las ' + Math.min(tope, ventas.length) + ' más recientes. Acota las fechas para ver el resto.') : null);
-    } catch (e) { if (e.estado !== 401) lista.replaceChildren(errorConReintento(e, cargar)); }
+      lista.replaceChildren();
+      pintar(ventas, miConsulta);
+    } catch (e) { if (miConsulta === consulta && e.estado !== 401) lista.replaceChildren(errorConReintento(e, cargar)); }
   }
   cargar();
   return h('div', { class: 'pila' }, filtros, resumen, lista);
