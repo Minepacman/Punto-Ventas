@@ -112,6 +112,8 @@ public class ConfiguracionClimaController implements Initializable {
             Double[] coords = selectorUbicacion.coordenadas();
             Configuracion g = configuracionService.guardarUbicacionClima(coords[0], coords[1],
                     selectorUbicacion.ciudad(), swClima.isSelected());
+            // La cabecera de la ventana principal oculta o reubica su clima según la nueva configuración
+            climaService.notificarCambio();
             if (g.isClimaActivo()) {
                 // Primer registro de inmediato, en segundo plano (si no hay internet, nada pasa)
                 Thread t = new Thread(climaService::registrarAhora, "clima-primer-registro");

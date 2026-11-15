@@ -20,11 +20,14 @@ import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.service.ActualizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.BienvenidaService;
+import me.eliassanchezfernandez.puntodeventa.service.ClimaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.DonadorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Atajo;
+import me.eliassanchezfernandez.puntodeventa.util.ClimaBarra;
 import me.eliassanchezfernandez.puntodeventa.util.Donacion;
+import me.eliassanchezfernandez.puntodeventa.util.Icono;
 import me.eliassanchezfernandez.puntodeventa.util.PreferenciasActualizacion;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -56,6 +59,7 @@ import java.util.ResourceBundle;
 @Scope("prototype")
 public class MainController implements Initializable {
 
+    @FXML private javafx.scene.control.ToolBar toolbar;
     @FXML private TabPane tabPane;
     @FXML private Tab     tabVentas;
     @FXML private Tab     tabProductos;
@@ -64,8 +68,11 @@ public class MainController implements Initializable {
     @FXML private Tab     tabCorte;
     @FXML private Tab     tabEstadisticas;
     @FXML private Label   labelUsuario;
+    @FXML private javafx.scene.layout.VBox relojBox;
+    @FXML private javafx.scene.layout.HBox filaReloj;
     @FXML private Label   labelHora;
     @FXML private Label   labelFecha;
+    @FXML private Label   labelClima;
     @FXML private Label   labelVersion;
     @FXML private Label   labelCaja;
     @FXML private Label   labelAtajos;
@@ -80,6 +87,7 @@ public class MainController implements Initializable {
     private InventarioController inventarioViewController;
     private CorteController      corteViewController;
     private EstadisticasController estadisticasViewController;
+    private ConfiguracionController configViewController;
 
     @Autowired private SesionService      sesionService;
     @Autowired private BienvenidaService  bienvenidaService;
@@ -90,11 +98,18 @@ public class MainController implements Initializable {
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService catalogoCodigosService;
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private AcercaDeDialogo      acercaDeDialogo;
+    @Autowired private ClimaService         climaService;
 
     /** Versión nueva encontrada en segundo plano (la abre el enlace de la barra de estado) */
     private ActualizacionService.Actualizacion actualizacionDisponible;
 
     private Timeline reloj;
+    /** Relectura del clima de la cabecera cada 10 min (además del aviso de ClimaService al guardar un registro) */
+    private Timeline refrescoClima;
+    private final Runnable oyenteClima = this::refrescarClima;
+    private static final String CLASE_CLIMA_VIEJO = "clima-desactualizado";
+    /** Lo último que se pintó (null = nada que mostrar); acomodarClima decide si cabe en la cabecera */
+    private ClimaBarra.Indicador climaMostrado;
 
     private static final Locale ES_MX = new Locale("es", "MX");
     private static final DateTimeFormatter FMT_HORA =
@@ -129,8 +144,127 @@ public class MainController implements Initializable {
         lnkAtajos.setText("Atajos " + Atajo.AYUDA_ATAJOS.etiquetaCorta(mac));
         configurarRefrescoDePestanas();
         configurarCierreDeVentana();
+        configurarClima();
         // Ya con la ventana en pantalla: asistente inicial → tutorial → donación (BienvenidaService decide cuáles)
         Platform.runLater(this::flujoDeBienvenida);
+    }
+
+    // ── Clima junto al reloj ──────────────────────────────────────────────
+
+    /**
+     * "24 °C · Soleado" con icono, del último registro que ClimaService guardó
+     * (nunca consulta internet aquí). Se relee cuando el servicio avisa que
+     * guardó uno nuevo o cambió la configuración, y cada 10 min por si acaso.
+     * Oculto si el clima está apagado, sin ubicación o sin registros.
+     */
+    private void configurarClima() {
+        labelClima.setVisible(false);
+        labelClima.setManaged(false);
+        if (sesionService.esAdmin()) labelClima.setCursor(javafx.scene.Cursor.HAND);
+        // Si la ventana se angosta (o el nombre del usuario es largo) el clima cede antes que cualquier botón
+        toolbar.widthProperty().addListener((o, a, b) -> acomodarClima());
+        climaService.alCambiar(oyenteClima);
+        refrescoClima = new Timeline(new KeyFrame(Duration.minutes(10), e -> refrescarClima()));
+        refrescoClima.setCycleCount(Animation.INDEFINITE);
+        refrescoClima.play();
+        refrescarClima();
+    }
+
+    /** Lee la base de datos fuera del hilo de JavaFX y pinta en él. Se puede llamar desde cualquier hilo. */
+    private void refrescarClima() {
+        Thread t = new Thread(() -> {
+            ClimaBarra.Indicador indicador = null;
+            try {
+                if (climaService.estaActivo()) {
+                    String ciudad = climaService.ciudad();
+                    indicador = climaService.ultimo()
+                            .map(r -> ClimaBarra.de(r, ciudad, LocalDateTime.now()))
+                            .orElse(null);
+                }
+            } catch (RuntimeException e) {
+                System.err.println("Clima: no se pudo leer para la cabecera (" + e.getMessage() + ").");
+            }
+            final ClimaBarra.Indicador listo = indicador;
+            Platform.runLater(() -> pintarClima(listo));
+        }, "clima-cabecera");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void pintarClima(ClimaBarra.Indicador indicador) {
+        climaMostrado = indicador;
+        if (indicador == null) {
+            acomodarClima();
+            return;
+        }
+        labelClima.setText(indicador.texto());
+        if (labelClima.getGraphic() instanceof Icono icono) {
+            if (!indicador.icono().equals(icono.getNombre())) icono.setNombre(indicador.icono());
+        } else {
+            labelClima.setGraphic(new Icono(indicador.icono(), 16));
+        }
+        labelClima.setTooltip(new javafx.scene.control.Tooltip(indicador.tooltip()));
+        if (indicador.desactualizado()) {
+            if (!labelClima.getStyleClass().contains(CLASE_CLIMA_VIEJO)) labelClima.getStyleClass().add(CLASE_CLIMA_VIEJO);
+        } else {
+            labelClima.getStyleClass().remove(CLASE_CLIMA_VIEJO);
+        }
+        acomodarClima();
+    }
+
+    /**
+     * Muestra el clima solo si cabe en el ancho actual de la cabecera. Va en el
+     * renglón de la hora, que es más corto que la fecha, así que normalmente no
+     * ensancha nada; si aun así no cabe (ventana angosta, nombre de usuario muy
+     * largo) cede el clima, nunca los botones: el cálculo usa los anchos
+     * preferidos, no la posición, así mostrar u ocultar el clima no lo altera.
+     */
+    private void acomodarClima() {
+        boolean cabe = climaMostrado != null
+                && climaCabe(toolbar, relojBox, filaReloj.getSpacing(), labelClima, labelHora, labelFecha);
+        labelClima.setVisible(cabe);
+        labelClima.setManaged(cabe);
+    }
+
+    /**
+     * @param reloj  el VBox del reloj (hora arriba con el clima a su izquierda, fecha abajo)
+     * @param gap    separación entre clima y hora
+     * @return true si el clima cabe con los demás elementos de la barra (o si la barra aún no tiene ancho)
+     */
+    static boolean climaCabe(javafx.scene.control.ToolBar barra, javafx.scene.layout.Region reloj, double gap,
+                             Label clima, Label hora, Label fecha) {
+        double ancho = barra.getWidth();
+        if (ancho <= 0) return true;          // todavía sin dibujar: se recalcula cuando tenga ancho
+        javafx.geometry.Insets p = barra.getPadding();
+        double ocupado = p.getLeft() + p.getRight();
+        int visibles = 0;
+        for (javafx.scene.Node item : barra.getItems()) {
+            if (!item.isManaged()) continue;
+            visibles++;
+            if (item != reloj) ocupado += item.prefWidth(-1);
+        }
+        // La ToolBar no expone su -fx-spacing: lo lleva el HBox interno de su skin (clase "container")
+        javafx.scene.Node caja = barra.lookup(".container");
+        double espacio = caja instanceof javafx.scene.layout.HBox h ? h.getSpacing() : 12;
+        ocupado += espacio * Math.max(0, visibles - 1);
+        double relojConClima = Math.max(clima.prefWidth(-1) + gap + hora.prefWidth(-1), fecha.prefWidth(-1));
+        return ocupado + relojConClima <= ancho;
+    }
+
+    /** Al salir de esta ventana (bloquear, cerrar sesión, salir) se dejan de escuchar avisos y de releer */
+    private void detenerClima() {
+        climaService.quitarOyente(oyenteClima);
+        if (refrescoClima != null) refrescoClima.stop();
+    }
+
+    /** Clic en el clima: solo el ADMIN abre Configuración → Ubicación y clima; para los demás no hace nada */
+    @FXML
+    private void onClima() {
+        if (!sesionService.esAdmin() || !tabPane.getTabs().contains(tabConfig)) return;
+        tabPane.getSelectionModel().select(tabConfig);     // la carga perezosa crea ConfiguracionController
+        if (configViewController == null) return;
+        // Un pulso después para que el contenido de la pestaña ya esté en la escena (la modal necesita su ventana)
+        Platform.runLater(() -> configViewController.onClima());
     }
 
     // ── Bienvenida: asistente inicial, tutorial y donación ───────────────
@@ -295,6 +429,7 @@ public class MainController implements Initializable {
     private void volverAlLogin() {
         try {
             if (reloj != null) reloj.stop();
+            detenerClima();
             guardarTicketPendiente();
             Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();
@@ -311,6 +446,7 @@ public class MainController implements Initializable {
     @FXML
     private void onSalir() {
         if (Ventanas.confirmar("Salir", "¿Salir de Caja Libre?")) {
+            detenerClima();
             guardarTicketPendiente();
             Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();
@@ -482,6 +618,7 @@ public class MainController implements Initializable {
             if (controlador instanceof InventarioController c)   inventarioViewController = c;
             if (controlador instanceof CorteController c)        corteViewController = c;
             if (controlador instanceof EstadisticasController c) estadisticasViewController = c;
+            if (controlador instanceof ConfiguracionController c) configViewController = c;
             tab.setContent(contenido);
             return true;
         } catch (IOException | RuntimeException e) {

@@ -14,8 +14,16 @@
             <Label text="Caja Libre" styleClass="brand-label"/>
             <Region HBox.hgrow="ALWAYS"/>
 
-            <VBox alignment="CENTER_RIGHT" styleClass="reloj-box">
-                <Label fx:id="labelHora" text="--:--" styleClass="reloj-hora"/>
+            <VBox fx:id="relojBox" alignment="CENTER_RIGHT" styleClass="reloj-box">
+                <!-- El clima va en el renglón de la hora: la fecha es más ancha, así que casi nunca ensancha la cabecera -->
+                <HBox fx:id="filaReloj" alignment="CENTER_RIGHT" spacing="10">
+                    <!-- Clima de la hora ("24 °C · Soleado"), del último registro de ClimaService; oculto si el clima
+                         está apagado, sin ubicación o si no cabe en el ancho actual (MainController.acomodarClima).
+                         El ADMIN lo pulsa para abrir Configuración → Ubicación y clima. -->
+                    <Label fx:id="labelClima" text="" styleClass="clima-barra" visible="false" managed="false"
+                           onMouseClicked="#onClima"><graphic><Icono nombre="nube" tamano="16"/></graphic></Label>
+                    <Label fx:id="labelHora" text="--:--" styleClass="reloj-hora"/>
+                </HBox>
                 <Label fx:id="labelFecha" text="—" styleClass="reloj-fecha"/>
             </VBox>
 

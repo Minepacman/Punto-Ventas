@@ -106,10 +106,31 @@ class ClimaServiceTest extends BaseServicioTest {
         assertThat(climaService.climaDe(ahora)).isPresent();
         assertThat(climaService.climaDe(ahora.minusHours(5))).isEmpty();
 
-        // Un registro viejo ya no es "actual"
+        // Un registro viejo ya no es "actual", pero sigue siendo el "último" (la cabecera lo muestra atenuado)
         climaRepo.deleteAll();
-        climaService.guardar(l, ahora.minusHours(ClimaService.VIGENCIA_HORAS + 1));
+        ClimaRegistro viejo = climaService.guardar(l, ahora.minusHours(ClimaService.VIGENCIA_HORAS + 1));
         assertThat(climaService.actual()).isEmpty();
+        assertThat(climaService.ultimo()).isPresent().get().extracting(ClimaRegistro::getId).isEqualTo(viejo.getId());
+    }
+
+    /** La cabecera se entera de registros nuevos sin consultar: ClimaService avisa a sus oyentes */
+    @Test
+    void losOyentesRecibenElAvisoYSePuedenQuitar() {
+        java.util.concurrent.atomic.AtomicInteger avisos = new java.util.concurrent.atomic.AtomicInteger();
+        Runnable oyente = avisos::incrementAndGet;
+        Runnable roto = () -> { throw new IllegalStateException("falla a propósito"); };
+        climaService.alCambiar(roto);        // uno que falla no impide avisar a los demás
+        climaService.alCambiar(oyente);
+        try {
+            climaService.notificarCambio();
+            assertThat(avisos.get()).isEqualTo(1);
+            climaService.quitarOyente(oyente);
+            climaService.notificarCambio();
+            assertThat(avisos.get()).isEqualTo(1);
+        } finally {
+            climaService.quitarOyente(roto);
+            climaService.quitarOyente(oyente);
+        }
     }
 
     @Test

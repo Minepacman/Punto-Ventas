@@ -1006,6 +1006,18 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-band-text-muted;
 }
 
+/* Clima junto al reloj ("24 °C · Soleado" con icono); atenuado cuando el registro tiene más de 3 h */
+.main-toolbar .clima-barra {
+    -fx-font-size: 12px;
+    -fx-text-fill: -pos-band-text;
+    -fx-graphic-text-gap: 4;
+}
+
+.main-toolbar .clima-barra.clima-desactualizado {
+    -fx-text-fill: -pos-band-text-muted;
+    -fx-opacity: 0.7;
+}
+
 /* Menú de desbordamiento de la ToolBar cuando no cabe todo */
 .main-toolbar > .tool-bar-overflow-button > .arrow {
     -fx-background-color: -pos-band-text;
