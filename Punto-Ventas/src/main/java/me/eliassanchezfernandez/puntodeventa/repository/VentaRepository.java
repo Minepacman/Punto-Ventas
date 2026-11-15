@@ -104,6 +104,18 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
     List<Object[]> resumenActivas(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
+    /**
+     * Vista "Hoy" de Estadísticas: en UNA sola fila y una sola consulta,
+     * [n del día completo, total del día completo, n hasta el corte, total hasta el corte]
+     * de las ventas ACTIVAS de un día ({@code corte} es la hora de hoy llevada a ese día:
+     * así "ayer hasta las 15:00" se compara con "hoy hasta las 15:00"). Sin cargar tickets.
+     */
+    @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0), " +
+           "COALESCE(SUM(CASE WHEN v.fecha < :corte THEN 1 ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN v.fecha < :corte THEN v.total ELSE 0.0 END), 0) FROM Venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)")
+    List<Object[]> resumenActivasConCorte(LocalDateTime inicio, LocalDateTime fin, LocalDateTime corte);
+
     /** [n, total] de las ventas CANCELADAS del rango (una sola fila) */
     @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND v.cancelada = true" + FILTRO_CAJA)

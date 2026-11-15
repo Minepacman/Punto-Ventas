@@ -1,5 +1,8 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -25,9 +28,11 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.AyudaEstadisticas;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.ContextoEstadisticas;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionEstadisticas;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionHoy;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionRezagados;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionSurtido;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.TutorialEstadisticasDialogo;
@@ -82,6 +87,11 @@ import java.util.function.Function;
  * Controlador de Estadísticas (CRT-10). Todo sale de los agregados que
  * mantiene AgregadosService (más "hoy" en vivo); aquí solo se presenta.
  *
+ * Arriba va la vista simple «Hoy» ({@link SeccionHoy}: venta y tickets de hoy
+ * contra ayer, la semana pasada y hace un año), que se recarga al entrar a la
+ * pestaña y cada minuto mientras está visible. Debajo, «Más detalles»: el
+ * periodo y todas las gráficas, tablas y secciones en TitledPanes cerrados.
+ *
  * main.fxml incluye esta vista para todos, pero MainController solo muestra
  * la pestaña a quien tiene VER_HISTORIAL; sin ese permiso no se consulta nada
  * en initialize(). No se muestran costos ni ganancias (no hace falta
@@ -90,7 +100,7 @@ import java.util.function.Function;
  *
  * Secciones registrables: además de lo que está en el FXML, {@link #secciones()}
  * da de alta tarjetas que implementan {@link SeccionEstadisticas}; cada una se
- * coloca en el contenedor de su pestaña, se carga en segundo plano y tiene su
+ * coloca en el contenedor de su bloque, se carga en segundo plano y tiene su
  * botón «?» (texto en {@link AyudaEstadisticas}). El tutorial de la primera
  * vez se muestra una sola vez por usuario (TutorialesService).
  */
@@ -99,6 +109,8 @@ import java.util.function.Function;
 public class EstadisticasController implements Initializable {
 
     private static final Locale ES_MX = new Locale("es", "MX");
+    /** Cada cuánto se refresca la vista Hoy mientras la pestaña está visible */
+    static final Duration INTERVALO_EN_VIVO = Duration.minutes(1);
     private static final DateTimeFormatter FMT_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FMT_DIA   = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter FMT_HORA  = DateTimeFormatter.ofPattern("dd/MM HH:mm");
@@ -125,7 +137,8 @@ public class EstadisticasController implements Initializable {
     @FXML private Button btnRecalcular;
     @FXML private Button btnAyuda;
 
-    // Contenedores de las secciones registradas (una por pestaña)
+    // Contenedores de las secciones registradas (uno por bloque)
+    @FXML private VBox boxHoy;
     @FXML private VBox boxSeccionesProductos;
     @FXML private VBox boxSeccionesReabastecimiento;
     @FXML private VBox boxSeccionesRecomendaciones;
@@ -210,6 +223,10 @@ public class EstadisticasController implements Initializable {
     /** Madurez de la última carga (para el tutorial) */
     private MadurezDatos madurezActual;
 
+    /** La vista Hoy (se refresca sola cada minuto mientras está visible) */
+    private SeccionHoy seccionHoy;
+    private Timeline enVivo;
+
     public record FilaProducto(int pos, String producto, String departamento, double piezas, double importe, double porcentaje) { }
     public record FilaCorrelacion(String producto, String tipo, String clave, double piezas, double indice) { }
     public record FilaClima(String condicion, int ventas, double importe) { }
@@ -222,12 +239,48 @@ public class EstadisticasController implements Initializable {
 
         if (sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
             recargar();
+            iniciarActualizacionEnVivo();
         } else {
             quitarColorDeNivel();
             lblNivel.setText("—");
             lblNivelMensaje.setText("Requiere el permiso «Ver historial de ventas».");
             btnRecalcular.setDisable(true);
+            for (SeccionEstadisticas<?> s : secciones) s.pintarError("requiere el permiso «Ver historial de ventas».");
         }
+    }
+
+    // ── Vista Hoy en vivo ─────────────────────────────────────────────────
+
+    /**
+     * Cada minuto vuelve a leer la vista Hoy, solo si la pestaña está a la vista
+     * (ventana mostrada y ningún ancestro oculto: el contenido de una pestaña no
+     * seleccionada está invisible). Se detiene si la vista sale de la escena.
+     */
+    private void iniciarActualizacionEnVivo() {
+        if (seccionHoy == null) return;
+        enVivo = new Timeline(new KeyFrame(INTERVALO_EN_VIVO, e -> actualizarHoySiEstaVisible()));
+        enVivo.setCycleCount(Animation.INDEFINITE);
+        enVivo.play();
+        boxHoy.sceneProperty().addListener((obs, vieja, nueva) -> {
+            if (nueva == null) enVivo.stop();
+            else if (enVivo.getStatus() != Animation.Status.RUNNING) enVivo.play();
+        });
+    }
+
+    private void actualizarHoySiEstaVisible() {
+        if (seccionHoy == null || !estaALaVista(boxHoy)) return;
+        recargarSeccion(seccionHoy);
+    }
+
+    /** ¿El nodo se ve en pantalla? Ventana mostrada y todos sus ancestros visibles. */
+    static boolean estaALaVista(Node nodo) {
+        if (nodo == null || nodo.getScene() == null) return false;
+        javafx.stage.Window w = nodo.getScene().getWindow();
+        if (w == null || !w.isShowing()) return false;
+        for (Node n = nodo; n != null; n = n.getParent()) {
+            if (!n.isVisible()) return false;
+        }
+        return true;
     }
 
     // ── Secciones registrables ────────────────────────────────────────────
@@ -237,7 +290,9 @@ public class EstadisticasController implements Initializable {
      * dar de alta su ayuda en AyudaEstadisticas con la misma clave y añadirla aquí.
      */
     private List<SeccionEstadisticas<?>> secciones() {
+        seccionHoy = new SeccionHoy(estadisticasService);
         return List.of(
+                seccionHoy,
                 new SeccionRezagados(reabastecimientoService),
                 new SeccionSurtido(reabastecimientoService, proveedorService, sesionService));
     }
@@ -250,6 +305,7 @@ public class EstadisticasController implements Initializable {
     /** Construye cada sección y la coloca en el contenedor de su pestaña */
     private void registrarSecciones() {
         Map<SeccionEstadisticas.Ubicacion, VBox> contenedores = new EnumMap<>(SeccionEstadisticas.Ubicacion.class);
+        contenedores.put(SeccionEstadisticas.Ubicacion.HOY,              boxHoy);
         contenedores.put(SeccionEstadisticas.Ubicacion.PRODUCTOS,        boxSeccionesProductos);
         contenedores.put(SeccionEstadisticas.Ubicacion.REABASTECIMIENTO, boxSeccionesReabastecimiento);
         contenedores.put(SeccionEstadisticas.Ubicacion.RECOMENDACIONES,  boxSeccionesRecomendaciones);
