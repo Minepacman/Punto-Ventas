@@ -25,6 +25,7 @@ import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.TutorialesService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.service.AuditoriaService;
+import me.eliassanchezfernandez.puntodeventa.service.AvisosService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionMovilService;
@@ -69,6 +70,7 @@ import java.util.Locale;
 import java.util.zip.GZIPOutputStream;
 import java.net.URLDecoder;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.function.Supplier;
@@ -95,6 +97,9 @@ import java.util.function.Supplier;
  *                                                    y nota media (esta solo con VER_GANANCIAS o GESTIONAR_PROVEEDORES)
  *   POST /api/proveedores/guardar {id?, nombre, telefono?, contacto?, diasEntrega:[1..7], diasPreventa:[1..7], notas?}
  *                                                    (GESTIONAR_PROVEEDORES) -> crea o edita; el RFC solo se captura en el escritorio
+ *   GET  /api/avisos                                  (cualquier usuario) -> avisos del día: proveedores que entregan o pasan a
+ *                                                    preventa hoy/mañana, productos que se acaban, hora pico (importes solo con
+ *                                                    VER_GANANCIAS o GESTIONAR_PROVEEDORES); el servicio los guarda 5 min en memoria
  *   GET  /api/tutorial                                (cualquier usuario) -> {visto}: recorrido móvil ya visto por ESTE usuario
  *   POST /api/tutorial/visto {visto: true|false}       (cualquier usuario) -> lo marca/reinicia (columna cajeros.tutorial_movil_visto)
  *
@@ -162,6 +167,7 @@ public class ServidorMovilService {
     @Autowired private ProveedorService     proveedorService;
     @Autowired private AnunciadorMdns       anunciador;
     @Autowired private TutorialesService    tutorialesService;
+    @Autowired private AvisosService        avisosService;
 
     /** Puertos de respaldo (después del preferido) cuando el elegido está ocupado; 0 = lo asigna el sistema */
     static final List<Integer> PUERTOS_RESPALDO = candidatosRespaldo();
@@ -453,6 +459,7 @@ public class ServidorMovilService {
                 case "/api/inventario/ajuste" -> { exigir(metodo, "POST"); ajusteInventario(ex); }
                 case "/api/proveedores"     -> { exigir(metodo, "GET");  proveedores(ex); }
                 case "/api/proveedores/guardar" -> { exigir(metodo, "POST"); guardarProveedor(ex); }
+                case "/api/avisos"          -> { exigir(metodo, "GET");  avisos(ex); }
                 case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
                 case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
                 case "/favicon.ico", "/icono-32.png", "/icono-256.png", "/manifest.webmanifest" -> estatico(ex, metodo, ruta);
@@ -1281,6 +1288,48 @@ public class ServidorMovilService {
                     .ifPresent(rp -> r.put("proveedor", mapaProveedor(rp, a.costosVisibles(), productosPorProveedor)));
             return r;
         });
+    }
+
+    // ── Avisos (la campana de la página móvil) ────────────────────────────
+
+    /**
+     * Avisos del día para cualquier usuario con sesión. El servicio decide qué importes
+     * entregar (nota media del proveedor solo a quien ve costos) y guarda el cálculo 5 minutos.
+     */
+    private void avisos(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> mapaAvisos(avisosService.avisos()));
+    }
+
+    private Map<String, Object> mapaAvisos(AvisosService.Avisos a) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("hoy", a.hoy().toString());
+        r.put("antiguedadSegundos", Math.max(0, Duration.between(a.generado(), LocalDateTime.now(reloj)).getSeconds()));
+        r.put("costosVisibles", a.costosVisibles());
+        r.put("total", a.avisos().size());
+        List<Map<String, Object>> lista = new ArrayList<>();
+        for (AvisosService.Aviso av : a.avisos()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", av.id());
+            m.put("tipo", av.tipo().name());
+            m.put("tipoEtiqueta", av.tipo().getEtiqueta());
+            m.put("prioridad", av.prioridad());
+            m.put("icono", av.icono());
+            m.put("titulo", av.titulo());
+            m.put("detalle", av.detalle());
+            if (av.accion() == null) {
+                m.put("accion", null);
+            } else {
+                Map<String, Object> ac = new LinkedHashMap<>();
+                ac.put("seccion", av.accion().seccion());
+                if (av.accion().proveedorId() != null) ac.put("proveedorId", av.accion().proveedorId());
+                if (av.accion().filtro() != null) ac.put("filtro", av.accion().filtro());
+                if (av.accion().buscar() != null) ac.put("buscar", av.accion().buscar());
+                m.put("accion", ac);
+            }
+            lista.add(m);
+        }
+        r.put("avisos", lista);
+        return r;
     }
 
     // ── Utilidades HTTP ───────────────────────────────────────────────────

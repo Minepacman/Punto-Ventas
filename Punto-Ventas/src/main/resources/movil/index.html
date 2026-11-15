@@ -21,7 +21,7 @@
   - Lo sirve el programa de escritorio (ServidorMovilService) en la red local.
   - Sin dependencias externas ni CDNs: funciona sin internet, solo en la LAN.
   - LOGIN, SESIÓN y DATOS (estadísticas, ventas, inventario, ajustes,
-    proveedores con su agenda de entrega/preventa) son
+    proveedores con su agenda de entrega/preventa, avisos de la campana) son
     reales: el objeto `api` (sección 3) llama con fetch() a /api/* y el servidor
     vuelve a comprobar los permisos del usuario en cada petición. SOLO la lectura
     del ticket del proveedor (OCR) sigue siendo un DEMO (objeto `ocr`).
@@ -123,8 +123,26 @@ a.btn { text-decoration: none; }   /* enlaces con aspecto de botón (p. ej. "Lla
 .cab-titulos { flex: 1; min-width: 0; display: grid; }
 .cab-titulos h1 { flex: none; }
 .cab-negocio { font-size: .74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
-.btn-icono-cab { width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px; background: none; color: var(--accent-text); display: grid; place-items: center; cursor: pointer; }
+.btn-icono-cab { position: relative; width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px; background: none; color: var(--accent-text); display: grid; place-items: center; cursor: pointer; }
 .btn-icono-cab:hover { background: var(--accent-subtle); }
+/* Campana de avisos: globo con el número de pendientes (se oculta en cero) */
+.globo { position: absolute; top: 3px; right: 1px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff;
+  font-size: .68rem; font-weight: 800; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none; }
+.aviso-grupo { display: grid; gap: .4rem; }
+.aviso-grupo + .aviso-grupo { margin-top: .4rem; }
+.aviso-grupo .seccion-t { display: flex; align-items: center; gap: .4rem; margin-bottom: .1rem; }
+.aviso-item { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.aviso-item .aviso-ir { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: .6rem; padding: .6rem .6rem; border: 0; border-radius: 12px;
+  background: var(--surface-alt); color: inherit; text-align: left; cursor: pointer; min-height: 52px; }
+.aviso-item .aviso-ir[disabled] { cursor: default; opacity: 1; pointer-events: none; }
+.aviso-item .ico-tipo { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--accent-subtle); color: var(--accent-text); }
+.aviso-item.alta .ico-tipo { background: var(--danger-subtle); color: var(--danger-text); }
+.aviso-item.info .ico-tipo { background: var(--warning-subtle); color: var(--warning-text); }
+.aviso-item .cuerpo { flex: 1; min-width: 0; }
+.aviso-item .t { font-weight: 650; overflow-wrap: anywhere; line-height: 1.3; }
+.aviso-item .d { font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; margin-top: .1rem; }
+.aviso-x { width: 40px; height: 40px; flex: none; border: 0; border-radius: 10px; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.aviso-x:hover { background: var(--inset); }
 /* Iconos SVG en línea (ver ICONOS en el script): heredan el color del texto */
 .ico-svg { display: block; flex: none; }
 .pastilla {
@@ -479,6 +497,8 @@ const ICONOS = {
   telefono:   ['M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'],
   lapiz:      ['M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z', 'm15 5 4 4'],
   mas:        ['M5 12h14', 'M12 5v14'],
+  campana:    ['M10.268 21a2 2 0 0 0 3.464 0', 'M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326'],
+  reloj:      ['M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0', 'M12 6v6l4 2'],
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
@@ -708,6 +728,9 @@ const api = {
   /** Crea (sin id) o edita (con id) un proveedor: {id?, nombre, telefono, contacto, diasEntrega:[1..7], diasPreventa:[1..7], notas} */
   guardarProveedor: datos => peticion('POST', '/api/proveedores/guardar', datos),
 
+  /** Avisos del día (campana): {hoy, total, avisos:[{id, tipo, tipoEtiqueta, prioridad, icono, titulo, detalle, accion}]}. El servidor los guarda 5 min. */
+  avisos: () => peticion('GET', '/api/avisos'),
+
   /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
   async ajustarStock({ id, tipo, cantidad, motivo, proveedor }) {
     const t = tipo === 'ENTRADA' ? 'entrada' : tipo === 'SALIDA' ? 'merma' : 'ajuste';
@@ -772,6 +795,7 @@ function cerrarLocal(mensaje) {
   E.sesion = null;
   clearInterval(E.temporizador);
   E.tutorialComprobado = false;
+  avisos.reiniciar();
   document.querySelectorAll('.velo, .tuto-velo').forEach(v => v.remove());
   pantallaLogin(mensaje);
 }
@@ -886,7 +910,7 @@ const SECCIONES = [   // `permiso` = clave de `secciones` que devuelve el servid
 ];
 const permitidas = () => SECCIONES.filter(s => E.sesion && E.sesion.secciones && E.sesion.secciones[s.permiso]);
 
-let contVista, contNav, tituloCab, botonAyuda;
+let contVista, contNav, tituloCab, botonAyuda, botonAvisos;
 
 function entrarAlSistema() {
   tituloCab = h('h1');
@@ -894,12 +918,13 @@ function entrarAlSistema() {
   contNav = h('div', { class: 'nav-int' });
   botonAyuda = h('button', { class: 'btn-icono-cab', type: 'button', id: 'ayuda', 'aria-label': 'Ayuda: recorrido por la página',
     title: 'Ayuda', onclick: () => tutorial.abrir() }, icono('ayuda', { tamano: 26 }));
+  botonAvisos = avisos.boton();
   const negocio = (E.sesion.negocio || '').trim();
   raiz.replaceChildren(
     h('header', { class: 'cabecera' },
       logoApp('cab-logo', 32),
       h('div', { class: 'cab-titulos' }, tituloCab, negocio ? h('div', { class: 'cab-negocio' }, negocio) : null),
-      botonAyuda),
+      botonAvisos, botonAyuda),
     contVista,
     h('nav', { class: 'nav', 'aria-label': 'Secciones' }, contNav));
   const ok = permitidas();
@@ -908,8 +933,10 @@ function entrarAlSistema() {
   irA(ok.some(s => s.id === inicial) ? inicial : ok[0].id).then(tutorial.siEsLaPrimeraVez);
   clearInterval(E.temporizador);
   E.temporizador = setInterval(vigilar, 60000);   // revalida cada minuto
+  avisos.cargar();                                 // al entrar; después cada 10 min mientras la página esté visible
+  avisos.programar();
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && E.sesion) vigilar(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && E.sesion) { vigilar(); avisos.cargarSiToca(); } });
 window.addEventListener('hashchange', () => {
   const id = location.hash.replace('#/', '');
   if (E.sesion && id !== E.vista && permitidas().some(s => s.id === id)) irA(id);
@@ -933,8 +960,11 @@ function pintarNav() {
   }
 }
 
-/** Cada cambio de sección vuelve a validar la sesión EN EL SERVIDOR (guardia de ruta). */
-async function irA(id) {
+/**
+ * Cada cambio de sección vuelve a validar la sesión EN EL SERVIDOR (guardia de ruta).
+ * `opciones` las recibe la vista (p. ej. un aviso abre Inventario ya filtrado o un proveedor concreto).
+ */
+async function irA(id, opciones = {}) {
   contVista.replaceChildren(cargando());
   if (!(await revalidar())) return;            // 401 => ya se mostró el login
   const s = permitidas().find(x => x.id === id);
@@ -947,7 +977,7 @@ async function irA(id) {
   tituloCab.textContent = s.titulo;
   pintarNav();
   try {
-    contVista.replaceChildren(await s.vista());
+    contVista.replaceChildren(await s.vista(opciones || {}));
   } catch (e) {
     if (e.estado === 401) return;
     contVista.replaceChildren(h('div', { class: 'aviso-err', role: 'alert' }, e.message));
@@ -1091,11 +1121,13 @@ function miniaturaProducto(id) {
   if (observadorMiniaturas) observadorMiniaturas.observe(img); else cargarMiniatura(img);
   return img;
 }
-async function vistaInventario() {
-  let productos = await api.inventario('');
-  let filtro = 'todos', texto = '', pendiente = null, secuencia = 0;
+/** opciones: {filtro: 'todos'|'bajo'|'agotado', buscar: texto} (las manda un aviso de la campana) */
+async function vistaInventario(opciones = {}) {
+  let texto = typeof opciones.buscar === 'string' ? opciones.buscar.slice(0, 60) : '';
+  let productos = await api.inventario(texto.trim());
+  let filtro = ['todos', 'bajo', 'agotado'].includes(opciones.filtro) ? opciones.filtro : 'todos', pendiente = null, secuencia = 0;
   const lista = h('div', { class: 'lista-rej' });
-  const busca = h('input', { class: 'entrada', type: 'search', inputmode: 'search', enterkeyhint: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off' });
+  const busca = h('input', { class: 'entrada', type: 'search', inputmode: 'search', enterkeyhint: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off', value: texto });
   const chips = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Filtrar' });
   const estado = p => p.stock <= 0 ? ['Agotado', 'mal'] : p.stock <= p.minimo ? ['Stock bajo', 'aviso'] : ['En existencia', 'ok'];
 
@@ -1225,7 +1257,8 @@ function selectorDias(etiqueta, seleccion, { preventa = false, editable = false 
 
 const telefonoLimpio = t => (t || '').replace(/[^0-9+]/g, '');
 
-async function vistaProveedores() {
+/** opciones: {proveedorId} abre de entrada el detalle de ese proveedor (lo manda un aviso de la campana) */
+async function vistaProveedores(opciones = {}) {
   let agenda = await api.proveedores();
   let seleccionado = agenda.hoy;                 // día del calendario que se detalla abajo (AAAA-MM-DD)
   const caja = h('div', { class: 'pila' });
@@ -1371,6 +1404,10 @@ async function vistaProveedores() {
   }
 
   pintar();
+  if (opciones.proveedorId != null) {
+    const p = agenda.proveedores.find(x => x.id === opciones.proveedorId);
+    if (p) setTimeout(() => detalleProveedor(p), 0);   // ya con la vista puesta, para que al cerrar quede la agenda detrás
+  }
   return caja;
 }
 
@@ -1529,6 +1566,150 @@ async function vistaConfig() {
 }
 
 /* ============================================================================
+   11b. AVISOS (la campana de la cabecera)
+       - GET /api/avisos al entrar y cada 10 minutos mientras la página esté visible
+         (el servidor los calcula y guarda 5 min; no hay notificaciones push: sin
+         HTTPS no hay service worker ni Notifications API, así que ni se intenta).
+       - Hoja agrupada por tipo (proveedores, se está acabando, hora pico); tocar un
+         aviso lleva a su sección. Los descartados se recuerdan EN EL TELÉFONO por
+         usuario y por día (almacen, con try/catch): mañana vuelven si siguen vigentes.
+   ============================================================================ */
+const avisos = {
+  datos: null, ultimaCarga: 0, cargando: null, globo: null, botonEl: null, hojaAbierta: null, temporizador: null,
+  CADA_MS: 10 * 60 * 1000,
+  ORDEN_TIPOS: ['PROVEEDOR', 'STOCK', 'HORA_PICO'],
+  ICONO_TIPO: { PROVEEDOR: 'camion', STOCK: 'paquete', HORA_PICO: 'reloj' },
+
+  claveLocal: () => 'pv.avisos.' + (E.sesion ? E.sesion.usuario : ''),
+
+  boton() {
+    avisos.globo = h('span', { class: 'globo oculto', 'aria-hidden': 'true' });
+    avisos.botonEl = h('button', { class: 'btn-icono-cab', type: 'button', id: 'avisos', 'aria-label': 'Avisos', title: 'Avisos',
+      onclick: () => avisos.abrir() }, icono('campana', { tamano: 26 }), avisos.globo);
+    return avisos.botonEl;
+  },
+
+  reiniciar() {
+    clearInterval(avisos.temporizador);
+    avisos.temporizador = null;
+    avisos.datos = null; avisos.ultimaCarga = 0; avisos.cargando = null;
+    if (avisos.hojaAbierta) { avisos.hojaAbierta.cerrar(); avisos.hojaAbierta = null; }
+  },
+
+  programar() {
+    clearInterval(avisos.temporizador);
+    avisos.temporizador = setInterval(() => { if (!document.hidden && E.sesion) avisos.cargar(); }, avisos.CADA_MS);
+  },
+
+  /** Al volver a la pestaña: solo si ya pasaron los 10 minutos (el intervalo no corre con la página oculta en muchos teléfonos) */
+  cargarSiToca() {
+    if (Date.now() - avisos.ultimaCarga >= avisos.CADA_MS) avisos.cargar();
+  },
+
+  async cargar() {
+    if (!E.sesion) return null;
+    if (avisos.cargando) return avisos.cargando;
+    avisos.cargando = (async () => {
+      try {
+        const d = await api.avisos();
+        avisos.datos = d; avisos.ultimaCarga = Date.now();
+        avisos.pintarGlobo();
+        return d;
+      } catch (e) {
+        return null;   // sin red o sin sesión: se queda lo último que se vio; la sesión la vigila vigilar()
+      } finally { avisos.cargando = null; }
+    })();
+    return avisos.cargando;
+  },
+
+  /** ids descartados HOY (según el "hoy" del servidor); otro día limpia la lista */
+  descartados() {
+    if (!avisos.datos) return new Set();
+    try {
+      const g = JSON.parse(almacen.get(avisos.claveLocal()) || 'null');
+      if (g && g.dia === avisos.datos.hoy && Array.isArray(g.ids)) return new Set(g.ids.map(String));
+    } catch (e) { /* valor corrupto: se ignora */ }
+    return new Set();
+  },
+  guardarDescartados(set) {
+    if (!avisos.datos) return;
+    almacen.set(avisos.claveLocal(), JSON.stringify({ dia: avisos.datos.hoy, ids: [...set].slice(0, 200) }));
+  },
+  descartar(id) { const s = avisos.descartados(); s.add(String(id)); avisos.guardarDescartados(s); avisos.pintarGlobo(); },
+  descartarTodos() { const s = avisos.descartados(); for (const a of avisos.lista()) s.add(String(a.id)); avisos.guardarDescartados(s); avisos.pintarGlobo(); },
+
+  lista: () => (avisos.datos && Array.isArray(avisos.datos.avisos)) ? avisos.datos.avisos : [],
+  pendientes() { const d = avisos.descartados(); return avisos.lista().filter(a => !d.has(String(a.id))); },
+
+  pintarGlobo() {
+    if (!avisos.globo || !avisos.botonEl) return;
+    const n = avisos.pendientes().length;
+    avisos.globo.textContent = n > 99 ? '99+' : String(n);
+    avisos.globo.classList.toggle('oculto', n === 0);
+    avisos.botonEl.setAttribute('aria-label', n ? 'Avisos: ' + n + ' pendiente(s)' : 'Avisos: ninguno pendiente');
+  },
+
+  /** Lleva a la sección del aviso (si el usuario puede verla) con las opciones que trae */
+  ir(a) {
+    const ac = a.accion;
+    if (!ac || !ac.seccion || !permitidas().some(s => s.id === ac.seccion)) return;
+    if (avisos.hojaAbierta) { avisos.hojaAbierta.cerrar(); avisos.hojaAbierta = null; }
+    irA(ac.seccion, { proveedorId: ac.proveedorId, filtro: ac.filtro, buscar: ac.buscar });
+  },
+
+  async abrir() {
+    if (!E.sesion) return;
+    if (avisos.hojaAbierta) { avisos.hojaAbierta.cerrar(); avisos.hojaAbierta = null; }
+    const cuerpo = h('div', { style: 'display:grid;gap:.6rem' });
+    const pie = h('div', { class: 'acciones dos' });
+    const q = hoja([h('h2', null, 'Avisos'), cuerpo, pie]);
+    avisos.hojaAbierta = { cerrar: () => { q.cerrar(); avisos.hojaAbierta = null; } };
+
+    const pintar = () => {
+      const pend = avisos.pendientes();
+      vaciar(cuerpo); vaciar(pie);
+      if (!avisos.datos) {
+        cuerpo.append(h('p', { class: 'vacio' }, 'No se pudieron cargar los avisos. Revisa la conexión con la computadora.'));
+      } else if (!pend.length) {
+        cuerpo.append(h('p', { class: 'vacio' }, avisos.lista().length
+          ? 'Ya descartaste los avisos de hoy. Mañana aparecerán los nuevos.'
+          : 'Sin avisos por ahora. Aquí verás qué proveedor viene hoy o mañana, qué productos se están acabando y la hora pico del día.'));
+      } else {
+        for (const tipo of avisos.ORDEN_TIPOS) {
+          const del = pend.filter(a => a.tipo === tipo);
+          if (!del.length) continue;
+          cuerpo.append(h('div', { class: 'aviso-grupo', role: 'group', 'aria-label': del[0].tipoEtiqueta || tipo },
+            h('div', { class: 'seccion-t' }, icono(avisos.ICONO_TIPO[tipo] || 'campana', { tamano: 16 }), del[0].tipoEtiqueta || tipo),
+            del.map(a => {
+              const puedeIr = !!(a.accion && a.accion.seccion && permitidas().some(s => s.id === a.accion.seccion));
+              const ico = ICONOS[a.icono] ? a.icono : (avisos.ICONO_TIPO[tipo] || 'campana');
+              return h('div', { class: 'aviso-item' + (a.prioridad === 1 ? ' alta' : a.prioridad >= 3 ? ' info' : '') },
+                h('button', { class: 'aviso-ir', type: 'button', disabled: !puedeIr, onclick: () => avisos.ir(a) },
+                  h('span', { class: 'ico-tipo', 'aria-hidden': 'true' }, icono(ico, { tamano: 18 })),
+                  h('span', { class: 'cuerpo' }, h('span', { class: 't', style: 'display:block' }, a.titulo), a.detalle ? h('span', { class: 'd', style: 'display:block' }, a.detalle) : null)),
+                h('button', { class: 'aviso-x', type: 'button', 'aria-label': 'Descartar: ' + a.titulo, title: 'Descartar por hoy',
+                  onclick: () => { avisos.descartar(a.id); pintar(); } }, icono('cerrar', { tamano: 20 })));
+            })));
+        }
+        if (avisos.datos.antiguedadSegundos >= 120) {
+          cuerpo.append(h('p', { class: 'nota' }, 'Calculado hace ' + Math.round(avisos.datos.antiguedadSegundos / 60) + ' min; se actualiza cada 10 minutos.'));
+        }
+      }
+      pie.append(
+        h('button', { class: 'btn', type: 'button', onclick: () => avisos.hojaAbierta && avisos.hojaAbierta.cerrar() }, 'Cerrar'),
+        pend.length
+          ? h('button', { class: 'btn btn-suave', type: 'button', onclick: () => { avisos.descartarTodos(); pintar(); } }, 'Descartar todos')
+          : h('button', { class: 'btn btn-suave', type: 'button', onclick: async () => { cuerpo.replaceChildren(cargando()); await avisos.cargar(); pintar(); } }, 'Actualizar'));
+    };
+    if (!avisos.datos || Date.now() - avisos.ultimaCarga > 2 * 60 * 1000) {   // viejo o nunca cargado: refresca al abrir
+      cuerpo.append(cargando('Buscando avisos…'));
+      await avisos.cargar();
+    }
+    pintar();
+  },
+};
+
+/* ============================================================================
    12. RECORRIDO GUIADO (tutorial): una vez por usuario, se repite con "Ayuda"
        - Solo incluye las secciones que el usuario puede ver (permitidas()).
        - Resalta el botón de la sección en el menú y coloca la tarjeta junto a él.
@@ -1558,6 +1739,9 @@ const tutorial = {
     const lista = [{ icono: 'tienda', titulo: 'Bienvenido al acceso móvil',
       texto: 'Desde tu teléfono puedes consultar el negocio estando en la misma red Wi-Fi que la computadora. Este recorrido dura un minuto y explica qué hace cada sección; puedes repetirlo cuando quieras.' }];
     for (const s of permitidas()) lista.push({ icono: s.icono, titulo: s.titulo, texto: textos[s.id] || '', foco: () => contNav.querySelector('[data-id="' + s.id + '"]') });
+    lista.push({ icono: 'campana', titulo: 'Avisos del día',
+      texto: 'La campana de arriba reúne lo que conviene saber hoy: qué proveedor entrega o pasa a tomar pedido hoy y mañana, qué productos se están acabando según lo que vendes y, con suficiente historial, la hora pico del día. Toca un aviso para ir a su sección; con la X lo descartas por hoy. Se actualiza cada 10 minutos.',
+      foco: () => botonAvisos });
     lista.push({ icono: 'ayuda', titulo: '¿Dudas después?', texto: 'Toca el botón de ayuda de la parte superior para repetir este recorrido en cualquier momento. ¡Listo para empezar!', foco: () => botonAyuda });
     return lista;
   },
