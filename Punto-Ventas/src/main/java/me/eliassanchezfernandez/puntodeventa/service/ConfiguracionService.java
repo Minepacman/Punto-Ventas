@@ -653,6 +653,24 @@ public class ConfiguracionService {
         guardarConfig(c);
     }
 
+    // ── Caducidades ───────────────────────────────────────────────────────
+
+    /** Con cuántos días de anticipación se avisa de lo que caduca (AJUSTAR_INVENTARIO, auditado) */
+    @Transactional
+    public Configuracion guardarDiasAvisoCaducidad(int dias) {
+        sesionService.verificarPermiso(me.eliassanchezfernandez.puntodeventa.model.Permiso.AJUSTAR_INVENTARIO);
+        if (dias < CaducidadService.DIAS_AVISO_MINIMO || dias > CaducidadService.DIAS_AVISO_MAXIMO) {
+            throw new NegocioException("Los días de aviso de caducidad deben estar entre "
+                    + CaducidadService.DIAS_AVISO_MINIMO + " y " + CaducidadService.DIAS_AVISO_MAXIMO + ".");
+        }
+        Configuracion c = obtenerParaEditar();
+        int antes = c.getDiasAvisoCaducidad();
+        c.setDiasAvisoCaducidad(dias);
+        Configuracion g = guardarConfig(c);
+        if (antes != dias) auditar("Caducidades", "días de aviso=" + antes, "días de aviso=" + dias);
+        return g;
+    }
+
     private void auditar(String seccion, String antes, String despues) {
         auditoriaService.registrar(sesionService.getCajeroActual(), "CONFIGURACION_MODIFICADA",
                 "[" + seccion + "] antes: " + antes + " | después: " + despues, (Cajero) null);

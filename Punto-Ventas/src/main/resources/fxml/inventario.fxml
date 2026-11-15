@@ -22,6 +22,7 @@
             <Button text="Ajustes"                onAction="#onAjustes"><graphic><Icono nombre="bascula"/></graphic></Button>
             <ToggleButton fx:id="btnSoloBajos" text="Productos Bajos"
                           onAction="#onProductosBajos"><graphic><Icono nombre="alerta"/></graphic></ToggleButton>
+            <Button fx:id="btnPorCaducar" text="Por caducar"   onAction="#onPorCaducar"><graphic><Icono nombre="calendario"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
             <!-- "Reporte de inventario" (PDF) se mostrará cuando exista; "Exportar…" ya saca CSV/xlsx/PDF -->
             <Button text="Movimientos"            onAction="#onReporteMovimientos"><graphic><Icono nombre="lista"/></graphic></Button>
@@ -62,6 +63,8 @@
 
                 <Label text="Cantidad Actual:"/>
                 <Label fx:id="labelCantidadActual" text="0.00" styleClass="info-label"/>
+                <!-- Fechas de caducidad estimadas (solo productos que controlan caducidad) -->
+                <Label fx:id="lblLotes" text="" wrapText="true" styleClass="hint" visible="false" managed="false"/>
 
                 <Label fx:id="lblEtiquetaCantidad" text="Cantidad que entra:"/>
                 <TextField fx:id="txtCantidad" promptText="0.00"
@@ -77,6 +80,11 @@
                     <TextField fx:id="txtCosto" promptText="0.00"/>
                     <Label text="El costo del producto se actualiza con el de esta entrada."
                            wrapText="true" styleClass="hint"/>
+                    <!-- Solo productos con "Controlar caducidad" -->
+                    <VBox fx:id="vboxCaducidad" spacing="6" visible="false" managed="false">
+                        <Label text="Caduca el (opcional):"/>
+                        <DatePicker fx:id="dpCaducidad" maxWidth="Infinity"/>
+                    </VBox>
                 </VBox>
 
                 <!-- Solo en modo AJUSTE -->

@@ -59,7 +59,8 @@ public class AvisosService {
     public enum Tipo {
         PROVEEDOR("Proveedores"),
         STOCK("Se está acabando"),
-        HORA_PICO("Hora pico");
+        HORA_PICO("Hora pico"),
+        CADUCIDAD("Por caducar");
 
         private final String etiqueta;
         Tipo(String etiqueta) { this.etiqueta = etiqueta; }
@@ -93,7 +94,10 @@ public class AvisosService {
                           Double cobertura) { }
 
     record Base(LocalDate hoy, LocalDateTime generado, List<VisitaProveedor> visitas, List<ProductoEscaso> escasos,
-                int escasosTotal, HoraPico horaPico) { }
+                int escasosTotal, HoraPico horaPico, List<CaducidadService.PorCaducar> caducidades, int diasCaducidad) { }
+
+    /** Id del aviso de caducidades: uno al día (las notificaciones no lo repiten aunque cambie la cuenta) */
+    public static final String ID_CADUCIDAD = "caducidad-semana";
 
     @Autowired private ProveedorRepository  proveedorRepo;
     @Autowired private ProductoRepository   productoRepo;
@@ -101,6 +105,7 @@ public class AvisosService {
     @Autowired private ProveedorService     proveedorService;
     @Autowired private EstadisticasService  estadisticasService;
     @Autowired private SesionService        sesionService;
+    @Autowired private CaducidadService     caducidadService;
     @Autowired private Clock                reloj;
 
     private volatile Base cache;
@@ -124,6 +129,8 @@ public class AvisosService {
         List<Aviso> lista = new ArrayList<>();
         for (VisitaProveedor v : b.visitas()) lista.add(avisoProveedor(v, costos));
         avisosStock(b, lista);
+        Aviso cad = avisoCaducidad(b.caducidades(), b.diasCaducidad());
+        if (cad != null) lista.add(cad);
         if (b.horaPico() != null && ahora.getHour() < b.horaPico().hasta()) lista.add(avisoHoraPico(b.horaPico()));
         // Orden estable: por prioridad y, dentro de ella, como se armó (proveedores por nombre, productos por urgencia)
         lista.sort(Comparator.comparingInt(Aviso::prioridad));
@@ -161,7 +168,9 @@ public class AvisosService {
         Optional<LocalDate> primeraVenta = ventaRepo.findPrimeraActiva().map(v -> v.getFecha().toLocalDate());
         List<ProductoEscaso> escasos = productosEscasos(hoy, primeraVenta);
         List<ProductoEscaso> recorte = escasos.subList(0, Math.min(MAX_PRODUCTOS, escasos.size()));
-        return new Base(hoy, ahora, visitasProveedores(hoy), List.copyOf(recorte), escasos.size(), horaPico(hoy, primeraVenta));
+        int diasCad = caducidadService.diasAviso();
+        return new Base(hoy, ahora, visitasProveedores(hoy), List.copyOf(recorte), escasos.size(), horaPico(hoy, primeraVenta),
+                List.copyOf(caducidadService.porCaducar(hoy, diasCad)), diasCad);
     }
 
     // ── Proveedores: hoy y mañana ─────────────────────────────────────────
@@ -306,6 +315,37 @@ public class AvisosService {
 
     static String dinero(double v) {
         return "$" + String.format(Locale.ROOT, "%,.2f", v);
+    }
+
+    // ── Caducidades ───────────────────────────────────────────────────────
+
+    /**
+     * Un solo aviso con lo que caduca dentro de {@code dias} días o ya caducó (null si no hay nada):
+     * "3 productos caducan esta semana" (o "en los próximos N días"). Cuenta productos, no
+     * entradas. Prioridad 1 si algo ya caducó, 2 si no. Función pura.
+     */
+    static Aviso avisoCaducidad(List<CaducidadService.PorCaducar> lotes, int dias) {
+        if (lotes == null || lotes.isEmpty()) return null;
+        java.util.LinkedHashSet<String> nombres = new java.util.LinkedHashSet<>();
+        java.util.Set<Long> productos = new java.util.HashSet<>(), caducados = new java.util.HashSet<>();
+        for (CaducidadService.PorCaducar l : lotes) {
+            productos.add(l.productoId());
+            nombres.add(l.producto());
+            if (l.caducado()) caducados.add(l.productoId());
+        }
+        int n = productos.size();
+        String plazo = dias == 7 ? "esta semana" : dias == 1 ? "hoy o mañana" : "en los próximos " + dias + " días";
+        String titulo = n == 1 ? "1 producto caduca " + plazo : n + " productos caducan " + plazo;
+        StringBuilder detalle = new StringBuilder();
+        if (!caducados.isEmpty()) {
+            detalle.append(caducados.size() == 1 ? "1 ya caducó: retíralo de la venta. " : caducados.size() + " ya caducaron: retíralos de la venta. ");
+        }
+        List<String> lista = new ArrayList<>(nombres);
+        detalle.append(String.join(", ", lista.subList(0, Math.min(MAX_PRODUCTOS, lista.size()))));
+        if (lista.size() > MAX_PRODUCTOS) detalle.append(" y ").append(lista.size() - MAX_PRODUCTOS).append(" más");
+        detalle.append('.');
+        return new Aviso(ID_CADUCIDAD, Tipo.CADUCIDAD, caducados.isEmpty() ? 2 : 1, "calendario", titulo, detalle.toString(),
+                Accion.inventario("caducar", null));
     }
 
     // ── Hora pico de este día de la semana ────────────────────────────────

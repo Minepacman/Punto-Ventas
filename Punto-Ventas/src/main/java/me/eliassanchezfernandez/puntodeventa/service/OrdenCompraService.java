@@ -219,6 +219,16 @@ public class OrdenCompraService {
      */
     @Transactional
     public OrdenCompra recibir(Long ordenId, Collection<Autorizacion> autorizaciones) {
+        return recibir(ordenId, autorizaciones, null);
+    }
+
+    /**
+     * Igual, con fechas de caducidad opcionales por línea ({@code caducidades}: id de línea → fecha;
+     * solo cuentan en productos que controlan caducidad, ver {@link CaducidadService}).
+     */
+    @Transactional
+    public OrdenCompra recibir(Long ordenId, Collection<Autorizacion> autorizaciones,
+                               java.util.Map<Long, java.time.LocalDate> caducidades) {
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         OrdenCompra o = cargar(ordenId);
         if (o.getEstado() == Estado.RECIBIDA) throw new NegocioException("La orden #" + ordenId + " ya fue recibida.");
@@ -243,7 +253,8 @@ public class OrdenCompraService {
         for (OrdenCompraLinea l : lineasEnOrdenDeBloqueo(o.getLineas())) {
             try {
                 productoService.registrarEntradaDeOrden(l.getProducto().getId(), l.getCantidad(),
-                        o.getProveedor(), "Orden de compra #" + o.getId(), l.getCostoUnitario(), autorizaciones);
+                        o.getProveedor(), "Orden de compra #" + o.getId(), l.getCostoUnitario(), autorizaciones,
+                        caducidades == null || l.getId() == null ? null : caducidades.get(l.getId()));
             } catch (PermisoRequeridoException e) {
                 throw e;
             } catch (NegocioException e) {
