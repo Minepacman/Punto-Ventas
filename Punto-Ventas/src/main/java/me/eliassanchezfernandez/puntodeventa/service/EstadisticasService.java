@@ -266,7 +266,8 @@ public class EstadisticasService {
         return totalesDe(resumenesEntre(p));
     }
 
-    private static Totales totalesDe(List<ResumenDiario> resumenes) {
+    /** Totales de una lista de resúmenes ya leída (función pura) */
+    public static Totales totalesDe(List<ResumenDiario> resumenes) {
         double total = 0, piezas = 0;
         int trans = 0;
         for (ResumenDiario r : resumenes) {
@@ -280,9 +281,14 @@ public class EstadisticasService {
     /** Total por cada día del periodo, con ceros en los días sin ventas (para la gráfica) */
     @Transactional(readOnly = true)
     public Map<LocalDate, Double> serieDiaria(Periodo p) {
+        return serieDiariaDe(p, resumenesEntre(p));
+    }
+
+    /** serieDiaria() sobre resúmenes ya leídos (función pura) */
+    public static Map<LocalDate, Double> serieDiariaDe(Periodo p, List<ResumenDiario> resumenes) {
         Map<LocalDate, Double> serie = new TreeMap<>();
         for (LocalDate d = p.desde(); !d.isAfter(p.hasta()); d = d.plusDays(1)) serie.put(d, 0.0);
-        for (ResumenDiario r : resumenesEntre(p)) serie.put(r.getFecha(), r.getTotal());
+        for (ResumenDiario r : resumenes) serie.put(r.getFecha(), r.getTotal());
         return serie;
     }
 
@@ -306,9 +312,14 @@ public class EstadisticasService {
     /** Total y tickets por franja horaria */
     @Transactional(readOnly = true)
     public Map<Franja, Totales> porFranja(Periodo p) {
+        return porFranjaDe(resumenesEntre(p));
+    }
+
+    /** porFranja() sobre resúmenes ya leídos (función pura) */
+    public static Map<Franja, Totales> porFranjaDe(List<ResumenDiario> resumenes) {
         Map<Franja, double[]> acumulado = new EnumMap<>(Franja.class);
         for (Franja f : Franja.values()) acumulado.put(f, new double[2]);
-        for (ResumenDiario d : resumenesEntre(p)) {
+        for (ResumenDiario d : resumenes) {
             for (Franja f : Franja.values()) {
                 acumulado.get(f)[0] += d.totalDe(f);
                 acumulado.get(f)[1] += d.transaccionesDe(f);
@@ -505,23 +516,43 @@ public class EstadisticasService {
      */
     @Transactional(readOnly = true)
     public List<Comparacion> comparaciones() {
-        LocalDate hoy = hoy();
         List<Comparacion> r = new ArrayList<>();
-        r.add(comparar("Hoy", "vs. el mismo día de la semana pasada",
-                Periodo.dia(hoy), Periodo.dia(hoy.minusWeeks(1))));
-        r.add(comparar("Semana", "vs. el mismo tramo de la semana pasada",
-                Periodo.semana(hoy), new Periodo(hoy.with(DayOfWeek.MONDAY).minusWeeks(1), hoy.minusWeeks(1), "Semana anterior")));
-        LocalDate mesAnterior = hoy.minusMonths(1);
-        r.add(comparar("Mes", "vs. los mismos días del mes pasado",
-                Periodo.mes(hoy), new Periodo(mesAnterior.withDayOfMonth(1), mesAnterior, "Mes anterior")));
-        LocalDate anioAnterior = hoy.minusYears(1);
-        r.add(comparar("Año", "vs. los mismos días del año pasado",
-                Periodo.anio(hoy), new Periodo(anioAnterior.withDayOfYear(1), anioAnterior, "Año anterior")));
+        for (DefComparacion d : definicionesComparacion(hoy())) {
+            r.add(new Comparacion(d.etiqueta(), d.detalle(), d.actual(), d.anterior(), totales(d.actual()), totales(d.anterior())));
+        }
         return r;
     }
 
-    private Comparacion comparar(String etiqueta, String detalle, Periodo actual, Periodo anterior) {
-        return new Comparacion(etiqueta, detalle, actual, anterior, totales(actual), totales(anterior));
+    /**
+     * Una sola de las comparaciones (Hoy, Semana, Mes o Año) con los totales del periodo actual
+     * ya calculados por quien llama: solo consulta el periodo anterior. Para el móvil, que
+     * muestra una a la vez (calcular las cuatro incluye dos años completos).
+     */
+    @Transactional(readOnly = true)
+    public Optional<Comparacion> comparacion(String etiqueta, Totales actual) {
+        for (DefComparacion d : definicionesComparacion(hoy())) {
+            if (d.etiqueta().equals(etiqueta)) {
+                return Optional.of(new Comparacion(d.etiqueta(), d.detalle(), d.actual(), d.anterior(), actual, totales(d.anterior())));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Qué se compara contra qué (sin consultar nada) */
+    record DefComparacion(String etiqueta, String detalle, Periodo actual, Periodo anterior) { }
+
+    static List<DefComparacion> definicionesComparacion(LocalDate hoy) {
+        LocalDate mesAnterior = hoy.minusMonths(1);
+        LocalDate anioAnterior = hoy.minusYears(1);
+        return List.of(
+                new DefComparacion("Hoy", "vs. el mismo día de la semana pasada",
+                        Periodo.dia(hoy), Periodo.dia(hoy.minusWeeks(1))),
+                new DefComparacion("Semana", "vs. el mismo tramo de la semana pasada",
+                        Periodo.semana(hoy), new Periodo(hoy.with(DayOfWeek.MONDAY).minusWeeks(1), hoy.minusWeeks(1), "Semana anterior")),
+                new DefComparacion("Mes", "vs. los mismos días del mes pasado",
+                        Periodo.mes(hoy), new Periodo(mesAnterior.withDayOfMonth(1), mesAnterior, "Mes anterior")),
+                new DefComparacion("Año", "vs. los mismos días del año pasado",
+                        Periodo.anio(hoy), new Periodo(anioAnterior.withDayOfYear(1), anioAnterior, "Año anterior")));
     }
 
     // ── Recomendaciones y clima (lectura para la pantalla) ───────────────

@@ -6,7 +6,9 @@ import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.SesionMovilRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -56,6 +58,16 @@ public class SesionMovilService {
     @Autowired private Clock                 reloj;
 
     private final SecureRandom azar = new SecureRandom();
+    private final java.util.concurrent.atomic.AtomicLong escrituras = new java.util.concurrent.atomic.AtomicLong();
+    private TransactionTemplate lectura;
+    private TransactionTemplate escritura;
+
+    @Autowired
+    void transacciones(PlatformTransactionManager tm) {
+        lectura = new TransactionTemplate(tm);
+        lectura.setReadOnly(true);
+        escritura = new TransactionTemplate(tm);
+    }
 
     /** Token en claro (solo existe aquí y en el teléfono) + la fila guardada */
     public record Emitida(String token, SesionMovil sesion) { }
@@ -88,27 +100,66 @@ public class SesionMovilService {
     /**
      * Valida el token: existe, no está revocado, no venció y su usuario sigue
      * activo y sin cambio de contraseña pendiente. Vacío = pedir credenciales.
+     *
+     * Corre en CADA petición del teléfono, así que la lectura va en una transacción
+     * de solo lectura (en SQLite: BEGIN DEFERRED, no espera a la caja que está
+     * cobrando) y solo se abre una transacción de escritura, corta y aparte, cuando
+     * hay algo que guardar: ultimo_uso como mucho una vez por minuto, o revocar la
+     * sesión de un usuario que ya no puede entrar.
      */
-    @Transactional
     public Optional<SesionValida> validar(String token) {
         if (token == null || token.isEmpty() || token.length() > 128) return Optional.empty();
-        Optional<SesionMovil> encontrada = sesionRepo.findByTokenHash(hash(token));
-        if (encontrada.isEmpty()) return Optional.empty();
-        SesionMovil s = encontrada.get();
+        String tokenHash = hash(token);
         LocalDateTime ahora = ahora();
-        if (s.isRevocada() || vencida(s, ahora)) return Optional.empty();
-
-        Cajero c = cajeroRepo.findById(s.getCajeroId()).orElse(null);
-        if (c == null || !c.isActivo() || c.isDebeCambiarContrasena()) {
-            s.setRevocada(true);
-            sesionRepo.save(s);
+        Lectura l = lectura.execute(st -> leer(tokenHash, ahora));
+        if (l == null) return Optional.empty();
+        if (l.revocar()) {
+            escritura.executeWithoutResult(st -> revocarSiAbierta(l.sesion().getId()));
             return Optional.empty();
         }
-        if (s.getUltimoUso() == null || Duration.between(s.getUltimoUso(), ahora).compareTo(REFRESCO_ULTIMO_USO) >= 0) {
+        if (l.tocar()) {
+            escritura.executeWithoutResult(st -> tocarUltimoUso(l.sesion().getId(), ahora));
+            l.sesion().setUltimoUso(ahora);
+        }
+        return Optional.of(new SesionValida(l.sesion(), l.cajero()));
+    }
+
+    /** Resultado de la parte de solo lectura de validar(): qué hay y qué falta escribir */
+    private record Lectura(SesionMovil sesion, Cajero cajero, boolean revocar, boolean tocar) { }
+
+    /** null = token desconocido, revocado o vencido (no hay nada que escribir) */
+    private Lectura leer(String tokenHash, LocalDateTime ahora) {
+        SesionMovil s = sesionRepo.findByTokenHash(tokenHash).orElse(null);
+        if (s == null || s.isRevocada() || vencida(s, ahora)) return null;
+        Cajero c = cajeroRepo.findById(s.getCajeroId()).orElse(null);
+        if (c == null || !c.isActivo() || c.isDebeCambiarContrasena()) return new Lectura(s, null, true, false);
+        return new Lectura(s, c, false, debeTocar(s, ahora));
+    }
+
+    private static boolean debeTocar(SesionMovil s, LocalDateTime ahora) {
+        return s.getUltimoUso() == null || Duration.between(s.getUltimoUso(), ahora).compareTo(REFRESCO_ULTIMO_USO) >= 0;
+    }
+
+    /** Escritura de validar(): se relee la fila para no pisar a otra petición que ya la tocó */
+    private void tocarUltimoUso(Long id, LocalDateTime ahora) {
+        sesionRepo.findById(id).filter(s -> !s.isRevocada() && debeTocar(s, ahora)).ifPresent(s -> {
             s.setUltimoUso(ahora);
             sesionRepo.save(s);
-        }
-        return Optional.of(new SesionValida(s, c));
+            escrituras.incrementAndGet();
+        });
+    }
+
+    private void revocarSiAbierta(Long id) {
+        sesionRepo.findById(id).filter(s -> !s.isRevocada()).ifPresent(s -> {
+            s.setRevocada(true);
+            sesionRepo.save(s);
+            escrituras.incrementAndGet();
+        });
+    }
+
+    /** Cuántas veces validar() tuvo que escribir (para las pruebas) */
+    long escriturasDeValidacion() {
+        return escrituras.get();
     }
 
     /**

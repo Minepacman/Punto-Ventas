@@ -28,7 +28,6 @@ import me.eliassanchezfernandez.puntodeventa.service.ProductoImagenService;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.TutorialesService;
-import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.service.AuditoriaService;
 import me.eliassanchezfernandez.puntodeventa.service.AvisosService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
@@ -183,7 +182,6 @@ public class ServidorMovilService {
     @Autowired private AuditoriaService     auditoriaService;
     @Autowired private Clock                reloj;
     @Autowired private EstadisticasService  estadisticasService;
-    @Autowired private VentaService         ventaService;
     @Autowired private ProductoService      productoService;
     @Autowired private ProductoImagenService productoImagenService;
     @Autowired private ProveedorService     proveedorService;
@@ -192,6 +190,7 @@ public class ServidorMovilService {
     @Autowired private AvisosService        avisosService;
     @Autowired private CertificadosLocales  certificados;
     @Autowired private NotificacionesPushService pushService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.ConsultasMovilService consultasMovil;
 
     /** Altas de suscripción push por IP (una por teléfono; el límite frena a quien quiera llenar la tabla) */
     static final int MAX_SUSCRIPCIONES_POR_IP = 20;
@@ -1049,8 +1048,21 @@ public class ServidorMovilService {
     // ── Datos reales (estadísticas, ventas, inventario) ───────────────────
 
     static final int MAX_DIAS_VENTAS = 93;
-    static final int MAX_VENTAS = 500;
+    /** Ventas por página si el teléfono no pide otra cantidad */
+    static final int VENTAS_POR_PAGINA = 50;
+    /** Máximo de ventas por página (tope del tamaño de la respuesta) */
+    static final int MAX_VENTAS = me.eliassanchezfernandez.puntodeventa.service.ConsultasMovilService.MAX_VENTAS_POR_PAGINA;
+    /** Renglones por venta que se mandan al teléfono (una venta enorme no infla la respuesta) */
+    static final int MAX_LINEAS_POR_VENTA = 200;
     static final int MAX_PRODUCTOS = 200;
+
+    /**
+     * Consultas pesadas (ventas, estadísticas, inventario) que pueden correr a la vez. En una PC de
+     * 2 núcleos con disco duro, más teléfonos consultando a la vez le quitan CPU y disco a la caja;
+     * la siguiente recibe 503 «Intenta de nuevo en un momento» y la página reintenta sola.
+     */
+    static final int MAX_CONSULTAS_PESADAS = 2;
+    final java.util.concurrent.Semaphore consultasPesadas = new java.util.concurrent.Semaphore(MAX_CONSULTAS_PESADAS);
 
     /**
      * Esqueleto común: token válido → permiso (comprobado aquí con el usuario recién leído de la BD
@@ -1059,10 +1071,24 @@ public class ServidorMovilService {
      */
     private void protegido(HttpExchange ex, Permiso requerido, java.util.function.Function<Cajero, Object> accion)
             throws IOException {
+        protegido(ex, requerido, false, accion);
+    }
+
+    /**
+     * pesada = true: además ocupa uno de los MAX_CONSULTAS_PESADAS lugares (después de validar
+     * sesión y permiso, así nadie sin sesión los acapara). Si no hay lugar: 503 + Retry-After.
+     */
+    private void protegido(HttpExchange ex, Permiso requerido, boolean pesada,
+                           java.util.function.Function<Cajero, Object> accion) throws IOException {
         Optional<SesionValida> v = validarToken(ex);
         if (v.isEmpty()) { sesionInvalida(ex); return; }
         Cajero cajero = v.get().cajero();
         if (requerido != null && !cajero.tienePermiso(requerido)) { sinPermiso(ex); return; }
+        if (pesada && !consultasPesadas.tryAcquire()) {
+            ex.getResponseHeaders().set("Retry-After", "1");
+            error(ex, 503, "OCUPADO", "Intenta de nuevo en un momento.");
+            return;
+        }
         Object resultado;
         try {
             Supplier<Object> trabajo = () -> accion.apply(cajero);
@@ -1070,8 +1096,20 @@ public class ServidorMovilService {
         } catch (PermisoRequeridoException e) {
             sinPermiso(ex);
             return;
+        } finally {
+            if (pesada) consultasPesadas.release();
         }
         responder(ex, 200, resultado);
+    }
+
+    /** Entero de la consulta dentro de [min, max]; ausente = porDefecto; otra cosa = 400 */
+    private static int entero(String valor, int porDefecto, int min, int max, String campo) {
+        if (valor == null || valor.isBlank()) return porDefecto;
+        try {
+            int n = Integer.parseInt(valor.trim());
+            if (n >= min && n <= max) return n;
+        } catch (NumberFormatException ignorada) { /* abajo */ }
+        throw new CuerpoInvalido(400, "El parámetro " + campo + " debe ser un número de " + min + " a " + max + ".");
     }
 
     private void sinPermiso(HttpExchange ex) throws IOException {
@@ -1120,7 +1158,7 @@ public class ServidorMovilService {
         if (!per.equals("dia") && !per.equals("semana") && !per.equals("mes")) {
             throw new CuerpoInvalido(400, "Periodo inválido. Usa dia, semana o mes.");
         }
-        protegido(ex, Permiso.VER_HISTORIAL, cajero -> {
+        protegido(ex, Permiso.VER_HISTORIAL, true, cajero -> {
             LocalDate hoy = estadisticasService.hoy();
             Periodo p = switch (per) {
                 case "semana" -> Periodo.semana(hoy);
@@ -1128,23 +1166,24 @@ public class ServidorMovilService {
                 default       -> Periodo.dia(hoy);
             };
             String etiqueta = switch (per) { case "semana" -> "Semana"; case "mes" -> "Mes"; default -> "Hoy"; };
+            boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
+            var e = consultasMovil.estadisticas(p, etiqueta, ganancias);
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("periodo", per);
             r.put("desde", p.desde().toString());
             r.put("hasta", p.hasta().toString());
-            r.put("totales", mapaTotales(estadisticasService.totales(p)));
+            r.put("totales", mapaTotales(e.totales()));
 
-            estadisticasService.comparaciones().stream().filter(c -> c.etiqueta().equals(etiqueta)).findFirst()
-                    .ifPresent(c -> {
-                        Map<String, Object> m = new LinkedHashMap<>();
-                        m.put("detalle", c.detalle());
-                        m.put("anterior", mapaTotales(c.anterior()));
-                        m.put("variacionPct", c.variacionPct());      // null = sin periodo anterior con ventas
-                        r.put("comparacion", m);
-                    });
+            e.comparacion().ifPresent(c -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("detalle", c.detalle());
+                m.put("anterior", mapaTotales(c.anterior()));
+                m.put("variacionPct", c.variacionPct());      // null = sin periodo anterior con ventas
+                r.put("comparacion", m);
+            });
 
             List<Map<String, Object>> top = new ArrayList<>();
-            for (var t : estadisticasService.topProductos(p, 5)) {
+            for (var t : e.top()) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", t.producto().getId());
                 m.put("descripcion", t.producto().getDescripcion());
@@ -1156,7 +1195,7 @@ public class ServidorMovilService {
             r.put("top", top);
 
             List<Map<String, Object>> franjas = new ArrayList<>();
-            estadisticasService.porFranja(p).forEach((f, t) -> {
+            e.franjas().forEach((f, t) -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("franja", f.name());
                 m.put("etiqueta", f.getEtiqueta());
@@ -1167,7 +1206,7 @@ public class ServidorMovilService {
             r.put("franjas", franjas);
 
             List<Map<String, Object>> serie = new ArrayList<>();
-            estadisticasService.serieDiaria(p).forEach((d, total) -> {
+            e.serie().forEach((d, total) -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("fecha", d.toString());
                 m.put("total", total);
@@ -1175,20 +1214,18 @@ public class ServidorMovilService {
             });
             r.put("serie", serie);
 
-            boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
             r.put("gananciaVisible", ganancias);
-            if (ganancias) {
-                double g = 0;
-                for (Venta v : ventaService.ventasEntre(p.desde(), p.hasta())) {
-                    if (v.isCancelada()) continue;
-                    for (DetalleVenta d : v.getDetalles()) g += d.getImporte() - d.getCostoUnitarioODefault() * d.getCantidad();
-                }
-                r.put("ganancia", Math.round(g * 100.0) / 100.0);
-            }
+            if (ganancias) r.put("ganancia", e.ganancia());
             return r;
         });
     }
 
+    /**
+     * Ventas del rango por páginas, más recientes primero: ?desde&hasta (máx. 93 días),
+     * &pagina (0, 1, …) y &limite (1..MAX_VENTAS, 50 por defecto). Los totales («totales») son
+     * del rango completo, calculados en SQL. «total» y «truncado» se conservan por compatibilidad
+     * (ventas en el rango / hay más páginas).
+     */
     private void ventas(HttpExchange ex) throws IOException {
         Map<String, String> q = parametros(ex);
         LocalDate hoy = estadisticasService.hoy();
@@ -1198,12 +1235,13 @@ public class ServidorMovilService {
         if (ChronoUnit.DAYS.between(desde, hasta) + 1 > MAX_DIAS_VENTAS) {
             throw new CuerpoInvalido(400, "El rango máximo es de " + MAX_DIAS_VENTAS + " días.");
         }
-        protegido(ex, Permiso.VER_HISTORIAL, cajero -> {
+        int pagina = entero(q.get("pagina"), 0, 0, me.eliassanchezfernandez.puntodeventa.service.ConsultasMovilService.MAX_PAGINA, "pagina");
+        int limite = entero(q.get("limite"), VENTAS_POR_PAGINA, 1, MAX_VENTAS, "limite");
+        protegido(ex, Permiso.VER_HISTORIAL, true, cajero -> {
             boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
-            List<Venta> todas = ventaService.ventasEntre(desde, hasta);
+            var pag = consultasMovil.ventas(desde, hasta, pagina, limite);
             List<Map<String, Object>> lista = new ArrayList<>();
-            for (Venta v : todas) {
-                if (lista.size() >= MAX_VENTAS) break;
+            for (Venta v : pag.ventas()) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", v.getId());
                 m.put("folio", v.getFolio());
@@ -1214,6 +1252,7 @@ public class ServidorMovilService {
                 m.put("cancelada", v.isCancelada());
                 List<Map<String, Object>> lineas = new ArrayList<>();
                 for (DetalleVenta d : v.getDetalles()) {
+                    if (lineas.size() >= MAX_LINEAS_POR_VENTA) break;
                     Map<String, Object> l = new LinkedHashMap<>();
                     l.put("productoId", d.getProducto().getId());
                     l.put("descripcion", d.getDescripcionMostrada());   // producto común: el nombre tecleado
@@ -1227,14 +1266,23 @@ public class ServidorMovilService {
                     lineas.add(l);
                 }
                 m.put("lineas", lineas);
+                if (v.getDetalles().size() > lineas.size()) m.put("lineasOmitidas", v.getDetalles().size() - lineas.size());
                 lista.add(m);
             }
+            Map<String, Object> totales = new LinkedHashMap<>();
+            totales.put("ventas", pag.ventasEnRango());
+            totales.put("canceladas", pag.canceladas());
+            totales.put("importe", pag.importe());          // sin canceladas
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("desde", desde.toString());
             r.put("hasta", hasta.toString());
+            r.put("pagina", pagina);
+            r.put("limite", limite);
             r.put("ventas", lista);
-            r.put("total", todas.size());
-            r.put("truncado", todas.size() > lista.size());
+            r.put("hayMas", pag.hayMas());
+            r.put("totales", totales);
+            r.put("total", pag.ventasEnRango());
+            r.put("truncado", pag.hayMas());
             return r;
         });
     }
@@ -1262,14 +1310,11 @@ public class ServidorMovilService {
     private void inventario(HttpExchange ex) throws IOException {
         String q = parametros(ex).getOrDefault("q", "").trim();
         if (q.length() > 60) throw new CuerpoInvalido(400, "Búsqueda demasiado larga.");
-        protegido(ex, null, cajero -> {
+        protegido(ex, null, true, cajero -> {
             boolean ganancias = cajero.tienePermiso(Permiso.VER_GANANCIAS);
-            List<Producto> encontrados = productoService.buscar(q).stream()
-                    .filter(p -> p.isActivo() && p.isUsaInventario())
-                    .sorted(java.util.Comparator.comparing((Producto p) -> !ProductoService.tieneStockBajo(p))
-                            .thenComparing(p -> p.getDescripcion() == null ? "" : p.getDescripcion().toLowerCase(Locale.ROOT)))
-                    .toList();
-            List<Producto> pagina = encontrados.subList(0, Math.min(MAX_PRODUCTOS, encontrados.size()));
+            // Filtro, orden (existencia baja primero, luego nombre) y tope en SQL
+            var encontrados = consultasMovil.inventario(q, MAX_PRODUCTOS);
+            List<Producto> pagina = encontrados.productos();
             // Qué productos tienen foto (una consulta): la página solo pide la miniatura de esos
             java.util.Set<Long> conImagen = productoImagenService.idsConImagen(pagina.stream().map(Producto::getId).toList());
             List<Map<String, Object>> lista = new ArrayList<>();
@@ -1280,8 +1325,8 @@ public class ServidorMovilService {
             }
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("productos", lista);
-            r.put("total", encontrados.size());
-            r.put("truncado", encontrados.size() > lista.size());
+            r.put("total", encontrados.total());
+            r.put("truncado", encontrados.total() > lista.size());
             r.put("puedeAjustar", cajero.tienePermiso(Permiso.AJUSTAR_INVENTARIO));
             return r;
         });
