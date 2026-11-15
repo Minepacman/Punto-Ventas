@@ -125,6 +125,8 @@ public class MainController implements Initializable {
         labelUsuario.setText(cajero != null
                 ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol().getEtiqueta() + ")"
                 : "Usuario: —");
+        // Nombres largos se recortan con «…» (maxWidth en main.fxml) para que «Salir» no se vaya al menú de la barra
+        labelUsuario.setTooltip(new javafx.scene.control.Tooltip(labelUsuario.getText()));
         labelVersion.setText(VersionApp.etiqueta());
         lnkActualizacion.setVisible(false);
         lnkActualizacion.setManaged(false);

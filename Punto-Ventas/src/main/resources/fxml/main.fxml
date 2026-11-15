@@ -33,7 +33,7 @@
 
             <Separator orientation="VERTICAL"/>
 
-            <Label fx:id="labelUsuario" text="Usuario: —"/>
+            <Label fx:id="labelUsuario" text="Usuario: —" maxWidth="230" minWidth="80" textOverrun="ELLIPSIS"/>
 
             <Separator orientation="VERTICAL"/>
 
