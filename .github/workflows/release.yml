@@ -120,7 +120,10 @@ jobs:
     needs: version
     runs-on: windows-latest
     continue-on-error: true
-    # v1.0.4: jpackage de 32 bits se quedó colgado 36 min sin escribir nada; el x64 tarda ~1 min. Con el límite la release no espera.
+    # v1.0.4: este trabajo se quedó 36 min sin escribir nada. No era jpackage ni WiX: build.gradle lanzaba jpackage con
+    # ProcessBuilder.inheritIO() dentro del daemon de Gradle, que ya había cerrado su stdout; en Windows el JDK crea entonces
+    # una tubería de 4 KB que nadie lee y jpackage --verbose se bloqueó al llenarla (corregido en jpackageTask: la salida se
+    # lee y se muestra). El x86 tarda ~1 min como el x64; el límite queda como red de seguridad para que la release no espere.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
