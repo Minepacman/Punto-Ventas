@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.config;
 
+import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -28,6 +29,8 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
     public static final int POOL_POSTGRESQL = 5;
     /** Propiedad de sqlite-jdbc que fija el BEGIN que abre cada transacción (DEFERRED/IMMEDIATE/EXCLUSIVE) */
     public static final String TRANSACTION_MODE = "transaction_mode";
+    /** Tamaño que HikariCP pone por su cuenta (10 en HikariCP 6) */
+    private static final int POOL_POR_DEFECTO_HIKARI = new HikariConfig().getMaximumPoolSize();
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
@@ -39,7 +42,9 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
 
     /** Punto de entrada reutilizable (también desde las pruebas) */
     public static void ajustar(HikariDataSource ds, PerfilBaseDatos perfil) {
-        if (ds.getMaximumPoolSize() <= 0) {
+        // HikariCP 5 dejaba -1 si nadie lo fijaba; HikariCP 6 (Spring Boot 3.4+) ya trae 10. Se toma como "no
+        // fijado" cualquiera de los dos; un 10 puesto a mano también se cambiaría (en un POS no tiene caso).
+        if (ds.getMaximumPoolSize() <= 0 || ds.getMaximumPoolSize() == POOL_POR_DEFECTO_HIKARI) {
             ds.setMaximumPoolSize(perfil.esPostgresql() ? POOL_POSTGRESQL : POOL_SQLITE);
         }
         if (ds.getMinimumIdle() < 0) ds.setMinimumIdle(1);
