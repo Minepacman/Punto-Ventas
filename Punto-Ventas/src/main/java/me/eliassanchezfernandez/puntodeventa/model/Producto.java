@@ -94,6 +94,16 @@ public class Producto {
     @Column(name = "objeto_imp", length = 2)
     private String objetoImp;
 
+    /**
+     * IVA del producto ({@link TipoIva}): 16 %, 0 % (básicos: tortilla, leche, huevo, frutas y
+     * verduras...), exento, o "usar el de la tienda" (la tasa de Configuración). Null en los
+     * productos anteriores a este campo = usar el de la tienda, así nada cambia hasta editarlos.
+     * El precio de venta YA incluye el impuesto: esto solo decide cómo se desglosa.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "iva", length = 10)
+    private TipoIva iva;
+
     // ── Inventario ───────────────────────────────────────────────────────
 
     @Column(name = "usa_inventario")
@@ -109,6 +119,11 @@ public class Producto {
 
     public boolean isActivo() {
         return activo == null || activo;
+    }
+
+    /** IVA del producto sin null: los productos sin IVA capturado usan el de la tienda */
+    public TipoIva getIvaOTienda() {
+        return TipoIva.oTienda(iva);
     }
 
     /**

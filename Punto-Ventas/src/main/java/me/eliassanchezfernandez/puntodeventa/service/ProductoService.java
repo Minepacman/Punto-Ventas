@@ -172,6 +172,9 @@ public class ProductoService {
         }
         if (producto.getId() == null) {
             if (producto.getActivo() == null) producto.setActivo(true);
+            // IVA propuesto por el departamento (ej. "Frutas y verduras" → 0 %) solo en el alta y solo si
+            // no se capturó uno (ni siquiera "usar el de la tienda"); después cada producto conserva el suyo
+            if (producto.getIva() == null) producto.setIva(ivaPorDefectoDe(producto.getDepartamento()));
             resolverProveedor(producto, null);
             // La existencia inicial es inventario que "aparece": exige el mismo permiso que una entrada
             if (producto.isUsaInventario() && producto.getCantidadActual() > 0) {
@@ -226,6 +229,8 @@ public class ProductoService {
             producto.setCantidadActual(0);
         }
         if (producto.getActivo() == null) producto.setActivo(enBd.isActivo());
+        // Quien no manda el IVA (importación, móvil) no lo borra: se conserva el que tenía
+        if (producto.getIva() == null) producto.setIva(enBd.getIva());
 
         Producto guardado = productoRepo.save(producto);
 
@@ -514,11 +519,24 @@ public class ProductoService {
         return departamentoRepo.findAllByOrderByNombreAsc();
     }
 
+    /** IVA que el departamento propone a sus productos nuevos; null si no tiene (o no hay departamento) */
+    public me.eliassanchezfernandez.puntodeventa.model.TipoIva ivaPorDefectoDe(Departamento depto) {
+        if (depto == null) return null;
+        if (depto.getIvaPorDefecto() == null && depto.getId() != null) {
+            // Puede venir sin cargar (solo el id, p. ej. desde la importación o el móvil)
+            return departamentoRepo.findById(depto.getId()).map(Departamento::getIvaPorDefecto).orElse(null);
+        }
+        return depto.getIvaPorDefecto();
+    }
+
     @Transactional
     public Departamento guardarDepartamento(Departamento d) {
         sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
         if (d.getNombre() == null || d.getNombre().isBlank()) {
             throw new NegocioException("El nombre del departamento es obligatorio.");
+        }
+        if (d.getIvaPorDefecto() == me.eliassanchezfernandez.puntodeventa.model.TipoIva.TIENDA) {
+            d.setIvaPorDefecto(null);   // "usar el de la tienda" es lo mismo que no proponer nada
         }
         d.setNombre(d.getNombre().trim());
         departamentoRepo.findByNombreIgnoreCase(d.getNombre())

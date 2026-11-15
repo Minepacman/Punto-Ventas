@@ -35,8 +35,28 @@ public record CfdiDocumento(
 
     public record Receptor(String rfc, String nombre, String regimenFiscal, String codigoPostal, String usoCfdi) { }
 
+    /**
+     * Traslado de un concepto. Con tasa (TipoFactor "Tasa": 0.160000 o 0.000000) lleva
+     * TasaOCuota e Importe; exento (TipoFactor "Exento", LIVA art. 9) solo lleva Base:
+     * {@code tasa} es null e {@code importe} cero.
+     */
     public record Impuesto(String nombre, BigDecimal base, BigDecimal tasa, BigDecimal importe) {
         public static final String IVA = "IVA";
+        public static final String TIPO_FACTOR_TASA = "Tasa";
+        public static final String TIPO_FACTOR_EXENTO = "Exento";
+
+        /** Traslado de IVA exento: solo base, sin tasa ni importe */
+        public static Impuesto exento(BigDecimal base) {
+            return new Impuesto(IVA, base, null, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        }
+
+        public boolean esExento() {
+            return tasa == null;
+        }
+
+        public String tipoFactor() {
+            return esExento() ? TIPO_FACTOR_EXENTO : TIPO_FACTOR_TASA;
+        }
     }
 
     public record Concepto(
