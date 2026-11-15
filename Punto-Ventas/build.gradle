@@ -301,6 +301,21 @@ def comprobarJdkDe32Bits(File jdk) {
     }
 }
 
+// Ejecuta un programa externo (jpackage, tar) mostrando su salida en la consola de Gradle conforme la escribe.
+// NUNCA usar ProcessBuilder.inheritIO() aquí: la compilación corre en un daemon de Gradle (con --no-daemon, uno de un
+// solo uso) que al arrancar CIERRA su stdout/stderr originales (DaemonMain.daemonStarted). En Linux/macOS el JDK
+// redirige esos descriptores a /dev/null y la salida heredada solo se pierde; en Windows el JDK ve el handle cerrado
+// (-1), crea una tubería de 4 KB para el hijo y nadie la lee: el hijo se bloquea en cuanto la llena. Así se quedó
+// colgado 36 minutos, sin escribir una línea, el jpackage --verbose de 32 bits de la release 1.0.4 (el x64, sin
+// --verbose, escribe menos de 4 KB y por eso terminaba). Leer la salida nosotros y pasarla al logger la hace visible
+// en el registro del flujo y evita el bloqueo. La entrada estándar se cierra: ninguno de estos programas la lee.
+def ejecutar(List<String> args, String mensajeFallo) {
+    def proceso = new ProcessBuilder(args).redirectErrorStream(true).start()
+    proceso.outputStream.close()
+    proceso.inputStream.withReader { lector -> lector.eachLine { logger.lifecycle(it) } }
+    if (proceso.waitFor() != 0) throw new GradleException(mensajeFallo)
+}
+
 tasks.register('jpackageTask') {
     group = 'distribution'
     description = 'Crea el instalador nativo del sistema actual con jpackage (dmg / exe / msi)'
@@ -390,16 +405,14 @@ tasks.register('jpackageTask') {
             }
         }
         logger.lifecycle("jpackage: " + args.join(' '))
-        def proceso = new ProcessBuilder(args).inheritIO().start()
-        if (proceso.waitFor() != 0) throw new GradleException('jpackage falló (en Windows revisa que WiX 3.x esté en el PATH; en Linux que estén fakeroot y, para rpm, rpmbuild)')
+        ejecutar(args, 'jpackage falló (en Windows revisa que WiX 3.x esté en el PATH; en Linux que estén fakeroot y, para rpm, rpmbuild)')
 
         // Linux portable: build/installer/PuntoDeVenta/ (bin/PuntoDeVenta + lib/runtime) → PuntoDeVenta-<versión>-linux.tar.gz
         if (esAppImage) {
             if (licencia.exists()) new File(destino, 'PuntoDeVenta/LICENSE').bytes = licencia.bytes
             def tar = new File(destino, "PuntoDeVenta-${versionNumerica}-linux.tar.gz")
-            def tarProceso = new ProcessBuilder(['tar', '-czf', tar.absolutePath, '-C', destino.absolutePath, 'PuntoDeVenta'])
-                    .inheritIO().start()
-            if (tarProceso.waitFor() != 0) throw new GradleException('tar falló al comprimir la app-image de Linux')
+            ejecutar(['tar', '-czf', tar.absolutePath, '-C', destino.absolutePath, 'PuntoDeVenta'],
+                    'tar falló al comprimir la app-image de Linux')
             new File(destino, 'PuntoDeVenta').deleteDir()
             logger.lifecycle("Portable Linux: " + tar.absolutePath)
         }
