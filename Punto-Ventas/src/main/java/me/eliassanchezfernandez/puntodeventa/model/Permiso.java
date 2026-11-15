@@ -25,6 +25,7 @@ public enum Permiso {
     DESCUENTO_MANUAL   ("Hacer descuentos manuales"),
     VENDER_SIN_STOCK   ("Vender sin existencia"),
     CANCELAR_VENTA     ("Cancelar ventas cobradas"),
+    DEVOLVER_VENTAS    ("Devolver artículos de ventas cobradas (reembolso)"),
     ABRIR_CAJON        ("Abrir el cajón de dinero sin dar motivo"),
     GESTIONAR_PROVEEDORES ("Gestionar proveedores y órdenes de compra"),
     FACTURAR           ("Emitir facturas (CFDI)"),
@@ -53,6 +54,8 @@ public enum Permiso {
      * ABRIR_CAJON: quien lo tiene abre el cajón sin explicar nada; quien no lo tiene
      * también puede abrirlo, pero debe decir el motivo y si entra o sale dinero (y cuánto):
      * todo queda en la bitácora y, si hubo dinero, en el corte.
+     * DEVOLVER_VENTAS (devolución parcial con reembolso) es, como cancelar, solo del administrador:
+     * a los demás se lo concede o autoriza cada devolución.
      * CAJERO: ninguno (todo lo de la lista es de administrador, USR-13).
      */
     public static Set<Permiso> porDefecto(Cajero.Rol rol) {

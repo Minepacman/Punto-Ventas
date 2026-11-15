@@ -507,6 +507,7 @@ public class CajaService {
         c.setVentasTotales(r.ventasTotales);
         c.setNumVentas(r.numVentas);
         c.setNumCanceladas(r.numCanceladas);
+        c.setDevoluciones(r.numDevoluciones > 0 ? r.totalDevoluciones : null);
         c.setGanancia(r.ganancia);
         c.setIva(r.iva);
         c.setEfectivoEsperado(e.esperado());

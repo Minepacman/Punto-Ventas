@@ -56,6 +56,24 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     int marcarCancelada(Long id, LocalDateTime fecha, String motivo, Long quienId, String quienNombre,
                         Long autorizoId, String autorizoNombre);
 
+    // ── Devoluciones parciales (DevolucionService) ───────────────────────
+
+    /**
+     * Anota la devolución en la venta SOLO si sigue activa (no cancelada), y con ello bloquea su
+     * fila hasta que la transacción termina: dos cajas que devuelven de la misma venta (o una que
+     * devuelve mientras otra cancela) se forman en esta fila en lugar de cruzarse.
+     * @return 1 si la venta está activa, 0 si ya fue cancelada
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE Venta v SET v.fechaUltimaDevolucion = :fecha " +
+           "WHERE v.id = :id AND (v.cancelada IS NULL OR v.cancelada = false)")
+    int marcarDevolucion(Long id, LocalDateTime fecha);
+
+    /** Suma lo reembolsado al acumulado de la venta (atómico) */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE Venta v SET v.totalDevuelto = COALESCE(v.totalDevuelto, 0.0) + :monto WHERE v.id = :id")
+    int sumarDevuelto(Long id, double monto);
+
     /** Primera venta registrada (cancelada o no; para recalcular agregados desde el inicio) */
     Optional<Venta> findFirstByOrderByFechaAsc();
 
@@ -102,10 +120,11 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     /**
      * Fechas de venta cuyos agregados cambiaron desde un momento dado: ventas
      * registradas después, o canceladas después (la cancelación mueve el día
-     * de la venta original, no el de la cancelación).
+     * de la venta original, no el de la cancelación; igual con las devoluciones parciales).
      */
     @Query("SELECT DISTINCT v.fecha FROM Venta v WHERE v.fecha >= :desde " +
-           "OR (v.fechaCancelacion IS NOT NULL AND v.fechaCancelacion >= :desde)")
+           "OR (v.fechaCancelacion IS NOT NULL AND v.fechaCancelacion >= :desde) " +
+           "OR (v.fechaUltimaDevolucion IS NOT NULL AND v.fechaUltimaDevolucion >= :desde)")
     List<LocalDateTime> findFechasAfectadasDesde(LocalDateTime desde);
 
     // ── Corte del día: totales calculados en SQL (sin cargar tickets ni renglones) ──

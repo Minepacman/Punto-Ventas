@@ -52,6 +52,7 @@ public class VentasPeriodoController implements Initializable {
     @FXML private DatePicker dpDesde;
     @FXML private DatePicker dpHasta;
     @FXML private Button     btnCancelarVenta;
+    @FXML private Button     btnDevolver;
     @FXML private Button     btnReimprimir;
     @FXML private Button     btnFacturar;
     @FXML private Button     btnFacturas;
@@ -88,6 +89,7 @@ public class VentasPeriodoController implements Initializable {
     @Autowired private ImpresionService    impresionService;
     @Autowired private FacturacionDialogos facturacionDialogos;
     @Autowired private MovimientoCajaDialogo movimientoCajaDialogo;
+    @Autowired private DevolucionDialogo devolucionDialogo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.FacturacionService facturacionService;
     @Autowired private org.springframework.context.ApplicationContext springContext;
 
@@ -120,6 +122,9 @@ public class VentasPeriodoController implements Initializable {
                       + (v.isCancelada() ? "  —  CANCELADA: " + v.getMotivoCancelacion()
                         + " (" + v.getCanceladaPorNombre()
                         + (v.getCancelacionAutorizadaPor() != null ? ", autorizó " + v.getCancelacionAutorizadaPor() : "") + ")"
+                        : "")
+                      + (!v.isCancelada() && v.getTotalDevueltoOCero() > 0.004
+                        ? "  —  Devoluciones: −" + Moneda.formato(v.getTotalDevueltoOCero()) + " (neto " + Moneda.formato(v.getTotalNeto()) + ")"
                         : "")
                     : "Detalle de la venta");
         });
@@ -214,6 +219,11 @@ public class VentasPeriodoController implements Initializable {
                     v.getId(), factura.getSerieFolio(), factura.esGlobal() ? " (global)" : "", factura.getEstadoEnum().getEtiqueta()));
             return;
         }
+        if (v.tieneDevoluciones() || v.getFechaUltimaDevolucion() != null) {
+            alerta(Alert.AlertType.INFORMATION, "Venta con devoluciones", "La venta #" + v.getId()
+                    + " ya tiene artículos devueltos: en lugar de cancelarla, devuelve lo que falta con «Devolver artículos…».");
+            return;
+        }
         if (java.time.LocalDateTime.now().isAfter(v.getLimiteCancelacion())) {
             alerta(Alert.AlertType.WARNING, "Fuera de plazo", String.format(
                     "La venta #%d ya no se puede cancelar: el plazo de %d horas venció el %s.",
@@ -244,6 +254,27 @@ public class VentasPeriodoController implements Initializable {
         } catch (NegocioException e) {
             alerta(Alert.AlertType.ERROR, "No se pudo cancelar", e.getMessage());
         }
+    }
+
+    /**
+     * Devolución parcial: el cliente regresa algunos artículos y se le reembolsa en efectivo
+     * (DevolucionService; permiso DEVOLVER_VENTAS o autorización, motivo, mismo plazo que cancelar).
+     */
+    @FXML private void onDevolver() {
+        Venta v = tablaVentas.getSelectionModel().getSelectedItem();
+        if (v == null) {
+            alerta(Alert.AlertType.WARNING, "Selecciona una venta", "Haz clic en una venta de la tabla para devolver artículos de ella.");
+            return;
+        }
+        Long id = v.getId();
+        devolucionDialogo.mostrar(raiz.getScene() != null ? raiz.getScene().getWindow() : null, id).ifPresent(dev -> {
+            alerta(Alert.AlertType.INFORMATION, "Devolución registrada", String.format(
+                    "Devolución %s de la venta #%d: entrega %s en efectivo al cliente.",
+                    dev.getFolio(), id, Moneda.formato(dev.getTotal())));
+            onBuscar();
+            ventas.stream().filter(x -> x.getId().equals(id)).findFirst()
+                    .ifPresent(x -> tablaVentas.getSelectionModel().select(x));
+        });
     }
 
     /**
@@ -314,9 +345,11 @@ public class VentasPeriodoController implements Initializable {
                 .flatMap(v -> v.getDetalles().stream())
                 .mapToDouble(DetalleVenta::getCantidad).sum();
         long canceladas = ventas.size() - activas.size();
+        double devuelto = activas.stream().mapToDouble(Venta::getTotalDevueltoOCero).sum();
         lblResumen.setText(String.format(
-                "%d venta(s)  ·  %s producto(s)  ·  Subtotal: %s  ·  IVA: %s  ·  Total: %s%s",
+                "%d venta(s)  ·  %s producto(s)  ·  Subtotal: %s  ·  IVA: %s  ·  Total: %s%s%s",
                 activas.size(), formatoCantidad(piezas), Moneda.formato(total - iva), Moneda.formato(iva), Moneda.formato(total),
+                devuelto > 0.004 ? "  ·  Devoluciones de estas ventas: −" + Moneda.formato(devuelto) : "",
                 canceladas > 0 ? "  ·  " + canceladas + " cancelada(s) no incluida(s)" : ""));
     }
 
@@ -331,7 +364,7 @@ public class VentasPeriodoController implements Initializable {
         colSubtotal.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getSubtotalODefault())));
         colIva.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getIvaODefault())));
         colTotal.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getTotal())));
-        colEstado.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().isCancelada() ? "Cancelada" : "Cobrada"));
+        colEstado.setCellValueFactory(c -> new SimpleStringProperty(estado(c.getValue())));
         colFactura.setCellValueFactory(c -> {
             var f = facturaPorVenta.get(c.getValue().getId());
             return new SimpleStringProperty(f == null ? "" : f.getSerieFolio() + (f.esGlobal() ? " (global)" : "")
@@ -340,7 +373,9 @@ public class VentasPeriodoController implements Initializable {
 
         colDetCodigo.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getCodigoMostrado()));
         colDetDescripcion.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getDescripcionMostrada()));
-        colDetCantidad.setCellValueFactory(c -> new SimpleStringProperty(formatoCantidad(c.getValue().getCantidad())));
+        colDetCantidad.setCellValueFactory(c -> new SimpleStringProperty(formatoCantidad(c.getValue().getCantidad())
+                + (c.getValue().getCantidadDevueltaOCero() > 0
+                   ? " (" + formatoCantidad(c.getValue().getCantidadDevueltaOCero()) + " dev.)" : "")));
         colDetPrecio.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getPrecioVenta())));
         colDetDescuento.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getDescuento())));
         colDetConcepto.setCellValueFactory(c -> {
@@ -355,6 +390,13 @@ public class VentasPeriodoController implements Initializable {
             return new SimpleStringProperty(texto);
         });
         colDetImporte.setCellValueFactory(c -> new SimpleStringProperty(Moneda.formato(c.getValue().getImporte())));
+    }
+
+    private static String estado(Venta v) {
+        if (v.isCancelada()) return "Cancelada";
+        if (v.estaDevueltaPorCompleto()) return "Devuelta";
+        if (v.tieneDevoluciones()) return "Devolución parcial";
+        return "Cobrada";
     }
 
     private static String formaPago(Venta v) {

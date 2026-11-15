@@ -32,6 +32,7 @@
             <Separator orientation="VERTICAL"/>
             <Button fx:id="btnCancelarVenta" text="Cancelar venta" onAction="#onCancelarVenta"
                     styleClass="button-danger"><graphic><Icono nombre="prohibido"/></graphic></Button>
+            <Button fx:id="btnDevolver" text="Devolver artículos…" onAction="#onDevolver"><graphic><Icono nombre="izquierda"/></graphic></Button>
             <Button fx:id="btnReimprimir" text="Reimprimir ticket" onAction="#onReimprimir"><graphic><Icono nombre="impresora"/></graphic></Button>
             <Button fx:id="btnFacturar" text="Facturar" onAction="#onFacturar"><graphic><Icono nombre="recibo"/></graphic></Button>
             <Button fx:id="btnFacturas" text="Facturas…" onAction="#onFacturas"><graphic><Icono nombre="documento"/></graphic></Button>

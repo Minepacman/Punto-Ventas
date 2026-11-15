@@ -129,14 +129,17 @@ public class AgregadosLote {
             Franja franja = Franja.de(v.getFecha());
             double piezas = 0;
             Map<Long, ProductoDiario> delDia = productos.computeIfAbsent(dia, k -> new LinkedHashMap<>());
+            // Las devoluciones parciales restan en el día de la venta (lo devuelto no se vendió)
             for (DetalleVenta d : v.getDetalles()) {
                 Producto p = d.getProducto();
                 if (p == null) continue;
-                piezas += d.getCantidad();
+                double cantidad = Math.max(0, d.getCantidad() - d.getCantidadDevueltaOCero());
+                double importe = Math.max(0, d.getImporte() - d.getImporteDevueltoOCero());
+                piezas += cantidad;
                 delDia.computeIfAbsent(p.getId(), k -> new ProductoDiario(dia, p))
-                      .sumar(franja, d.getCantidad(), d.getImporte());
+                      .sumar(franja, cantidad, importe);
             }
-            resumenes.computeIfAbsent(dia, ResumenDiario::new).sumarVenta(franja, v.getTotal(), piezas);
+            resumenes.computeIfAbsent(dia, ResumenDiario::new).sumarVenta(franja, v.getTotalNeto(), piezas);
         }
 
         Map<LocalDate, AgregadosService.DiaCalculado> resultado = new TreeMap<>();

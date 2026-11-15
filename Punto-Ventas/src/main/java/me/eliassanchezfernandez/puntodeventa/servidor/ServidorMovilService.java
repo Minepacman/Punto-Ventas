@@ -1254,6 +1254,7 @@ public class ServidorMovilService {
                 m.put("total", v.getTotal());
                 m.put("formaPago", v.getFormaPago() == null ? "" : v.getFormaPago().getEtiqueta());
                 m.put("cancelada", v.isCancelada());
+                if (v.getTotalDevueltoOCero() > 0.004) m.put("devuelto", v.getTotalDevueltoOCero());   // devoluciones parciales
                 List<Map<String, Object>> lineas = new ArrayList<>();
                 for (DetalleVenta d : v.getDetalles()) {
                     if (lineas.size() >= MAX_LINEAS_POR_VENTA) break;
@@ -1266,6 +1267,7 @@ public class ServidorMovilService {
                     l.put("cantidad", d.getCantidad());
                     l.put("precio", d.getPrecioVenta());
                     l.put("importe", d.getImporte());
+                    if (d.getCantidadDevueltaOCero() > 0) l.put("devuelta", d.getCantidadDevueltaOCero());
                     if (ganancias) l.put("costo", d.getCostoUnitarioODefault());
                     lineas.add(l);
                 }

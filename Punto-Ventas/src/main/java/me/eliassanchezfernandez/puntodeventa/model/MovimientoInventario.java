@@ -73,7 +73,7 @@ public class MovimientoInventario {
     @Column(name = "proveedor_id")
     private Long proveedorId;
 
-    /** Folio de la venta relacionada (VENTA / CANCELACION) */
+    /** Folio de la venta relacionada (VENTA / CANCELACION / DEVOLUCION) */
     @Column(name = "venta_id")
     private Long ventaId;
 
@@ -90,7 +90,9 @@ public class MovimientoInventario {
 
     public enum Tipo {
         ENTRADA("Entrada"), AJUSTE("Ajuste"), VENTA("Venta"),
-        CANCELACION("Cancelación"), ALTA_INICIAL("Alta inicial");
+        CANCELACION("Cancelación"), ALTA_INICIAL("Alta inicial"),
+        /** Artículo devuelto por el cliente (devolución parcial de una venta) */
+        DEVOLUCION("Devolución de cliente");
 
         private final String etiqueta;
 

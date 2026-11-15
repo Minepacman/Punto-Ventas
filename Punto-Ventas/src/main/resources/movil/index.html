@@ -694,10 +694,10 @@ const api = {
       + '&pagina=' + pagina);
     const r = d.ventas.map(v => ({
       id: v.id, folio: v.folio || String(v.id), fecha: new Date(v.fecha), cajero: v.cajero, pago: v.formaPago,
-      cancelada: v.cancelada, total: v.total,
+      cancelada: v.cancelada, total: v.total, devuelto: v.devuelto || 0,
       // `importe` ya trae descuento/promoción/mayoreo aplicados (cantidad × precio no cuadraría con el total)
       lineas: v.lineas.map(l => ({ nombre: l.descripcion, unidad: l.unidad || 'pza', cantidad: l.cantidad, precio: l.precio,
-        importe: l.importe != null ? l.importe : l.cantidad * l.precio })),
+        importe: l.importe != null ? l.importe : l.cantidad * l.precio, devuelta: l.devuelta || 0 })),
     }));
     r.truncado = d.truncado; r.totalReal = d.total;
     r.hayMas = !!d.hayMas;
@@ -1119,7 +1119,8 @@ async function vistaHistorial() {
 
   const filaVenta = v => h('button', { class: 'fila', type: 'button', onclick: () => detalleVenta(v) },
     h('div', { class: 'cuerpo' },
-      h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada') : null),
+      h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada')
+        : (v.devuelto > 0 ? h('span', { class: 'insignia', style: 'margin-left:.5rem' }, 'Con devolución') : null)),
       h('div', { class: 'd' }, fechaHora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero)),
     h('div', { class: 'der' }, dinero(v.total)));
 
@@ -1176,9 +1177,11 @@ function detalleVenta(v) {
     h('h2', null, 'Venta ' + v.folio),
     h('p', { class: 'sub' }, fechaLarga(v.fecha) + ' ' + hora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero + (v.cancelada ? ' · CANCELADA' : '')),
     h('div', null, v.lineas.map(l => h('div', { class: 'linea' },
-      h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio))),
+      h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio)
+        + (l.devuelta > 0 ? ' · devuelto: ' + num(l.devuelta) : ''))),
       h('div', null, dinero(l.importe != null ? l.importe : l.cantidad * l.precio))))),
     h('div', { class: 'total-fila' }, h('span', null, 'Total'), h('span', null, dinero(v.total))),
+    v.devuelto > 0 ? h('p', { class: 'sub' }, 'Devoluciones: −' + dinero(v.devuelto) + ' · neto ' + dinero(v.total - v.devuelto)) : null,
     h('button', { class: 'btn btn-block', type: 'button', onclick: () => h2.cerrar() }, 'Cerrar'),
   ]);
 }

@@ -68,6 +68,7 @@ public class VentaService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FacturaRepository facturaRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.DevolucionRepository devolucionRepo;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -702,6 +703,7 @@ public class VentaService {
                     v.getId(), v.getPlazoCancelacionHorasOPorDefecto(), limite.format(FMT)));
         }
         if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
+        if (v.getFechaUltimaDevolucion() != null) throw new NegocioException(mensajeConDevoluciones(v));
 
         // 1) La marca de cancelación, PRIMERO y condicionada a que la venta siga activa EN la base. Con
         //    varias cajas, dos pueden haber leído la venta "no cancelada" y cancelarla a la vez: solo una
@@ -717,6 +719,9 @@ public class VentaService {
                     + "): la mercancía ya regresó al inventario y no se hizo nada más.");
         }
         em.refresh(v);   // la fila ya cambió en la base; la copia en memoria se vuelve a leer
+        // Con artículos ya devueltos (DevolucionService) cancelar regresaría mercancía y dinero dos veces: se
+        // devuelve el resto. La devolución bloquea esta misma fila, así que aquí se ve aunque otra caja acabe de hacerla.
+        if (v.getFechaUltimaDevolucion() != null) throw new NegocioException(mensajeConDevoluciones(v));
 
         // 2) Regresar mercancía: productos en orden de id, el mismo orden en que cobrar() los descuenta
         //    (ver cantidadesPorProducto), para que dos cajas nunca se bloqueen en cruz.
@@ -739,6 +744,11 @@ public class VentaService {
                 "Venta #" + v.getId() + " — " + motivo.trim(), aut);
         if (aut != null) aut.consumir();
         return v;
+    }
+
+    private static String mensajeConDevoluciones(Venta v) {
+        return "La venta #" + v.getId() + " ya tiene artículos devueltos: en lugar de cancelarla, "
+                + "devuelve lo que falta con «Devolver artículos…».";
     }
 
     /**
@@ -890,6 +900,18 @@ public class VentaService {
         r.numCanceladas   = ((Number) canceladas[0]).intValue();
         r.totalCanceladas = ((Number) canceladas[1]).doubleValue();
 
+        // Devoluciones de artículos hechas en el periodo en esta caja (DevolucionService): restan en las ventas
+        // netas y en la ganancia (lo reembolsado menos el costo de lo que regresó al anaquel; lo de merma se pierde).
+        // El efectivo reembolsado ya resta en el esperado como salida de caja «Devolución al cliente».
+        Object[] devs = devolucionRepo.resumenEntre(inicio, fin, caja).get(0);
+        r.numDevoluciones   = ((Number) devs[0]).intValue();
+        r.totalDevoluciones = redondear(((Number) devs[1]).doubleValue());
+        r.ivaDevoluciones   = redondear(((Number) devs[2]).doubleValue());
+        if (r.numDevoluciones > 0) {
+            Double costo = devolucionRepo.costoRecuperadoEntre(inicio, fin, caja);
+            r.ganancia -= r.totalDevoluciones - (costo != null ? costo : 0.0);
+        }
+
         // El cambio sale del efectivo; las ventas anteriores al pago dividido van todas a su forma de pago
         for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO, caja)) {
             sumarPago(r, (Venta.FormaPago) f[0], ((Number) f[1]).doubleValue());
@@ -988,6 +1010,14 @@ public class VentaService {
         public int    numVentas;
         public int    numCanceladas;
         public double totalCanceladas;
+        /** Devoluciones de artículos hechas en el periodo (no cambian {@link #ventasTotales}; ver {@link #getVentasNetas}) */
+        public int    numDevoluciones;
+        public double totalDevoluciones;
+        /** IVA incluido en lo reembolsado */
+        public double ivaDevoluciones;
+
+        /** Ventas del periodo menos lo reembolsado por devoluciones de artículos */
+        public double getVentasNetas() { return redondear(ventasTotales - totalDevoluciones); }
         /** false cuando quien consulta no tiene VER_GANANCIAS (ganancia = 0) */
         public boolean gananciaVisible = true;
         /** Nombre con el que los productos comunes aparecen en {@link #porDepartamento} */
