@@ -63,6 +63,18 @@ jobs:
           case "$TAG" in
             *[!0-9A-Za-z.-]*) echo "::error::Versión con caracteres no permitidos: $TAG"; exit 1 ;;
           esac
+          # El instalador solo lleva x.y.z (jpackage recorta "-beta.1") y el ProductCode del MSI sale del nombre y
+          # esa versión: dos etiquetas con el mismo x.y.z (v1.1.0-beta.1 y luego v1.1.0) darían el mismo ProductCode y
+          # Windows no instalaría la segunda encima de la primera ("ya hay otra versión de este producto"). Por eso cada
+          # x.y.z se usa en UNA sola etiqueta: tras v1.1.0-beta.1 la siguiente es v1.1.1-beta.2 o la final v1.1.1.
+          NUM=$(printf '%s' "$TAG" | sed -n 's/^\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p')
+          if [ -z "$NUM" ]; then echo "::error::La versión debe empezar con x.y.z: $TAG"; exit 1; fi
+          OTRAS=$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}.git" "v${NUM}*" \
+                  | sed 's#.*refs/tags/##' | grep -E "^v${NUM//./\\.}(-.*)?$" | grep -vx "v${TAG}" || true)
+          if [ -n "$OTRAS" ]; then
+            echo "::error::La versión numérica ${NUM} ya la usa otra etiqueta ($(echo $OTRAS)). Windows no podría actualizar entre ellas: sube el último número (p. ej. a la siguiente x.y.z)."
+            exit 1
+          fi
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
           case "$TAG" in
             *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
