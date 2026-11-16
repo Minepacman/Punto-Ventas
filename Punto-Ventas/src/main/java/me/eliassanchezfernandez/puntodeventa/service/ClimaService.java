@@ -312,8 +312,12 @@ public class ClimaService {
 
     // ── Trabajos programados ─────────────────────────────────────────────
 
-    /** Cada hora, a los 5 minutos, mientras el clima esté activo */
-    @Scheduled(cron = "0 5 * * * *")
+    /**
+     * Cada 30 minutos en punto (7:00, 7:30, 8:00…), mientras el clima esté activo. La lectura de la
+     * media hora reemplaza la de su hora (un registro por hora: {@link #guardar}), así la cabecera se
+     * mantiene al día y las estadísticas siguen asociando las ventas por hora.
+     */
+    @Scheduled(cron = "0 0,30 * * * *")
     public void trabajoHorario() {
         if (!trabajosActivos) return;
         self.registrarAhora();

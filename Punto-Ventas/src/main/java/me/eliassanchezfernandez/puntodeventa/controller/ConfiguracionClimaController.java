@@ -121,7 +121,7 @@ public class ConfiguracionClimaController implements Initializable {
                 t.start();
             }
             Ventanas.alerta(Alert.AlertType.INFORMATION, "Ubicación guardada",
-                    g.isClimaActivo() ? "El clima se registrará cada hora." : "El clima está desactivado.");
+                    g.isClimaActivo() ? "El clima se actualizará cada 30 minutos (7:00, 7:30, 8:00…)." : "El clima está desactivado.");
             onCerrar();
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "No se pudo guardar", e.getMessage());

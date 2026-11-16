@@ -34,7 +34,7 @@
                 <HBox styleClass="fila-interruptor">
                     <ToggleSwitch fx:id="swClima"/>
                     <VBox spacing="1" HBox.hgrow="ALWAYS">
-                        <Label text="Registrar el clima cada hora" styleClass="interruptor-titulo"/>
+                        <Label text="Actualizar el clima cada 30 minutos" styleClass="interruptor-titulo"/>
                         <Label text="Temperatura y condición del tiempo de tu zona (servicio gratuito Open-Meteo). Se enciende solo cuando ya hay ubicación."
                                wrapText="true" styleClass="hint"/>
                     </VBox>

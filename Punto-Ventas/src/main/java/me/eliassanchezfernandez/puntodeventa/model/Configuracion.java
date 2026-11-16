@@ -152,7 +152,7 @@ public class Configuracion {
     @Column(name = "ciudad", length = 100)
     private String ciudad;
 
-    /** Consultar el clima cada hora (apagado hasta que haya coordenadas) */
+    /** Consultar el clima cada 30 minutos en punto (apagado hasta que haya coordenadas) */
     @Column(name = "clima_activo")
     private Boolean climaActivo;
 
