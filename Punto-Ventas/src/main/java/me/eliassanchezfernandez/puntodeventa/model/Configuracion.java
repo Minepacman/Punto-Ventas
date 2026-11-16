@@ -204,6 +204,16 @@ public class Configuracion {
     @Column(name = "movil_puerto_https")
     private Integer movilPuertoHttps;
 
+    // ── Apariencia ───────────────────────────────────────────────────────
+
+    /**
+     * Apariencia de toda la tienda (tema, color, iconos, letra, vidrio) en JSON
+     * (util/apariencia/Apariencia). null = la de fábrica. La página móvil la lee
+     * de /api/apariencia. Los tickets impresos no la usan.
+     */
+    @Column(name = "apariencia", length = 2000)
+    private String apariencia;
+
     // ── Inicio de sesión ─────────────────────────────────────────────────
 
     /** Mostrar en la pantalla de inicio de sesión la lista de usuarios activos (null = no) */

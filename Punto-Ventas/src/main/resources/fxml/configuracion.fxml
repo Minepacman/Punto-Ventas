@@ -46,6 +46,7 @@
                         <BotonOpcion icono="efectivo" titulo="Moneda"             descripcion="Símbolo y código ($ MXN)"                      onAction="#onMoneda"/>
                         <BotonOpcion icono="regla"   titulo="Unidades de medida"  descripcion="Pieza, kilo, litro, paquete"                  onAction="#onUnidades"/>
                         <BotonOpcion icono="energia" titulo="Abrir al encender"   beta="ABRIR_AL_ENCENDER" descripcion="Iniciar con la computadora"                   onAction="#onAbrirAlEncender"/>
+                        <BotonOpcion icono="imagen"  titulo="Apariencia"          descripcion="Colores, iconos, letra"                      onAction="#onApariencia"/>
                     </FlowPane>
                 </VBox>
 

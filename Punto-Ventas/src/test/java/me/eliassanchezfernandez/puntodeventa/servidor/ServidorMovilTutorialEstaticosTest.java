@@ -215,7 +215,9 @@ class ServidorMovilTutorialEstaticosTest {
         String csp = r.headers().firstValue("Content-Security-Policy").orElseThrow();
         assertThat(csp).contains("manifest-src 'self'").contains("img-src 'self'");
         // Iconos: SVG en línea creados por DOM, sin emojis ni fuentes/CDN externos
-        assertThat(html).contains("createElementNS").contains("Lucide").doesNotContain("cdn.").doesNotContain("@font-face");
+        assertThat(html).contains("createElementNS").contains("Lucide").doesNotContain("cdn.").doesNotContain("fonts.googleapis");
+        // Las únicas letras externas a la página son las incluidas en el programa (/fuentes/, lista cerrada)
+        assertThat(html).doesNotContain("url(\"http");
         assertThat(html.codePoints().anyMatch(cp -> cp >= 0x1F300 && cp <= 0x1FAFF)).as("sin emojis en la página").isFalse();
     }
 
