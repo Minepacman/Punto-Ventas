@@ -97,6 +97,10 @@ public final class Iconos {
                 "M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8",
                 "M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4",
                 "M2 7h20");
+        icono("mas-opciones",   // Lucide «ellipsis»: menú «Más»
+                "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+                "M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0",
+                "M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0");
         icono("buscar",
                 "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0",
                 "m21 21-4.3-4.3");

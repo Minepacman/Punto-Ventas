@@ -232,7 +232,7 @@ public class InventarioController implements Initializable {
     @FXML void onReporteInventario() {
         alerta(Alert.AlertType.INFORMATION, "Reporte de inventario",
                 "La generación de reportes en PDF no está disponible en esta versión. "
-                + "Usa \"Productos Bajos\" para ver los faltantes.");
+                + "Usa \"Productos bajos\" para ver los faltantes.");
     }
 
     /** Bitácora de movimientos de inventario (INV-07) */

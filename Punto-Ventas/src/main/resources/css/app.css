@@ -1046,6 +1046,15 @@ TilePane > .button:armed,
     -fx-alignment: center-left;
 }
 
+/* Barra de acciones (FlowPane): si no caben los botones pasan a otro renglón en vez de
+   recortarse con «…» (1024×768 y letra grande). Va junto con .section-toolbar. */
+.barra-acciones {
+    -fx-hgap: 8;
+    -fx-vgap: 8;
+    -fx-alignment: center-left;
+    -fx-row-valignment: center;
+}
+
 .section-toolbar .form-section-title {
     -fx-font-size: 14px;
     -fx-text-fill: -pos-text-muted;
