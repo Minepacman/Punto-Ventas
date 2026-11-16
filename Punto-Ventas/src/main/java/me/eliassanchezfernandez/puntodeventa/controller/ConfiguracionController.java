@@ -12,6 +12,9 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -66,6 +69,7 @@ public class ConfiguracionController implements Initializable {
     @Autowired private AcercaDeDialogo acercaDeDialogo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.ActualizacionService actualizacionService;
     @Autowired private CatalogoCodigosService catalogoCodigosService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ocr.LectorTicketsService lectorTicketsService;
 
     @Override public void initialize(URL url, ResourceBundle rb) { }
 
@@ -402,6 +406,96 @@ public class ConfiguracionController implements Initializable {
 
     @FXML void onImpresora() { abrirAdmin("/fxml/configuracion_impresora.fxml", "Impresora de tickets", 600, 760); }
     @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", "Báscula", 600, 620); }
+    /**
+     * Abrir Caja Libre al encender la computadora (por computadora; ver util/InicioAutomatico).
+     * Viene encendido de fábrica en el programa instalado. reg.exe en Windows: fuera del hilo de JavaFX.
+     */
+    @FXML void onAbrirAlEncender() {
+        if (!soloAdmin()) return;
+        var lanzador = me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.lanzador();
+        var carpeta = me.eliassanchezfernandez.puntodeventa.util.RutasApp.carpetaAplicacion();
+        CheckBox activo = new CheckBox("Abrir " + me.eliassanchezfernandez.puntodeventa.util.Marca.NOMBRE
+                + " al encender esta computadora");
+        activo.setSelected(me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.decidido(carpeta).orElse(true));
+        activo.setDisable(lanzador.isEmpty());
+        Label nota = new Label(lanzador.isEmpty()
+                ? "Solo disponible en el programa instalado (no al correrlo desde el código)."
+                : "Al prender la computadora e iniciar sesión, el programa se abre solo y queda listo para cobrar. "
+                + "Viene encendido de fábrica; se decide en cada computadora.");
+        nota.setWrapText(true);
+        nota.setPrefWidth(420);
+        nota.getStyleClass().add("hint");
+        dialogoGuardar("Abrir al encender", "Iniciar con la computadora", new VBox(10, activo, nota), () -> {
+            if (lanzador.isEmpty()) return;
+            boolean encendido = activo.isSelected();
+            me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.guardarDecision(carpeta, encendido);
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                String error = me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.aplicar(encendido, lanzador.get(),
+                        me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.Entorno.actual());
+                if (error != null) javafx.application.Platform.runLater(() -> alerta(Alert.AlertType.WARNING, "Abrir al encender", error));
+            });
+        });
+    }
+
+    /**
+     * Lector de tickets de proveedor (OCR): Automático / Rápido / Preciso, con una línea que dice qué
+     * motor se usa en esta computadora y por qué. Es por computadora (ocr.properties), no de la BD.
+     * Buscar Tesseract corre procesos: se hace fuera del hilo de JavaFX.
+     */
+    @FXML void onLectorTickets() {
+        if (!soloAdmin()) return;
+        var preferencias = me.eliassanchezfernandez.puntodeventa.ocr.SeleccionMotorOcr.Preferencia.values();
+        ToggleGroup grupo = new ToggleGroup();
+        VBox opciones = new VBox(8);
+        String[] ayudas = {
+                "Elige solo según la computadora: memoria, procesador y una prueba rápida.",
+                "Tesseract: funciona en cualquier computadora, incluso de 32 bits o con poca memoria.",
+                "PaddleOCR: lee mejor las fotos difíciles, pero pide más memoria y una computadora de 64 bits."};
+        for (int i = 0; i < preferencias.length; i++) {
+            RadioButton rb = new RadioButton(preferencias[i].etiqueta());
+            rb.setUserData(preferencias[i]);
+            rb.setToggleGroup(grupo);
+            Label ayuda = new Label(ayudas[i]);
+            ayuda.getStyleClass().add("hint");
+            ayuda.setWrapText(true);
+            ayuda.setPadding(new Insets(0, 0, 0, 24));
+            opciones.getChildren().add(new VBox(2, rb, ayuda));
+        }
+        var actual = lectorTicketsService.preferencia();
+        grupo.getToggles().stream().filter(t -> t.getUserData() == actual).findFirst().ifPresent(grupo::selectToggle);
+        Label motivo = new Label("Revisando esta computadora…");
+        motivo.setWrapText(true);
+        motivo.setPrefWidth(460);
+        motivo.getStyleClass().add("subtitle");
+        Label nota = new Label("Sirve para capturar la mercancía con una foto del ticket del proveedor desde el celular. "
+                + "La foto se lee en esta computadora y no se envía a nadie. PaddleOCR se descarga una sola vez "
+                + "(unos 80 MB) solo si esta computadora puede usarlo.");
+        nota.setWrapText(true);
+        nota.setPrefWidth(460);
+        nota.getStyleClass().add("hint");
+        java.util.Map<Object, String> motivos = new java.util.concurrent.ConcurrentHashMap<>();
+        Runnable mostrar = () -> {
+            Toggle t = grupo.getSelectedToggle();
+            String m = t == null ? null : motivos.get(t.getUserData());
+            motivo.setText(m == null ? "Revisando esta computadora…" : m);
+        };
+        grupo.selectedToggleProperty().addListener((o, a, b) -> mostrar.run());
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            for (var p : preferencias) {
+                var d = lectorTicketsService.decision(p);
+                String estado = lectorTicketsService.estadoPreparacion();
+                motivos.put(p, "Se usará: " + d.motor().etiqueta() + ". " + d.motivo() + (estado.isBlank() ? "" : "\n" + estado));
+            }
+            javafx.application.Platform.runLater(mostrar);
+        });
+        VBox contenido = new VBox(12, opciones, motivo, nota);
+        dialogoGuardar("Lector de tickets", "Cómo se leen las fotos de tickets de proveedor", contenido, () -> {
+            Toggle t = grupo.getSelectedToggle();
+            if (t != null) lectorTicketsService.guardarPreferencia(
+                    (me.eliassanchezfernandez.puntodeventa.ocr.SeleccionMotorOcr.Preferencia) t.getUserData());
+        });
+    }
+
     @FXML void onLector()    { if (soloAdmin()) dispositivosDialogos.lector(raiz.getScene().getWindow()); }
     @FXML void onCajon()     { if (soloAdmin()) dispositivosDialogos.cajon(raiz.getScene().getWindow()); }
     @FXML void onTerminalBancaria() { if (soloAdmin()) dispositivosDialogos.terminalBancaria(raiz.getScene().getWindow()); }
