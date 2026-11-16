@@ -87,6 +87,7 @@ public class InventarioController implements Initializable {
     @Autowired private ApplicationContext  springContext;
     @Autowired private CaducidadService    caducidadService;
     @Autowired private CaducidadDialogos   caducidadDialogos;
+    @Autowired private LeerTicketDialogo   leerTicketDialogo;
 
     private final ObservableList<Producto> lista = FXCollections.observableArrayList();
     private Producto productoSeleccionado = null;
@@ -197,6 +198,16 @@ public class InventarioController implements Initializable {
         } catch (Exception e) {
             e.printStackTrace();
             alerta(Alert.AlertType.ERROR, "Error", "No se pudo abrir la ventana: " + e.getMessage());
+        }
+    }
+
+    /** Leer el ticket del proveedor (foto o texto) y darle entrada a todo de una vez */
+    @FXML void onLeerTicket() {
+        try {
+            if (leerTicketDialogo.mostrar(tablaInventario.getScene().getWindow())) recargar();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Leer ticket", "No se pudo abrir la ventana: " + e.getMessage());
         }
     }
 
