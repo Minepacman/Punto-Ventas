@@ -155,6 +155,8 @@ public class MainController implements Initializable {
         if (ventasViewController != null) ventasViewController.setAlDarDeAlta(this::darDeAltaDesdeVentas);
         configurarCierreDeVentana();
         configurarClima();
+        // Equipo lento (arranque o pantalla): la barra de estado ofrece el modo ligero, una sola vez
+        me.eliassanchezfernandez.puntodeventa.util.MedidorFluidez.alDetectarLentitud(this::ofrecerModoLigero);
         // Ya con la ventana en pantalla: asistente inicial → tutorial → donación (BienvenidaService decide cuáles)
         Platform.runLater(this::flujoDeBienvenida);
     }
@@ -399,6 +401,32 @@ public class MainController implements Initializable {
             }
             r.actualizacion().ifPresent(a -> Platform.runLater(() -> mostrarAvisoDeActualizacion(a)));
         });
+    }
+
+    private Hyperlink lnkModoLigero;
+
+    /** Enlace «Equipo lento: probar el modo ligero» junto al de actualización (se ofrece una sola vez) */
+    private void ofrecerModoLigero(String motivo) {
+        if (lnkModoLigero != null || !me.eliassanchezfernandez.puntodeventa.util.ModoLigero.debeSugerir()) return;
+        if (!(lnkActualizacion.getParent() instanceof javafx.scene.layout.Pane barra)) return;
+        lnkModoLigero = new Hyperlink("Equipo lento: probar el modo ligero");
+        lnkModoLigero.setTooltip(new javafx.scene.control.Tooltip("Esta computadora " + motivo
+                + ". El modo ligero quita sombras, vidrio y animaciones. Se cambia en Configuración → Apariencia."));
+        lnkModoLigero.setOnAction(e -> {
+            var r = Ventanas.confirmar("Modo ligero",
+                    "Esta computadora " + motivo + ".\n\nEl modo ligero quita sombras, el efecto vidrio y las "
+                    + "animaciones para que la pantalla responda más rápido. Solo cambia esta computadora y se puede "
+                    + "apagar en Configuración → Apariencia.\n\n¿Encenderlo ahora?");
+            if (r) {
+                me.eliassanchezfernandez.puntodeventa.util.ModoLigero.guardarPreferencia(
+                        me.eliassanchezfernandez.puntodeventa.util.ModoLigero.Preferencia.ENCENDIDO);
+                me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia.reaplicar();
+            } else {
+                me.eliassanchezfernandez.puntodeventa.util.ModoLigero.marcarSugerido();
+            }
+            barra.getChildren().remove(lnkModoLigero);
+        });
+        barra.getChildren().add(barra.getChildren().indexOf(lnkActualizacion), lnkModoLigero);
     }
 
     private void mostrarAvisoDeActualizacion(ActualizacionService.Actualizacion a) {

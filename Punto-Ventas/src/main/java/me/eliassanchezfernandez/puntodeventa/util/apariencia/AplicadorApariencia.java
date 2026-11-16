@@ -10,6 +10,7 @@ import javafx.scene.text.Font;
 import javafx.stage.PopupWindow;
 import javafx.stage.Window;
 import me.eliassanchezfernandez.puntodeventa.util.EstiloIconos;
+import me.eliassanchezfernandez.puntodeventa.util.ModoLigero;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,9 @@ public final class AplicadorApariencia {
     private static boolean instalado;
     private static boolean aplicada;
     private static Boolean uaOscuro;
+    /** URL de css/ligero.css si el modo ligero está encendido (null = apagado) */
+    private static String urlLigero;
+    private static String urlLigeroRecurso;
     private static final Set<Apariencia.Letra> FUENTES_CARGADAS = EnumSet.noneOf(Apariencia.Letra.class);
 
     public static Apariencia actual() {
@@ -48,8 +52,11 @@ public final class AplicadorApariencia {
             return;
         }
         instalar();
-        if (aplicada && a.equals(actual)) return;
+        String ligero = ModoLigero.activo() ? urlHojaLigera() : null;
+        if (aplicada && a.equals(actual) && java.util.Objects.equals(ligero, urlLigero)) return;
         aplicada = true;
+        String ligeroAnterior = urlLigero;
+        urlLigero = ligero;
         cargarFuente(a.letra());
         boolean oscuro = a.tema().enEscritorio() == Apariencia.Tema.OSCURO;
         if (uaOscuro == null || uaOscuro != oscuro) {
@@ -58,12 +65,35 @@ public final class AplicadorApariencia {
             uaOscuro = oscuro;
         }
         String anterior = urlHoja;
-        urlHoja = a.esPorDefecto() ? null : HojaApariencia.comoUrl(HojaApariencia.css(a, appCss()));
+        // Modo ligero: el vidrio no se genera (la elección se conserva y vuelve al apagar el modo)
+        Apariencia pintada = ligero != null && a.vidrio() ? a.conVidrio(false) : a;
+        urlHoja = pintada.esPorDefecto() ? null : HojaApariencia.comoUrl(HojaApariencia.css(pintada, appCss()));
         actual = a;
         EstiloIconos.configurar(a.paqueteIconos(), a.estiloIconos(), a.grosorIconos().ancho(), a.iconosGrandes() ? 1.25 : 1.0);
         for (Window w : Window.getWindows()) {
-            if (w.getScene() != null) ponerHoja(w.getScene(), anterior);
+            if (w.getScene() != null) {
+                if (ligeroAnterior != null && ligero == null) w.getScene().getStylesheets().remove(ligeroAnterior);
+                ponerHoja(w.getScene(), anterior);
+            }
         }
+    }
+
+    /** Vuelve a aplicar la apariencia vigente (p. ej. al cambiar el modo ligero en esta computadora) */
+    public static void reaplicar() {
+        aplicar(actual);
+    }
+
+    /** ¿Se está pintando con el modo ligero? */
+    public static boolean ligeroAplicado() {
+        return urlLigero != null;
+    }
+
+    private static String urlHojaLigera() {
+        if (urlLigeroRecurso == null) {
+            var u = AplicadorApariencia.class.getResource(ModoLigero.HOJA);
+            urlLigeroRecurso = u == null ? null : u.toExternalForm();
+        }
+        return urlLigeroRecurso;
     }
 
     /** Escucha las ventanas que se abran (diálogos, ventanas modales) para ponerles la hoja vigente */
@@ -95,6 +125,14 @@ public final class AplicadorApariencia {
         if (anterior != null) hojas.remove(anterior);
         hojas.removeIf(h -> h.startsWith("data:text/css") && !h.equals(urlHoja));
         if (urlHoja != null && !hojas.contains(urlHoja)) hojas.add(urlHoja);
+        // La hoja ligera siempre al final (manda sobre las sombras de app.css y de la apariencia)
+        if (urlLigero != null) {
+            int i = hojas.indexOf(urlLigero);
+            if (i != hojas.size() - 1) {
+                if (i >= 0) hojas.remove(i);
+                hojas.add(urlLigero);
+            }
+        }
     }
 
     /** Carga (una vez) los archivos de la familia de letra elegida */

@@ -32,6 +32,7 @@ import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Icono;
 import me.eliassanchezfernandez.puntodeventa.util.PaquetesIconos;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
+import me.eliassanchezfernandez.puntodeventa.util.ModoLigero;
 import me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia;
 import me.eliassanchezfernandez.puntodeventa.util.apariencia.Apariencia;
 import me.eliassanchezfernandez.puntodeventa.util.apariencia.Paleta;
@@ -131,7 +132,8 @@ public class AparienciaDialogo {
                     seccion("Color principal", "imagen", colores()),
                     seccion("Iconos", "estrella", iconos()),
                     seccion("Letra", "documento", letra()),
-                    seccion("Efecto vidrio (Liquid Glass)", "idea", vidrio()));
+                    seccion("Efecto vidrio (Liquid Glass)", "idea", vidrio()),
+                    seccion("Modo ligero (para computadoras lentas)", "energia", modoLigero()));
             form.setPadding(new Insets(14, 16, 14, 16));
             ScrollPane scroll = new ScrollPane(form);
             scroll.setFitToWidth(true);
@@ -406,6 +408,37 @@ public class AparienciaDialogo {
             HBox filaVidrio = new HBox(8, chkVidrio, beta);
             filaVidrio.setAlignment(Pos.CENTER_LEFT);
             return new VBox(6, filaVidrio, pista, avisoVidrio);
+        }
+
+        /**
+         * Modo ligero: de ESTA computadora (no de la tienda ni del usuario) y se aplica al momento, sin
+         * esperar a «Aplicar» (ver util/ModoLigero).
+         */
+        private Node modoLigero() {
+            ToggleGroup grupo = new ToggleGroup();
+            HBox opciones = new HBox(12);
+            Label estadoLigero = new Label(ModoLigero.descripcionEstado());
+            estadoLigero.getStyleClass().add("hint");
+            estadoLigero.setWrapText(true);
+            for (ModoLigero.Preferencia p : ModoLigero.Preferencia.values()) {
+                RadioButton rb = new RadioButton(p == ModoLigero.Preferencia.AUTOMATICO ? "Automático (recomendado)" : p.nombre());
+                rb.setToggleGroup(grupo);
+                rb.setUserData(p);
+                rb.setSelected(p == ModoLigero.preferencia());
+                opciones.getChildren().add(rb);
+            }
+            grupo.selectedToggleProperty().addListener((o, a, b) -> {
+                if (b == null) return;
+                ModoLigero.guardarPreferencia((ModoLigero.Preferencia) b.getUserData());
+                AplicadorApariencia.reaplicar();
+                estadoLigero.setText(ModoLigero.descripcionEstado());
+            });
+            Label pista = new Label("Quita sombras, el efecto vidrio y las animaciones para que la pantalla responda más "
+                    + "rápido. Automático lo enciende si esta computadora dibuja sin tarjeta de video. "
+                    + "Solo cambia esta computadora y se aplica al momento.");
+            pista.getStyleClass().add("hint");
+            pista.setWrapText(true);
+            return new VBox(6, opciones, estadoLigero, pista);
         }
 
         private HBox fila(String titulo, Node contenido) {

@@ -207,4 +207,12 @@ class AjustesPoolPorDialectoTest {
         AjustesPoolPorDialecto.ajustar(explicito, PerfilBaseDatos.POSTGRESQL);
         assertThat(explicito.getMaximumPoolSize()).isEqualTo(8);
     }
+
+    @Test
+    void conJavaDe32BitsNoSeMapeaLaBaseEnMemoria() {
+        // 32 bits: 2 GB de direcciones para todo el proceso; cada conexión mapearía su propia ventana de 64 MB
+        assertThat(AjustesPoolPorDialecto.mmapPara("32")).isEqualTo("0");
+        assertThat(AjustesPoolPorDialecto.mmapPara("64")).isEqualTo("67108864");
+        assertThat(AjustesPoolPorDialecto.mmapPara(null)).isEqualTo("67108864");
+    }
 }
