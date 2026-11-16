@@ -63,12 +63,14 @@
     -pos-band-line:       rgba(255, 255, 255, 0.16);
     -pos-band-fill:       rgba(255, 255, 255, 0.10);
     -pos-band-fill-hover: rgba(255, 255, 255, 0.18);
+    -pos-login-bg:        linear-gradient(to bottom right, #2A4566 0%, #1B3049 100%);
 
     /* ---------- Texto -------------------------------------------------- */
     -pos-text:            #1B232E;
     -pos-text-muted:      #525C6A;   /* AA sobre lienzo y sobre blanco     */
     -pos-text-subtle:     #6B7582;   /* pistas, marcadores (AA sobre blanco)*/
-    -pos-text-on-accent:  #FFFFFF;
+    -pos-text-on-accent:  #FFFFFF;   /* sobre el acento (blanco o negro según el color elegido) */
+    -pos-text-on-solid:   #FFFFFF;   /* sobre rojo/verde sólidos y la ayuda emergente */
 
     /* ---------- Acento (acciones primarias, foco, selección) ---------- */
     -pos-accent:          #2F6CAD;
@@ -256,17 +258,17 @@
 .button-danger-solid,
 .button.danger {
     -color-button-bg:             -pos-danger;
-    -color-button-fg:             -pos-text-on-accent;
+    -color-button-fg:             -pos-text-on-solid;
     -color-button-border:         -pos-danger-hover;
     -color-button-edge:           -pos-danger-pressed;
     -color-button-bg-hover:       -pos-danger-hover;
-    -color-button-fg-hover:       -pos-text-on-accent;
+    -color-button-fg-hover:       -pos-text-on-solid;
     -color-button-border-hover:   -pos-danger-pressed;
     -color-button-bg-focused:     -pos-danger;
-    -color-button-fg-focused:     -pos-text-on-accent;
+    -color-button-fg-focused:     -pos-text-on-solid;
     -color-button-border-focused: -pos-danger-pressed;
     -color-button-bg-pressed:     -pos-danger-pressed;
-    -color-button-fg-pressed:     -pos-text-on-accent;
+    -color-button-fg-pressed:     -pos-text-on-solid;
     -color-button-border-pressed: -pos-danger-pressed;
     -pos-button-ring:             -pos-danger-ring;
     -fx-font-weight: bold;
@@ -276,17 +278,17 @@
 .button.success,
 .btn-cobrar {
     -color-button-bg:             -pos-success-gradient;
-    -color-button-fg:             -pos-text-on-accent;
+    -color-button-fg:             -pos-text-on-solid;
     -color-button-border:         -pos-success-hover;
     -color-button-edge:           -pos-success-pressed;
     -color-button-bg-hover:       -pos-success-gradient-hover;
-    -color-button-fg-hover:       -pos-text-on-accent;
+    -color-button-fg-hover:       -pos-text-on-solid;
     -color-button-border-hover:   -pos-success-pressed;
     -color-button-bg-focused:     -pos-success-gradient;
-    -color-button-fg-focused:     -pos-text-on-accent;
+    -color-button-fg-focused:     -pos-text-on-solid;
     -color-button-border-focused: -pos-success-pressed;
     -color-button-bg-pressed:     -pos-success-pressed;
-    -color-button-fg-pressed:     -pos-text-on-accent;
+    -color-button-fg-pressed:     -pos-text-on-solid;
     -color-button-border-pressed: -pos-success-pressed;
     -pos-button-ring:             -pos-success-ring;
     -fx-font-weight: bold;
@@ -831,7 +833,7 @@ TilePane > .button:armed,
 
 .tooltip {
     -fx-background-color: -pos-tooltip-bg;
-    -fx-text-fill: -pos-text-on-accent;
+    -fx-text-fill: -pos-text-on-solid;
     -fx-background-radius: 4;
     -fx-padding: 6 8 6 8;
     -fx-font-size: 12px;
@@ -1469,7 +1471,7 @@ TilePane > .button:armed,
    ====================================================================== */
 
 .login-root {
-    -fx-background-color: linear-gradient(to bottom right, #2A4566 0%, #1B3049 100%);
+    -fx-background-color: -pos-login-bg;
     -fx-padding: 28;
 }
 
@@ -2161,3 +2163,53 @@ TilePane > .button:armed,
 
 /* Iconos Lucide (util/Icono): el color del trazo sigue al texto del control que los contiene */
 .icono { -fx-background-color: transparent; }
+
+/* ======================================================================
+   APARIENCIA (Configuración → Apariencia, controller/AparienciaDialogo)
+   ====================================================================== */
+.apariencia-ventana {
+    -fx-background-color: -pos-bg-app;
+}
+.apariencia-seccion {
+    -fx-padding: 0 0 10 0;
+    -fx-border-color: transparent transparent -pos-border-subtle transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.apariencia-opcion {
+    -fx-padding: 5 10 5 10;
+}
+.apariencia-opcion:selected,
+.apariencia-paquete:selected,
+.muestra-color:selected {
+    -fx-background-color: -pos-accent, -pos-accent-subtle;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 7, 5;
+    -fx-text-fill: -pos-accent-text;
+}
+.apariencia-paquete {
+    -fx-padding: 6 10 6 10;
+}
+.muestra-color {
+    -fx-padding: 4;
+    -fx-background-radius: 20;
+}
+.muestra-color:selected {
+    -fx-background-radius: 20, 18;
+}
+/* Maqueta de la vista previa: su hoja propia (HojaApariencia con ámbito) define los colores */
+.vista-previa {
+    -fx-background-color: -pos-bg-app;
+    -fx-background-radius: 12;
+    -fx-border-color: -pos-border;
+    -fx-border-radius: 12;
+}
+
+/* Pastilla "Beta" (función en etapa beta; p. ej. el efecto vidrio de Apariencia) */
+.etiqueta-beta {
+    -fx-background-color: -pos-warning-muted;
+    -fx-text-fill: -pos-warning-text;
+    -fx-background-radius: 999;
+    -fx-padding: 1 8 1 8;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}

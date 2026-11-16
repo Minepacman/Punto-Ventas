@@ -71,7 +71,14 @@ public class ConfiguracionController implements Initializable {
     @Autowired private CatalogoCodigosService catalogoCodigosService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.ocr.LectorTicketsService lectorTicketsService;
 
+    @Autowired private AparienciaDialogo aparienciaDialogo;
+
     @Override public void initialize(URL url, ResourceBundle rb) { }
+
+    /** Tema, color, iconos, letra y vidrio (toda la tienda: admin; "solo para mí": cualquier usuario) */
+    @FXML void onApariencia() {
+        aparienciaDialogo.abrir(raiz.getScene().getWindow());
+    }
 
     /** Administración de usuarios (ADMIN completo; GERENTE solo consulta y desactiva) */
     @FXML void onCajeros() {

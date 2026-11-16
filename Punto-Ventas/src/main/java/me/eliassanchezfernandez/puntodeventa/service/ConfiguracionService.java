@@ -114,6 +114,12 @@ public class ConfiguracionService {
         }
     }
 
+    /** Guarda la fila (quien llama ya verificó el permiso y audita; p. ej. AparienciaService) */
+    @Transactional
+    public Configuracion guardarDirecto(Configuracion c) {
+        return guardarConfig(c);
+    }
+
     private Configuracion guardarConfig(Configuracion c) {
         Configuracion g = configuracionRepo.save(c);
         invalidarCache();

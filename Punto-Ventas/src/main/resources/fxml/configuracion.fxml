@@ -45,6 +45,7 @@
                         <BotonOpcion icono="numeros" titulo="Folios"              descripcion="Numeración de los tickets"                     onAction="#onFolios"/>
                         <BotonOpcion icono="efectivo" titulo="Moneda"             descripcion="Símbolo y código ($ MXN)"                      onAction="#onMoneda"/>
                         <BotonOpcion icono="regla"   titulo="Unidades de medida"  descripcion="Pieza, kilo, litro, paquete"                  onAction="#onUnidades"/>
+                        <BotonOpcion icono="imagen"  titulo="Apariencia"          descripcion="Colores, iconos, letra"                      onAction="#onApariencia"/>
                         <BotonOpcion icono="energia" titulo="Abrir al encender"   descripcion="Iniciar con la computadora"                   onAction="#onAbrirAlEncender"/>
                     </FlowPane>
                 </VBox>
