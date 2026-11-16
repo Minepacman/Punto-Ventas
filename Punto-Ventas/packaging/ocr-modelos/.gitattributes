@@ -1,0 +1,5 @@
+# Los scripts corren con bash también en Windows (Git Bash del runner): con CRLF fallarían ("$'\r': command not found")
+*.sh        text eol=lf
+*.sha256    text eol=lf
+configs/*   text eol=lf
+*.txt       text eol=lf

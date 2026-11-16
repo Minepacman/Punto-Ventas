@@ -1,0 +1,85 @@
+# Tesseract para los instaladores de Windows (x64 y x86): un tesseract.exe estático compilado con vcpkg en un commit
+# fijo + spa/eng de tessdata_fast 4.1.0 con SHA-256 fijo. Deja el artefacto "tesseract-windows-<arq>" con la carpeta
+# que build.gradle copia a <app>\ocr\tesseract (-PtesseractDir=...). Ver packaging/tesseract/windows/construir.ps1.
+#
+# La compilación tarda ~10-20 min, así que el resultado se guarda en la caché de Actions. Las etiquetas v* solo pueden
+# leer cachés de la rama principal (main) o de sí mismas: por eso este flujo también corre al llegar a main un cambio en
+# packaging/tesseract (y a mano con "Run workflow"), para que la release encuentre la caché lista. Con o sin caché,
+# siempre se comprueba la arquitectura, que arranque y que lea el ticket de muestra antes de entregarlo.
+name: Tesseract para Windows
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Punto-Ventas/packaging/tesseract/**'
+      - '.github/workflows/tesseract-windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tesseract:
+    name: Tesseract ${{ matrix.arq }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arq: [x64, x86]
+    runs-on: windows-latest
+    # El de 32 bits es opcional igual que su instalador: si falla, el x64 y la release siguen.
+    continue-on-error: ${{ matrix.arq == 'x86' }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: Punto-Ventas
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Caché de la compilación
+        id: cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: Punto-Ventas/build/ocr-tesseract-${{ matrix.arq }}
+          # cambia si cambia la receta (vcpkg/triplets), los idiomas fijos o configs/tsv
+          key: tesseract-windows-${{ matrix.arq }}-${{ hashFiles('Punto-Ventas/packaging/tesseract/windows/**', 'Punto-Ventas/packaging/tesseract/tessdata.sha256', 'Punto-Ventas/packaging/tesseract/bajar-tessdata.sh', 'Punto-Ventas/packaging/tesseract/configs/**') }}
+      - name: Compilar con vcpkg
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: ./packaging/tesseract/windows/construir.ps1 -Arquitectura ${{ matrix.arq }} -Destino build/ocr-tesseract-${{ matrix.arq }}
+      - name: Idiomas spa y eng (tessdata_fast 4.1.0, SHA-256 fijo)
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash packaging/tesseract/bajar-tessdata.sh build/ocr-tesseract-${{ matrix.arq }}/tessdata
+      - name: Comprobar arquitectura, idiomas y sumas
+        shell: pwsh
+        env:
+          ARQ: ${{ matrix.arq }}
+        run: |
+          $dir = "build/ocr-tesseract-$env:ARQ"
+          $bytes = [System.IO.File]::ReadAllBytes("$dir/bin/tesseract.exe")
+          $pe = [System.BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [System.BitConverter]::ToUInt16($bytes, $pe + 4)
+          $esperado = if ($env:ARQ -eq 'x86') { 0x14C } else { 0x8664 }
+          "tesseract.exe Machine=0x{0:X}" -f $machine
+          if ($machine -ne $esperado) { throw ("Arquitectura equivocada: 0x{0:X}" -f $machine) }
+          foreach ($linea in Get-Content packaging/tesseract/tessdata.sha256) {
+            if (-not $linea.Trim()) { continue }
+            $suma, $nombre = $linea -split '\s+', 2
+            $real = (Get-FileHash -Algorithm SHA256 "$dir/tessdata/$($nombre.TrimStart('*'))").Hash.ToLower()
+            if ($real -ne $suma) { throw "$nombre no coincide: $real" }
+          }
+          Get-ChildItem $dir -Recurse -File | Select-Object Length, FullName | Format-Table -AutoSize | Out-String -Width 200
+      - name: Arranca y lee el ticket de muestra
+        shell: bash
+        run: |
+          d=build/ocr-tesseract-${{ matrix.arq }}
+          bash packaging/tesseract/comprobar.sh "$d/bin/tesseract.exe" "$d/tessdata" src/main/resources/ocr/ticket-muestra.jpg
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tesseract-windows-${{ matrix.arq }}
+          path: Punto-Ventas/build/ocr-tesseract-${{ matrix.arq }}
+          if-no-files-found: error
+          retention-days: 7

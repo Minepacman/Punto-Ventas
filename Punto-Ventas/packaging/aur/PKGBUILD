@@ -15,7 +15,10 @@ url="https://github.com/Minepacman/Punto-Ventas"
 license=('GPL-3.0-or-later')
 # Lo que necesita el runtime de Java 17 + JavaFX 17 empaquetado: GTK 3, X11/XTest, OpenGL, ALSA, fuentes
 depends=('gtk3' 'libxtst' 'libxxf86vm' 'libgl' 'alsa-lib' 'freetype2' 'fontconfig' 'hicolor-icon-theme')
-optdepends=('xdg-utils: abrir enlaces y la página de descargas en el navegador')
+optdepends=('xdg-utils: abrir enlaces y la página de descargas en el navegador'
+            'tesseract: lector de tickets de proveedor (OCR); el programa lo busca en /usr/bin'
+            'tesseract-data-spa: español para el lector de tickets'
+            'tesseract-data-eng: inglés para el lector de tickets')
 provides=('punto-de-venta')
 conflicts=('punto-de-venta')
 options=('!strip')

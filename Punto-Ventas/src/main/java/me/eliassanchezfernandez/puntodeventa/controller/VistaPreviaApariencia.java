@@ -16,6 +16,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import me.eliassanchezfernandez.puntodeventa.util.Icono;
 import me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia;
 import me.eliassanchezfernandez.puntodeventa.util.apariencia.Apariencia;
@@ -80,19 +81,22 @@ public class VistaPreviaApariencia extends VBox {
 
         // Ticket + total
         TableView<Fila> ticket = new TableView<>(FXCollections.observableArrayList(
-                new Fila("Refresco de cola 600 ml", "2", "$36.00"),
-                new Fila("Pan blanco grande", "1", "$48.50"),
-                new Fila("Huevo blanco 1 kg", "1", "$52.00")));
+                new Fila("Refresco 600 ml", "2", "$36.00"),
+                new Fila("Pan grande", "1", "$48.50"),
+                new Fila("Huevo 1 kg", "1", "$52.00")));
         ticket.getStyleClass().add("ticket-table");
         TableColumn<Fila, String> cProd = new TableColumn<>("Producto");
         cProd.setCellValueFactory(new PropertyValueFactory<>("producto"));
-        cProd.setPrefWidth(180);
+        cProd.setPrefWidth(200);
+        cProd.setMinWidth(110);
         TableColumn<Fila, String> cCant = new TableColumn<>("Cant.");
         cCant.setCellValueFactory(new PropertyValueFactory<>("cantidad"));
-        cCant.setPrefWidth(50);
+        cCant.setPrefWidth(56);
+        cCant.getStyleClass().add("align-right");
         TableColumn<Fila, String> cImp = new TableColumn<>("Importe");
         cImp.setCellValueFactory(new PropertyValueFactory<>("importe"));
-        cImp.setPrefWidth(80);
+        cImp.setPrefWidth(84);
+        cImp.getStyleClass().add("align-right");
         ticket.getColumns().addAll(List.of(cProd, cCant, cImp));
         ticket.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         ticket.setPrefHeight(132);
@@ -100,6 +104,7 @@ public class VistaPreviaApariencia extends VBox {
         ticket.getSelectionModel().select(1);
         ticket.setFocusTraversable(false);
         HBox.setHgrow(ticket, Priority.ALWAYS);
+        ColumnasTabla.ajustar(ticket);   // con letra grande: ni encabezados ni importes con «…»
 
         Label tituloTotal = new Label("TOTAL");
         tituloTotal.getStyleClass().add("total-label-title");
@@ -114,8 +119,8 @@ public class VistaPreviaApariencia extends VBox {
         VBox totales = new VBox(8, cajaTotal, cobrar);
         totales.getStyleClass().add("totales-panel");
         totales.setPadding(new Insets(10));
-        totales.setPrefWidth(175);
-        totales.setMinWidth(160);
+        totales.setPrefWidth(160);
+        totales.setMinWidth(150);
         HBox centro = new HBox(10, ticket, totales);
         centro.setPadding(new Insets(0, 12, 0, 12));
 
@@ -154,7 +159,13 @@ public class VistaPreviaApariencia extends VBox {
         tarjeta.getStyleClass().add("card");
         VBox.setMargin(tarjeta, new Insets(0, 12, 0, 12));
 
-        getChildren().addAll(cabecera, centro, botones, tarjeta);
+        // Pie como el de la ventana principal (texto atenuado sobre la barra hundida)
+        Label pie = new Label("Caja 1 · Listo");
+        HBox barraEstado = new HBox(pie);
+        barraEstado.getStyleClass().add("status-bar");
+        barraEstado.setPadding(new Insets(4, 12, 4, 12));
+
+        getChildren().addAll(cabecera, centro, botones, tarjeta, barraEstado);
     }
 
     private Icono icono(String nombre, double tamano) {

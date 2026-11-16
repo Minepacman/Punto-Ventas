@@ -62,16 +62,32 @@ le envía dato alguno de la tienda; cada uno ve únicamente la dirección IP pú
 igual que cualquier sitio web. Lo que se guarda en el programa es la ciudad y las coordenadas que el
 administrador confirma.
 
-Lector de tickets de proveedor (OCR). El instalador de macOS incluye Tesseract OCR
-(<https://github.com/tesseract-ocr/tesseract>, Apache-2.0) con sus datos de idioma `spa` y `eng` de
-tessdata_fast (Apache-2.0), Leptonica (licencia tipo BSD-2) y las bibliotecas de imagen y compresión que
-usan (libpng, libjpeg-turbo, libtiff, libwebp, OpenJPEG, giflib, libarchive, xz, zstd, lz4, libb2; licencias
-permisivas tipo BSD/MIT/zlib); su texto de licencia va junto al programa (`ocr/tesseract`). En equipos aptos y
-solo si la selección lo pide, el programa descarga una vez ONNX Runtime para Java
+Lector de tickets de proveedor (OCR). Los instaladores de Windows y macOS incluyen Tesseract OCR
+(<https://github.com/tesseract-ocr/tesseract>, Apache-2.0) en `ocr/tesseract`, con los datos de idioma `spa` y
+`eng` de tessdata_fast 4.1.0 (<https://github.com/tesseract-ocr/tessdata_fast>, Apache-2.0) y el archivo de
+configuración `configs/tsv` de Tesseract (Apache-2.0). El texto de la licencia de Tesseract va en
+`ocr/tesseract/LICENSE-tesseract.txt` y el de cada biblioteca en `ocr/tesseract/licencias/`:
+
+| Biblioteca | Licencia | Windows (x64/x86, enlazada estáticamente en `tesseract.exe`, compilada con vcpkg) | macOS (de Homebrew, como bibliotecas aparte) |
+|---|---|---|---|
+| Tesseract 5.5.4 | Apache-2.0 | sí | sí |
+| Leptonica 1.87.0 (<http://www.leptonica.org>) | BSD-2-Clause | sí | sí |
+| libjpeg-turbo | IJG + BSD-3-Clause + zlib | sí | sí |
+| libpng | Licencia libpng/PNG Reference Library | sí | sí |
+| libtiff | Licencia libtiff (tipo BSD) | sí | sí |
+| zlib | zlib | sí | (la del sistema) |
+| giflib, libwebp, OpenJPEG | MIT, BSD-3-Clause, BSD-2-Clause | solo si vcpkg las agrega como funciones por defecto de leptonica (su `copyright` iría en `licencias/`) | sí |
+| libarchive, xz/liblzma, zstd, lz4, libb2 | BSD-2-Clause, 0BSD, BSD-3-Clause, BSD-2-Clause, CC0-1.0 | no (Tesseract sin libarchive ni curl) | sí |
+
+En Windows el ejecutable es estático y usa el runtime de Microsoft Visual C++ enlazado estáticamente (permitido
+por la licencia de Visual Studio para redistribuir programas compilados); no lleva DLLs. En Linux el lector usa el
+Tesseract de la distribución (el paquete `.deb`/`.rpm` lo declara como dependencia), que no se distribuye con el
+programa. En equipos aptos y solo si la selección lo pide, el programa descarga una vez ONNX Runtime para Java
 (<https://github.com/microsoft/onnxruntime>, MIT) y los modelos PP-OCRv6 de PaddleOCR
 (<https://github.com/PaddlePaddle/PaddleOCR>, Apache-2.0) en la versión ONNX publicada por RapidOCR
-(<https://github.com/RapidAI/RapidOCR>, Apache-2.0); cada archivo se verifica con su SHA-256. Las fotos de
-los tickets se leen en la computadora de la tienda y no se envían a nadie.
+(<https://github.com/RapidAI/RapidOCR>, Apache-2.0), primero del espejo en la release `ocr-modelos-1` de este
+repositorio (copia sin cambios) y si no de la fuente original; cada archivo se verifica con su SHA-256. Las fotos
+de los tickets se leen en la computadora de la tienda y no se envían a nadie.
 
 Si falta alguna biblioteca o algún aviso en esta lista, repórtalo en
 <https://github.com/Minepacman/Punto-Ventas/issues>.

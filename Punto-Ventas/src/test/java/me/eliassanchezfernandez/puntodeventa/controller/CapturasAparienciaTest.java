@@ -116,6 +116,48 @@ class CapturasAparienciaTest {
         assertThat(fondo.get()).isEqualTo(Color.web("#14181E"));
     }
 
+    /**
+     * La maqueta de la ventana de Apariencia con el programa en Claro: cada tema elegido debe verse
+     * con su propio fondo y texto (oscuro, alto contraste, vidrio) y sin nombres recortados.
+     */
+    @Test
+    void vistaPreviaDeCadaTema() throws Exception {
+        Path dir = Path.of(System.getenv().getOrDefault("APP_CAPTURAS_DIR", System.getProperty("java.io.tmpdir")), "vista-previa");
+        Files.createDirectories(dir);
+        arrancarJavaFx();
+        enFx(() -> AplicadorApariencia.aplicar(Apariencia.porDefecto()));
+        Apariencia d = Apariencia.porDefecto();
+        Map<String, Apariencia> variantes = new LinkedHashMap<>();
+        variantes.put("claro", d);
+        variantes.put("oscuro", d.conTema(Apariencia.Tema.OSCURO));
+        variantes.put("alto-contraste", d.conTema(Apariencia.Tema.ALTO_CONTRASTE));
+        variantes.put("vidrio-oscuro", d.conTema(Apariencia.Tema.OSCURO).conVidrio(true).conAcento("#0F7C86"));
+        variantes.put("oscuro-letra130", d.conTema(Apariencia.Tema.OSCURO).conEscala(130));
+        StringBuilder recortes = new StringBuilder();
+        for (Map.Entry<String, Apariencia> v : variantes.entrySet()) {
+            capturar(() -> {
+                VistaPreviaApariencia vista = new VistaPreviaApariencia();
+                vista.mostrar(v.getValue());
+                Scene escena = new Scene(new javafx.scene.layout.StackPane(vista), 560, 470);
+                Ventanas.aplicarCss(escena);
+                Stage s = new Stage();
+                s.setScene(escena);
+                // Tras el primer pase de estilos: ¿algún texto del ticket de muestra con «…»?
+                javafx.application.Platform.runLater(() -> javafx.application.Platform.runLater(() -> {
+                    for (javafx.scene.Node n : vista.lookupAll(".table-cell")) {
+                        if (n instanceof javafx.scene.control.Labeled l) {
+                            String visto = CapturasBarrasTest.textoMostrado(l);
+                            if (visto != null) recortes.append(v.getKey()).append(": «").append(l.getText()).append("» → «").append(visto).append("»\n");
+                        }
+                    }
+                }));
+                return s;
+            }, dir.resolve(v.getKey() + ".png"));
+        }
+        Files.writeString(dir.resolve("recortes.txt"), recortes.toString());
+        System.out.println("Vista previa, recortes:\n" + recortes);
+    }
+
     private void conEscena(String fxml, java.util.function.Consumer<Scene> accion) throws Exception {
         CountDownLatch listo = new CountDownLatch(1);
         AtomicReference<Throwable> error = new AtomicReference<>();

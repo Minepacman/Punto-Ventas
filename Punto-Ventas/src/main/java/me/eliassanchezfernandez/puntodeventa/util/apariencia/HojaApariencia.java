@@ -129,6 +129,8 @@ public final class HojaApariencia {
         while (r.find()) {
             String selector = r.group(1).trim().replaceAll("\\s+", " ");
             if (selector.startsWith("@")) continue;
+            // El papel del ticket (vista previa) imita la impresión: su letra no cambia con la escala
+            if (selector.contains(".ticket-papel")) continue;
             List<String> decl = new ArrayList<>();
             Matcher t = TAMANO_PX.matcher(r.group(2));
             while (t.find()) {
@@ -148,7 +150,9 @@ public final class HojaApariencia {
 
     /**
      * Con letra grande en 1024×768: la cabecera conserva su tamaño (si no, se esconden Cerrar sesión y
-     * Salir), las pestañas crecen poco y el panel del total se compacta para que Cobrar siga a la vista.
+     * Salir), las pestañas crecen poco, los encabezados de las tablas se quedan en 13 px (las cifras de las
+     * celdas sí crecen; así caben las 8 columnas del ticket sin «Descu…») y el panel del total se compacta
+     * para que Cobrar siga a la vista.
      */
     private static final String COMPACTO = """
             .main-toolbar { -fx-font-size: 13px !important; }
@@ -158,6 +162,7 @@ public final class HojaApariencia {
             .totales-panel .text-field { -fx-padding: 4 10 4 10 !important; }
             .total-box { -fx-padding: 8 14 8 14 !important; }
             .btn-cobrar { -fx-padding: 8 12 8 12 !important; }
+            .table-view > .column-header-background .column-header { -fx-font-size: 13px !important; }
             .totales-panel > .separator { -fx-padding: 0 !important; }
             """;
 
@@ -191,6 +196,8 @@ public final class HojaApariencia {
             .hyperlink { -fx-underline: true !important; }
             .login-card, .context-menu, .dialog-pane, .card { -fx-effect: null !important; }
             .main-tabs > .tab-header-area > .headers-region > .tab:selected { -fx-border-color: -pos-accent !important; -fx-border-width: 0 0 4 0 !important; }
+            .main-toolbar .button { -fx-border-color: -pos-band-button-border !important; }
+            .main-toolbar .button-danger { -fx-border-color: -pos-band-danger-border !important; }
             """;
 
     /**

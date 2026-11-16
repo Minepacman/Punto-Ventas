@@ -473,20 +473,28 @@ cubierto por pruebas unitarias y por el ticket de muestra, pero no se volvió a 
 
 ### 12d. Empaquetado de Tesseract por plataforma
 
+Estado al 2026-11-15 (detalle operativo en `docs/publicar.md`, «Lector de tickets (Tesseract) en los instaladores»).
+Todas las plataformas llevan los mismos idiomas: `spa` + `eng` de **tessdata_fast 4.1.0** (SHA-256 fijos en
+`packaging/tesseract/tessdata.sha256`; idénticos a los de Homebrew) y `tessdata/configs/tsv`.
+
 | Plataforma | Estado | Tamaño en el instalador |
 |---|---|---|
-| macOS arm64 | **Hecho**: `empaquetarTesseract` (lo llama `jpackageTask`) copia el `tesseract` de Homebrew y sus bibliotecas que no son del sistema a `app/ocr/tesseract`, las reapunta (`install_name_tool`), las firma ad hoc y comprueba que arranque y vea `spa`. | 14.5 MB sin comprimir (ejecutable 70 KB + 15 bibliotecas 8.4 MB + `spa`/`eng` 6.1 MB); probado en un app-image de jpackage |
-| macOS x64 | Mismo código en el runner `macos-15-intel`; **falta** el paso `brew install tesseract tesseract-lang` en `release.yml`. Sin PaddleOCR (ORT 1.31 no trae osx-x64). | ≈ igual |
-| Windows x64 | **Falta**. Recomendado: compilar en CI con vcpkg `tesseract:x64-windows-static` (un `tesseract.exe` estático, sin DLLs) o extraer el instalador de UB Mannheim con 7-Zip y copiar solo `tesseract.exe` + DLLs a `build/install/…/lib/ocr/tesseract/bin` y `spa`/`eng` a `tessdata`. | ≈ 15–20 MB (estimado) |
-| Windows x86 | **Falta**, y es donde Tesseract es la única opción. UB Mannheim ya no publica 32 bits: vcpkg `x86-windows-static`. Probar en una PC de 32 bits real. | ≈ 12–15 MB (estimado) |
-| Linux | **Falta**. Lo simple: que el `.deb` dependa de `tesseract-ocr tesseract-ocr-spa` (jpackage no tiene opción: editar `DEBIAN/control` y reempaquetar) o indicar `sudo apt install tesseract-ocr tesseract-ocr-spa`; el programa ya lo busca en `/usr/bin`. | 0 (del sistema) |
+| macOS arm64 | **Hecho** y en el CI: `brew install tesseract` + `bajar-tessdata.sh` → `empaquetarTesseract` copia el `tesseract` de Homebrew y sus bibliotecas que no son del sistema a `app/ocr/tesseract`, las reapunta (`install_name_tool`), las firma ad hoc, copia la licencia de cada fórmula a `licencias/` y comprueba que arranque y vea `spa`/`eng`. `comprobar-dmg.sh` monta el `.dmg` y lee el ticket de muestra desde la app empaquetada. | 14.7 MB sin comprimir (ejecutable 70 KB + 15 bibliotecas 8.4 MB + idiomas 6.4 MB); dmg probado en esta Mac |
+| macOS x64 | Mismo código en el runner `macos-15-intel` con el mismo `brew install`; **sin probar en el CI todavía**. Sin PaddleOCR (ORT 1.31 no trae osx-x64). | ≈ igual |
+| Windows x64 | `tesseract-windows.yml` compila con vcpkg (commit fijo de 2026.10.16: tesseract 5.5.4 + leptonica 1.87.0) un `tesseract.exe` **estático** (triplet propio `x64-windows-static-rel`: CRT estático, solo Release, sin curl/libarchive), con caché de Actions; `-PtesseractDir` lo copia a la app y el flujo lo prueba desde la app-image intermedia. **Sin probar en el CI todavía.** | ≈ 13–15 MB (estimado) |
+| Windows x86 | Igual con `x86-windows-static-rel` (UB Mannheim ya no publica 32 bits). Opcional: si falla, el x86 sale sin lector incluido. **Sin probar en el CI ni en una PC de 32 bits real.** | ≈ 12–14 MB (estimado) |
+| Linux | El `.deb` depende de `tesseract-ocr, tesseract-ocr-spa` y el `.rpm` de `/usr/bin/tesseract, (tesseract-langpack-spa or tesseract-ocr-traineddata-spanish)` (`--linux-package-deps` de jpackage); el `.tar.gz` lo documenta. El CI instala el `.deb` y lee el ticket con `/usr/bin/tesseract`. | 0 (del sistema) |
+
+Hallazgo al empaquetar: `MotorTesseract` pide la salida con el config `tsv` (archivo `tessdata/configs/tsv`); la
+carpeta `tessdata` del instalador de macOS no lo traía y Tesseract contestaba texto plano, que `TsvTesseract` no
+entiende. Ahora todos los instaladores lo llevan, `comprobar.sh` exige salida TSV y `LocalizadorTesseract` ignora
+una `tessdata` sin `configs/tsv`. (Más robusto aún: pedir `-c tessedit_create_tsv=1` en vez del config.)
 
 Sin la carpeta, el programa usa un Tesseract instalado en el sistema si lo hay; si no hay ninguno, Configuración lo
-dice ("no se encontró Tesseract"). Firma: si algún día se firma el `.app` con Developer ID, revisar que `--mac-sign`
-firme también `app/ocr/tesseract/{bin,lib}`. Licencias: Tesseract y Leptonica (Apache-2.0 / BSD-2), libpng, libjpeg,
-libtiff, libwebp, openjpeg, giflib, libarchive y compresores (licencias permisivas), PaddleOCR y modelos
-(Apache-2.0), ONNX Runtime (MIT): anotadas en `AVISOS-TERCEROS.md`; la licencia de Tesseract va en
-`ocr/tesseract/LICENSE-tesseract.txt` (faltan los textos de cada biblioteca de imagen junto al binario).
+dice ("no se encontró Tesseract"). macOS: Homebrew compila para la versión del runner (`minos`), así que el Tesseract
+incluido solo arranca de esa versión de macOS en adelante; en una más vieja se descarta solo. Firma: si algún día se
+firma el `.app` con Developer ID, revisar que `--mac-sign` firme también `app/ocr/tesseract/{bin,lib}`. Licencias en
+`AVISOS-TERCEROS.md` y, junto al binario, `ocr/tesseract/LICENSE-tesseract.txt` + `ocr/tesseract/licencias/`.
 
 ### 12e. Lo que NO quedó resuelto (para la siguiente pasada)
 
@@ -509,9 +517,11 @@ libtiff, libwebp, openjpeg, giflib, libarchive y compresores (licencias permisiv
 7. **Nota a mano**: ningún motor la lee (esperado): captura manual.
 8. **PC vieja real**: tiempos no medidos en hardware de 2 núcleos; tampoco el uso de memoria nativa de ORT
    (~200–300 MB fuera del heap de 384 MB) en un equipo de 4 GB.
-9. **Empaquetado Windows/Linux** de Tesseract y `brew install` en el runner Intel (tabla 12d).
-10. **Espejo de descargas**: modelos en modelscope.cn y ORT en Maven Central; conviene publicarlos como activos de una
-    release de GitHub del proyecto (mismo SHA-256) y cambiar las URL de `RecursosPpOcr`.
+9. ~~Empaquetado Windows/Linux de Tesseract y `brew install` en el runner Intel~~: preparado (tabla 12d); falta la
+    primera corrida del flujo de release para confirmarlo en Windows x64/x86, macOS Intel y Linux.
+10. ~~Espejo de descargas~~: `RecursosPpOcr` prueba primero la release `ocr-modelos-1` del proyecto y después la
+    fuente original (mismo SHA-256); el espejo lo crea el flujo manual `ocr-modelos.yml`
+    (`gh workflow run ocr-modelos.yml -R Minepacman/Punto-Ventas`, una vez, desde `main`).
 11. **Endpoint móvil** que llame a `LectorTicketsService.leer(foto, espera)` y el intérprete (otro agente).
 12. **Modo mixto** (Tesseract y re-lectura con PaddleOCR de renglones dudosos) no implementado: con PaddleOCR a ~1.5 s
     en equipos aptos no hace falta y en los no aptos no hay PaddleOCR. Revaluar con medidas en PC real.

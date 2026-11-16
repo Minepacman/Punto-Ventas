@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -72,6 +73,8 @@ public class ProveedoresController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Encabezados completos aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tabla);
         checks = Map.of(DayOfWeek.MONDAY, chkLun, DayOfWeek.TUESDAY, chkMar, DayOfWeek.WEDNESDAY, chkMie,
                 DayOfWeek.THURSDAY, chkJue, DayOfWeek.FRIDAY, chkVie, DayOfWeek.SATURDAY, chkSab, DayOfWeek.SUNDAY, chkDom);
         checksPreventa = Map.of(DayOfWeek.MONDAY, chkPreLun, DayOfWeek.TUESDAY, chkPreMar, DayOfWeek.WEDNESDAY, chkPreMie,

@@ -42,7 +42,7 @@
             </VBox>
             <CheckBox fx:id="chkDecimales" text="Permite decimales"/>
             <VBox spacing="4">
-                <Label text="Clave SAT (c_ClaveUnidad, para facturar)" styleClass="field-label"/>
+                <Label text="Clave SAT (c_ClaveUnidad, para facturar)" styleClass="field-label" wrapText="true" minHeight="-Infinity"/>
                 <TextField fx:id="txtClaveSat" promptText="ej: H87 pieza, KGM kilo, LTR litro"/>
             </VBox>
             <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary" maxWidth="Infinity" prefHeight="36"/>

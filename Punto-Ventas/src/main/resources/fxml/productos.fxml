@@ -66,7 +66,7 @@
                 <columns>
                     <TableColumn fx:id="colImagen"       text=""             prefWidth="44" minWidth="44" maxWidth="44" resizable="false"/>
                     <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="120"/>
-                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="230"/>
+                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="230" minWidth="160"/>
                     <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="80" styleClass="align-right"/>
                     <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="80" styleClass="align-right"/>
                     <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="80" styleClass="align-right"/>
