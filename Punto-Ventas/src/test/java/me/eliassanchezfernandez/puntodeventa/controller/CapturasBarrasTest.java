@@ -25,6 +25,8 @@ import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.Apariencia;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -106,33 +108,46 @@ class CapturasBarrasTest {
         arrancarJavaFx();
         enFx(() -> Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()));
 
-        // {pantalla ancho, alto visible (sin barra de tareas), tamaño de letra base o null}
+        // {pantalla ancho, alto visible (sin barra de tareas), escala de letra de Apariencia (%)}
         Object[][] casos = {
-                {1024, 728, null, "1024x768"},
-                {1280, 760, null, "1280x800"},
-                {1024, 728, 15.0, "1024x768-letra115"},
-                {1024, 728, 17.0, "1024x768-letra130"},
+                {1024, 728, 100, "1024x768"},
+                {1280, 760, 100, "1280x800"},
+                {1024, 728, 115, "1024x768-letra115"},
+                {1024, 728, 130, "1024x768-letra130"},
+                {1280, 760, 130, "1280x800-letra130"},
         };
         try {
             for (Object[] c : casos) {
                 int anchoPantalla = (Integer) c[0];
                 int altoVisible = (Integer) c[1];
-                Double letra = (Double) c[2];
+                int escala = (Integer) c[2];
+                enFx(() -> AplicadorApariencia.aplicar(Apariencia.porDefecto().conEscala(escala)));
                 Path dir = base.resolve((String) c[3]);
                 Files.createDirectories(dir);
                 informe.append("== ").append(c[3]).append(" ==\n");
-                boolean cuenta = letra == null || letra < 16;   // 130 % solo se documenta
+                boolean cuenta = true;
+                // Ventana principal maximizada (cabecera con reloj, usuario, Bloquear / Cerrar sesión / Salir)
+                capturar("/fxml/main.fxml", anchoPantalla, altoVisible - 30, dir, cuenta);
+                // Con un nombre largo la cabecera cede la fecha y angosta el nombre: Bloquear / Cerrar sesión / Salir siempre a la vista
+                String nombreAntes = sesionService.getCajeroActual().getNombreCompleto();
+                sesionService.getCajeroActual().setNombreCompleto("María Guadalupe Hernández de la Cruz");
+                try {
+                    capturar("/fxml/main.fxml", anchoPantalla, altoVisible - 30, dir, cuenta, "main-nombre-largo");
+                } finally {
+                    sesionService.getCajeroActual().setNombreCompleto(nombreAntes);
+                }
                 for (String fxml : PESTANAS) {
                     // Ventana maximizada: pestañas (~42 px), cabecera (~56 px) y barra de estado (~28 px)
-                    capturar(fxml, anchoPantalla - 16, altoVisible - 126, letra, dir, cuenta);
+                    capturar(fxml, anchoPantalla - 16, altoVisible - 126, dir, cuenta);
                 }
                 for (Object[] v : VENTANAS) {
                     double ancho = Math.min(((Number) v[1]).doubleValue(), Math.floor(anchoPantalla * 0.96));
                     double alto = Math.min(((Number) v[2]).doubleValue(), Math.floor(altoVisible * 0.92));
-                    capturar((String) v[0], ancho, alto, letra, dir, cuenta);
+                    capturar((String) v[0], ancho, alto, dir, cuenta);
                 }
             }
         } finally {
+            enFx(() -> AplicadorApariencia.aplicar(Apariencia.porDefecto()));
             sesionService.cerrarSesion();
             Files.createDirectories(base);
             Files.writeString(base.resolve("recortes.txt"), informe.toString());
@@ -142,16 +157,18 @@ class CapturasBarrasTest {
         assertThat(botonesRecortados).as("botones con el texto recortado (ver recortes.txt)").isEmpty();
     }
 
-    private void capturar(String fxml, double ancho, double alto, Double letra, Path dir, boolean cuenta) throws Exception {
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta) throws Exception {
+        capturar(fxml, ancho, alto, dir, cuenta, fxml.substring(fxml.lastIndexOf('/') + 1).replace(".fxml", ""));
+    }
+
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta, String nombre) throws Exception {
         AtomicReference<Throwable> error = new AtomicReference<>();
         CountDownLatch listo = new CountDownLatch(1);
-        String nombre = fxml.substring(fxml.lastIndexOf('/') + 1).replace(".fxml", "");
         Platform.runLater(() -> {
             try {
                 FXMLLoader loader = new FXMLLoader(CapturasBarrasTest.class.getResource(fxml));
                 loader.setControllerFactory(springContext::getBean);
                 Parent raiz = loader.load();
-                if (letra != null) raiz.setStyle("-fx-font-size: " + letra + "px;");
                 Scene escena = new Scene(raiz, ancho, alto);
                 Ventanas.aplicarCss(escena);
                 Stage stage = new Stage();
@@ -184,9 +201,22 @@ class CapturasBarrasTest {
     }
 
     /** Anota cada control con el texto recortado; los botones (y lo que va dentro de un botón) cuentan como fallo */
+    private final java.util.Set<Node> vistos = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
     private void revisar(String pantalla, Node n, boolean cuenta) {
-        if (!n.isVisible()) return;
+        if (!n.isVisible() || !vistos.add(n)) return;
         if (n instanceof TableView<?> || n instanceof ListView<?> || n instanceof TreeTableView<?>) return;
+        if (n instanceof javafx.scene.control.ToolBar tb) {
+            // La barra de JavaFX esconde en «»» lo que no cabe: también cuenta como recortado
+            for (Node item : tb.getItems()) {
+                if (item.isManaged() && item.isVisible() && item.getParent() == null && item instanceof Labeled l) {
+                    String linea = String.format("  %-26s %-14s «%s» → (en el desborde »)", pantalla,
+                            item.getClass().getSimpleName(), l.getText());
+                    informe.append(linea).append("  ← BOTÓN\n");
+                    if (cuenta) botonesRecortados.add(linea);
+                }
+            }
+        }
         if (n instanceof Labeled l) {
             String recortado = textoMostrado(l);
             if (recortado != null) {

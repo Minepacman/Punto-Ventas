@@ -1210,6 +1210,8 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text;
 }
 
+/* Ancho y alto en em: con letra grande (Apariencia) la tarjeta crece en proporción con el
+   texto y el título no se recorta (220x42 px con la letra de fábrica de 13 px) */
 .boton-opcion {
     -color-button-bg:             -pos-surface-alt;
     -color-button-border:         -pos-border-subtle;
@@ -1219,9 +1221,9 @@ TilePane > .button:armed,
     -color-button-bg-focused:     -pos-surface-alt;
     -color-button-bg-pressed:     -pos-accent-muted;
     -color-button-border-pressed: -pos-accent;
-    -fx-pref-width: 220;
+    -fx-pref-width: 17em;
     -fx-min-height: 42;
-    -fx-pref-height: 42;
+    -fx-pref-height: 3.25em;
     -fx-padding: 3 10 3 8;
     -fx-background-radius: 8, 8, 7;
 }
@@ -2217,6 +2219,8 @@ TilePane > .button:armed,
     -fx-border-width: 1;
     -fx-border-radius: 999;
     -fx-padding: 0 6 0 6;
+}
+
 /* ======================================================================
    APARIENCIA (Configuración → Apariencia, controller/AparienciaDialogo)
    ====================================================================== */

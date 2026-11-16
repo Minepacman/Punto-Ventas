@@ -30,10 +30,16 @@
                 <tooltip><Tooltip text="Ver solo los productos en o por debajo del mínimo"/></tooltip></ToggleButton>
             <Button fx:id="btnPorCaducar" text="Por caducar"   onAction="#onPorCaducar"><graphic><Icono nombre="calendario"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
-            <Button fx:id="btnProveedores" text="Proveedores"     onAction="#onProveedores"><graphic><Icono nombre="fabrica"/></graphic></Button>
-            <Button fx:id="btnOrdenes"     text="Órdenes de compra" onAction="#onOrdenesCompra"><graphic><Icono nombre="recibo"/></graphic></Button>
+            <!-- Solo con GESTIONAR_PROVEEDORES (InventarioController lo oculta a los demás) -->
+            <MenuButton fx:id="mnuProveedores" text="Proveedores"><graphic><Icono nombre="fabrica"/></graphic>
+                <tooltip><Tooltip text="Proveedores y órdenes de compra"/></tooltip>
+                <items>
+                    <MenuItem text="Proveedores y días de visita" onAction="#onProveedores"><graphic><Icono nombre="fabrica"/></graphic></MenuItem>
+                    <MenuItem text="Órdenes de compra"            onAction="#onOrdenesCompra"><graphic><Icono nombre="recibo"/></graphic></MenuItem>
+                </items>
+            </MenuButton>
             <!-- "Reporte de inventario" (PDF) se mostrará cuando exista; "Exportar…" ya saca CSV/xlsx/PDF -->
-            <MenuButton text="Más"><graphic><Icono nombre="mas-opciones"/></graphic>
+            <MenuButton text="Más">
                 <tooltip><Tooltip text="Movimientos de inventario y exportar la lista"/></tooltip>
                 <items>
                     <MenuItem text="Movimientos de inventario" onAction="#onReporteMovimientos"><graphic><Icono nombre="lista"/></graphic></MenuItem>

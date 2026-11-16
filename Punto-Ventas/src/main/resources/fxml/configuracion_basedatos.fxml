@@ -72,18 +72,19 @@
                     </HBox>
                     <Label fx:id="lblModoActual" wrapText="true" styleClass="hint"/>
                     <RadioButton fx:id="rbUnaCaja" text="Una sola caja (base de datos SQLite en este equipo)"
-                                 toggleGroup="$grupoModo" onAction="#onCambiarModo"/>
+                                 toggleGroup="$grupoModo" onAction="#onCambiarModo" wrapText="true"/>
                     <RadioButton fx:id="rbVariasCajas" text="Varias cajas (servidor PostgreSQL en la red local)"
-                                 toggleGroup="$grupoModo" onAction="#onCambiarModo" contentDisplay="RIGHT">
+                                 toggleGroup="$grupoModo" onAction="#onCambiarModo" contentDisplay="RIGHT" wrapText="true">
                         <graphic><EtiquetaBeta funcion="VARIAS_CAJAS"/></graphic>
                     </RadioButton>
                     <GridPane fx:id="gridServidor" hgap="8" vgap="6">
                         <padding><Insets left="24"/></padding>
+                        <!-- Etiquetas y «Probar conexión» nunca se recortan: cede el campo del servidor -->
                         <columnConstraints>
-                            <ColumnConstraints/>
+                            <ColumnConstraints minWidth="-Infinity"/>
                             <ColumnConstraints hgrow="ALWAYS"/>
-                            <ColumnConstraints/>
-                            <ColumnConstraints/>
+                            <ColumnConstraints minWidth="-Infinity"/>
+                            <ColumnConstraints minWidth="-Infinity"/>
                         </columnConstraints>
                         <Label text="Servidor:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
                         <TextField fx:id="txtHost" promptText="IP o nombre, ej. 192.168.1.10" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
@@ -95,7 +96,7 @@
                         <TextField fx:id="txtUsuario" text="puntodeventa" GridPane.rowIndex="2" GridPane.columnIndex="1" GridPane.columnSpan="3"/>
                         <Label text="Contraseña:" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
                         <PasswordField fx:id="txtContrasena" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
-                        <Button fx:id="btnProbar" text="Probar conexión" onAction="#onProbarConexion"
+                        <Button fx:id="btnProbar" text="Probar conexión" onAction="#onProbarConexion" minWidth="-Infinity"
                                 GridPane.rowIndex="3" GridPane.columnIndex="2" GridPane.columnSpan="2"/>
                         <Label fx:id="lblPrueba" wrapText="true" styleClass="hint" GridPane.rowIndex="4" GridPane.columnIndex="0" GridPane.columnSpan="4"/>
                     </GridPane>

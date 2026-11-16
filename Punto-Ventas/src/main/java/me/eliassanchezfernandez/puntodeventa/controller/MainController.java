@@ -170,6 +170,8 @@ public class MainController implements Initializable {
         if (sesionService.esAdmin()) labelClima.setCursor(javafx.scene.Cursor.HAND);
         // Si la ventana se angosta (o el nombre del usuario es largo) el clima cede antes que cualquier botón
         toolbar.widthProperty().addListener((o, a, b) -> acomodarClima());
+        // Al cambiar el tamaño de letra (Apariencia) cambia lo que ocupa cada elemento, no el ancho de la barra
+        labelUsuario.fontProperty().addListener((o, a, b) -> Platform.runLater(this::acomodarClima));
         climaService.alCambiar(oyenteClima);
         refrescoClima = new Timeline(new KeyFrame(Duration.minutes(10), e -> refrescarClima()));
         refrescoClima.setCycleCount(Animation.INDEFINITE);
@@ -227,6 +229,26 @@ public class MainController implements Initializable {
      * preferidos, no la posición, así mostrar u ocultar el clima no lo altera.
      */
     private void acomodarClima() {
+        // Con letra grande (Apariencia 115/130 %) o un nombre largo ni sin clima caben los botones y la
+        // ToolBar mandaría «Cerrar sesión» y «Salir» al desborde (»). Antes que eso cede la fecha y
+        // luego se angosta el nombre del usuario (tiene «…» y tooltip con el nombre completo).
+        labelClima.setVisible(false);
+        labelClima.setManaged(false);
+        labelFecha.setVisible(true);
+        labelFecha.setManaged(true);
+        // La ToolBar decide qué manda al desborde con el ancho PREFERIDO de cada elemento (no respeta
+        // maxWidth): el nombre se limita con prefWidth para que un nombre largo no empuje los botones.
+        labelUsuario.setPrefWidth(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
+        double usuario = Math.min(USUARIO_ANCHO_MAX, labelUsuario.prefWidth(-1));
+        labelUsuario.setPrefWidth(usuario);
+        double sobra = sobranteCabecera(toolbar);
+        if (sobra < 0) {
+            sobra += labelFecha.prefWidth(-1) - labelHora.prefWidth(-1);
+            labelFecha.setVisible(false);
+            labelFecha.setManaged(false);
+        }
+        if (sobra < 0) labelUsuario.setPrefWidth(Math.max(USUARIO_ANCHO_MIN, usuario + sobra));
+        if (!labelFecha.isManaged()) return;   // si ya no cupo la fecha, menos el clima
         boolean cabe = climaMostrado != null
                 && climaCabe(toolbar, relojBox, filaReloj.getSpacing(), labelClima, labelHora, labelFecha);
         labelClima.setVisible(cabe);
@@ -256,6 +278,27 @@ public class MainController implements Initializable {
         ocupado += espacio * Math.max(0, visibles - 1);
         double relojConClima = Math.max(clima.prefWidth(-1) + gap + hora.prefWidth(-1), fecha.prefWidth(-1));
         return ocupado + relojConClima <= ancho;
+    }
+
+    private static final double USUARIO_ANCHO_MAX = 230;
+    private static final double USUARIO_ANCHO_MIN = 80;
+
+    /** Ancho que sobra (negativo: falta) en la cabecera con los anchos preferidos de lo que se ve (0 si aún no tiene ancho) */
+    static double sobranteCabecera(javafx.scene.control.ToolBar barra) {
+        double ancho = barra.getWidth();
+        if (ancho <= 0) return 0;
+        javafx.geometry.Insets p = barra.getPadding();
+        double ocupado = p.getLeft() + p.getRight();
+        int visibles = 0;
+        for (javafx.scene.Node item : barra.getItems()) {
+            if (!item.isManaged()) continue;
+            visibles++;
+            ocupado += item.prefWidth(-1);
+        }
+        javafx.scene.Node caja = barra.lookup(".container");
+        double espacio = caja instanceof javafx.scene.layout.HBox h ? h.getSpacing() : 12;
+        ocupado += espacio * Math.max(0, visibles - 1);
+        return ancho - ocupado;
     }
 
     /** Al salir de esta ventana (bloquear, cerrar sesión, salir) se dejan de escuchar avisos y de releer */

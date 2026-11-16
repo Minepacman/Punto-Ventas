@@ -77,7 +77,7 @@
                     <TableColumn fx:id="colEstado"       text="Estado"       prefWidth="70"/>
                 </columns>
                 <placeholder>
-                    <Label text="No hay productos registrados. Pulsa + Nuevo para agregar."/>
+                    <Label text="No hay productos registrados. Pulsa «Nuevo» para agregar."/>
                 </placeholder>
             </TableView>
         </center>

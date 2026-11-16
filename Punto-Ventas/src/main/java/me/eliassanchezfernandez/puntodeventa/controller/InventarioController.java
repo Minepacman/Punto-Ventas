@@ -61,9 +61,8 @@ public class InventarioController implements Initializable {
     @FXML private ComboBox<Proveedor> cmbProveedor;
     @FXML private Label     lblSinProveedores;
     @FXML private Label     lblVisitanHoy;
-    @FXML private Button    btnProveedores;
+    @FXML private MenuButton mnuProveedores;
     @FXML private Button    btnLeerTicket;
-    @FXML private Button    btnOrdenes;
     @FXML private TextField txtCosto;
     @FXML private VBox      vboxAjuste;
     @FXML private ComboBox<String> comboMotivo;
@@ -111,10 +110,8 @@ public class InventarioController implements Initializable {
         });
 
         boolean gestiona = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
-        for (Button b : List.of(btnProveedores, btnOrdenes)) {
-            b.setVisible(gestiona);
-            b.setManaged(gestiona);
-        }
+        mnuProveedores.setVisible(gestiona);
+        mnuProveedores.setManaged(gestiona);
         CaducidadDialogos.configurar(dpCaducidad);
         aplicarModo(Modo.ENTRADA);
         recargar();

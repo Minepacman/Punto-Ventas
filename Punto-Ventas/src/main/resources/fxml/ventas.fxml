@@ -25,7 +25,8 @@
                 <Button fx:id="btnBuscar"    text="Buscar  F6"   onAction="#onBuscar" focusTraversable="false"><graphic><Icono nombre="buscar"/></graphic></Button>
                 <Button fx:id="btnProductoComun" text="Sin código" onAction="#onProductoComun" focusTraversable="false"><graphic><Icono nombre="etiqueta"/></graphic></Button>
             </HBox>
-            <HBox spacing="6" alignment="CENTER_LEFT">
+            <!-- Pasa a otro renglón si no cabe (letra 115/130 %): nunca recorta con «…» -->
+            <FlowPane styleClass="barra-acciones">
                 <Button fx:id="btnCantidad"  text="Cantidad  F7"      onAction="#onCambiarCantidad" styleClass="button-sm" focusTraversable="false"/>
                 <Button fx:id="btnQuitar"    text="Quitar  Supr"   onAction="#onQuitarLinea"
                         styleClass="button-danger, button-sm" focusTraversable="false"><graphic><Icono nombre="eliminar"/></graphic></Button>
@@ -42,7 +43,7 @@
                         visible="false" managed="false" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="efectivo"/></graphic></Button>
                 <Button fx:id="btnEfectivo"   text="Efectivo"      onAction="#onMovimientoEfectivo"
                         styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="subir"/></graphic></Button>
-            </HBox>
+            </FlowPane>
         </VBox>
     </top>
 

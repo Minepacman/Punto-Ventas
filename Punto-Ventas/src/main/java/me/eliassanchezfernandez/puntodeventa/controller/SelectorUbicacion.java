@@ -68,7 +68,14 @@ public class SelectorUbicacion extends VBox {
         txtCiudad.setOnAction(e -> buscar());
         HBox.setHgrow(txtCiudad, Priority.ALWAYS);
         btnBuscar.setOnAction(e -> buscar());
-        HBox acciones = new HBox(8, btnDetectar, o, txtCiudad, btnBuscar);
+        // Botones y etiqueta nunca se recortan con «…» (letra grande): primero cede el campo de la
+        // ciudad y, si aun así no cabe, «o escribe tu ciudad» pasa al renglón de abajo
+        for (javafx.scene.layout.Region r : List.of(btnDetectar, o, btnBuscar)) r.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        txtCiudad.setPrefWidth(200);
+        txtCiudad.setMinWidth(140);
+        HBox buscarCiudad = new HBox(8, o, txtCiudad, btnBuscar);
+        buscarCiudad.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.layout.FlowPane acciones = new javafx.scene.layout.FlowPane(8, 8, btnDetectar, buscarCiudad);
         acciones.setAlignment(Pos.CENTER_LEFT);
 
         cmbLugares.setPromptText("Elige tu ciudad en la lista");
