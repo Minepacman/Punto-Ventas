@@ -349,7 +349,7 @@
                                 </VBox>
                             </HBox>
                             <Label fx:id="lblClimaAviso"
-                                   text="El clima se consulta cada hora con las coordenadas del negocio (Configuración → Ubicación y clima). Solo se envían las coordenadas; ningún dato de ventas sale del equipo."
+                                   text="El clima se consulta cada 30 minutos con las coordenadas del negocio (Configuración → Ubicación y clima). Solo se envían las coordenadas; ningún dato de ventas sale del equipo."
                                    styleClass="hint" wrapText="true"/>
                         </VBox>
 

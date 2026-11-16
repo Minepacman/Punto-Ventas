@@ -1015,7 +1015,7 @@ public class EstadisticasController implements Initializable {
                 lblClimaTemperatura.setText("—");
                 lblClimaCondicion.setText("Sin datos de clima");
                 lblClimaActualizado.setText(c.isClimaActivo()
-                        ? "Sin conexión al servicio de clima; se reintenta cada hora."
+                        ? "Sin conexión al servicio de clima; se reintenta cada 30 minutos."
                         : "El clima está desactivado (Configuración → Ubicación y clima).");
             }
             tablaClima.setPlaceholder(new Label("Sin ventas en el periodo."));
