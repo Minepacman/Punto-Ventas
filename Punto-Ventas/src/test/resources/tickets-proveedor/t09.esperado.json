@@ -1,0 +1,37 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Distribuidora de Dulces y Chicles Ramírez",
+      "folio": "202609150103698",
+      "fecha": "2026-09-15",
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "TUTSI 40PZS",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 40,
+          "precioUnitario": 138.0,
+          "descuento": null,
+          "importe": 138.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "MZ CHOCO GT",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 126.0,
+          "descuento": null,
+          "importe": 126.0
+        }
+      ],
+      "subtotal": null,
+      "descuento": 0.0,
+      "impuestos": null,
+      "cargos": null,
+      "total": 264.0,
+      "notas": null
+    }
+  ]
+}

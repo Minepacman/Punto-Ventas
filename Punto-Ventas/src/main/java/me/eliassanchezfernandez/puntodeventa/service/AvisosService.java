@@ -60,7 +60,8 @@ public class AvisosService {
         PROVEEDOR("Proveedores"),
         STOCK("Se está acabando"),
         HORA_PICO("Hora pico"),
-        CADUCIDAD("Por caducar");
+        CADUCIDAD("Por caducar"),
+        GANANCIA("Ganancia baja");
 
         private final String etiqueta;
         Tipo(String etiqueta) { this.etiqueta = etiqueta; }
@@ -107,6 +108,7 @@ public class AvisosService {
     @Autowired private SesionService        sesionService;
     @Autowired private CaducidadService     caducidadService;
     @Autowired private Clock                reloj;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService ticketProveedorService;
 
     private volatile Base cache;
 
@@ -129,12 +131,37 @@ public class AvisosService {
         List<Aviso> lista = new ArrayList<>();
         for (VisitaProveedor v : b.visitas()) lista.add(avisoProveedor(v, costos));
         avisosStock(b, lista);
+        if (costos) avisosGanancia(lista);
         Aviso cad = avisoCaducidad(b.caducidades(), b.diasCaducidad());
         if (cad != null) lista.add(cad);
         if (b.horaPico() != null && ahora.getHour() < b.horaPico().hasta()) lista.add(avisoHoraPico(b.horaPico()));
         // Orden estable: por prioridad y, dentro de ella, como se armó (proveedores por nombre, productos por urgencia)
         lista.sort(Comparator.comparingInt(Aviso::prioridad));
         return new Avisos(b.hoy(), b.generado(), costos, List.copyOf(lista));
+    }
+
+    /** Días hacia atrás en que una entrada de mercancía con ganancia baja sigue avisando */
+    public static final int DIAS_AVISO_GANANCIA = 7;
+
+    /**
+     * Productos que acaban de recibir mercancía y quedaron ganando menos del 10 % sobre el costo
+     * (el proveedor subió el costo y el precio de venta no se ha movido). Solo para quien ve costos.
+     */
+    private void avisosGanancia(List<Aviso> lista) {
+        List<me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.GananciaBaja> bajas;
+        try {
+            bajas = ticketProveedorService.gananciaBajaTrasEntradas(DIAS_AVISO_GANANCIA);
+        } catch (RuntimeException e) {
+            return;                                    // un aviso no debe tumbar los demás
+        }
+        int n = 0;
+        for (var g : bajas) {
+            if (n++ >= MAX_PRODUCTOS) break;
+            String detalle = String.format(java.util.Locale.ROOT, "Cuesta $%.2f y se vende en $%.2f (ganas %s): considera subirle el precio.",
+                    g.costo(), g.precioVenta(), g.ganancia() < 0 ? "nada, pierdes" : Math.round(g.ganancia() * 100) + " %");
+            lista.add(new Aviso("ganancia-" + g.productoId(), Tipo.GANANCIA, 2, "sube", g.descripcion(), detalle,
+                    Accion.inventario(null, g.descripcion())));
+        }
     }
 
     /** Hora pico de hoy (null si no hay patrón): la usa el programador de notificaciones para avisar 30 min antes */

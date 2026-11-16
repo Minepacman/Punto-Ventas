@@ -1,0 +1,37 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Distribuidor Ejemplo",
+      "folio": null,
+      "fecha": "2026-11-12",
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "ROCHER T2",
+          "cantidad": 8,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 20.52,
+          "descuento": null,
+          "importe": 164.16
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "K MAXI T1",
+          "cantidad": 10,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 10.4112,
+          "descuento": null,
+          "importe": 104.11
+        }
+      ],
+      "subtotal": 268.27,
+      "descuento": null,
+      "impuestos": null,
+      "cargos": null,
+      "total": 268.27,
+      "notas": "Cantidad pegada a la descripción (8-ROCHER)."
+    }
+  ]
+}

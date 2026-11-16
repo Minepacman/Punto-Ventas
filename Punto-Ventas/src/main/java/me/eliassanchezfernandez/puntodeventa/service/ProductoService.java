@@ -512,6 +512,20 @@ public class ProductoService {
     }
 
     /**
+     * Un renglón de un ticket de proveedor que se está registrando ({@code TicketProveedorService}).
+     * Como en las órdenes de compra, NO consume la autorización: una sola cubre todo el ticket y la
+     * consume el servicio del ticket al terminar.
+     */
+    @Transactional
+    public Producto registrarEntradaDeTicket(Long productoId, double cantidad, Proveedor proveedor,
+                                             String motivo, double costoUnitario,
+                                             Collection<Autorizacion> autorizaciones) {
+        if (proveedor == null) throw new NegocioException("Elige el proveedor del ticket.");
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
+                costoUnitario, autorizaciones, false, null, Caducidad.Origen.MANUAL);
+    }
+
+    /**
      * @param proveedor proveedor del catálogo (null en entradas con el nombre escrito a mano). Si el
      *        producto aún no tiene proveedor habitual, esta entrada se lo asigna; si ya tiene uno
      *        (elegido por el usuario o por una entrada anterior) no se toca.

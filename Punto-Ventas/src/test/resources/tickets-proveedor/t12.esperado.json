@@ -1,0 +1,77 @@
+{
+  "tickets": [
+    {
+      "proveedor": null,
+      "folio": "VER-60809152026113707",
+      "fecha": "2026-09-15",
+      "lineas": [
+        {
+          "codigoProveedor": "5862",
+          "descripcion": "PED RAZAS PEQUEÑAS Purpose 12/4",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 12,
+          "precioUnitario": 26.0,
+          "descuento": 0.0,
+          "importe": 51.99
+        },
+        {
+          "codigoProveedor": "5908",
+          "descripcion": "WKS NOVA Pouch Adult Tuna 24/85",
+          "cantidad": 4,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 10.5,
+          "descuento": 0.0,
+          "importe": 41.99
+        },
+        {
+          "codigoProveedor": "5909",
+          "descripcion": "WKS NOVA Pouch Adult Salmon 24/",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 10.5,
+          "descuento": 0.0,
+          "importe": 21.0
+        },
+        {
+          "codigoProveedor": "5918",
+          "descripcion": "PEDIGREE RP PURPOSE RES 24/100G",
+          "cantidad": 6,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 10.5,
+          "descuento": 0.0,
+          "importe": 62.99
+        },
+        {
+          "codigoProveedor": "5934",
+          "descripcion": "Wks Tasty mix atún y salmón 24/",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 10.5,
+          "descuento": 0.0,
+          "importe": 21.0
+        },
+        {
+          "codigoProveedor": "5935",
+          "descripcion": "Wks Tasty mix pavo y pollo 24/7",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 10.5,
+          "descuento": 0.0,
+          "importe": 21.0
+        }
+      ],
+      "subtotal": 189.62,
+      "descuento": 0.0,
+      "impuestos": 30.35,
+      "cargos": null,
+      "total": 219.97,
+      "notas": "Precio impreso redondeado (2 x 26.00 = 52 pero el renglón dice 51.99); SUBTOTAL = antes de IVA."
+    }
+  ]
+}

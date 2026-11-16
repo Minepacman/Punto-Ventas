@@ -1,0 +1,107 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Barcel",
+      "folio": "MX12670_261072315051",
+      "fecha": "2026-11-11",
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "Takis Ranch 1p 70g PC FLOW",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 15.56,
+          "descuento": null,
+          "importe": 31.12
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "GoldenNuts Enchilado 1p 78",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 15.56,
+          "descuento": null,
+          "importe": 15.56
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Pop Sens Queso PC 1p 45g F",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 14.0,
+          "descuento": null,
+          "importe": 42.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Big Mix Fuego 80g FLOW BAR",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 17.11,
+          "descuento": null,
+          "importe": 34.22
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Big Mix Inglesa Limon 80g",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 17.11,
+          "descuento": null,
+          "importe": 17.11
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Valentones Fuego 1p 60g FL",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 14.0,
+          "descuento": null,
+          "importe": 14.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Chips Fuego 52g 57g FLOW B",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 15.56,
+          "descuento": null,
+          "importe": 15.56
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Takis Fuego 20pct Mas Pica",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 15.55,
+          "descuento": null,
+          "importe": 46.65
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "Takis Salsa Brava 1p 70g F",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 15.55,
+          "descuento": null,
+          "importe": 31.1
+        }
+      ],
+      "subtotal": 247.32,
+      "descuento": 0.0,
+      "impuestos": 19.78,
+      "cargos": null,
+      "total": 267.1,
+      "notas": "Precios sin IEPS (8 %); totales impresos dos veces."
+    }
+  ]
+}
