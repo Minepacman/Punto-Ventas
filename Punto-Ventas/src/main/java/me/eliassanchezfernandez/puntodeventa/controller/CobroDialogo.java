@@ -23,6 +23,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
+import me.eliassanchezfernandez.puntodeventa.service.ValeService;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.RafagaLector;
@@ -40,6 +41,9 @@ import java.util.Optional;
  *  - Enter cobra (si todo está vacío, cobra con efectivo exacto);
  *  - F1…F5 ponen los billetes "que siguen" al total (exacto, decena, 50, 100, 200…);
  *  - F8/F9/F10 pasan todo el total a tarjeta / transferencia / vales;
+ *  - F11 lleva al código del «Vale de la tienda»: se escanea o se teclea y Enter lo busca (ese
+ *    Enter nunca cobra); se usa lo que tenga, hasta el total, y el resto se paga con otra forma.
+ *    Un vale escaneado por error en un campo de monto se pasa solo a su campo;
  *  - Tab cambia de forma de pago (pago dividido: la suma debe cubrir el total y
  *    lo que no es efectivo no puede excederlo);
  *  - Esc regresa al ticket sin cobrar nada;
@@ -110,6 +114,24 @@ public final class CobroDialogo {
     }
 
     /**
+     * Lo que la ventana necesita para aceptar un «Vale de la tienda» (vale de compra de una
+     * devolución): cómo buscar un código. Después de cerrar, {@link #codigo()} dice qué vale se usó.
+     */
+    public static final class ValeTienda {
+        private final java.util.function.Function<String, ValeService.Consulta> buscador;
+        private ValeService.Consulta elegido;
+
+        public ValeTienda(java.util.function.Function<String, ValeService.Consulta> buscador) {
+            this.buscador = buscador;
+        }
+
+        public ValeService.Consulta elegido() { return elegido; }
+
+        /** Código del vale elegido (null si no se usó ninguno) */
+        public String codigo() { return elegido != null ? elegido.codigo() : null; }
+    }
+
+    /**
      * @param fiado null = sin la forma "A cuenta (fiado)". Con ella: F6 elige el cliente, F7 pone
      *        todo a cuenta; el resto puede ir en efectivo u otra forma (pago dividido). Si lo
      *        fiado rebasa el límite del cliente se avisa aquí y el servicio pide la autorización.
@@ -118,6 +140,15 @@ public final class CobroDialogo {
                                                                  List<Venta.FormaPago> habilitadas,
                                                                  Map<Venta.FormaPago, Double> iniciales,
                                                                  boolean inicialesPorLector, Fiado fiado) {
+        return mostrar(owner, total, habilitadas, iniciales, inicialesPorLector, fiado, null);
+    }
+
+    /** @param vale null = sin «Vale de la tienda» */
+    public static Optional<Map<Venta.FormaPago, Double>> mostrar(Window owner, double total,
+                                                                 List<Venta.FormaPago> habilitadas,
+                                                                 Map<Venta.FormaPago, Double> iniciales,
+                                                                 boolean inicialesPorLector, Fiado fiado,
+                                                                 ValeTienda vale) {
         Dialog<Map<Venta.FormaPago, Double>> dlg = new Dialog<>();
         dlg.setTitle("Cobrar");
         dlg.setHeaderText(null);
@@ -140,6 +171,8 @@ public final class CobroDialogo {
         grid.setVgap(6);
         int fila = 0;
         List<Venta.FormaPago> formas = new ArrayList<>(habilitadas);
+        formas.remove(Venta.FormaPago.VALE_COMPRA);   // tiene su propio renglón (código + monto)
+        formas.remove(Venta.FormaPago.CREDITO);
         if (formas.isEmpty()) formas.add(Venta.FormaPago.EFECTIVO);
         for (Venta.FormaPago forma : formas) {
             TextField campo = new TextField();
@@ -191,26 +224,68 @@ public final class CobroDialogo {
             btnCliente.setOnAction(e -> elegir.run());
         }
 
+        // Vale de la tienda: código (escaneado o tecleado) + cuánto se usa de él
+        TextField txtCodigoVale = null;
+        TextField campoVale = null;
+        Label lblVale = new Label();
+        lblVale.setWrapText(true);
+        lblVale.getStyleClass().add("hint");
+        lblVale.setMaxWidth(380);
+        if (vale != null) {
+            txtCodigoVale = new TextField();
+            txtCodigoVale.setPromptText("Escanea o escribe el código");
+            txtCodigoVale.setPrefColumnCount(11);
+            campoVale = new TextField();
+            campoVale.setPromptText("0.00");
+            campoVale.setPrefColumnCount(7);
+            campoVale.setTooltip(new Tooltip("Cuánto se paga con el vale (se pone solo al buscarlo)"));
+            campos.put(Venta.FormaPago.VALE_COMPRA, campoVale);
+            HBox filaVale = new HBox(6, txtCodigoVale, campoVale);
+            HBox.setHgrow(txtCodigoVale, Priority.ALWAYS);
+            grid.addRow(fila++, new Label("Vale de la tienda:"), filaVale);
+            grid.add(lblVale, 1, fila++);
+            lblVale.setText("F11: escanea el vale que trae el cliente y pulsa Enter.");
+        }
+
         // ── Botones rápidos ──────────────────────────────────────────────
         FlowPane rapidos = new FlowPane(6, 6);
-        List<Double> sugerencias = CalculoCobro.sugerenciasDeEfectivo(total);
         TextField txtEfectivo = campos.get(Venta.FormaPago.EFECTIVO);
         Map<KeyCode, Runnable> teclasRapidas = new LinkedHashMap<>();
+        // Billetes "que siguen" a lo que falta pagar en efectivo (cambia al usar un vale)
+        final double[] montosBillete = new double[TECLAS_BILLETES.length];
+        final List<Button> botonesBillete = new ArrayList<>();
+        final TextField campoValeFinal = campoVale;
+        final TextField codigoValeFinal = txtCodigoVale;
+        java.util.function.DoubleConsumer actualizarBilletes = restante -> {
+            List<Double> sug = CalculoCobro.sugerenciasDeEfectivo(Math.max(0, restante));
+            for (int i = 0; i < botonesBillete.size(); i++) {
+                Button b = botonesBillete.get(i);
+                boolean hay = i < sug.size() && restante > 0.004;
+                b.setVisible(hay);
+                b.setManaged(hay);
+                if (!hay) continue;
+                montosBillete[i] = sug.get(i);
+                b.setText((i == 0 ? "Exacto " : "") + Moneda.formato(sug.get(i)) + "  " + TECLAS_BILLETES[i].getName());
+                b.getTooltip().setText("Poner " + Moneda.formato(sug.get(i)) + " en efectivo");
+            }
+        };
         if (txtEfectivo != null) {
-            for (int i = 0; i < sugerencias.size() && i < TECLAS_BILLETES.length; i++) {
-                double monto = sugerencias.get(i);
-                String texto = (i == 0 ? "Exacto " : "") + Moneda.formato(monto);
-                Button b = boton(texto + "  " + TECLAS_BILLETES[i].getName(), "Poner " + Moneda.formato(monto) + " en efectivo");
+            for (int i = 0; i < TECLAS_BILLETES.length; i++) {
+                final int indice = i;
+                Button b = boton("", "");
                 Runnable accion = () -> {
-                    campos.values().forEach(c -> { if (c != txtEfectivo) c.clear(); });
-                    txtEfectivo.setText(CalculoCobro.formatoCampo(monto));
+                    if (!b.isVisible()) return;
+                    campos.values().forEach(c -> { if (c != txtEfectivo && c != campoValeFinal) c.clear(); });
+                    txtEfectivo.setText(CalculoCobro.formatoCampo(montosBillete[indice]));
                     txtEfectivo.requestFocus();
                     txtEfectivo.selectAll();
                 };
                 b.setOnAction(e -> accion.run());
                 teclasRapidas.put(TECLAS_BILLETES[i], accion);
+                botonesBillete.add(b);
                 rapidos.getChildren().add(b);
             }
+            actualizarBilletes.accept(total);
         }
         KeyCode[] teclasTodo = { KeyCode.F8, KeyCode.F9, KeyCode.F10 };
         int n = 0;
@@ -264,7 +339,8 @@ public final class CobroDialogo {
         filaCambio.setAlignment(Pos.CENTER_LEFT);
 
         Label ayuda = new Label("Enter cobra · Esc regresa · Tab cambia de forma de pago · Enter sin montos = efectivo exacto"
-                + (fiado != null ? " · F6 cliente · F7 todo a cuenta" : ""));
+                + (fiado != null ? " · F6 cliente · F7 todo a cuenta" : "")
+                + (vale != null ? " · F11 vale de la tienda" : ""));
         ayuda.getStyleClass().add("hint");
         ayuda.setWrapText(true);
 
@@ -317,6 +393,15 @@ public final class CobroDialogo {
                             "Elige a qué cliente se le anota la cuenta (F6).");
                 }
             }
+            if (vale != null) {
+                double usoVale = montos.getOrDefault(Venta.FormaPago.VALE_COMPRA, 0.0);
+                String problemaVale = problemaVale(vale.elegido, usoVale);
+                lblVale.setText(textoVale(vale.elegido, usoVale));
+                if (problemaVale != null && r.esValido()) {
+                    r = new CalculoCobro.Resultado(r.total(), r.pagado(), r.efectivo(), r.noEfectivo(), r.faltante(), r.cambio(),
+                            problemaVale);
+                }
+            }
             actual[0] = r;
             lblPagado.setText(Moneda.formato(r.pagado()));
             if (!r.hayPago()) {
@@ -340,6 +425,75 @@ public final class CobroDialogo {
         recalcular.run();
         alElegirCliente[0] = recalcular;
 
+        // ── Vale de la tienda: buscar el código (Enter en su campo; nunca cobra) ──
+        final Runnable[] buscarVale = { () -> { } };
+        if (vale != null) {
+            final TextField codigoVale = txtCodigoVale;
+            final TextField montoVale = campoVale;
+            buscarVale[0] = () -> {
+                String texto = codigoVale.getText();
+                if (texto == null || texto.isBlank()) {
+                    vale.elegido = null;
+                    montoVale.clear();
+                    actualizarBilletes.accept(total);
+                    recalcular.run();
+                    return;
+                }
+                ValeService.Consulta c;
+                try {
+                    c = vale.buscador.apply(texto);
+                } catch (RuntimeException ex) {
+                    c = new ValeService.Consulta(null, ValeService.normalizar(texto), 0, 0, null,
+                            "No se pudo buscar el vale: " + ex.getMessage());
+                }
+                if (c == null || !c.sePuedeUsar()) {
+                    vale.elegido = null;
+                    montoVale.clear();
+                    recalcular.run();
+                    lblVale.setText(c != null ? c.problema() : "No se encontró el vale.");
+                    codigoVale.requestFocus();
+                    codigoVale.selectAll();
+                    return;
+                }
+                vale.elegido = c;
+                double otros = 0;
+                for (Map.Entry<Venta.FormaPago, TextField> e : campos.entrySet()) {
+                    if (e.getKey() == Venta.FormaPago.EFECTIVO || e.getKey() == Venta.FormaPago.VALE_COMPRA) continue;
+                    double m = CalculoCobro.parsearMonto(e.getValue().getText(), 0);
+                    if (!Double.isNaN(m) && m > 0) otros += m;
+                }
+                double usar = c.aUsar(Math.max(0, total - otros));
+                codigoVale.setText(c.codigoMostrado());
+                montoVale.setText(CalculoCobro.formatoCampo(usar));
+                double restante = Math.round((total - otros - usar) * 100.0) / 100.0;
+                actualizarBilletes.accept(restante);
+                recalcular.run();
+                if (restante > 0.004 && txtEfectivo != null) {
+                    txtEfectivo.requestFocus();
+                    txtEfectivo.selectAll();
+                } else {
+                    montoVale.requestFocus();
+                    montoVale.selectAll();
+                }
+            };
+            // Si cambia el código ya buscado, el vale deja de valer hasta buscarlo otra vez
+            codigoVale.textProperty().addListener((o, a, b) -> {
+                if (vale.elegido != null && !ValeService.normalizar(b).equals(vale.elegido.codigo())) {
+                    vale.elegido = null;
+                    recalcular.run();
+                }
+            });
+            // Enter (tecleado o del lector) en el código: buscar, nunca cobrar
+            codigoVale.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                if (e.getCode() == KeyCode.ENTER) {
+                    e.consume();
+                    buscarVale[0].run();
+                }
+            });
+            codigoVale.setOnAction(javafx.event.Event::consume);
+            teclasRapidas.put(KeyCode.F11, () -> { codigoVale.requestFocus(); codigoVale.selectAll(); });
+        }
+
         // Ritmo de las teclas en los campos: un código escaneado ahí llega como ráfaga + Enter
         campos.values().forEach(c -> {
             c.addEventFilter(KeyEvent.KEY_TYPED, e -> {
@@ -347,9 +501,21 @@ public final class CobroDialogo {
                 if (ch != null && !ch.isEmpty()) lector.caracter(ch.charAt(0), System.nanoTime());
             });
             c.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                if (e.getCode() != KeyCode.ENTER) return;
+                // Un vale escaneado (o tecleado) en un campo de monto: se pasa a su campo y se busca, sin cobrar
+                if (vale != null && c != campoValeFinal && ValeService.pareceCodigo(c.getText())) {
+                    e.consume();
+                    lector.enter(System.nanoTime());
+                    String codigo = c.getText();
+                    c.clear();
+                    capturadoPorLector[0] = false;
+                    codigoValeFinal.setText(codigo);
+                    buscarVale[0].run();
+                    return;
+                }
                 // Solo marca (nunca desmarca): el "false" lo pone cualquier edición del monto. Así un
                 // Enter humano no borra la sospecha que traían los montos iniciales del panel.
-                if (e.getCode() == KeyCode.ENTER && lector.enter(System.nanoTime()).isPresent()) capturadoPorLector[0] = true;
+                if (lector.enter(System.nanoTime()).isPresent()) capturadoPorLector[0] = true;
             });
         });
 
@@ -415,6 +581,28 @@ public final class CobroDialogo {
         });
 
         return dlg.showAndWait();
+    }
+
+    /** Por qué no se puede cobrar con lo puesto en el vale (null = está bien) */
+    static String problemaVale(ValeService.Consulta elegido, double usoVale) {
+        if (usoVale <= 0) return null;
+        if (elegido == null) return "Escanea o escribe el código del vale y pulsa Enter para buscarlo (F11).";
+        if (usoVale > elegido.saldo() + 0.004) {
+            return "Al vale " + elegido.codigoMostrado() + " solo le quedan " + Moneda.formato(elegido.saldo()) + ".";
+        }
+        return null;
+    }
+
+    /** Línea bajo el vale: cuánto tiene, cuánto se usa y cuánto le quedará */
+    static String textoVale(ValeService.Consulta elegido, double usoVale) {
+        if (elegido == null) return "F11: escanea el vale que trae el cliente y pulsa Enter.";
+        String texto = "Vale " + elegido.codigoMostrado() + ": tiene " + Moneda.formato(elegido.saldo());
+        if (usoVale > 0 && usoVale <= elegido.saldo() + 0.004) {
+            double queda = Math.max(0, Math.round((elegido.saldo() - usoVale) * 100.0) / 100.0);
+            texto += " · se usan " + Moneda.formato(usoVale)
+                    + (queda > 0.004 ? " · le quedarán " + Moneda.formato(queda) : " · se usa completo");
+        }
+        return texto;
     }
 
     /** Línea bajo el campo de fiado: el cliente elegido, lo que debe y si esta venta rebasa su límite */

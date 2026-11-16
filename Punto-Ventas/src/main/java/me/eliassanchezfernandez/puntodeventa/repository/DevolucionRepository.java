@@ -23,9 +23,11 @@ public interface DevolucionRepository extends JpaRepository<Devolucion, Long> {
 
     /**
      * Corte: cuántas devoluciones, cuánto se reembolsó, cuánto IVA iba incluido y cuánto de lo
-     * reembolsado se descontó de cuentas de clientes (fiado, no salió del cajón) en [inicio, fin)
+     * reembolsado se descontó de cuentas de clientes (fiado, no salió del cajón) y cuánto se dio en
+     * vales de compra (tampoco salió del cajón) en [inicio, fin)
      */
-    @Query("SELECT COUNT(d), COALESCE(SUM(d.total), 0.0), COALESCE(SUM(d.iva), 0.0), COALESCE(SUM(d.aCuenta), 0.0) FROM Devolucion d "
+    @Query("SELECT COUNT(d), COALESCE(SUM(d.total), 0.0), COALESCE(SUM(d.iva), 0.0), COALESCE(SUM(d.aCuenta), 0.0), "
+         + "COALESCE(SUM(d.enVale), 0.0) FROM Devolucion d "
          + "WHERE d.fecha >= :inicio AND d.fecha < :fin" + FILTRO_CAJA)
     List<Object[]> resumenEntre(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 

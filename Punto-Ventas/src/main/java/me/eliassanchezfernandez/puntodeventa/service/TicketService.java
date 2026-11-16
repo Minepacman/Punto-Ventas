@@ -124,6 +124,7 @@ public class TicketService {
         for (PagoVenta p : v.getPagos()) {
             d.linea(dosColumnas(p.getFormaPago().getEtiqueta(), Moneda.formato(p.getMonto()), cols));
             if (p.tieneDatosTarjeta()) ajustar("  " + p.resumenTarjeta(), cols).forEach(d::linea);
+            lineasVale(p, cols).forEach(d::linea);
         }
         if (v.getPagos().isEmpty() && v.getFormaPago() != null) {
             d.linea(dosColumnas(v.getFormaPago().getEtiqueta(), Moneda.formato(v.getPagoCon()), cols));
@@ -135,6 +136,18 @@ public class TicketService {
         ajustar(c.getTicketAgradecimiento() != null ? c.getTicketAgradecimiento() : "¡Gracias por su compra!", cols)
                 .forEach(d::centrada);
         return d;
+    }
+
+    /** Bajo un pago con vale de la tienda: su código y lo que le quedó (para que el cliente lo siga usando) */
+    static List<String> lineasVale(PagoVenta p, int cols) {
+        List<String> l = new ArrayList<>();
+        if (p.getFormaPago() != Venta.FormaPago.VALE_COMPRA || p.getValeCodigo() == null) return l;
+        l.add("  Vale " + me.eliassanchezfernandez.puntodeventa.model.Vale.mostrar(p.getValeCodigo()));
+        if (p.getValeSaldo() != null) {
+            l.add(dosColumnas(p.getValeSaldo() > 0.004 ? "  Le queda al vale" : "  Vale usado completo",
+                    p.getValeSaldo() > 0.004 ? Moneda.formato(p.getValeSaldo()) : "", cols));
+        }
+        return l;
     }
 
     /** "A cuenta de <cliente> · Saldo: $X" (solo en ventas con fiado); el saldo es el de ese momento */
@@ -250,6 +263,7 @@ public class TicketService {
         d.linea(dosColumnas("Tarjeta", Moneda.formato(r.tarjeta), cols));
         if (r.transferencia > 0) d.linea(dosColumnas("Transferencia", Moneda.formato(r.transferencia), cols));
         if (r.vales > 0) d.linea(dosColumnas("Vales", Moneda.formato(r.vales), cols));
+        if (r.valesTienda > 0.004) d.linea(dosColumnas("Vales de la tienda", Moneda.formato(r.valesTienda), cols));
         if (r.credito > 0) d.linea(dosColumnas("A cuenta (fiado)", Moneda.formato(r.credito), cols));
         for (VentaService.TarjetaTerminal t : r.tarjetaPorTerminal) {
             d.linea(dosColumnas("  " + t.terminal() + " (" + t.pagos() + ")", Moneda.formato(t.monto()), cols));
@@ -274,6 +288,9 @@ public class TicketService {
             if (r.devolucionesACuenta > 0.004) {
                 d.linea(dosColumnas("  a cuentas de clientes", Moneda.formato(r.devolucionesACuenta), cols));
             }
+            if (r.devolucionesEnVale > 0.004) {
+                d.linea(dosColumnas("  en vales de compra", Moneda.formato(r.devolucionesEnVale), cols));
+            }
             d.agregar(dosColumnas("VENTAS NETAS", Moneda.formato(r.getVentasNetas()), cols),
                     DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
         }
@@ -284,6 +301,14 @@ public class TicketService {
             if (r.productosComunes > 0.004) {
                 ajustar(textoProductosComunes(r), cols).forEach(d::linea);
             }
+        }
+        if (r.numValesEmitidos > 0 || r.valesTienda > 0.004) {
+            d.linea(raya);
+            d.negrita("Vales de compra (no son efectivo)");
+            if (r.numValesEmitidos > 0) {
+                d.linea(dosColumnas("Entregados (" + r.numValesEmitidos + ")", Moneda.formato(r.valesEmitidos), cols));
+            }
+            if (r.valesTienda > 0.004) d.linea(dosColumnas("Usados para pagar", Moneda.formato(r.valesTienda), cols));
         }
         if (!r.porCaja.isEmpty()) {
             d.linea(raya);
@@ -442,9 +467,15 @@ public class TicketService {
         if (dev.getIvaOCero() > 0.004) d.linea(dosColumnas("IVA incluido", Moneda.formato(dev.getIvaOCero()), cols));
         d.agregar(dosColumnas("REEMBOLSO", Moneda.formato(dev.getTotal()) + " " + c.getMonedaCodigo(), cols),
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, true);
-        if (dev.getACuentaOCero() > 0.004) {
-            // Venta a cuenta (fiado): primero se bajó la deuda del cliente, el resto se entregó en efectivo
-            d.linea(dosColumnas("A su cuenta", Moneda.formato(dev.getACuentaOCero()), cols));
+        if (dev.getACuentaOCero() > 0.004 || dev.getEnValeOCero() > 0.004) {
+            // Venta a cuenta (fiado): primero se bajó la deuda del cliente; vale y efectivo, lo que se entregó
+            if (dev.getACuentaOCero() > 0.004) d.linea(dosColumnas("A su cuenta", Moneda.formato(dev.getACuentaOCero()), cols));
+            if (dev.getEnValeOCero() > 0.004) {
+                d.linea(dosColumnas("En vale", Moneda.formato(dev.getEnValeOCero()), cols));
+                if (dev.getValeCodigo() != null) {
+                    d.linea("  Vale " + me.eliassanchezfernandez.puntodeventa.model.Vale.mostrar(dev.getValeCodigo()));
+                }
+            }
             if (dev.getEnEfectivo() > 0.004) d.linea(dosColumnas("En efectivo", Moneda.formato(dev.getEnEfectivo()), cols));
         } else {
             d.linea(dosColumnas("Forma", dev.getFormaTexto(), cols));
@@ -456,6 +487,38 @@ public class TicketService {
         d.vacia();
         d.centrada("_".repeat(Math.min(cols - 4, 28)));
         d.centrada("Recibió el cliente");
+        return d;
+    }
+
+    /**
+     * «VALE DE COMPRA» para entregar al cliente: el monto en grande, el código con su código de barras
+     * (se escanea en la ventana de cobro), la vigencia y cómo usarlo.
+     */
+    public DocumentoImpresion documentoVale(me.eliassanchezfernandez.puntodeventa.model.Vale v, Configuracion c) {
+        int cols = columnas(c.getTicketAnchoMm());
+        String raya = "-".repeat(cols);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        DocumentoImpresion d = new DocumentoImpresion();
+        d.titulo(c.getNombreTienda());
+        if (c.getDireccion() != null) ajustar(c.getDireccion(), cols).forEach(d::centrada);
+        if (c.getTicketTelefono() != null) d.centrada("Tel: " + c.getTicketTelefono());
+        d.linea(raya);
+        d.agregar("VALE DE COMPRA", DocumentoImpresion.Alineacion.CENTRO, true, true);
+        d.linea(raya);
+        d.agregar(Moneda.formato(v.getMonto()), DocumentoImpresion.Alineacion.CENTRO, true, true);
+        if (v.getSaldo() + 0.004 < v.getMonto()) d.centrada("Le queda: " + Moneda.formato(v.getSaldo()));
+        d.vacia();
+        d.codigoBarras(v.getCodigo());
+        d.agregar("Código: " + v.getCodigoMostrado(), DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.vacia();
+        d.linea(dosColumnas("Entregado", v.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        d.linea(dosColumnas("Vence", v.getVence() != null ? v.getVence().format(fmt) : "No vence", cols));
+        if (v.getVentaFolio() != null) d.linea("Por devolución de la venta " + v.getVentaFolio());
+        if (v.getClienteNombre() != null) ajustar("Cliente: " + v.getClienteNombre(), cols).forEach(d::linea);
+        d.linea("Atendió: " + (v.getCajeroNombre() != null ? v.getCajeroNombre() : "—"));
+        d.linea(raya);
+        ajustar("Preséntalo en caja para pagar tu siguiente compra. Puedes usarlo en partes: "
+                + "lo que no uses se queda en el vale. No se cambia por efectivo.", cols).forEach(d::centrada);
         return d;
     }
 

@@ -179,6 +179,10 @@ public class VentasController implements Initializable {
 
     /** Cliente al que se anota la parte "A cuenta (fiado)" del ticket en cobro (null = sin fiado) */
     private CobroDialogo.ClienteFiado clienteFiado;
+    /** Vales de compra de la tienda (forma «Vale de la tienda» en la ventana de cobro) */
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.ValeService valeService;
+    /** Código del vale elegido en la ventana de cobro (solo para el cobro en curso) */
+    private String valeCobro;
 
     private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
@@ -846,14 +850,17 @@ public class VentasController implements Initializable {
             // Un pago sospechoso (cambio enorme o tecleado por el lector) pasa por la ventana de cobro,
             // que lo muestra y exige una confirmación distinta del Enter
             CobroDialogo.Fiado fiado = new CobroDialogo.Fiado(this::elegirClienteFiado, clienteFiado);
+            CobroDialogo.ValeTienda vale = new CobroDialogo.ValeTienda(valeService::consultar);
             Optional<Map<Venta.FormaPago, Double>> elegido = CobroDialogo.mostrar(
-                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector, fiado);
+                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector,
+                    fiado, vale);
             if (elegido.isEmpty()) {                  // Esc: nada cambia, el ticket sigue en captura
                 txtCodigo.requestFocus();
                 return;
             }
             montos = elegido.get();
             clienteFiado = montos.containsKey(Venta.FormaPago.CREDITO) ? fiado.elegido() : null;
+            valeCobro = montos.containsKey(Venta.FormaPago.VALE_COMPRA) ? vale.codigo() : null;
         }
         cobrarCon(montos);
     }
@@ -878,6 +885,8 @@ public class VentasController implements Initializable {
                 pagos.add(new PagoVenta(e.getKey(), e.getValue(), tarjeta.terminal(), tarjeta.ultimos4(), tarjeta.autorizacion()));
             } else if (e.getKey() == Venta.FormaPago.CREDITO) {
                 pagos.add(PagoVenta.aCuenta(clienteFiado != null ? clienteFiado.id() : null, e.getValue()));
+            } else if (e.getKey() == Venta.FormaPago.VALE_COMPRA) {
+                pagos.add(PagoVenta.conVale(valeCobro, e.getValue()));
             } else {
                 pagos.add(new PagoVenta(e.getKey(), e.getValue()));
             }
@@ -985,7 +994,11 @@ public class VentasController implements Initializable {
         lblVentaCobradaDetalle.setText("Total " + Moneda.formato(venta.getTotal())
                 + "  ·  Pagó " + Moneda.formato(venta.getPagoCon())
                 + (venta.getClienteNombre() != null ? "  ·  A cuenta de " + venta.getClienteNombre()
-                        + (venta.getSaldoCliente() != null ? " (debe " + Moneda.formato(venta.getSaldoCliente()) + ")" : "") : ""));
+                        + (venta.getSaldoCliente() != null ? " (debe " + Moneda.formato(venta.getSaldoCliente()) + ")" : "") : "")
+                + venta.getPagos().stream().filter(p -> p.getFormaPago() == Venta.FormaPago.VALE_COMPRA && p.getValeSaldo() != null)
+                        .map(p -> "  ·  Al vale " + me.eliassanchezfernandez.puntodeventa.model.Vale.mostrar(p.getValeCodigo())
+                                + (p.getValeSaldo() > 0.004 ? " le quedan " + Moneda.formato(p.getValeSaldo()) : " ya no le queda saldo"))
+                        .collect(java.util.stream.Collectors.joining()));
         lblVentaCobradaCambio.setText(Moneda.formato(venta.getCambio()));
         boolean puedeFacturar = false;
         try {
@@ -1768,6 +1781,7 @@ public class VentasController implements Initializable {
         autorizaciones.clear();
         tarjetaCapturada = null;
         clienteFiado = null;
+        valeCobro = null;
         txtCodigo.clear();
         camposPago.values().forEach(TextField::clear);
         labelTotal.setText("$0.00");

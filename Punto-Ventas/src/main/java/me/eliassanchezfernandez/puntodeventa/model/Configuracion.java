@@ -44,6 +44,14 @@ public class Configuracion {
     @Column(name = "plazo_cancelacion_horas", nullable = false)
     private int plazoCancelacionHoras = Venta.PLAZO_CANCELACION_HORAS_POR_DEFECTO;
 
+    /** Días que dura un vale de compra (devoluciones) desde que se entrega; null o 0 = no vence */
+    @Column(name = "vale_vigencia_dias")
+    private Integer valeVigenciaDias;
+
+    public int getValeVigenciaDiasOCero() {
+        return valeVigenciaDias == null || valeVigenciaDias < 0 ? 0 : valeVigenciaDias;
+    }
+
     // ── Opciones habilitadas ─────────────────────────────────────────────
 
     /** Pedir el fondo de caja al primer inicio de sesión del día (CRT-02) */
@@ -349,6 +357,7 @@ public class Configuracion {
             case TRANSFERENCIA -> isPagoTransferencia();
             case VALES         -> isPagoVales();
             case CREDITO       -> false;
+            case VALE_COMPRA   -> false;   // vale de la tienda: tiene su propio campo en la ventana de cobro
         };
     }
 

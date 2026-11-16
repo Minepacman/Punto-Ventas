@@ -51,6 +51,16 @@
                            wrapText="true" styleClass="hint"/>
                 </VBox>
 
+                <Separator/>
+                <Label text="Vales de compra (devoluciones)" styleClass="form-section-title"/>
+
+                <VBox spacing="4">
+                    <Label text="Los vales vencen después de (días)" styleClass="field-label"/>
+                    <TextField fx:id="txtVigenciaVales" promptText="0"/>
+                    <Label text="Escribe 0 para que los vales no venzan. Aplica a los vales que se entreguen de hoy en adelante."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
                 <Region minHeight="4"/>
 
                 <HBox spacing="12">

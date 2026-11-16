@@ -53,7 +53,10 @@ import java.util.TreeMap;
  *    el cliente sigue debiendo de esa venta (movimiento DEVOLUCION en su libro, hasta lo pendiente
  *    de la venta) y solo el resto se le da en efectivo, como salida de caja «Devolución al cliente»
  *    de esta caja (resta en el efectivo esperado del corte). La devolución guarda cuánto fue a la
- *    cuenta ({@code a_cuenta}). Vales o notas de crédito no existen todavía.
+ *    cuenta ({@code a_cuenta}).
+ *  - Vale para otra compra: si el cajero lo elige, lo que no fue a la cuenta se entrega como vale de
+ *    compra impreso ({@link ValeService}) y no sale efectivo. Lo que la venta se pagó con un vale de la
+ *    tienda regresa SIEMPRE como vale (nunca como efectivo: un vale no se convierte en dinero).
  *  - Varias cajas: primero se bloquea la fila de la venta con un UPDATE condicionado a que siga
  *    activa (dos cajas que devuelven de la misma venta, o una que devuelve mientras otra cancela,
  *    se forman); luego cada renglón se anota con un UPDATE condicionado a no rebasar lo vendido;
@@ -80,6 +83,7 @@ public class DevolucionService {
     /** Fiado: una venta a cuenta reembolsa primero a la cuenta. @Lazy por el ciclo CuentaCliente → MovimientoCaja → Caja → Venta */
     @Autowired @org.springframework.context.annotation.Lazy private CuentaClienteService cuentaClienteService;
     @Autowired private ConfiguracionService configuracionService;
+    @Autowired @org.springframework.context.annotation.Lazy private ValeService valeService;
     @Autowired private IdentidadCaja identidadCaja;
     @Autowired private RutasApp rutas;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
@@ -99,14 +103,30 @@ public class DevolucionService {
      * venta sigue cargado a la cuenta del cliente (fiado; 0 si no fue a cuenta), que es lo primero
      * que se descuenta del reembolso.
      */
-    public record Estado(Venta venta, List<Devolucion> devoluciones, double pendienteACuenta) {
-        public Estado(Venta venta, List<Devolucion> devoluciones) { this(venta, devoluciones, 0); }
+    public record Estado(Venta venta, List<Devolucion> devoluciones, double pendienteACuenta, double pendienteEnVale) {
+        public Estado(Venta venta, List<Devolucion> devoluciones) { this(venta, devoluciones, 0, 0); }
+        public Estado(Venta venta, List<Devolucion> devoluciones, double pendienteACuenta) {
+            this(venta, devoluciones, pendienteACuenta, 0);
+        }
 
-        /** Cómo se repartiría un reembolso de {@code total}: [a la cuenta, en efectivo] */
+        /** Cómo se repartiría un reembolso de {@code total} en efectivo: [a la cuenta, en efectivo] (sin vales) */
         public double[] reparto(double total) {
-            double cuenta = Math.min(Math.max(0, total), Math.max(0, pendienteACuenta));
-            cuenta = VentaService.redondear(cuenta);
-            return new double[] { cuenta, VentaService.redondear(Math.max(0, total - cuenta)) };
+            double[] r = reparto(total, Devolucion.FormaReembolso.EFECTIVO);
+            return new double[] { r[0], VentaService.redondear(r[1] + r[2]) };
+        }
+
+        /**
+         * Cómo se repartiría un reembolso de {@code total}: [a la cuenta, en vale, en efectivo]. Primero
+         * la cuenta del cliente (fiado); luego, con «vale», todo lo demás va al vale; con «efectivo»,
+         * solo lo que se pagó con un vale de la tienda regresa como vale y el resto es efectivo.
+         */
+        public double[] reparto(double total, Devolucion.FormaReembolso forma) {
+            double t = Math.max(0, total);
+            double cuenta = VentaService.redondear(Math.min(t, Math.max(0, pendienteACuenta)));
+            double resto = VentaService.redondear(Math.max(0, t - cuenta));
+            double vale = forma == Devolucion.FormaReembolso.VALE ? resto
+                    : VentaService.redondear(Math.min(resto, Math.max(0, pendienteEnVale)));
+            return new double[] { cuenta, vale, VentaService.redondear(Math.max(0, resto - vale)) };
         }
     }
 
@@ -118,7 +138,8 @@ public class DevolucionService {
         verificarLectura();
         Venta v = ventaRepo.findConDetallesById(ventaId)
                 .orElseThrow(() -> new NegocioException("La venta ya no existe."));
-        return new Estado(v, devolucionRepo.findConDetallesByVentaId(ventaId), cuentaClienteService.pendienteDeVenta(ventaId));
+        List<Devolucion> devs = devolucionRepo.findConDetallesByVentaId(ventaId);
+        return new Estado(v, devs, cuentaClienteService.pendienteDeVenta(ventaId), pendienteEnVale(v, devs));
     }
 
     /** Una devolución con sus renglones (para el comprobante) */
@@ -155,9 +176,7 @@ public class DevolucionService {
         String motivo = s.motivo() == null ? "" : s.motivo().trim();
         if (motivo.isEmpty()) throw new NegocioException("Indica el motivo de la devolución.");
         if (motivo.length() > 250) motivo = motivo.substring(0, 250);
-        if (s.forma() != null && s.forma() != Devolucion.FormaReembolso.EFECTIVO) {
-            throw new NegocioException("Por ahora el reembolso solo puede ser en efectivo.");
-        }
+        Devolucion.FormaReembolso forma = s.forma() != null ? s.forma() : Devolucion.FormaReembolso.EFECTIVO;
         // Renglones pedidos: sin repetir (se suman) y con cantidad válida
         Map<Long, Linea> pedidas = new LinkedHashMap<>();
         if (s.lineas() != null) {
@@ -207,7 +226,7 @@ public class DevolucionService {
         dev.setVentaId(v.getId());
         dev.setVentaFolio(v.getFolioMostrado());
         dev.setMotivo(motivo);
-        dev.setFormaReembolso(Devolucion.FormaReembolso.EFECTIVO);
+        dev.setFormaReembolso(forma);
         dev.setCajeroId(quien.getId());
         dev.setCajeroNombre(quien.getNombreCompleto());
         dev.setCaja(identidadCaja.numero());
@@ -308,7 +327,26 @@ public class DevolucionService {
                     "Devolución " + guardada.getFolio() + " de la venta " + v.getFolioMostrado() + ": " + motivo);
         }
         if (aCuenta > 0.004) guardada.setACuenta(aCuenta);
-        double enEfectivo = VentaService.redondear(guardada.getTotal() - aCuenta);
+        double resto = VentaService.redondear(guardada.getTotal() - aCuenta);
+
+        // 4b) Vale para otra compra: lo que se pagó con vale regresa siempre como vale; con «vale», todo el resto
+        double enVale = 0;
+        if (resto > 0.004) {
+            if (forma == Devolucion.FormaReembolso.VALE) {
+                enVale = resto;
+            } else {
+                enVale = Math.min(resto, pendienteEnVale(v, devolucionRepo.findConDetallesByVentaId(v.getId())));
+            }
+            enVale = VentaService.redondear(enVale);
+        }
+        if (enVale > 0.004) {
+            me.eliassanchezfernandez.puntodeventa.model.Vale vale = valeService.emitir(enVale, v.getId(),
+                    v.getFolioMostrado(), guardada.getId(), v.getClienteNombre());
+            guardada.setEnVale(enVale);
+            guardada.setValeId(vale.getId());
+            guardada.setValeCodigo(vale.getCodigo());
+        }
+        double enEfectivo = VentaService.redondear(resto - enVale);
 
         // 5) El resto, en efectivo: salida de esta caja, cuenta en el corte del turno
         if (enEfectivo > 0.004) {
@@ -317,11 +355,12 @@ public class DevolucionService {
             guardada.setMovimientoCajaId(m.getId());
         }
 
-        String reparto = aCuenta > 0.004
-                ? (enEfectivo > 0.004
-                        ? String.format("%s a la cuenta de %s y %s en efectivo", Moneda.formato(aCuenta), clienteDe(v), Moneda.formato(enEfectivo))
-                        : String.format("a la cuenta de %s", clienteDe(v)))
-                : "en " + guardada.getFormaReembolso().getEtiqueta().toLowerCase();
+        List<String> partes = new ArrayList<>();
+        if (aCuenta > 0.004) partes.add(Moneda.formato(aCuenta) + " a la cuenta de " + clienteDe(v));
+        if (enVale > 0.004) partes.add(Moneda.formato(enVale) + " en el vale " + guardada.getValeCodigo());
+        if (enEfectivo > 0.004) partes.add(Moneda.formato(enEfectivo) + " en efectivo");
+        String reparto = partes.isEmpty() ? "en " + guardada.getFormaReembolso().getEtiqueta().toLowerCase()
+                : "(" + String.join(", ", partes) + ")";
         auditoriaService.registrar(quien, "VENTA_DEVOLUCION", String.format("%s de la venta #%d — %s — reembolso %s %s — %s",
                 guardada.getFolio(), v.getId(), String.join("; ", resumen), Moneda.formato(guardada.getTotal()),
                 reparto, motivo), aut);
@@ -344,6 +383,14 @@ public class DevolucionService {
         if (esLoUltimo || d.getCantidad() <= 0) return resta;
         double proporcional = VentaService.redondear(importe * cantidad / d.getCantidad());
         return Math.min(resta, Math.max(0, proporcional));
+    }
+
+    /** Lo pagado con vales de la tienda que aún no ha regresado como vale en devoluciones anteriores */
+    static double pendienteEnVale(Venta v, List<Devolucion> devoluciones) {
+        double pagado = v.montoPagadoCon(Venta.FormaPago.VALE_COMPRA);
+        if (pagado <= 0.004) return 0;
+        double yaEnVale = devoluciones.stream().mapToDouble(Devolucion::getEnValeOCero).sum();
+        return VentaService.redondear(Math.max(0, pagado - yaEnVale));
     }
 
     private static String clienteDe(Venta v) {

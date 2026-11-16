@@ -26,9 +26,10 @@ import java.util.List;
 @NoArgsConstructor
 public class Devolucion {
 
-    /** Cómo se le regresó el dinero al cliente. Por ahora solo efectivo (vales / notas de crédito: pendiente) */
+    /** Cómo se le regresó el dinero al cliente: en efectivo o con un vale para otra compra (ValeService) */
     public enum FormaReembolso {
-        EFECTIVO("Efectivo");
+        EFECTIVO("Efectivo"),
+        VALE("Vale para otra compra");
 
         private final String etiqueta;
         FormaReembolso(String etiqueta) { this.etiqueta = etiqueta; }
@@ -73,6 +74,21 @@ public class Devolucion {
     @Column(name = "a_cuenta")
     private Double aCuenta;
 
+    /**
+     * Parte del reembolso que se entregó como vale de compra (no salió del cajón). null o 0 = sin vale.
+     * Con forma VALE es todo lo que no fue a la cuenta del cliente; con EFECTIVO puede haberlo igual si
+     * la venta se pagó con un vale (lo pagado con vale regresa como vale, nunca como efectivo).
+     */
+    @Column(name = "en_vale")
+    private Double enVale;
+
+    /** Vale entregado (null si no hubo) */
+    @Column(name = "vale_id")
+    private Long valeId;
+
+    @Column(name = "vale_codigo", length = 20)
+    private String valeCodigo;
+
     /** Salida de efectivo que registró el reembolso (null si no salió efectivo) */
     @Column(name = "movimiento_caja_id")
     private Long movimientoCajaId;
@@ -110,17 +126,26 @@ public class Devolucion {
         return aCuenta != null ? aCuenta : 0.0;
     }
 
-    /** Lo que sí salió del cajón: el total menos lo descontado de la cuenta del cliente */
-    public double getEnEfectivo() {
-        return Math.max(0, Math.round((total - getACuentaOCero()) * 100.0) / 100.0);
+    public double getEnValeOCero() {
+        return enVale != null ? enVale : 0.0;
     }
 
-    /** "Efectivo", "A cuenta del cliente" o "A cuenta y efectivo" según cómo se repartió el reembolso */
+    /** Lo que sí salió del cajón: el total menos lo descontado de la cuenta del cliente y lo dado en vale */
+    public double getEnEfectivo() {
+        return Math.max(0, Math.round((total - getACuentaOCero() - getEnValeOCero()) * 100.0) / 100.0);
+    }
+
+    /** "Efectivo", "Vale para otra compra", "A cuenta del cliente" o la combinación según cómo se repartió */
     public String getFormaTexto() {
-        boolean cuenta = getACuentaOCero() > 0.004, efectivo = getEnEfectivo() > 0.004;
-        if (cuenta && efectivo) return "A cuenta y efectivo";
-        if (cuenta) return "A cuenta del cliente";
-        return formaReembolso != null ? formaReembolso.getEtiqueta() : FormaReembolso.EFECTIVO.getEtiqueta();
+        boolean cuenta = getACuentaOCero() > 0.004, efectivo = getEnEfectivo() > 0.004, vale = getEnValeOCero() > 0.004;
+        java.util.List<String> partes = new java.util.ArrayList<>();
+        if (cuenta) partes.add(efectivo || vale ? "A cuenta" : "A cuenta del cliente");
+        if (vale) partes.add(cuenta || efectivo ? "vale" : FormaReembolso.VALE.getEtiqueta());
+        if (efectivo) partes.add(cuenta || vale ? "efectivo" : FormaReembolso.EFECTIVO.getEtiqueta());
+        if (partes.isEmpty()) return formaReembolso != null ? formaReembolso.getEtiqueta() : FormaReembolso.EFECTIVO.getEtiqueta();
+        if (partes.size() == 1) return partes.get(0);
+        String texto = String.join(", ", partes.subList(0, partes.size() - 1)) + " y " + partes.get(partes.size() - 1);
+        return Character.toUpperCase(texto.charAt(0)) + texto.substring(1);
     }
 
     /** Folio del comprobante: "D-" + id */

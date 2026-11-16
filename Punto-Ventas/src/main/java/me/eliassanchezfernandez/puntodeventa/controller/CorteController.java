@@ -107,6 +107,10 @@ public class CorteController implements Initializable {
     @FXML private Label lblTransferencia;
     @FXML private Label lblValesTitulo;
     @FXML private Label lblVales;
+    @FXML private Label lblValesTiendaTitulo;
+    @FXML private Label lblValesTienda;
+    @FXML private Label lblValesEmitidosTitulo;
+    @FXML private Label lblValesEmitidos;
     @FXML private Label lblSubtotal;
     @FXML private Label lblIva;
     @FXML private Label lblIvaPorTasaTitulo;
@@ -603,6 +607,10 @@ public class CorteController implements Initializable {
         lblTarjeta.setText(moneda(r.tarjeta));
         mostrarFila(lblTransferenciaTitulo, lblTransferencia, r.transferencia);
         mostrarFila(lblValesTitulo, lblVales, r.vales);
+        // Vales de compra de la tienda: ni entran ni salen del cajón (el efectivo esperado no los cuenta)
+        mostrarFila(lblValesTiendaTitulo, lblValesTienda, r.valesTienda);
+        mostrarFila(lblValesEmitidosTitulo, lblValesEmitidos, r.valesEmitidos);
+        if (r.numValesEmitidos > 0) lblValesEmitidos.setText(r.numValesEmitidos + " (" + moneda(r.valesEmitidos) + ")");
         lblSubtotal.setText(moneda(r.subtotal));
         lblIva.setText(moneda(r.iva) + VentaService.ResumenCorte.notaDevoluciones(r.ivaDevoluciones));
         // Desglose por tasa solo cuando el periodo mezcla tasas (básicos al 0 % con artículos al 16 %)
@@ -617,7 +625,8 @@ public class CorteController implements Initializable {
         lblDevArticulosTitulo.setVisible(hayDevoluciones); lblDevArticulosTitulo.setManaged(hayDevoluciones);
         lblDevArticulos.setVisible(hayDevoluciones);       lblDevArticulos.setManaged(hayDevoluciones);
         lblDevArticulos.setText(r.numDevoluciones + " (−" + moneda(r.totalDevoluciones) + ")"
-                + (r.devolucionesACuenta > 0.004 ? "; " + moneda(r.devolucionesACuenta) + " a cuentas de clientes, no salió del cajón" : ""));
+                + (r.devolucionesACuenta > 0.004 ? "; " + moneda(r.devolucionesACuenta) + " a cuentas de clientes, no salió del cajón" : "")
+                + (r.devolucionesEnVale > 0.004 ? "; " + moneda(r.devolucionesEnVale) + " en vales, no salió del cajón" : ""));
 
         lblVentasTotalesTitulo.setText("Ventas " + que);
         lblGananciaTitulo.setText("Ganancia " + que);

@@ -224,6 +224,7 @@ public final class ConstructorCfdi {
             case TRANSFERENCIA -> "03";
             case VALES         -> "08";
             case CREDITO       -> "99";
+            case VALE_COMPRA   -> "17";   // Compensación: se paga con el saldo a favor que el cliente tiene en la tienda
         };
     }
 

@@ -41,7 +41,8 @@ import java.util.Optional;
 
 /**
  * Ventana "Devolver artículos…" (Historial de ventas): el cliente regresa algunos artículos
- * de una venta y se le reembolsa en efectivo lo que pagó por ellos. Por renglón: cuánto devuelve
+ * de una venta y se le reembolsa lo que pagó por ellos: en efectivo (lo normal) o con un vale para
+ * otra compra (se imprime con su código de barras; no sale dinero del cajón). Por renglón: cuánto devuelve
  * (hasta lo que queda) y si regresa al inventario (dañado/caducado → no, queda como merma). El
  * motivo es obligatorio. Si el usuario no tiene DEVOLVER_VENTAS se pide la autorización de un
  * administrador. Las reglas viven en {@link DevolucionService}; aquí solo se arma la solicitud.
@@ -102,7 +103,17 @@ public class DevolucionDialogo {
         lblTotal.getStyleClass().add("corte-total-value");
         List<Fila> filas = new ArrayList<>();
         final DevolucionService.Estado est = estado;
-        Runnable recalcular = () -> lblTotal.setText(textoReembolso(est, totalEstimado(filas)));
+        // Cómo se le regresa el dinero: efectivo (de siempre) o vale para otra compra
+        javafx.scene.control.ToggleGroup grupoForma = new javafx.scene.control.ToggleGroup();
+        javafx.scene.control.RadioButton rbEfectivo = new javafx.scene.control.RadioButton("Devolver en efectivo");
+        javafx.scene.control.RadioButton rbVale = new javafx.scene.control.RadioButton("Darle un vale para otra compra");
+        rbEfectivo.setToggleGroup(grupoForma);
+        rbVale.setToggleGroup(grupoForma);
+        rbEfectivo.setSelected(true);
+        java.util.function.Supplier<Devolucion.FormaReembolso> formaElegida = () ->
+                rbVale.isSelected() ? Devolucion.FormaReembolso.VALE : Devolucion.FormaReembolso.EFECTIVO;
+        Runnable recalcular = () -> lblTotal.setText(textoReembolso(est, totalEstimado(filas), formaElegida.get()));
+        grupoForma.selectedToggleProperty().addListener((o, a, b) -> recalcular.run());
         int r = 1;
         for (DetalleVenta d : v.getDetalles()) {
             double pendiente = d.getCantidadPorDevolver();
@@ -142,10 +153,18 @@ public class DevolucionDialogo {
             for (Fila f : filas) if (!f.regresa().isDisabled()) f.regresa().setSelected(!merma);
         });
 
-        Label lblForma = new Label("El reembolso sale en efectivo del cajón de esta caja y aparece en el corte como "
-                + "«Devolución al cliente». Por ahora no hay vales ni notas de crédito: solo efectivo.");
-        lblForma.getStyleClass().add("hint");
-        lblForma.setWrapText(true);
+        Label hintEfectivo = hint("Se le entrega el dinero del cajón de esta caja (aparece en el corte como «Devolución al cliente»).");
+        Label hintVale = hint("No sale dinero del cajón: se imprime un vale con un código que el cliente presenta en caja "
+                + "para pagar su siguiente compra.");
+        VBox opcionesForma = new VBox(4, new Label("¿Cómo le regresas el dinero?"), rbEfectivo, sangria(hintEfectivo), rbVale, sangria(hintVale));
+        if (est.pendienteACuenta() > 0.004) {
+            opcionesForma.getChildren().add(hint("La venta fue a cuenta: primero se baja lo que el cliente debe de ella ("
+                    + Moneda.formato(est.pendienteACuenta()) + " como máximo) y solo el resto se entrega."));
+        }
+        if (est.pendienteEnVale() > 0.004) {
+            opcionesForma.getChildren().add(hint("Esta venta se pagó con un vale de la tienda: esa parte (hasta "
+                    + Moneda.formato(est.pendienteEnVale()) + ") se regresa como vale, no en efectivo."));
+        }
         Label lblMerma = new Label("Si el artículo viene dañado o caducado, desmarca «Regresa al inventario»: "
                 + "quedará registrado como merma.");
         lblMerma.getStyleClass().add("hint");
@@ -163,7 +182,7 @@ public class DevolucionDialogo {
         lblError.setVisible(false);
         lblError.setManaged(false);
 
-        VBox contenido = new VBox(8, desplazable, lblMerma, new Label("Motivo:"), cmbMotivo, lblTotal, lblForma, chkImprimir, lblError);
+        VBox contenido = new VBox(8, desplazable, lblMerma, new Label("Motivo:"), cmbMotivo, opcionesForma, lblTotal, chkImprimir, lblError);
         contenido.setPadding(new Insets(10));
         contenido.setPrefWidth(760);
         dlg.getDialogPane().setContent(contenido);
@@ -200,13 +219,8 @@ public class DevolucionDialogo {
                 return;
             }
             double total = totalEstimado(filas);
-            double[] reparto = est.reparto(total);
-            String comoSeReembolsa = reparto[0] > 0.004
-                    ? (reparto[1] > 0.004
-                            ? String.format("bajar %s de la cuenta del cliente y entregarle %s en efectivo",
-                                    Moneda.formato(reparto[0]), Moneda.formato(reparto[1]))
-                            : String.format("bajar %s de la cuenta del cliente (no sale efectivo)", Moneda.formato(reparto[0])))
-                    : String.format("entregar %s en efectivo al cliente", Moneda.formato(total));
+            Devolucion.FormaReembolso forma = formaElegida.get();
+            String comoSeReembolsa = comoSeReembolsa(est.reparto(total, forma));
             if (!Ventanas.confirmar("Devolver artículos", String.format(
                     "¿Devolver %d artículo(s) de la venta %s y %s?",
                     lineas.size(), v.getFolioMostrado(), comoSeReembolsa))) {
@@ -220,13 +234,14 @@ public class DevolucionDialogo {
                 auts = List.of(aut.get());
             }
             try {
-                resultado[0] = devolucionService.devolver(new DevolucionService.Solicitud(v.getId(), lineas, motivo.trim()), auts);
+                resultado[0] = devolucionService.devolver(new DevolucionService.Solicitud(v.getId(), lineas, motivo.trim(), forma), auts);
             } catch (NegocioException e) {
                 mostrar(lblError, e.getMessage());
                 ev.consume();
                 return;
             }
             if (chkImprimir.isSelected()) imprimir(resultado[0].getId());
+            if (resultado[0].getValeId() != null) entregarVale(resultado[0], hayImpresora);
         });
         dlg.setResultConverter(b -> b == devolver ? resultado[0] : null);
         Platform.runLater(() -> filas.stream().filter(f -> !f.cantidad().isDisabled()).findFirst()
@@ -234,12 +249,71 @@ public class DevolucionDialogo {
         return dlg.showAndWait().filter(d -> d != null);
     }
 
-    /** "Reembolso en efectivo: $X" o, en una venta a cuenta (fiado), cuánto baja la deuda y cuánto se entrega */
-    private static String textoReembolso(DevolucionService.Estado estado, double total) {
-        double[] r = estado.reparto(total);
-        if (r[0] <= 0.004) return "Reembolso en efectivo: " + Moneda.formato(total);
-        return "Reembolso " + Moneda.formato(total) + ": " + Moneda.formato(r[0]) + " a su cuenta"
-                + (r[1] > 0.004 ? " y " + Moneda.formato(r[1]) + " en efectivo" : " (no sale efectivo)");
+    /**
+     * "Reembolso en efectivo: $X", "Reembolso en vale: $X" o el reparto (a su cuenta / en vale / en
+     * efectivo) cuando la venta fue a cuenta o se pagó con un vale
+     */
+    static String textoReembolso(DevolucionService.Estado estado, double total, Devolucion.FormaReembolso forma) {
+        double[] r = estado.reparto(total, forma);
+        int partes = (r[0] > 0.004 ? 1 : 0) + (r[1] > 0.004 ? 1 : 0) + (r[2] > 0.004 ? 1 : 0);
+        if (partes <= 1) {
+            if (r[0] > 0.004) return "Reembolso " + Moneda.formato(total) + ": a su cuenta (no sale efectivo)";
+            if (r[1] > 0.004) return "Reembolso en vale: " + Moneda.formato(total) + " (no sale efectivo)";
+            return "Reembolso en efectivo: " + Moneda.formato(total);
+        }
+        List<String> l = new ArrayList<>();
+        if (r[0] > 0.004) l.add(Moneda.formato(r[0]) + " a su cuenta");
+        if (r[1] > 0.004) l.add(Moneda.formato(r[1]) + " en vale");
+        if (r[2] > 0.004) l.add(Moneda.formato(r[2]) + " en efectivo");
+        return "Reembolso " + Moneda.formato(total) + ": " + String.join(", ", l);
+    }
+
+    /** "entregar $X en efectivo al cliente", "darle un vale por $X", o el reparto completo */
+    static String comoSeReembolsa(double[] r) {
+        List<String> l = new ArrayList<>();
+        if (r[0] > 0.004) l.add("bajar " + Moneda.formato(r[0]) + " de la cuenta del cliente");
+        if (r[1] > 0.004) l.add("darle un vale por " + Moneda.formato(r[1]));
+        if (r[2] > 0.004) l.add("entregarle " + Moneda.formato(r[2]) + " en efectivo");
+        if (l.isEmpty()) return "no entregar nada";
+        if (l.size() == 1) return l.get(0) + (r[2] > 0.004 ? "" : " (no sale efectivo)");
+        return String.join(", ", l.subList(0, l.size() - 1)) + " y " + l.get(l.size() - 1);
+    }
+
+    /** El vale recién entregado: se imprime (si hay impresora) y se muestra el código para el cliente */
+    private void entregarVale(Devolucion dev, boolean hayImpresora) {
+        String codigo = me.eliassanchezfernandez.puntodeventa.model.Vale.mostrar(dev.getValeCodigo());
+        if (hayImpresora) {
+            try {
+                impresionService.imprimirValeAsync(dev.getValeId()).whenComplete((res, error) -> Platform.runLater(() -> {
+                    if (error != null || res == null || res.esFallo()) {
+                        Ventanas.alerta(Alert.AlertType.WARNING, "Vale de compra",
+                                (res != null ? res.mensaje() : "No se pudo imprimir el vale.")
+                                + "\n\nAnota el código en un papel para el cliente: " + codigo);
+                    }
+                }));
+            } catch (NegocioException e) {
+                Ventanas.alerta(Alert.AlertType.ERROR, "Vale de compra", e.getMessage());
+            }
+        }
+        Ventanas.alerta(Alert.AlertType.INFORMATION, "Vale de compra", String.format(
+                "Vale por %s\n\nCódigo: %s\n\n%s",
+                Moneda.formato(dev.getEnValeOCero()), codigo,
+                hayImpresora ? "Se está imprimiendo. Entrégaselo al cliente: lo presenta en caja para pagar su siguiente compra."
+                        : "No hay impresora: anota el código en un papel o en el ticket del cliente. "
+                          + "Lo dice en caja (o se escribe en «Vale de la tienda») para pagar su siguiente compra."));
+    }
+
+    private static Label hint(String texto) {
+        Label l = new Label(texto);
+        l.getStyleClass().add("hint");
+        l.setWrapText(true);
+        return l;
+    }
+
+    private static javafx.scene.Node sangria(javafx.scene.Node n) {
+        VBox caja = new VBox(n);
+        caja.setPadding(new Insets(0, 0, 0, 26));
+        return caja;
     }
 
     /** Suma lo que se reembolsaría con lo tecleado (misma cuenta que DevolucionService) y lo pinta por renglón */
