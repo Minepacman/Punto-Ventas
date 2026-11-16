@@ -74,7 +74,7 @@ public class ConfiguracionMovilController implements Initializable {
             "Úsalo solo en el Wi-Fi del negocio (con contraseña), nunca en el de los clientes ni en redes públicas: "
                     + "la conexión no va cifrada."
     };
-    private static final int QR_PANTALLA_PX = 240;   // ≈ 6.5 cm en pantalla: se lee a 40 cm y deja ver el interruptor sin desplazar
+    private static final int QR_PANTALLA_PX = 210;   // ≈ 5.5 cm en pantalla: se lee a 40 cm y deja ver el interruptor sin desplazar a 1024×768
     private static final int QR_IMPRESION_PX = 360;  // puntos de impresión (≈ 12.7 cm a 72 dpi)
 
     /** URL cuyo QR se muestra cuando hay varias direcciones (se conserva al refrescar) */

@@ -48,6 +48,11 @@
                                promptText="Buscar por código o descripción..."
                                HBox.hgrow="ALWAYS"
                                onKeyReleased="#onBuscar"/>
+                    <!-- Varios productos a la vez: Shift o Ctrl/Cmd + clic en la tabla -->
+                    <Label fx:id="lblSeleccion" styleClass="hint" visible="false" managed="false"/>
+                    <Button fx:id="btnCambiarIva" text="Cambiar IVA…" onAction="#onCambiarIvaSeleccionados">
+                        <tooltip><Tooltip text="Pone el mismo IVA a los productos seleccionados. Para elegir varios, mantén Shift o Ctrl (Cmd en Mac) al hacer clic."/></tooltip>
+                    </Button>
                 </HBox>
             </VBox>
         </top>
@@ -481,6 +486,10 @@
                         <ComboBox fx:id="comboIvaDepartamento" maxWidth="Infinity"/>
                         <Label text="Al dar de alta un producto en este departamento, el IVA se llena con este valor (ej. «Frutas y verduras» → IVA 0 %). Se puede cambiar en cada producto y no toca los productos ya existentes."
                                wrapText="true" styleClass="hint"/>
+                        <Button fx:id="btnAplicarIvaDepartamento" text="Aplicar este IVA a sus productos…"
+                                onAction="#onAplicarIvaDepartamento" disable="true">
+                            <tooltip><Tooltip text="Pone el IVA guardado de este departamento a todos sus productos que ya existen."/></tooltip>
+                        </Button>
                     </VBox>
 
                 <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
