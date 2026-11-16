@@ -2208,6 +2208,8 @@ TilePane > .button:armed,
     -fx-border-width: 1;
     -fx-border-radius: 999;
     -fx-padding: 0 6 0 6;
+}
+
 /* ======================================================================
    APARIENCIA (Configuración → Apariencia, controller/AparienciaDialogo)
    ====================================================================== */
