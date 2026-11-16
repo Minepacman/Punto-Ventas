@@ -357,7 +357,7 @@ def ejecutar(List<String> args, String mensajeFallo) {
 // de jpackage (así vale igual para Windows de 32 bits, que trae otros módulos como jdk.crypto.mscapi). Se excluye
 // por nombre en vez de listar lo necesario: un módulo olvidado rompería algo raro (impresoras, TLS, locales) que
 // las pruebas no ven porque corren con el JDK completo. -PruntimeCompleto deja el comportamiento de antes.
-def MODULOS_DE_DESARROLLO = ['jdk.compiler', 'jdk.javadoc', 'jdk.jshell', 'jdk.jlink', 'jdk.jpackage', 'jdk.jartool',
+ext.modulosDeDesarrollo = ['jdk.compiler', 'jdk.javadoc', 'jdk.jshell', 'jdk.jlink', 'jdk.jpackage', 'jdk.jartool',
         'jdk.jdeps', 'jdk.jconsole', 'jdk.jdi', 'jdk.jdwp.agent', 'jdk.jstatd', 'jdk.attach', 'jdk.editpad',
         'jdk.hotspot.agent', 'jdk.jcmd', 'jdk.management.agent', 'jdk.sctp', 'jdk.incubator.foreign',
         'jdk.incubator.vector', 'jdk.incubator.concurrent']
@@ -370,7 +370,7 @@ def modulosRuntime(File jdk) {
     if (p.waitFor() != 0) throw new GradleException("No se pudieron listar los módulos de $jdk:\n$salida")
     salida.readLines()
             .collect { it.trim().split('@')[0] }
-            .findAll { it && !it.startsWith('jdk.internal.') && !(it in MODULOS_DE_DESARROLLO) && !it.startsWith('Picked up') }
+            .findAll { it && !it.startsWith('jdk.internal.') && !(it in project.ext.modulosDeDesarrollo) && !it.startsWith('Picked up') }
 }
 
 // ── Lector de tickets (OCR): Tesseract dentro del instalador ─────────────────────────────────
