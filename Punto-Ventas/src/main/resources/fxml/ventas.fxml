@@ -75,14 +75,14 @@
             <!-- CONSTRAINED: las columnas se reparten el ancho disponible (a 1024 px la tabla recibe ~700 px);
                  Descripción es la que crece. Sin esto "Importe" y "Existencia" quedaban fuera de vista. -->
             <TableView fx:id="tablaProductos" styleClass="ticket-table" VBox.vgrow="ALWAYS">
-                <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/></columnResizePolicy>
+                <!-- Sin CONSTRAINED_RESIZE_POLICY: la descripción toma el ancho sobrante (ColumnasTabla.llenarCon) y las cifras conservan el suyo -->
                 <columns>
-                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="95"  minWidth="60"/>
+                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="80"  minWidth="60"/>
                     <TableColumn fx:id="colDescripcion"   text="Descripción" prefWidth="200" minWidth="120"/>
                     <TableColumn fx:id="colPrecio"        text="Precio"      prefWidth="75"  minWidth="60" styleClass="align-right"/>
                     <TableColumn fx:id="colCantidad"      text="Cant."       prefWidth="55"  minWidth="45" styleClass="align-right"/>
                     <TableColumn fx:id="colDescuento"     text="Descuento"   prefWidth="75"  minWidth="60" styleClass="align-right"/>
-                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="105" minWidth="70"/>
+                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="90"  minWidth="70"/>
                     <TableColumn fx:id="colImporte"       text="Importe"     prefWidth="85"  minWidth="70" styleClass="align-right"/>
                     <TableColumn fx:id="colExistencia"    text="Existencia"  prefWidth="75"  minWidth="60" styleClass="align-right"/>
                 </columns>

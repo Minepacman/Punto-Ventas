@@ -129,7 +129,7 @@
 
                 <columns>
                     <TableColumn fx:id="colCodigo"      text="Código"     prefWidth="130"/>
-                    <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="260"/>
+                    <TableColumn fx:id="colDescripcion" text="Descripción" prefWidth="260" minWidth="140"/>
                     <TableColumn fx:id="colActual"      text="Actual"      prefWidth="90" styleClass="align-right"/>
                     <TableColumn fx:id="colMinimo"      text="Mínimo"      prefWidth="90" styleClass="align-right"/>
                     <TableColumn fx:id="colEstado"      text="Estado"      prefWidth="100"/>
