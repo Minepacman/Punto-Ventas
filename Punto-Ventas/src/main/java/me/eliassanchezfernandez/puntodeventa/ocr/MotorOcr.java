@@ -12,4 +12,17 @@ public interface MotorOcr {
 
     /** Nombre corto para bitácora y pantalla, p. ej. "Tesseract 5.5.4" */
     String nombre();
+
+    /**
+     * ¿Puede leer fotos en esta computadora? (p. ej. falta Tesseract y PaddleOCR no está listo). Si no, las
+     * pantallas ofrecen escribir el texto o, en el teléfono, mandar la foto a la computadora para revisarla.
+     */
+    default boolean disponible() {
+        return true;
+    }
+
+    /** Por qué no puede leer (texto para el usuario); null si sí puede */
+    default String motivoNoDisponible() {
+        return null;
+    }
 }

@@ -91,14 +91,15 @@ public class TicketProveedorService {
 
     /** ¿Hay un motor OCR instalado? Si no, la pantalla ofrece escribir o pegar el texto */
     public boolean hayLectorDeFotos() {
-        return motores.getIfAvailable() != null;
+        MotorOcr m = motores.getIfAvailable();
+        return m != null && m.disponible();
     }
 
     /** Lee la foto con el motor OCR (puede tardar; llamarlo fuera del hilo de la pantalla) */
     public Lectura leerFoto(byte[] foto) throws IOException {
         sesionService.requerirSesion();
         MotorOcr motor = motores.getIfAvailable();
-        if (motor == null) throw new NegocioException("La lectura de fotos no está instalada en esta computadora: escribe o pega el texto del ticket.");
+        if (motor == null || !motor.disponible()) throw new NegocioException("La lectura de fotos no está instalada en esta computadora: escribe o pega el texto del ticket.");
         if (foto == null || foto.length == 0) throw new NegocioException("La foto está vacía.");
         ResultadoOcr r = motor.leer(foto);
         List<TicketLeido> tickets = r.renglones() != null && !r.renglones().isEmpty()
@@ -315,6 +316,20 @@ public class TicketProveedorService {
      */
     public double margenHabitual(Long departamentoId) {
         return margenHabitual(departamentoId, productoRepo.findAllByOrderByDescripcionAsc());
+    }
+
+    /**
+     * Ganancia habitual de cada departamento con UNA lectura del catálogo (para sugerir el precio de un
+     * producto nuevo al cambiarle el departamento en el teléfono). La llave -1 es la de «sin departamento».
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Double> margenesHabituales() {
+        sesionService.requerirSesion();
+        List<Producto> catalogo = productoRepo.findAllByOrderByDescripcionAsc();
+        Map<Long, Double> r = new LinkedHashMap<>();
+        r.put(-1L, margenHabitual(null, catalogo));
+        for (Departamento d : departamentoRepo.findAll()) r.put(d.getId(), margenHabitual(d.getId(), catalogo));
+        return r;
     }
 
     static double margenHabitual(Long departamentoId, List<Producto> catalogo) {

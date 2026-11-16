@@ -25,6 +25,16 @@ public class MotorOcrSeleccionado implements MotorOcr {
     }
 
     @Override
+    public boolean disponible() {
+        return lector.decision().motor() != SeleccionMotorOcr.Motor.NINGUNO;
+    }
+
+    @Override
+    public String motivoNoDisponible() {
+        return disponible() ? null : lector.decision().motivo();
+    }
+
+    @Override
     public String nombre() {
         return lector.motor().map(MotorOcr::nombre).orElse(String.valueOf(lector.decision().motor()));
     }

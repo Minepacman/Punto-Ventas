@@ -99,10 +99,100 @@ public class LeerTicketDialogo {
     @Autowired private ProductoService productoService;
     @Autowired private SesionService sesionService;
     @Autowired private AutorizacionService autorizacionService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService porRevisar;
 
     /** Abre la ventana; regresa cuando se cierra (true si se registró al menos un ticket) */
     public boolean mostrar(Window owner) {
         Ventana v = new Ventana(owner);
+        v.stage.showAndWait();
+        return v.registrados > 0;
+    }
+
+    /**
+     * «Por revisar»: tickets mandados desde el teléfono. Con uno lo abre directo; con varios deja elegir (o
+     * descartar los que no sirven). Lo leído en el teléfono se vuelve a interpretar aquí con el intérprete de hoy.
+     * @return true si se registró al menos un ticket
+     */
+    public boolean mostrarPorRevisar(Window owner) {
+        boolean registrado = false;
+        while (true) {
+            List<me.eliassanchezfernandez.puntodeventa.repository.TicketPorRevisarRepository.Resumen> lista = porRevisar.pendientes();
+            if (lista.isEmpty()) {
+                if (!registrado) Ventanas.alerta(Alert.AlertType.INFORMATION, "Por revisar", "No hay tickets esperando revisión.");
+                return registrado;
+            }
+            Long id = elegirPendiente(owner, lista);
+            if (id == null) return registrado;
+            if (id < 0) continue;                                   // se descartó uno: volver a la lista
+            if (abrirPendiente(owner, id)) registrado = true;
+            if (lista.size() == 1) return registrado;
+        }
+    }
+
+    /** id elegido; -1 si se descartó uno; null si se cerró */
+    private Long elegirPendiente(Window owner, List<me.eliassanchezfernandez.puntodeventa.repository.TicketPorRevisarRepository.Resumen> lista) {
+        if (lista.size() == 1) return lista.get(0).id();
+        java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm");
+        Dialog<Long> dlg = new Dialog<>();
+        dlg.setTitle("Tickets por revisar");
+        dlg.setHeaderText("Fotos de tickets mandadas desde el teléfono");
+        if (owner != null) dlg.initOwner(owner);
+        ListView<me.eliassanchezfernandez.puntodeventa.repository.TicketPorRevisarRepository.Resumen> lv = new ListView<>();
+        lv.getItems().setAll(lista);
+        lv.setPrefSize(520, 260);
+        lv.setCellFactory(v -> new ListCell<>() {
+            @Override protected void updateItem(me.eliassanchezfernandez.puntodeventa.repository.TicketPorRevisarRepository.Resumen r, boolean vacio) {
+                super.updateItem(r, vacio);
+                setText(vacio || r == null ? null : r.creadoEn().format(f) + " · la mandó " + (r.usuarioNombre() == null ? "—" : r.usuarioNombre())
+                        + (r.nota() == null ? "" : " · " + r.nota()));
+            }
+        });
+        lv.getSelectionModel().selectFirst();
+        lv.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2 && lv.getSelectionModel().getSelectedItem() != null) {
+                dlg.setResult(lv.getSelectionModel().getSelectedItem().id());
+                dlg.close();
+            }
+        });
+        dlg.getDialogPane().setContent(lv);
+        ButtonType abrir = new ButtonType("Abrir", ButtonBar.ButtonData.OK_DONE);
+        ButtonType descartar = new ButtonType("Descartar", ButtonBar.ButtonData.LEFT);
+        dlg.getDialogPane().getButtonTypes().addAll(descartar, abrir, ButtonType.CANCEL);
+        dlg.setResultConverter(b -> {
+            var sel = lv.getSelectionModel().getSelectedItem();
+            if (sel == null) return null;
+            if (b == abrir) return sel.id();
+            if (b == descartar) {
+                if (!Ventanas.confirmar("Descartar", "¿Quitar este ticket de la lista sin registrarlo?")) return -1L;
+                try {
+                    porRevisar.descartar(sel.id());
+                } catch (NegocioException e) {
+                    Ventanas.alerta(Alert.AlertType.WARNING, "Descartar", e.getMessage());
+                }
+                return -1L;
+            }
+            return null;
+        });
+        Ventanas.estilizar(dlg);
+        return dlg.showAndWait().orElse(null);
+    }
+
+    /** Abre «Leer ticket» con la foto (y lo leído) de un pendiente; true si se registró */
+    boolean abrirPendiente(Window owner, Long id) {
+        var p = porRevisar.obtener(id);
+        Ventana v = new Ventana(owner);
+        v.pendienteId = p.id();
+        v.proveedorInicial = p.proveedorId();
+        v.foto = p.foto();
+        v.imagen = new Image(new ByteArrayInputStream(p.foto()));
+        List<TicketLeido> ts = me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService.interpretar(p);
+        if (!ts.isEmpty() && ts.stream().anyMatch(x -> !x.getLineas().isEmpty())) {
+            v.origen = p.origen() == null ? "teléfono" : "teléfono · " + p.origen();
+            v.empezarRevision(ts);
+        } else {
+            v.origen = "teléfono";
+            v.leerFoto();
+        }
         v.stage.showAndWait();
         return v.registrados > 0;
     }
@@ -157,6 +247,9 @@ public class LeerTicketDialogo {
         String origen;
         TicketProveedorService.Revision revision;
         int registrados;
+        /** Ticket mandado desde el teléfono que se está revisando (se marca REGISTRADO al darle entrada) */
+        Long pendienteId;
+        Long proveedorInicial;
 
         // Revisión
         ComboBox<Proveedor> cmbProveedor;
@@ -388,7 +481,7 @@ public class LeerTicketDialogo {
         void empezarRevision(List<TicketLeido> ts) {
             tickets = ts;
             actual = 0;
-            revisar(null);
+            revisar(proveedorInicial);
         }
 
         void revisar(Long proveedorId) {
@@ -871,6 +964,13 @@ public class LeerTicketDialogo {
                 return;
             }
             registrados++;
+            if (pendienteId != null) {
+                try {
+                    porRevisar.marcarRegistrado(pendienteId, res.registroId());
+                } catch (RuntimeException e) {
+                    System.err.println("No se pudo marcar el ticket por revisar #" + pendienteId + ": " + e.getMessage());
+                }
+            }
             mostrarResultado(prov, res);
             if (actual + 1 < tickets.size()) {
                 actual++;
