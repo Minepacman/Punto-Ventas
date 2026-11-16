@@ -54,6 +54,8 @@ import me.eliassanchezfernandez.puntodeventa.util.LectorEnModales;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.PantallaConexion;
 import me.eliassanchezfernandez.puntodeventa.util.RafagaLector;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -225,6 +227,7 @@ public class VentasController implements Initializable {
     // ── Inicialización ────────────────────────────────────────────────────
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        EtiquetaBeta.marcar(btnFacturarVenta, FuncionBeta.FACTURACION_CFDI);
         camposPago.put(Venta.FormaPago.EFECTIVO, txtEfectivo);
         camposPago.put(Venta.FormaPago.TARJETA, txtTarjeta);
         camposPago.put(Venta.FormaPago.TRANSFERENCIA, txtTransferencia);

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -17,7 +18,10 @@
             <VBox styleClass="form-panel" spacing="14">
                 <padding><Insets topRightBottomLeft="24"/></padding>
 
-                <Label text="Báscula" styleClass="form-section-title"/>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="Báscula" styleClass="form-section-title"/>
+                    <EtiquetaBeta funcion="BASCULA"/>
+                </HBox>
                 <Separator/>
 
                 <VBox spacing="2">

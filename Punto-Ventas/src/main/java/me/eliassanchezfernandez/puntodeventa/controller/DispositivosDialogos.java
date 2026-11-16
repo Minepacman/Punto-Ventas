@@ -31,6 +31,8 @@ import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -295,7 +297,7 @@ public class DispositivosDialogos {
         nota.setWrapText(true);
         nota.setPrefWidth(420);
         nota.getStyleClass().add("hint");
-        dialogoGuardar(owner, "Terminal bancaria", "Terminales con las que se cobra con tarjeta",
+        dialogoGuardar(owner, "Terminal bancaria", "Terminales con las que se cobra con tarjeta", FuncionBeta.TERMINAL_BANCARIA,
                 new VBox(10, new Label("Terminales (máximo " + DispositivosService.MAX_TERMINALES + "):"), lista, exigir, nota),
                 () -> dispositivosService.guardarTerminales(lista.getText(), exigir.isSelected()));
     }
@@ -373,6 +375,11 @@ public class DispositivosDialogos {
 
     /** Diálogo Guardar / Cancelar; si el servicio rechaza los datos el error sale en el mismo diálogo */
     private void dialogoGuardar(Window owner, String titulo, String encabezado, Node contenido, Runnable guardar) {
+        dialogoGuardar(owner, titulo, encabezado, null, contenido, guardar);
+    }
+
+    /** Igual, con la pastilla «Beta» en el encabezado si la función sigue en beta */
+    private void dialogoGuardar(Window owner, String titulo, String encabezado, FuncionBeta beta, Node contenido, Runnable guardar) {
         Label error = new Label();
         error.setWrapText(true);
         error.getStyleClass().add("field-error-label");
@@ -386,6 +393,7 @@ public class DispositivosDialogos {
         caja.setPadding(new Insets(10));
         dlg.getDialogPane().setContent(caja);
         Ventanas.estilizar(dlg);
+        EtiquetaBeta.marcar(dlg, beta);
         ButtonType guardarBtn = new ButtonType("Guardar", ButtonBar.ButtonData.OK_DONE);
         dlg.getDialogPane().getButtonTypes().addAll(guardarBtn, ButtonType.CANCEL);
         Button boton = (Button) dlg.getDialogPane().lookupButton(guardarBtn);

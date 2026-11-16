@@ -19,7 +19,7 @@
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Button text="Entrada de mercancía"   onAction="#onAgregar"
                     styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
-            <Button text="Leer ticket"            onAction="#onLeerTicket"><graphic><Icono nombre="camara"/></graphic>
+            <Button fx:id="btnLeerTicket" text="Leer ticket" onAction="#onLeerTicket"><graphic><Icono nombre="camara"/></graphic>
                 <tooltip><Tooltip text="Leer el ticket del proveedor (foto o texto) y darle entrada a todo de una vez"/></tooltip></Button>
             <Button text="Ajustes"                onAction="#onAjustes"><graphic><Icono nombre="bascula"/></graphic></Button>
             <ToggleButton fx:id="btnSoloBajos" text="Productos Bajos"

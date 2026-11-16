@@ -2188,3 +2188,22 @@ TilePane > .button:armed,
     -fx-text-fill: -color-fg-muted;
     -fx-font-size: 11px;
 }
+
+/* Pastilla «Beta» (util/EtiquetaBeta, lista en util/FuncionBeta): contorno suave del acento, letra chica.
+   Repetida bajo .button/.radio-button/.check-box para ganarle a la regla de etiquetas del tema dentro de controles. */
+.etiqueta-beta,
+.button .etiqueta-beta,
+.toggle-button .etiqueta-beta,
+.radio-button .etiqueta-beta,
+.check-box .etiqueta-beta,
+.tab .etiqueta-beta {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -pos-accent-text;
+    -fx-background-color: -pos-accent-subtle;
+    -fx-background-radius: 999;
+    -fx-border-color: -pos-accent-muted;
+    -fx-border-width: 1;
+    -fx-border-radius: 999;
+    -fx-padding: 0 6 0 6;
+}

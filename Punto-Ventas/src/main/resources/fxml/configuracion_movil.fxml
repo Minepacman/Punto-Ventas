@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 <?import atlantafx.base.controls.ToggleSwitch?>
@@ -57,7 +58,10 @@
 
                     <!-- 3. Avisos en el teléfono: el QR abre el asistente paso a paso de la página móvil -->
                     <VBox spacing="10" prefWidth="420" minWidth="0" HBox.hgrow="ALWAYS">
-                        <Label text="Activar avisos en un teléfono" styleClass="form-section-title"/>
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <Label text="Activar avisos en un teléfono" styleClass="form-section-title"/>
+                            <EtiquetaBeta funcion="AVISOS_TELEFONO"/>
+                        </HBox>
                         <Label text="Escanea este código con el teléfono: abre un asistente que te lleva paso a paso (iPhone o Android) para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen aunque la página esté cerrada. Se hace una sola vez por teléfono."
                                wrapText="true" styleClass="hint"/>
                         <HBox spacing="14" alignment="TOP_LEFT">

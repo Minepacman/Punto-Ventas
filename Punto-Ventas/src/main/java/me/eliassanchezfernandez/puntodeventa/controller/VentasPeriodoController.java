@@ -20,6 +20,8 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -102,6 +104,7 @@ public class VentasPeriodoController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         configurarColumnas();
+        EtiquetaBeta.marcar(btnFacturar, FuncionBeta.FACTURACION_CFDI);
         tablaVentas.setItems(ventas);
         tablaDetalle.setItems(detalles);
         tablaVentas.setPlaceholder(new Label("No hay ventas en el período seleccionado."));
@@ -154,7 +157,8 @@ public class VentasPeriodoController implements Initializable {
     /** Facturas emitidas (archivos, correo, cancelación, factura global) */
     @FXML private void onFacturas() {
         try {
-            Ventanas.abrirModal(springContext, "/fxml/facturas.fxml", "Facturas electrónicas", raiz.getScene().getWindow(), 1100, 640);
+            Ventanas.abrirModal(springContext, "/fxml/facturas.fxml",
+                    EtiquetaBeta.tituloVentana("Facturas electrónicas", FuncionBeta.FACTURACION_CFDI), raiz.getScene().getWindow(), 1100, 640);
         } catch (Exception e) {
             alerta(Alert.AlertType.ERROR, "Facturas", "No se pudo abrir la ventana: " + e.getMessage());
         }

@@ -15,13 +15,15 @@ import javafx.scene.layout.VBox;
  * una línea corta que dice en palabras llanas para qué sirve. En FXML:
  * {@code <BotonOpcion icono="usuario" titulo="Cajeros" descripcion="Usuarios y permisos" onAction="#onCajeros"/>}.
  * El estilo está en app.css ({@code .boton-opcion}); la prueba IconosFxmlTest
- * revisa que el icono exista.
+ * revisa que el icono exista. Con {@code beta="BASCULA"} (una constante de {@link FuncionBeta}) lleva la
+ * pastilla «Beta» junto al título mientras esa función siga en beta.
  */
 public class BotonOpcion extends Button {
 
     private final StringProperty titulo = new SimpleStringProperty(this, "titulo", "");
     private final StringProperty descripcion = new SimpleStringProperty(this, "descripcion", "");
     private final StringProperty icono = new SimpleStringProperty(this, "icono", null);
+    private final StringProperty beta = new SimpleStringProperty(this, "beta", null);
 
     private final Icono vistaIcono = new Icono();
     private final Label lblTitulo = new Label();
@@ -50,7 +52,14 @@ public class BotonOpcion extends Button {
         lblDescripcion.visibleProperty().bind(descripcion.isNotEmpty());
         lblDescripcion.managedProperty().bind(descripcion.isNotEmpty());
 
-        VBox textos = new VBox(1, lblTitulo, lblDescripcion);
+        EtiquetaBeta pastilla = new EtiquetaBeta();
+        pastilla.funcionProperty().bind(beta);
+        pastilla.setVisible(false);
+        pastilla.setManaged(false);
+        lblTitulo.setMinWidth(0);
+        HBox filaTitulo = new HBox(6, lblTitulo, pastilla);
+        filaTitulo.setAlignment(Pos.CENTER_LEFT);
+        VBox textos = new VBox(1, filaTitulo, lblDescripcion);
         textos.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(textos, Priority.ALWAYS);
         HBox fila = new HBox(10, marcoIcono, textos);
@@ -74,4 +83,9 @@ public class BotonOpcion extends Button {
     public String getIcono() { return icono.get(); }
     public void setIcono(String valor) { icono.set(valor); }
     public StringProperty iconoProperty() { return icono; }
+
+    /** Nombre de una constante de {@link FuncionBeta}, o vacío */
+    public String getBeta() { return beta.get(); }
+    public void setBeta(String valor) { beta.set(valor); }
+    public StringProperty betaProperty() { return beta; }
 }

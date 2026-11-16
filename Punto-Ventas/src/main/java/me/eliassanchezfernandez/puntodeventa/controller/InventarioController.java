@@ -19,6 +19,8 @@ import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -60,6 +62,7 @@ public class InventarioController implements Initializable {
     @FXML private Label     lblSinProveedores;
     @FXML private Label     lblVisitanHoy;
     @FXML private Button    btnProveedores;
+    @FXML private Button    btnLeerTicket;
     @FXML private Button    btnOrdenes;
     @FXML private TextField txtCosto;
     @FXML private VBox      vboxAjuste;
@@ -95,6 +98,7 @@ public class InventarioController implements Initializable {
 
     @Override public void initialize(URL url, ResourceBundle rb) {
         configurarColumnas();
+        EtiquetaBeta.marcar(btnLeerTicket, FuncionBeta.LECTOR_TICKETS);
         tablaInventario.setItems(lista);
         tablaInventario.setPlaceholder(new Label("No hay productos con inventario."));
         comboMotivo.setItems(FXCollections.observableArrayList(

@@ -31,6 +31,8 @@ import me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -400,12 +402,13 @@ public class ConfiguracionController implements Initializable {
     }
 
     /** Emisor, credenciales del PAC y claves SAT por defecto (solo ADMIN) */
-    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml", "Facturación electrónica (CFDI 4.0)", 960, 720); }
+    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml",
+            EtiquetaBeta.tituloVentana("Facturación electrónica (CFDI 4.0)", FuncionBeta.FACTURACION_CFDI), 960, 720); }
 
     // ── Dispositivos (solo ADMIN; cada servicio lo vuelve a verificar y audita) ──
 
     @FXML void onImpresora() { abrirAdmin("/fxml/configuracion_impresora.fxml", "Impresora de tickets", 600, 760); }
-    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", "Báscula", 600, 620); }
+    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", EtiquetaBeta.tituloVentana("Báscula", FuncionBeta.BASCULA), 600, 620); }
     /**
      * Abrir Caja Libre al encender la computadora (por computadora; ver util/InicioAutomatico).
      * Viene encendido de fábrica en el programa instalado. reg.exe en Windows: fuera del hilo de JavaFX.
@@ -425,7 +428,7 @@ public class ConfiguracionController implements Initializable {
         nota.setWrapText(true);
         nota.setPrefWidth(420);
         nota.getStyleClass().add("hint");
-        dialogoGuardar("Abrir al encender", "Iniciar con la computadora", new VBox(10, activo, nota), () -> {
+        dialogoGuardar("Abrir al encender", "Iniciar con la computadora", new VBox(10, activo, nota), FuncionBeta.ABRIR_AL_ENCENDER, () -> {
             if (lanzador.isEmpty()) return;
             boolean encendido = activo.isSelected();
             me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.guardarDecision(carpeta, encendido);
@@ -489,7 +492,7 @@ public class ConfiguracionController implements Initializable {
             javafx.application.Platform.runLater(mostrar);
         });
         VBox contenido = new VBox(12, opciones, motivo, nota);
-        dialogoGuardar("Lector de tickets", "Cómo se leen las fotos de tickets de proveedor", contenido, () -> {
+        dialogoGuardar("Lector de tickets", "Cómo se leen las fotos de tickets de proveedor", contenido, FuncionBeta.LECTOR_TICKETS, () -> {
             Toggle t = grupo.getSelectedToggle();
             if (t != null) lectorTicketsService.guardarPreferencia(
                     (me.eliassanchezfernandez.puntodeventa.ocr.SeleccionMotorOcr.Preferencia) t.getUserData());
@@ -511,12 +514,18 @@ public class ConfiguracionController implements Initializable {
 
     /** Diálogo con Guardar / Cancelar; si el servicio rechaza los datos, el error sale en el mismo diálogo */
     private void dialogoGuardar(String titulo, String encabezado, Node contenido, Runnable guardar) {
+        dialogoGuardar(titulo, encabezado, contenido, null, guardar);
+    }
+
+    /** Igual, con la pastilla «Beta» en el encabezado si la función sigue en beta */
+    private void dialogoGuardar(String titulo, String encabezado, Node contenido, FuncionBeta beta, Runnable guardar) {
         Label error = new Label();
         error.setWrapText(true);
         error.getStyleClass().add("field-error-label");
         error.setVisible(false);
         error.setManaged(false);
         Dialog<ButtonType> dlg = dialogo(titulo, encabezado, new VBox(10, contenido, error));
+        EtiquetaBeta.marcar(dlg, beta);
         ButtonType guardarBtn = new ButtonType("Guardar", ButtonBar.ButtonData.OK_DONE);
         dlg.getDialogPane().getButtonTypes().addAll(guardarBtn, ButtonType.CANCEL);
         Button boton = (Button) dlg.getDialogPane().lookupButton(guardarBtn);

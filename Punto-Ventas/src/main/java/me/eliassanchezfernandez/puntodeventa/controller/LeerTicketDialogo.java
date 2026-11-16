@@ -66,6 +66,8 @@ import me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorSer
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.Icono;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -171,7 +173,7 @@ public class LeerTicketDialogo {
         boolean cambiandoProveedor;
 
         Ventana(Window owner) {
-            stage.setTitle("Leer ticket de proveedor");
+            stage.setTitle(EtiquetaBeta.tituloVentana("Leer ticket de proveedor", FuncionBeta.LECTOR_TICKETS));
             stage.initModality(Modality.WINDOW_MODAL);
             if (owner != null) stage.initOwner(owner);
             Ventanas.aplicarIcono(stage);
@@ -232,7 +234,9 @@ public class LeerTicketDialogo {
                 e.consume();
             });
 
-            VBox caja = new VBox(14, titulo, ayuda, zona);
+            HBox filaTitulo = new HBox(8, titulo, new EtiquetaBeta(FuncionBeta.LECTOR_TICKETS));
+            filaTitulo.setAlignment(Pos.CENTER_LEFT);
+            VBox caja = new VBox(14, filaTitulo, ayuda, zona);
             if (!servicio.hayLectorDeFotos()) {
                 Label sin = new Label("Esta computadora todavía no puede leer el texto de las fotos. Puedes elegir la foto "
                         + "para tenerla a la vista mientras escribes o pegas el texto del ticket.");

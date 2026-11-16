@@ -67,6 +67,9 @@ class CapturasConfiguracionTest {
 
         // Hub de Configuración tal como se ve dentro de la pestaña a 1024×768 (área de contenido)
         capturar("/fxml/configuracion.fxml", 1008, 640, dir.resolve("configuracion-hub.png"), null);
+        // Inventario: barra con «Leer ticket» (pastilla Beta); base de datos con su sección «Cajas y servidor»
+        capturar("/fxml/inventario.fxml", 1008, 640, dir.resolve("inventario.png"), null);
+        capturar("/fxml/configuracion_basedatos.fxml", 940, 669, dir.resolve("base-datos.png"), null);
 
         // Acceso móvil con el servidor encendido (QR real de la red local) y luego apagado
         try {

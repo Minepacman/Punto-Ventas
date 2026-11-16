@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta?>
 <?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
@@ -22,7 +23,10 @@
                 <HBox spacing="22">
                     <!-- ── Emisor ── -->
                     <VBox spacing="8" prefWidth="430" minWidth="0" HBox.hgrow="ALWAYS">
-                        <Label text="Datos del emisor (como en la Constancia de Situación Fiscal)" styleClass="form-section-title" wrapText="true"/>
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <Label text="Datos del emisor (como en la Constancia de Situación Fiscal)" styleClass="form-section-title" wrapText="true" minWidth="0"/>
+                            <EtiquetaBeta funcion="FACTURACION_CFDI"/>
+                        </HBox>
                         <GridPane hgap="10" vgap="8">
                             <Label text="RFC *" styleClass="field-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
                             <TextField fx:id="txtRfc" promptText="ej: GODE561231GR8" GridPane.columnIndex="1" GridPane.rowIndex="0"/>

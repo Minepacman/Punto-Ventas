@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
@@ -65,12 +66,17 @@
 
                 <!-- ── Derecha: una caja o varias ── -->
                 <VBox styleClass="form-panel" spacing="8" HBox.hgrow="ALWAYS" prefWidth="440" minWidth="0">
-                    <Label text="Cajas y servidor" styleClass="form-section-title"/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label text="Cajas y servidor" styleClass="form-section-title"/>
+                        <EtiquetaBeta funcion="VARIAS_CAJAS"/>
+                    </HBox>
                     <Label fx:id="lblModoActual" wrapText="true" styleClass="hint"/>
                     <RadioButton fx:id="rbUnaCaja" text="Una sola caja (base de datos SQLite en este equipo)"
                                  toggleGroup="$grupoModo" onAction="#onCambiarModo"/>
                     <RadioButton fx:id="rbVariasCajas" text="Varias cajas (servidor PostgreSQL en la red local)"
-                                 toggleGroup="$grupoModo" onAction="#onCambiarModo"/>
+                                 toggleGroup="$grupoModo" onAction="#onCambiarModo" contentDisplay="RIGHT">
+                        <graphic><EtiquetaBeta funcion="VARIAS_CAJAS"/></graphic>
+                    </RadioButton>
                     <GridPane fx:id="gridServidor" hgap="8" vgap="6">
                         <padding><Insets left="24"/></padding>
                         <columnConstraints>

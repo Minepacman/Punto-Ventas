@@ -38,6 +38,8 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.AbrirArchivo;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -98,6 +100,7 @@ public class FacturacionDialogos {
         dlg.setTitle("Facturar venta " + venta.getFolioMostrado());
         dlg.setHeaderText("Factura de la venta " + venta.getFolioMostrado() + " por " + Moneda.formato(venta.getTotal())
                 + (fiscalService.obtener().isPacSandbox() ? "\nMODO PRUEBAS: la factura no tendrá validez fiscal." : ""));
+        EtiquetaBeta.marcar(dlg, FuncionBeta.FACTURACION_CFDI);
         if (owner != null) dlg.initOwner(owner);
 
         ComboBox<ClienteFiscal> cmbCliente = new ComboBox<>(FXCollections.observableArrayList(clienteFiscalService.listar()));
@@ -228,6 +231,7 @@ public class FacturacionDialogos {
         dlg.setTitle("Factura global (público en general)");
         dlg.setHeaderText("Una factura con las ventas del periodo que NO se facturaron a un cliente"
                 + (fiscalService.obtener().isPacSandbox() ? "\nMODO PRUEBAS: la factura no tendrá validez fiscal." : ""));
+        EtiquetaBeta.marcar(dlg, FuncionBeta.FACTURACION_CFDI);
         if (owner != null) dlg.initOwner(owner);
 
         ComboBox<Entrada> cmbPeriodicidad = new ComboBox<>(FXCollections.observableArrayList(CatalogoSat.PERIODICIDADES));

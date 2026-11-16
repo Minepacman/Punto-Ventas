@@ -1161,6 +1161,8 @@ public class ServidorMovilService {
         r.put("rol", c.getRol().name());
         r.put("rolEtiqueta", c.getRol().getEtiqueta());
         r.put("negocio", nombreNegocio());
+        // Funciones con la pastilla «Beta» (la lista vive en util/FuncionBeta)
+        r.put("beta", me.eliassanchezfernandez.puntodeventa.util.FuncionBeta.nombresEnBeta());
         r.put("permisos", c.getPermisosEfectivos().stream().map(Enum::name).sorted().toList());
         Map<String, Object> secciones = new LinkedHashMap<>();
         boolean historial = c.tienePermiso(Permiso.VER_HISTORIAL);
