@@ -119,4 +119,19 @@ class HojaAparienciaTest {
         Map<String, String> t = HojaApariencia.tokensDeAppCss(appCss());
         assertThat(t).containsEntry("-pos-accent", "#2F6CAD").containsKey("-pos-login-bg").containsKey("-pos-text-on-solid");
     }
+
+    @Test
+    void elVidrioLigeroDejaLasTablasOpacasYQuitaLaSombraDeLasTarjetas() {
+        Apariencia a = Apariencia.porDefecto().conVidrio(true);
+        String completo = HojaApariencia.vidrio(a, false);
+        String ligero = HojaApariencia.vidrio(a, true);
+        String tablaCompleta = completo.lines().filter(l -> l.startsWith(".table-view")).findFirst().orElseThrow();
+        String tablaLigera = ligero.lines().filter(l -> l.startsWith(".table-view")).findFirst().orElseThrow();
+        assertThat(tablaCompleta).contains("rgba(");
+        assertThat(tablaLigera).doesNotContain("rgba(").contains("#");
+        assertThat(completo).contains(".config-card, .login-card { -fx-effect");
+        assertThat(ligero).doesNotContain(".config-card, .login-card { -fx-effect").contains(".login-card { -fx-effect");
+        // Lo demás del vidrio (fondo decorativo, paneles) no cambia
+        assertThat(ligero).contains("radial-gradient").contains(".card, .card-flat");
+    }
 }

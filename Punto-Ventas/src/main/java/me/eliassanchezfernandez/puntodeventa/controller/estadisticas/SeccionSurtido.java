@@ -116,6 +116,7 @@ public final class SeccionSurtido implements SeccionEstadisticas<PlanSurtido> {
         boxGrupos.getChildren().clear();
         List<Fila> todas = new ArrayList<>();
         int gruposMostrados = 0;
+        int abiertos = 0;
         for (GrupoSurtido g : p.grupos()) {
             List<LineaSurtido> lineas = soloPedir ? g.aPedir() : g.lineas();
             if (lineas.isEmpty()) continue;
@@ -124,44 +125,64 @@ public final class SeccionSurtido implements SeccionEstadisticas<PlanSurtido> {
             for (LineaSurtido l : lineas) filas.add(fila(g, l));
             todas.addAll(filas);
 
-            TableView<Fila> tabla = new TableView<>(FXCollections.observableArrayList(filas));
-            tabla.getColumns().setAll(columnas(false));
-            tabla.setPlaceholder(new Label("Nada que pedir por ahora."));
-            tabla.setRowFactory(tv -> new javafx.scene.control.TableRow<>() {
-                @Override protected void updateItem(Fila f, boolean vacio) {
-                    super.updateItem(f, vacio);
-                    getStyleClass().removeAll("fila-agotado", "fila-stock-bajo");
-                    if (vacio || f == null) return;
-                    if (Urgencia.AGOTADO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-agotado");
-                    else if (Urgencia.BAJO_MINIMO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-stock-bajo");
-                }
-            });
-            Tarjetas.ajustarAlto(tabla, filas.size(), 90, 320);
-
-            Button crear = new Button("Crear orden de compra en borrador…");
-            crear.getStyleClass().add("button-primary");
-            crear.setDisable(!puedeOrdenar || g.productosAPedir() == 0);
-            crear.setOnAction(e -> crearOrden(g, crear));
-            Label nota = new Label(!puedeOrdenar ? "Requiere el permiso «Gestionar proveedores y órdenes de compra»."
-                    : g.productosAPedir() == 0 ? "Nada que pedir por ahora."
-                    : g.tieneProveedor() ? "Se guarda como borrador con " + g.productosAPedir() + " producto(s); revísala en Inventario → Órdenes de compra."
-                    : "Este grupo no tiene proveedor: al crear la orden se te pedirá elegir uno.");
-            nota.getStyleClass().add("hint");
-            nota.setWrapText(true);
-            HBox pie = new HBox(10, crear, nota);
-            pie.setAlignment(Pos.CENTER_LEFT);
-
             String titulo = g.nombre() + "  —  " + g.productosAPedir() + " por pedir"
                     + (p.conCostos() && g.costoPedido() > 0 ? " · " + Moneda.formato(g.costoPedido()) : "")
                     + " · visita: " + g.diasVisita() + " · próximo surtido en " + g.horizonteDias() + " día(s)";
-            TitledPane tp = new TitledPane(titulo, new VBox(8, tabla, pie));
-            tp.setExpanded(g.productosAPedir() > 0);
+            // La tabla del grupo se arma al abrir su panel: con 50 proveedores armarlas todas eran ~17 000
+            // nodos y ~150 MB del montón de 384 MB (se llegó a OutOfMemoryError, ver docs/rendimiento-1.0.5.md).
+            // Abiertos de entrada: solo los primeros grupos con algo que pedir.
+            TitledPane tp = new TitledPane(titulo, null);
+            boolean abrir = g.productosAPedir() > 0 && abiertos < GRUPOS_ABIERTOS;
+            if (abrir) abiertos++;
             tp.setAnimated(false);
+            Runnable armar = () -> {
+                if (tp.getContent() == null) tp.setContent(contenidoGrupo(g, filas, puedeOrdenar));
+            };
+            if (abrir) armar.run();
+            tp.setExpanded(abrir);
+            tp.expandedProperty().addListener((o, antes, ahora) -> { if (ahora) armar.run(); });
             boxGrupos.getChildren().add(tp);
         }
         tablaExportar.getColumns().setAll(columnas(true));
         tablaExportar.setItems(FXCollections.observableArrayList(todas));
+        pintarResumen(p, gruposMostrados);
+    }
 
+    /** Grupos con algo que pedir que se muestran abiertos al pintar (los demás se arman al abrirlos) */
+    static final int GRUPOS_ABIERTOS = 3;
+
+    /** Tabla del grupo + botón de orden de compra (solo cuando el panel se abre) */
+    private Node contenidoGrupo(GrupoSurtido g, List<Fila> filas, boolean puedeOrdenar) {
+        TableView<Fila> tabla = new TableView<>(FXCollections.observableArrayList(filas));
+        tabla.getColumns().setAll(columnas(false));
+        tabla.setPlaceholder(new Label("Nada que pedir por ahora."));
+        tabla.setRowFactory(tv -> new javafx.scene.control.TableRow<>() {
+            @Override protected void updateItem(Fila f, boolean vacio) {
+                super.updateItem(f, vacio);
+                getStyleClass().removeAll("fila-agotado", "fila-stock-bajo");
+                if (vacio || f == null) return;
+                if (Urgencia.AGOTADO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-agotado");
+                else if (Urgencia.BAJO_MINIMO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-stock-bajo");
+            }
+        });
+        Tarjetas.ajustarAlto(tabla, filas.size(), 90, 320);
+
+        Button crear = new Button("Crear orden de compra en borrador…");
+        crear.getStyleClass().add("button-primary");
+        crear.setDisable(!puedeOrdenar || g.productosAPedir() == 0);
+        crear.setOnAction(e -> crearOrden(g, crear));
+        Label nota = new Label(!puedeOrdenar ? "Requiere el permiso «Gestionar proveedores y órdenes de compra»."
+                : g.productosAPedir() == 0 ? "Nada que pedir por ahora."
+                : g.tieneProveedor() ? "Se guarda como borrador con " + g.productosAPedir() + " producto(s); revísala en Inventario → Órdenes de compra."
+                : "Este grupo no tiene proveedor: al crear la orden se te pedirá elegir uno.");
+        nota.getStyleClass().add("hint");
+        nota.setWrapText(true);
+        HBox pie = new HBox(10, crear, nota);
+        pie.setAlignment(Pos.CENTER_LEFT);
+        return new VBox(8, tabla, pie);
+    }
+
+    private void pintarResumen(PlanSurtido p, int gruposMostrados) {
         if (p.grupos().isEmpty()) {
             lblResumen.setText("No hay productos activos con inventario.");
         } else if (gruposMostrados == 0) {

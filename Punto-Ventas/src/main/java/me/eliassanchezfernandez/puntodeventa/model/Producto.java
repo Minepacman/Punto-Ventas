@@ -13,10 +13,15 @@ import lombok.NoArgsConstructor;
  * de fila completa pisaría la existencia (y cualquier otra columna) con el valor viejo que esa caja leyó;
  * con columnas dinámicas cada caja escribe solo lo suyo. La existencia además se mueve con UPDATE
  * atómicos (ProductoRepository), que nunca pasan por la entidad.
+ *
+ * {@code @BatchSize}: las listas que llegan a productos por una relación (promociones, códigos aprendidos de
+ * proveedor, caducidades, renglones de órdenes...) los traen de 100 en 100 y no uno por uno: la pestaña
+ * Promociones con 300 promociones hacía 248 SELECT (rendimiento-1.0.5.md).
  */
 @Entity
 @Table(name = "productos")
 @org.hibernate.annotations.DynamicUpdate
+@org.hibernate.annotations.BatchSize(size = 100)
 @Data
 @NoArgsConstructor
 public class Producto {

@@ -200,7 +200,20 @@ public final class HojaApariencia {
      * texto legible. Barato: solo fondos y bordes pintados; la única sombra (-fx-effect) es la de las
      * tarjetas de Configuración y del login, que casi no se repintan. Nunca en tablas ni campos.
      */
+    /**
+     * Vidrio "ligero" para equipos modestos o sin aceleración gráfica (lo decide {@link AplicadorApariencia}):
+     * mismo fondo decorativo y mismos paneles, pero tablas y listas OPACAS y sin sombra en las tarjetas de
+     * Configuración. Con el dibujo por software, una tabla translúcida obliga a repintar los degradados del
+     * fondo en cada cuadro al desplazarla: 9.2 → 15.6 ms de CPU de dibujo por cuadro (+70 %) medido en
+     * 5 000 filas (docs/rendimiento-1.0.5.md). Opaca se ve casi igual (el velo ya era del 82 %).
+     */
+    static volatile boolean vidrioLigero;
+
     static String vidrio(Apariencia a) {
+        return vidrio(a, vidrioLigero);
+    }
+
+    static String vidrio(Apariencia a, boolean ligero) {
         Apariencia.Tema tema = a.tema().enEscritorio();
         boolean oscuro = tema == Apariencia.Tema.OSCURO;
         boolean alto = tema == Apariencia.Tema.ALTO_CONTRASTE;
@@ -222,6 +235,7 @@ public final class HojaApariencia {
                 + " 0%, rgba(255, 255, 255, 0.0) 45%)";
         String panel = superficie.rgba(velo);
         String panelFuerte = superficie.rgba(veloFuerte);
+        String panelTabla = ligero ? superficie.hex() : panelFuerte;
         String sombra = oscuro ? "rgba(0, 0, 0, 0.45)" : "rgba(27, 35, 46, 0.16)";
         Rgb banda = Rgb.deHex(t.getOrDefault("-pos-band-bg-flat", "#213A58"));
 
@@ -241,7 +255,8 @@ public final class HojaApariencia {
         sb.append(paneles).append(" { -fx-background-color: ").append(panel).append(", ").append(brillo)
                 .append(" !important; -fx-background-insets: 0 !important; -fx-background-radius: 14 !important; ")
                 .append("-fx-border-color: ").append(bordeVidrio).append(" !important; -fx-border-width: 1 !important; -fx-border-radius: 14 !important; }\n");
-        sb.append(".config-card, .login-card { -fx-effect: dropshadow(three-pass-box, ").append(sombra).append(", 18, 0, 0, 6) !important; }\n");
+        sb.append(ligero ? ".login-card" : ".config-card, .login-card").append(" { -fx-effect: dropshadow(three-pass-box, ")
+                .append(sombra).append(", 18, 0, 0, 6) !important; }\n");
         sb.append(".login-card { -fx-background-color: ").append(panelFuerte).append(", ").append(brillo)
                 .append(" !important; -fx-background-radius: 18 !important; -fx-border-color: ").append(bordeVidrio)
                 .append(" !important; -fx-border-radius: 18 !important; }\n");
@@ -251,7 +266,7 @@ public final class HojaApariencia {
         sb.append(".tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: ").append(superficie.rgba(oscuro ? 0.35 : 0.45)).append(" !important; }\n");
         sb.append(".status-bar { -fx-background-color: ").append(superficie.rgba(oscuro ? 0.45 : 0.55)).append(" !important; }\n");
         // Tablas y listas: casi opacas (se leen igual), solo esquinas y borde de luz
-        sb.append(".table-view, .list-view, .tree-table-view { -fx-background-color: ").append(panelFuerte)
+        sb.append(".table-view, .list-view, .tree-table-view { -fx-background-color: ").append(panelTabla)
                 .append(" !important; -fx-background-radius: 10 !important; -fx-border-color: ").append(bordeVidrio)
                 .append(" !important; -fx-border-radius: 10 !important; }\n");
         // Banda: el color de la banda un poco translúcido, con línea de luz arriba

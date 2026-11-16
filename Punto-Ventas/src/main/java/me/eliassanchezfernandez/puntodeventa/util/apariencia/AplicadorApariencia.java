@@ -70,6 +70,7 @@ public final class AplicadorApariencia {
     private static void instalar() {
         if (instalado) return;
         instalado = true;
+        HojaApariencia.vidrioLigero = vidrioLigero();
         for (Window w : Window.getWindows()) vigilar(w);
         Window.getWindows().addListener((ListChangeListener<Window>) cambio -> {
             while (cambio.next()) {
@@ -119,6 +120,26 @@ public final class AplicadorApariencia {
             }
         }
         return textoAppCss;
+    }
+
+    /**
+     * ¿Vidrio en su versión ligera? En equipos modestos o cuando JavaFX dibuja por software (sin aceleración
+     * gráfica: tarjetas viejas, escritorio remoto). {@code -Dapp.vidrio.ligero=true|false} lo fuerza.
+     */
+    static boolean vidrioLigero() {
+        String forzado = System.getProperty("app.vidrio.ligero");
+        if (forzado != null) return Boolean.parseBoolean(forzado);
+        return equipoModesto() || dibujoPorSoftware();
+    }
+
+    /** El "pipeline" de JavaFX es el de software (com.sun.prism.sw); cualquier duda = no */
+    static boolean dibujoPorSoftware() {
+        try {
+            Object p = Class.forName("com.sun.prism.GraphicsPipeline").getMethod("getPipeline").invoke(null);
+            return p != null && p.getClass().getName().startsWith("com.sun.prism.sw.");
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /**

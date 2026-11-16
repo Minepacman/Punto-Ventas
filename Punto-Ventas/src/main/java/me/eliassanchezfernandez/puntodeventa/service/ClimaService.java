@@ -70,10 +70,28 @@ public class ClimaService {
     @Value("${app.estadisticas.jobs:true}")
     private boolean trabajosActivos;
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(4))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    /**
+     * Se crea al primer uso (como en ActualizacionService): construirlo inicializa SSL y un ejecutor, ~100 ms
+     * medidos al crear el bean en CADA arranque, antes del login, aunque el clima esté apagado (rendimiento-1.0.5.md).
+     */
+    private volatile HttpClient http;
+
+    private HttpClient http() {
+        HttpClient h = http;
+        if (h == null) {
+            synchronized (this) {
+                h = http;
+                if (h == null) {
+                    h = HttpClient.newBuilder()
+                            .connectTimeout(Duration.ofSeconds(4))
+                            .followRedirects(HttpClient.Redirect.NORMAL)
+                            .build();
+                    http = h;
+                }
+            }
+        }
+        return h;
+    }
 
     /** Último problema al consultar (para mostrarlo en Configuración); null si la última consulta salió bien */
     private volatile String ultimoError;
@@ -181,7 +199,7 @@ public class ClimaService {
                 .header("Accept", "application/json")
                 .GET().build();
         try {
-            HttpResponse<java.io.InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<java.io.InputStream> resp = http().send(req, HttpResponse.BodyHandlers.ofInputStream());
             try (java.io.InputStream cuerpo = resp.body()) {
                 if (resp.statusCode() != 200) {
                     throw new IOException("El servicio de clima respondió " + resp.statusCode() + ".");
