@@ -58,10 +58,8 @@ public final class LocalizadorTesseract {
         for (Candidato c : candidatos) {
             if (!Files.isRegularFile(c.ejecutable()) || !Files.isExecutable(c.ejecutable())) continue;
             Path tessdata = c.tessdata() != null && Files.isDirectory(c.tessdata()) ? c.tessdata() : null;
-            // MotorTesseract pide la salida con el config "tsv": una carpeta de idiomas sin configs/tsv daría texto
-            // plano que no se entiende. Se ignora esa carpeta y se prueba con la propia del programa (la del sistema
-            // la trae; la de un instalador mal armado no, y entonces el candidato se descarta en idiomas()).
-            if (tessdata != null && !Files.isRegularFile(tessdata.resolve(CONFIG_TSV))) tessdata = null;
+            // MotorTesseract pide la salida TSV con "-c tessedit_create_tsv=1", así que una carpeta de idiomas sin
+            // configs/tsv sirve igual (antes se descartaba).
             String version = version(c.ejecutable());
             if (version == null) continue;            // no arranca (bibliotecas faltantes, arquitectura equivocada)
             String idiomas = idiomas(c.ejecutable(), tessdata);

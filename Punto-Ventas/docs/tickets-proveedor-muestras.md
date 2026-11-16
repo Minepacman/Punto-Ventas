@@ -52,3 +52,7 @@ ticket está en `tNN.esperado.json` y lo revisa `InterpreteTicketMuestrasTest`.
 - Con errores típicos de OCR inyectados al azar (5 variantes por ticket): 98.9 % (ruido leve), 95.7 % (medio),
   91 % (fuerte). Lo que más se pierde con ruido fuerte: la etiqueta del total muy dañada y números pegados sin
   punto en renglones de 2 cifras.
+- **De la foto al ticket** (2026-11-16, arnés opt-in `TicketsRealesExtremoAExtremoTest`, 15 fotos sin la nota a mano,
+  sobre las imágenes ya preparadas por el preproceso): Tesseract 65.8 % de los campos y 4 de 15 tickets cuadran;
+  PaddleOCR 82.7 % y 13 de 16 cuadran (antes de esta pasada: 60.7 %/0 y 71.3 %/6). Detalle y lo que falta en
+  `investigacion-ocr-tickets.md` §12f. Por eso el lector sigue en **Beta**.

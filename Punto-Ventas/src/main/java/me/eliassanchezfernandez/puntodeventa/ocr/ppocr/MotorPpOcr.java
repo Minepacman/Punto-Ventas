@@ -58,6 +58,11 @@ public final class MotorPpOcr implements MotorOcr, AutoCloseable {
             so.setIntraOpNumThreads(Math.max(1, hilos));
             so.setInterOpNumThreads(1);
             so.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
+            // Sin "arena" de memoria: con ella ONNX Runtime se quedaba con ~1.2 GB nativos tras unas lecturas y no
+            // los devolvía (medido en PC de 2 núcleos simulada). Sin arena cada lectura libera lo suyo; cuesta
+            // unos milisegundos por lectura, que en un ticket de 1–3 s no se notan.
+            so.setCPUArenaAllocator(false);
+            so.setMemoryPatternOptimization(false);
             det = env.createSession(modeloDet.toString(), so);
             rec = env.createSession(modeloRec.toString(), so);
             String caracteres = rec.getMetadata().getCustomMetadata().get("character");

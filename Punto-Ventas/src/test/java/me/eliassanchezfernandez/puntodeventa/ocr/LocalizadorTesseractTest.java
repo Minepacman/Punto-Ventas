@@ -118,20 +118,15 @@ class LocalizadorTesseractTest {
     }
 
     @Test
-    void tessdataSinConfigTsvNoSeUsa(@TempDir Path dir) throws IOException {
+    void tessdataSinConfigTsvSiSeUsa(@TempDir Path dir) throws IOException {
         Assumptions.assumeFalse(System.getProperty("os.name", "").toLowerCase().contains("win"), "usa un script de shell");
-        // con los idiomas pero sin configs/tsv, Tesseract contestaría texto plano en vez de TSV
+        // MotorTesseract pide el TSV con "-c tessedit_create_tsv=1": la carpeta de idiomas no necesita configs/tsv
         Path app = dir.resolve("app");
         Path base = app.resolve("ocr/tesseract");
         tesseractFalso(base.resolve("bin/tesseract"), null);
         Files.createDirectories(base.resolve("tessdata"));
         Files.writeString(base.resolve("tessdata/spa.traineddata"), "x");
         Files.writeString(base.resolve("tessdata/eng.traineddata"), "x");
-        assertThat(LocalizadorTesseract.buscar(null, Map.of("PATH", ""), app, "Linux")
-                .filter(x -> x.ejecutable().startsWith(dir))).isEmpty();
-        // con él, sí
-        Files.createDirectories(base.resolve("tessdata/configs"));
-        Files.writeString(base.resolve("tessdata/configs/tsv"), "tessedit_create_tsv 1\n");
         assertThat(LocalizadorTesseract.buscar(null, Map.of("PATH", ""), app, "Linux").map(LocalizadorTesseract.Ubicacion::tessdata))
                 .contains(base.resolve("tessdata"));
     }

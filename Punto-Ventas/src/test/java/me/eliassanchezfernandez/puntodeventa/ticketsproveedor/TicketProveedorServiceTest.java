@@ -45,6 +45,8 @@ class TicketProveedorServiceTest extends BaseServicioTest {
     @Autowired private AutorizacionService autorizacionService;
     @Autowired private AvisosService avisosService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.HistorialPrecioRepository historialRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.TicketProveedorRegistroRepository registroRepo;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private Proveedor jalapa;
 
@@ -174,6 +176,46 @@ class TicketProveedorServiceTest extends BaseServicioTest {
         assertThat(stockActual(pinada)).isEqualTo(8);
         servicio.aplicar(solicitud(otra, true), null);
         assertThat(stockActual(pinada)).isEqualTo(16);
+        // Cada registro del mismo folio lleva su número de repetición (1, 2…): es la llave única en la base
+        var registros = registroRepo.findByProveedorIdAndFolioOrderByRegistradoEnDesc(r.proveedorId(), r.ticket().getFolio());
+        assertThat(registros).extracting(me.eliassanchezfernandez.puntodeventa.model.TicketProveedorRegistro::getRepeticion)
+                .containsExactlyInAnyOrder(1, 2);
+    }
+
+    @Test
+    void siOtraCajaRegistraElMismoFolioEnMedioLaEntradaSeDeshaceConAvisoAmable() throws Exception {
+        Producto pinada = conCosto("Piñada 2 L", 29, 35, 0);
+        TicketProveedorService.Revision r = servicio.preparar(ticket("t11"), null);
+        servicio.aplicar(solicitud(r, false), null);
+        assertThat(stockActual(pinada)).isEqualTo(8);
+        // "Otra caja" alcanzó a guardar este folio con el número de repetición que esta caja va a calcular
+        // (previos + 1 = 3): el insert de aquí choca con la llave única, como pasaría en la carrera real
+        var ajeno = new me.eliassanchezfernandez.puntodeventa.model.TicketProveedorRegistro();
+        ajeno.setProveedor(proveedorService.listarActivos().stream().filter(p -> p.getId().equals(r.proveedorId())).findFirst().orElseThrow());
+        ajeno.setFolio(r.ticket().getFolio());
+        ajeno.setRepeticion(3);
+        ajeno.setRenglones(1);
+        ajeno.setTotalRegistrado(232);
+        registroRepo.saveAndFlush(ajeno);
+
+        TicketProveedorService.Revision otra = servicio.preparar(ticket("t11"), null);
+        boolean postgres;
+        try (var con = jdbc.getDataSource().getConnection()) {
+            postgres = con.getMetaData().getDatabaseProductName().toLowerCase().contains("postgres");
+        }
+        if (postgres) {
+            // Varias cajas (PostgreSQL): la llave única uk_tickets_proveedor_folio_rep detiene el segundo insert
+            assertThatThrownBy(() -> servicio.aplicar(solicitud(otra, true), null))
+                    .isInstanceOf(NegocioException.class).hasMessageContaining("Otra caja").hasMessageContaining("No se registró nada");
+            assertThat(stockActual(pinada)).isEqualTo(8);     // la entrada de mercancía se deshizo completa
+        } else {
+            // Una caja (SQLite): un solo proceso y escrituras en serie (BEGIN IMMEDIATE), la carrera no existe; Hibernate
+            // no crea la llave única en SQLite. Aquí solo se comprueba que la repetición se numera como la llave espera.
+            servicio.aplicar(solicitud(otra, true), null);
+            var registros = registroRepo.findByProveedorIdAndFolioOrderByRegistradoEnDesc(r.proveedorId(), r.ticket().getFolio());
+            assertThat(registros).extracting(me.eliassanchezfernandez.puntodeventa.model.TicketProveedorRegistro::getRepeticion)
+                    .containsExactlyInAnyOrder(1, 3, 3);
+        }
     }
 
     @Test

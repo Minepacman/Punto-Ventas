@@ -63,6 +63,30 @@ class PostprocesoPpOcrTest {
     }
 
     @Test
+    void conPapelOnduladoElImporteSeUneAlRenglonDeSuVecinoYNoAlDeAbajo() {
+        // El importe del renglón 1 (derecha) baja 14 px por la onda del papel y queda a la altura del
+        // renglón 2 (izquierda): por vecindad horizontal sigue siendo del renglón 1.
+        List<Renglon> r = PostprocesoPpOcr.renglones(List.of(
+                new PostprocesoPpOcr.Fragmento("1 300062064 2", 0.9, 10, 100, 200, 124),
+                new PostprocesoPpOcr.Fragmento("$17.26", 0.9, 300, 108, 380, 132),
+                new PostprocesoPpOcr.Fragmento("$ 34.52", 0.9, 420, 114, 520, 138),
+                new PostprocesoPpOcr.Fragmento("* GIRO DTS NI RF 114GRX44X1", 0.9, 10, 126, 420, 150),
+                new PostprocesoPpOcr.Fragmento("2 300062346 1", 0.9, 10, 152, 200, 176),
+                new PostprocesoPpOcr.Fragmento("$17.26", 0.9, 300, 160, 380, 184),
+                new PostprocesoPpOcr.Fragmento("$ 17.26", 0.9, 420, 166, 520, 190)), 1.0);
+        assertThat(r).extracting(Renglon::texto).containsExactly(
+                "1 300062064 2 $17.26 $ 34.52", "* GIRO DTS NI RF 114GRX44X1", "2 300062346 1 $17.26 $ 17.26");
+    }
+
+    @Test
+    void fragmentosEncimadosALoAnchoNuncaSonElMismoRenglon() {
+        List<Renglon> r = PostprocesoPpOcr.renglones(List.of(
+                new PostprocesoPpOcr.Fragmento("SubTot", 0.9, 10, 100, 80, 120),
+                new PostprocesoPpOcr.Fragmento("215.00", 0.9, 20, 112, 90, 132)), 1.0);
+        assertThat(r).extracting(Renglon::texto).containsExactly("SubTot", "215.00");
+    }
+
+    @Test
     void recursosNoListosSinArchivosYVerificacionDeSha(@TempDir Path dir) throws IOException {
         RecursosPpOcr r = new RecursosPpOcr(dir);
         assertThat(r.listos()).isFalse();

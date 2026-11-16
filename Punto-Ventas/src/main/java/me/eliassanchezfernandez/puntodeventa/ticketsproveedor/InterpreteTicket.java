@@ -4,9 +4,12 @@ import me.eliassanchezfernandez.puntodeventa.ocr.Renglon;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -62,7 +65,7 @@ public final class InterpreteTicket {
         String texto;
         String norm;
         final int y;
-        Ln(int idx, String texto, int y) { this.idx = idx; this.texto = texto; this.norm = etiquetas(texto); this.y = y; }
+        Ln(int idx, String texto, int y) { this.idx = idx; this.texto = texto; this.norm = etiquetas(unirNumerosPartidos(texto)); this.y = y; }
     }
 
     enum Tipo { NUM, PCT, UNIDAD, PALABRA }
@@ -74,6 +77,10 @@ public final class InterpreteTicket {
         double valor;
         boolean conPunto;
         boolean cantidadPegada;
+        /** Ficha inventada a partir de un signo suelto ("|", "]") que casi siempre es un 1 mal leído */
+        boolean conjetura;
+        /** Trae un solo decimal ("34.5"): al OCR se le perdió la última cifra de los centavos */
+        boolean unDecimal;
         int digitos;
         Rol rol = Rol.NINGUNO;
         boolean deRenglonConTexto;
@@ -94,6 +101,8 @@ public final class InterpreteTicket {
 
     private static final Pattern CANT_PEGADA = Pattern.compile("^(\\d{1,4}(?:[.,]\\d+)?)-(\\p{L}.*)$");
     private static final Pattern PRECIO_PEGADO = Pattern.compile("^(\\p{L}{2,})(\\d{1,6}[.,]\\d{2})$");
+    /** "$20.52c/u": precio con la unidad pegada */
+    private static final Pattern UNIDAD_PEGADA = Pattern.compile("(?i)^(\\$?\\d{1,6}[.,]\\d{1,4})(c/u|c/|pz|pza|pzas|kg)$");
     private static final Pattern FOLIOS_DESC = Pattern.compile("(?i)folios\\s+desc\\.?:?");
 
     // ── Entrada ────────────────────────────────────────────────────────────
@@ -159,6 +168,7 @@ public final class InterpreteTicket {
             t.setFormato(f);
             t.setProveedorPorFormato(f.getProveedorSugerido());
             List<LineaTicket> lineas = leerArticulos(lns, s.desde(), s.finItems(), f);
+            normalizarClaves(lineas);
             t.setLineas(lineas);
             int finEncabezado = lineas.isEmpty() ? s.desde() : indiceDe(lns, lineas.get(0).getRenglon());
             for (int i = s.inicio(); i < Math.max(finEncabezado, s.inicio()); i++) t.getEncabezado().add(lns.get(i).texto);
@@ -166,9 +176,9 @@ public final class InterpreteTicket {
             for (int i = s.inicio(); i < s.fin(); i++) sb.append(lns.get(i).texto).append('\n');
             t.setTexto(sb.toString());
             leerEncabezado(t, lns, s.inicio(), s.fin(), f);
-            leerPie(t, lns, s.inicio(), s.fin(), s.finItems());
+            List<Double> numerosPie = leerPie(t, lns, s.inicio(), s.fin(), s.finItems());
             completarEmpaques(t);
-            t.setCuadre(cuadrar(t));
+            t.setCuadre(cuadrar(t, numerosPie));
             tickets.add(t);
         }
         return tickets;
@@ -215,7 +225,10 @@ public final class InterpreteTicket {
     static String etiquetas(String s) {
         String n = TextoTicket.normal(s);
         n = n.replaceAll("(?<=[A-Z])0(?=[A-Z])", "O").replaceAll("(?<=[A-Z])1(?=[A-Z])", "I");
-        // Etiquetas con una letra mal leída ("T0TAL", "SUBnOTAL", "CAJETIELAS") se corrigen
+        // "TOTA]" / "TOTA}" (la L leída como corchete), "I|A" y "IUA" (la V como U), "TOTALAPAGAR" pegado
+        n = n.replaceAll("(?<=[A-Z]{3})[\\]}](?=[^A-Z]|$)", "L").replaceAll("(?<=[A-Z])[|!](?=[A-Z])", "I")
+                .replaceAll("\\bIUA\\b", "IVA").replaceAll("\\bI\\.U\\.A\\b", "I.V.A").replaceAll("TOTAL ?A ?PAGAR", "TOTAL A PAGAR");
+        // Etiquetas con una letra mal leída ("T0TAL", "SUBnOTAL", "CAJETIELAS") se corrigen; las largas aguantan dos
         Matcher m = Pattern.compile("[A-Z]{5,}").matcher(n);
         StringBuilder sb = new StringBuilder();
         while (m.find()) {
@@ -231,7 +244,7 @@ public final class InterpreteTicket {
             "IMPUESTOS", "PIEZAS", "CANTIDAD", "IMPORTE", "CAJETILLAS", "PAQUETES", "FOLIO", "FECHA", "FACTURA",
             "REMISION", "DESCRIPCION", "PRECIO", "IMPRESION", "CAPTURA", "DISTRIBUCION", "PRODUCTOS");
 
-    /** La etiqueta conocida que difiere de la palabra en una sola letra (mismo largo), o null */
+    /** La etiqueta conocida que difiere de la palabra en una letra (dos si la etiqueta tiene 8+), mismo largo; o null */
     static String etiquetaParecida(String w) {
         for (String e : PALABRAS_ETIQUETA) {
             if (e.equals(w)) return null;
@@ -239,20 +252,40 @@ public final class InterpreteTicket {
         for (String e : PALABRAS_ETIQUETA) {
             if (e.length() != w.length()) continue;
             int dif = 0;
-            for (int i = 0; i < e.length() && dif <= 1; i++) if (e.charAt(i) != w.charAt(i)) dif++;
-            if (dif == 1) return e;
+            for (int i = 0; i < e.length() && dif <= 2; i++) if (e.charAt(i) != w.charAt(i)) dif++;
+            if (dif == 1 || (dif == 2 && e.length() >= 8)) return e;
         }
         return null;
     }
 
+    /** "324. 00" y "468 .81": un número al que el OCR le metió un espacio junto al punto */
+    static String unirNumerosPartidos(String s) {
+        return s.replaceAll("(?<=\\d)\\. (?=\\d{2}(?!\\d))", ".").replaceAll("(?<=\\d) \\.(?=\\d{2}(?!\\d))", ".");
+    }
+
     static List<Tok> fichas(String texto) {
-        String s = FOLIOS_DESC.matcher(texto).replaceAll(" ");
-        s = s.replace("=", " ").replace("*", " ");
+        String s = FOLIOS_DESC.matcher(unirNumerosPartidos(texto)).replaceAll(" ");
+        s = s.replace("=", " ").replace("*", " ").replace("\u00d7", " ").replace("\u00a5", " ").replace("\uffe5", " ");
         List<Tok> out = new ArrayList<>();
-        for (String crudo : s.trim().split("\\s+")) {
-            String t = crudo.replaceAll("^[\"'(\\[]+", "").replaceAll("[\"'),;\\]]+$", "");
+        String[] crudos = s.trim().split("\\s+");
+        for (int ix = 0; ix < crudos.length; ix++) {
+            String crudo = crudos[ix];
+            // Un "|", "]", "l" o "I" solo entre cifras es casi siempre un 1 (cantidad) mal leído
+            if (crudo.matches("[|\\]lI!}]") && ix > 0 && ix < crudos.length - 1
+                    && crudos[ix - 1].matches("\\$?[\\d.,]*\\d[\\d.,]*") && crudos[ix + 1].matches("\\$?[\\d.,]*\\d[\\d.,]*")) {
+                Tok uno = numero("1");
+                uno.conjetura = true;
+                out.add(uno);
+                continue;
+            }
+            String t = crudo.replaceAll("^[\"'()\\[\\]{}|]+", "").replaceAll("[\"'),;\\]|]+$", "");
             if (t.length() > 1 && t.endsWith(":")) t = t.substring(0, t.length() - 1);
             if (t.isEmpty() || t.equals("$") || t.equals("-") || t.equals(":")) continue;
+            Matcher mu = UNIDAD_PEGADA.matcher(t);
+            if (mu.matches()) {
+                Tok n = numero(mu.group(1));
+                if (n != null) { out.add(n); out.add(new Tok(Tipo.UNIDAD, mu.group(2))); continue; }
+            }
             Matcher m = CANT_PEGADA.matcher(t);
             if (m.matches()) {
                 Tok q = numero(m.group(1));
@@ -286,6 +319,7 @@ public final class InterpreteTicket {
         k.valor = v;
         String sin = s.replace("$", "").replace("-", "");
         k.conPunto = sin.contains(".") || sin.matches("\\d+,\\d{1,2}");
+        k.unDecimal = sin.matches("\\d+[.,]\\d");
         int d = 0;
         for (char c : sin.toCharArray()) if (Character.isDigit(c)) d++;
         k.digitos = d;
@@ -300,8 +334,10 @@ public final class InterpreteTicket {
             Tok t = toks.get(i);
             if (t.tipo == Tipo.PALABRA) {
                 if (primera < 0) primera = i;
-                ultima = i;
-                if (t.txt.replaceAll("[^\\p{L}]", "").length() >= 2) palabras = true;
+                int letras = t.txt.replaceAll("[^\\p{L}]", "").length();
+                // Basura corta al final del renglón ("pa", "Na", "u") no convierte el importe de antes en descripción
+                if (letras >= 3 || (i < toks.size() - 1 && toks.get(i + 1).tipo == Tipo.PALABRA)) ultima = i;
+                if (letras >= 2) palabras = true;
             }
         }
         if (!toks.isEmpty()) {
@@ -311,6 +347,14 @@ public final class InterpreteTicket {
             } else if (toks.size() > 1 && esEntero(a) && a.digitos <= 3 && esEntero(toks.get(1)) && toks.get(1).digitos >= 4) {
                 a.rol = Rol.INDICE;
                 toks.get(1).rol = Rol.CODIGO;
+            } else if (palabras) {
+                // Clave larga (7+ cifras) al final de la descripción: el OCR juntó dos renglones
+                for (int i = toks.size() - 1; i > 0; i--) {
+                    Tok t = toks.get(i);
+                    if (t.tipo != Tipo.NUM) continue;
+                    if (esEntero(t) && t.digitos >= 7 && !t.cantidadPegada) t.rol = Rol.CODIGO;
+                    break;
+                }
             }
         }
         for (int i = primera + 1; i < ultima; i++) {
@@ -393,7 +437,8 @@ public final class InterpreteTicket {
     static boolean esEncabezado(Ln ln) {
         if (P_FECHA_TEXTO.matcher(ln.norm).find()) return true;
         Matcher m = P_ETIQUETA.matcher(ln.norm);
-        if (m.find()) return true;
+        // "pr: 126 DANONE MANZANA $0.00 $31.00": basura con dos puntos al inicio de un renglón de artículo
+        if (m.find() && dineros(ln).size() < 2) return true;
         return P_FIN.matcher(ln.norm).find();
     }
 
@@ -404,6 +449,7 @@ public final class InterpreteTicket {
         List<Analisis> cand = new ArrayList<>();
         for (int i = Math.max(0, desde); i < Math.min(hasta, lns.size()); i++) {
             Ln ln = lns.get(i);
+            if (!cand.isEmpty() && P_FIN.matcher(ln.norm).find()) break;    // resumen por precios, forma de pago: ya no hay artículos
             if (esTitulos(ln) || esPie(ln) || esEncabezado(ln) || esTotalFinal(ln)) continue;
             cand.add(analizar(ln));
         }
@@ -473,15 +519,34 @@ public final class InterpreteTicket {
 
     private static Articulo resolverVentana(List<Analisis> ventana) {
         boolean texto = ventana.stream().anyMatch(a -> a.tienePalabras);
-        if (!texto) return null;
         List<Tok> nums = numerosLibres(ventana);
         if (nums.isEmpty()) return null;
         Solucion s = Solucionador.resolver(nums);
         if (s == null) return null;
         String desc = descripcionDe(ventana, s.usados());
         int letras = desc.replaceAll("[^\\p{L}]", "").length();
-        if (letras < 2) return null;
+        boolean sinDescripcion = false;
+        String codigo = codigoDe(ventana);
+        if (!texto || letras < 2) {
+            // Sin palabras (el OCR se comió la descripción): solo si es claramente un renglón de artículo, o sea
+            // cantidad × precio − descuento = importe con 3+ cifras, o clave de proveedor con precio e importe.
+            // Se marca para que el usuario elija el producto.
+            boolean cuentas = s.usados().size() >= 3 && !s.cantidadSupuesta() && s.cantidad() == Math.floor(s.cantidad())
+                    && s.diferencia() <= Solucionador.tolerancia(s.cantidad());
+            boolean conClave = codigo != null && s.usados().size() >= 2 && s.diferencia() <= 0.011;
+            if (s.correcciones() > 0 || !(cuentas || conClave) || (ventana.size() == 2 && codigo == null)) return null;
+            sinDescripcion = true;
+            desc = "";
+        }
+        // Sin descripción vale mucho menos que emparejarse con la descripción de arriba (si la hay)
         double puntaje = s.puntaje() + Math.min(letras / 10.0, 1.5) - (ventana.size() - 1);
+        if (sinDescripcion) puntaje = Math.max(0.5, puntaje - 8);
+        // Un renglón que solo trae número y clave ("2 300062346") no puede ser artículo solo: conviene absorberlo
+        if (ventana.size() == 2) {
+            for (Analisis a : ventana) {
+                if (!a.tienePalabras && codigoDe(List.of(a)) != null && numerosLibres(List.of(a)).isEmpty()) puntaje += 1.5;
+            }
+        }
         // Desempate: lo más común es la descripción arriba y los números abajo
         if (ventana.size() == 2 && ventana.get(0).tienePalabras && !ventana.get(1).tienePalabras) puntaje += 0.05;
 
@@ -501,6 +566,9 @@ public final class InterpreteTicket {
         l.setImporte(s.importe());
         l.setDescuentoAntesDeIva(s.descuentoAntesDeIva());
         List<String> motivos = new ArrayList<>();
+        if (sinDescripcion) motivos.add("No se leyó la descripción de este renglón: elige el producto.");
+        if (s.conjeturas() > 0) motivos.add("La cantidad se leyó como un signo: se tomó 1.");
+        if (s.cerosCorregidos() > 0) motivos.add("Ceros de impresora de matriz leídos como 8 o 6: se corrigieron para que cuadre.");
         if (s.cantidadSupuesta()) motivos.add("No se vio la cantidad: se supuso 1.");
         if (s.correcciones() > 0) motivos.add("A un número le faltaba el punto decimal: revisa precio e importe.");
         if (s.diferencia() > 0.02) motivos.add(String.format(Locale.ROOT, "Cantidad × precio no da exacto el importe (diferencia de %.2f).", s.diferencia()));
@@ -527,6 +595,32 @@ public final class InterpreteTicket {
         return sb.toString().replaceAll("^[-*·.\\s]+", "").trim();
     }
 
+    /**
+     * "7023427" entre claves de 6 cifras: el OCR pegó el número de renglón a la clave. Si la mayoría de las
+     * claves miden L cifras, a las de L+1 que empiezan con una cifra de 1 a 9 se les quita esa cifra.
+     */
+    static void normalizarClaves(List<LineaTicket> lineas) {
+        Map<Integer, Integer> largos = new HashMap<>();
+        for (LineaTicket l : lineas) {
+            String c = l.getCodigoProveedor();
+            if (c != null && c.matches("\\d{4,}")) largos.merge(c.length(), 1, Integer::sum);
+        }
+        if (largos.isEmpty()) return;
+        int largo = -1, cuantos = 0;
+        for (var e : largos.entrySet()) if (e.getValue() > cuantos) { cuantos = e.getValue(); largo = e.getKey(); }
+        if (cuantos < 2 || cuantos * 2 < lineas.size()) return;
+        for (LineaTicket l : lineas) {
+            String c = l.getCodigoProveedor();
+            if (c != null && c.matches("[1-9]\\d{" + largo + "}")) {
+                l.setCodigoProveedor(c.substring(1));
+                if (l.getEstado() == LineaTicket.Estado.RECONOCIDO) {
+                    l.setEstado(LineaTicket.Estado.REVISAR);
+                    l.setMotivo("La clave traía pegado el número de renglón: se leyó " + c.substring(1) + ".");
+                }
+            }
+        }
+    }
+
     private static String codigoDe(List<Analisis> ventana) {
         for (Analisis a : ventana) for (Tok t : a.toks) if (t.rol == Rol.CODIGO) return t.txt;
         return null;
@@ -545,28 +639,89 @@ public final class InterpreteTicket {
 
     record Solucion(double cantidad, Double precio, Double descuento, double importe, Set<Tok> usados,
                     boolean descuentoAntesDeIva, int correcciones, boolean cantidadSupuesta, double diferencia,
-                    double puntaje) { }
+                    double puntaje, int cerosCorregidos, int conjeturas) {
+        Solucion(double cantidad, Double precio, Double descuento, double importe, Set<Tok> usados,
+                 boolean descuentoAntesDeIva, int correcciones, boolean cantidadSupuesta, double diferencia, double puntaje) {
+            this(cantidad, precio, descuento, importe, usados, descuentoAntesDeIva, correcciones, cantidadSupuesta, diferencia, puntaje, 0, 0);
+        }
+        Solucion conPuntaje(double p) {
+            return new Solucion(cantidad, precio, descuento, importe, usados, descuentoAntesDeIva, correcciones, cantidadSupuesta,
+                    diferencia, p, cerosCorregidos, conjeturas);
+        }
+        Solucion conCeros(int ceros) {
+            return new Solucion(cantidad, precio, descuento, importe, usados, descuentoAntesDeIva, correcciones, cantidadSupuesta,
+                    diferencia, puntaje - 0.45 * ceros, ceros, conjeturas);
+        }
+        Solucion conConjeturas(int c) {
+            return new Solucion(cantidad, precio, descuento, importe, usados, descuentoAntesDeIva, correcciones, cantidadSupuesta,
+                    diferencia, puntaje - 0.3 * c, cerosCorregidos, c);
+        }
+    }
 
     static final class Solucionador {
         private Solucionador() { }
 
         static double tolerancia(double q) { return 0.011 + 0.0051 * Math.abs(q); }
 
-        /** Variantes de un número: tal cual y, si no traía punto, "le faltó el punto" (1550 → 15.50) */
+        /**
+         * Variantes de un número: {valor, correcciones de punto, ceros corregidos}. Tal cual; si no traía punto,
+         * "le faltó el punto" (1550 → 15.50); y, si trae 8 o 6, con esas cifras como 0 (las impresoras de matriz
+         * de puntos imprimen el cero con diagonal y el OCR lo lee 8 o 6: 215.08 → 215.00, 1.8 → 1.0).
+         */
         static List<double[]> variantes(Tok t) {
             List<double[]> v = new ArrayList<>();
-            v.add(new double[] { t.valor, 0 });
-            if (!t.conPunto && t.digitos >= 3 && !t.cantidadPegada) v.add(new double[] { t.valor / 100.0, 1 });
+            v.add(new double[] { t.valor, 0, 0 });
+            if (!t.conPunto && t.digitos >= 3 && !t.cantidadPegada) v.add(new double[] { t.valor / 100.0, 1, 0 });
+            if (!t.conjetura) {
+                for (double[] c : conCerosCorregidos(t.txt)) v.add(new double[] { c[0], 0, c[1] });
+            }
             return v;
         }
 
+        /** El mismo texto numérico con sus 8 y/o 6 como ceros: {valor, cuántas cifras cambiaron} */
+        static List<double[]> conCerosCorregidos(String txt) {
+            List<double[]> out = new ArrayList<>();
+            String base = txt.replace("$", "");
+            if (!base.matches("[\\d.,]+") || (base.indexOf('8') < 0 && base.indexOf('6') < 0)) return out;
+            String[] formas = { base.replace('8', '0'), base.replace('6', '0'), base.replace('8', '0').replace('6', '0') };
+            Set<String> vistas = new HashSet<>();
+            vistas.add(base);
+            for (String f : formas) {
+                if (!vistas.add(f)) continue;
+                Double v = TextoTicket.numero(f);
+                if (v == null) continue;
+                int cambios = 0;
+                for (int i = 0; i < f.length(); i++) if (f.charAt(i) != base.charAt(i)) cambios++;
+                out.add(new double[] { v, cambios });
+            }
+            return out;
+        }
+
         static Solucion resolver(List<Tok> nums) {
+            Solucion mejor = null;
+            int n = nums.size();
+            // El importe es casi siempre el último número; si el OCR revolvió las columnas puede ser otro con punto
+            for (int im = n - 1; im >= 0; im--) {
+                if (im < n - 1 && !(nums.get(im).conPunto && nums.get(im).digitos >= 3)) continue;
+                List<Tok> orden = new ArrayList<>(nums);
+                Tok ti = orden.remove(im);
+                orden.add(ti);
+                Solucion s = resolverConImporteAlFinal(orden);
+                if (s == null) continue;
+                if (im < n - 1) s = s.conPuntaje(s.puntaje() - 1.5);
+                mejor = mejorDe(mejor, s);
+            }
+            return mejor;
+        }
+
+        private static Solucion resolverConImporteAlFinal(List<Tok> nums) {
             int n = nums.size();
             Tok ti = nums.get(n - 1);
             Solucion mejor = null;
             for (double[] vi : variantes(ti)) {
                 double imp = vi[0];
                 int ci = (int) vi[1];
+                int zi = (int) vi[2];
                 if (imp <= 0) continue;
                 if (n >= 3) {
                     for (int i = 0; i < n - 1; i++) {
@@ -579,37 +734,71 @@ public final class InterpreteTicket {
                                 double p = vp[0];
                                 if (p <= 0) continue;
                                 int c = ci + (int) vp[1];
-                                mejor = mejorDe(mejor, probar(nums, i, j, -1, q, p, 0, imp, c, false));
-                                for (int k = Math.max(i, j) + 1; k < n - 1; k++) {
-                                    for (double[] vd : variantes(nums.get(k))) {
-                                        double d = vd[0];
-                                        if (d < 0 || d >= q * p) continue;
-                                        mejor = mejorDe(mejor, probar(nums, i, j, k, q, p, d, imp, c + (int) vd[1], false));
-                                        if (d > 0) mejor = mejorDe(mejor, probar(nums, i, j, k, q, p, d, imp, c + (int) vd[1], true));
+                                int z = zi + (int) vp[2];
+                                for (double[] vq : variantes(tq)) {
+                                    if (vq[1] > 0) continue;                       // a la cantidad no le falta el punto
+                                    double qq = vq[0];
+                                    if (qq <= 0 || qq > 10000) continue;
+                                    int zq = z + (int) vq[2];
+                                    mejor = mejorDe(mejor, conCeros(probar(nums, i, j, -1, qq, p, 0, imp, c, false), zq));
+                                    for (int k = Math.max(i, j) + 1; k < n - 1; k++) {
+                                        for (double[] vd : variantes(nums.get(k))) {
+                                            double d = vd[0];
+                                            if (d < 0 || d >= qq * p) continue;
+                                            int zd = zq + (int) vd[2];
+                                            mejor = mejorDe(mejor, conCeros(probar(nums, i, j, k, qq, p, d, imp, c + (int) vd[1], false), zd));
+                                            if (d > 0) mejor = mejorDe(mejor, conCeros(probar(nums, i, j, k, qq, p, d, imp, c + (int) vd[1], true), zd));
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                if (n == 2) {
-                    Tok ta = nums.get(0);
+                // Dos números: (precio, importe) iguales, (cantidad, importe) o (precio con punto, importe = n × precio).
+                // Con más números se prueba igual por pares, castigando los que quedan sin usar.
+                for (int i = 0; i < n - 1; i++) {
+                    Tok ta = nums.get(i);
                     double a = ta.valor;
+                    double castigo = 0;
+                    for (int k = 0; k < n - 1; k++) if (k != i) castigo += nums.get(k).deRenglonConTexto ? 0.5 : 1.0;
+                    if (n > 2) castigo += 1.0;
+                    Set<Tok> usados = Set.of(ta, ti);
                     if (a > 0 && Math.abs(a - imp) <= tolerancia(1) && !ta.cantidadPegada) {
-                        mejor = mejorDe(mejor, new Solucion(1, a, null, imp, Set.of(ta, ti), false, ci, true,
-                                Math.abs(a - imp), 7 - 0.6 * ci));
+                        mejor = mejorDe(mejor, conCeros(new Solucion(1, a, null, imp, usados, false, ci, true,
+                                Math.abs(a - imp), 7 - 0.6 * ci - castigo), zi));
+                    } else if (a > 0 && !ta.cantidadPegada && ta.unDecimal && Math.abs(Math.floor(imp * 10 + 1e-6) / 10 - a) <= 0.011) {
+                        mejor = mejorDe(mejor, conCeros(new Solucion(1, imp, null, imp, usados, false, ci + 1, true, 0, 6.4 - 0.6 * ci - castigo), zi));
+                    } else if (a > 0 && !ta.cantidadPegada && ti.unDecimal && Math.abs(Math.floor(a * 10 + 1e-6) / 10 - imp) <= 0.011) {
+                        mejor = mejorDe(mejor, conCeros(new Solucion(1, a, null, a, usados, false, ci + 1, true, 0, 6.4 - 0.6 * ci - castigo), zi));
                     }
                     if (a > 0 && a <= 1000 && (a == Math.floor(a) || a < 1)) {
                         double p = Math.round(imp / a * 10000.0) / 10000.0;   // precio derivado, 4 decimales
-                        double puntaje = 7 + (ta.cantidadPegada ? 5 : 0) - 0.5 - 0.6 * ci;
-                        mejor = mejorDe(mejor, new Solucion(a, p, null, imp, Set.of(ta, ti), false, ci, false, 0, puntaje));
+                        double puntaje = 7 + (ta.cantidadPegada ? 5 : 0) - 0.5 - 0.6 * ci - castigo;
+                        mejor = mejorDe(mejor, conCeros(new Solucion(a, p, null, imp, usados, false, ci, false, 0, puntaje), zi));
+                    }
+                    // "16.00 32.00": un precio con centavos y un importe que es 2, 3… veces el precio (la cantidad se perdió)
+                    if (ta.conPunto && a > 0 && imp > a + 0.001) {
+                        long qr = Math.round(imp / a);
+                        if (qr >= 2 && qr <= 500 && Math.abs(qr * a - imp) <= tolerancia(qr)) {
+                            mejor = mejorDe(mejor, conCeros(new Solucion(qr, a, null, imp, usados, false, ci, true,
+                                    Math.abs(qr * a - imp), 7 - 0.4 - 0.6 * ci - castigo), zi));
+                        }
                     }
                 }
                 if (n == 1) {
-                    mejor = mejorDe(mejor, new Solucion(1, imp, null, imp, Set.of(ti), false, ci, true, 0, 5 - 0.6 * ci));
+                    mejor = mejorDe(mejor, conCeros(new Solucion(1, imp, null, imp, Set.of(ti), false, ci, true, 0, 5 - 0.6 * ci), zi));
                 }
             }
             return mejor;
+        }
+
+        private static Solucion conCeros(Solucion s, int ceros) {
+            if (s == null) return null;
+            int conjeturas = 0;
+            for (Tok t : s.usados()) if (t.conjetura) conjeturas++;
+            Solucion r = ceros > 0 ? s.conCeros(ceros) : s;
+            return conjeturas > 0 ? r.conConjeturas(conjeturas) : r;
         }
 
         private static Solucion probar(List<Tok> nums, int i, int j, int k, double q, double p, double d, double imp,
@@ -617,7 +806,21 @@ public final class InterpreteTicket {
             double bruto = q * p;
             double neto = antesDeIva ? bruto - 1.16 * d : bruto - d;
             double dif = Math.abs(neto - imp);
-            if (dif > tolerancia(q)) return null;
+            if (dif > tolerancia(q)) {
+                // "34.5" por 34.52 o "17.2" por 17.26: al OCR se le perdió la última cifra; si lo demás cuadra, se completa
+                if (nums.get(nums.size() - 1).unDecimal && Math.abs(Math.floor(neto * 10 + 1e-6) / 10 - imp) <= 0.011) {
+                    imp = TextoTicket.centavos(neto);
+                    correcciones++;
+                } else if (nums.get(j).unDecimal && q > 0) {
+                    double p2 = antesDeIva ? (imp + 1.16 * d) / q : (imp + d) / q;
+                    if (Math.abs(Math.floor(p2 * 10 + 1e-6) / 10 - p) > 0.011) return null;
+                    p = Math.round(p2 * 10000.0) / 10000.0;
+                    correcciones++;
+                } else {
+                    return null;
+                }
+                dif = 0;
+            }
             int n = nums.size();
             Set<Tok> usados = new HashSet<>();
             usados.add(nums.get(i));
@@ -826,7 +1029,8 @@ public final class InterpreteTicket {
             Ln ln = lns.get(i);
             StringBuilder corregido = new StringBuilder();
             for (String p : ln.texto.split("\\s+|(?<=:)")) corregido.append(TextoTicket.corregirNumero(p)).append(' ');
-            Matcher m = P_FECHA.matcher(TextoTicket.normal(corregido.toString()));
+            String textoFecha = TextoTicket.normal(corregido.toString()).replaceAll("(\\d{1,2}-\\d{1,2}) (\\d{4})\\b", "$1-$2");
+            Matcher m = P_FECHA.matcher(textoFecha);
             if (!m.find()) continue;
             String et = etiquetaRecortada(ln.norm);
             int prio = ln.norm.contains("FECHA") ? 3
@@ -847,18 +1051,45 @@ public final class InterpreteTicket {
                 return LocalDate.of(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3)));
             }
             int a = Integer.parseInt(m.group(4)), b = Integer.parseInt(m.group(6));
-            int anio = Integer.parseInt(m.group(7));
-            if (anio < 100) anio += 2000;
+            Integer anio = anioPlausible(m.group(7));
+            if (anio == null) return null;
             boolean guion = "-".equals(m.group(5));
             // Con diagonal es día/mes (México); con guion, los equipos de ruta imprimen mes-día
             boolean mesPrimero = guion || f == Formato.RUTA_JALAPA;
             if (a > 12) mesPrimero = false;
             if (b > 12) mesPrimero = true;
             int dia = mesPrimero ? b : a, mes = mesPrimero ? a : b;
-            return LocalDate.of(anio, mes, dia);
+            LocalDate d = LocalDate.of(anio, mes, dia);
+            // Un ticket no puede ser de pasado mañana: si al voltear día y mes queda en el pasado, era al revés
+            LocalDate hoy = LocalDate.now();
+            if (d.isAfter(hoy.plusDays(1)) && dia <= 12) {
+                LocalDate volteada = LocalDate.of(anio, dia, mes);
+                if (!volteada.isAfter(hoy.plusDays(1))) return volteada;
+            }
+            return d;
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /**
+     * Año de dos o cuatro cifras. "2028" o "2925" leídos en 2026 son un 6 o un 0 confundidos: se prueba 8→6,
+     * 8→0, 6→0, 9→0 y se acepta el que caiga entre hace 3 años y el que viene; si ninguno, null.
+     */
+    static Integer anioPlausible(String texto) {
+        int hoy = LocalDate.now().getYear();
+        List<String> formas = new ArrayList<>(List.of(texto));
+        formas.add(texto.replace('8', '6'));
+        formas.add(texto.replace('8', '0'));
+        formas.add(texto.replace('6', '0'));
+        formas.add(texto.replace('9', '0'));
+        formas.add(texto.replace('8', '6').replace('9', '0'));
+        for (String f : formas) {
+            int anio = Integer.parseInt(f);
+            if (anio < 100) anio += 2000;
+            if (anio >= hoy - 3 && anio <= hoy + 1) return anio;
+        }
+        return null;
     }
 
     // ── Pie: subtotal, descuento, impuestos, cargos, total ──────────────────
@@ -866,28 +1097,70 @@ public final class InterpreteTicket {
     private static final Pattern P_NUMERO = Pattern.compile("\\d[\\d,]*(?:\\.\\d+)?");
 
     static Double ultimoNumero(Ln ln) {
-        StringBuilder sb = new StringBuilder();
-        for (String p : ln.texto.split("\\s+|(?<=:)")) sb.append(TextoTicket.corregirNumero(p)).append(' ');
-        Matcher m = P_NUMERO.matcher(sb.toString());
+        Matcher m = P_NUMERO.matcher(textoNumerico(ln));
         String ultimo = null;
         while (m.find()) ultimo = m.group();
         if (ultimo == null) return null;
         return TextoTicket.numero(ultimo.endsWith(",") ? ultimo.substring(0, ultimo.length() - 1) : ultimo);
     }
 
-    static void leerPie(TicketLeido t, List<Ln> lns, int desde, int hasta, int finItems) {
+    private static String textoNumerico(Ln ln) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : unirNumerosPartidos(ln.texto).split("\\s+|(?<=:)")) sb.append(TextoTicket.corregirNumero(p)).append(' ');
+        return sb.toString();
+    }
+
+    private static final Pattern P_DINERO = Pattern.compile("\\d[\\d,]*[.,]\\d{2}(?!\\d)");
+
+    /** Valor de un renglón del pie: el último con centavos ("Costo Distribucion: 11.60 1 j 8" → 11.60); si no hay, el último número */
+    static Double valorPie(Ln ln) {
+        Matcher m = P_DINERO.matcher(textoNumerico(ln));
+        String ultimo = null;
+        while (m.find()) ultimo = m.group();
+        return ultimo != null ? TextoTicket.numero(ultimo) : ultimoNumero(ln);
+    }
+
+    /** "S9.31" se corrige a $9.31, pero pudo ser 59.31: la otra lectura, si existe, para decidir con las cuentas */
+    static Double alternativaConCinco(Ln ln, Double v) {
+        if (v == null) return null;
+        for (String p : ln.texto.split("\\s+")) {
+            if (!p.matches("S\\d+\\.\\d{2}")) continue;
+            Double leido = TextoTicket.numero(p.substring(1));
+            if (leido != null && Math.abs(leido - v) < 0.001) return TextoTicket.numero("5" + p.substring(1));
+        }
+        return null;
+    }
+
+    /** Números con centavos de un renglón (para el rescate aritmético del pie) */
+    private static List<Double> dineros(Ln ln) {
+        List<Double> out = new ArrayList<>();
+        Matcher m = P_DINERO.matcher(textoNumerico(ln));
+        while (m.find()) { Double v = TextoTicket.numero(m.group()); if (v != null) out.add(v); }
+        return out;
+    }
+
+    /** Lee el pie y devuelve todos los importes con centavos que aparecen en él (para el rescate aritmético) */
+    static List<Double> leerPie(TicketLeido t, List<Ln> lns, int desde, int hasta, int finItems) {
         Double subtotalVenta = null, subtotal = null, descuento = null, iva = null, ieps = null, impuestos = null;
-        Double cargos = null, total = null, piezas = null, cajetillas = null;
+        Double cargos = null, total = null, piezas = null, cajetillas = null, impuestosAlt = null;
+        List<Double> numerosPie = new ArrayList<>();
+        int ultimoArticulo = -1;
+        for (LineaTicket l : t.getLineas()) ultimoArticulo = Math.max(ultimoArticulo, indiceDe(lns, l.getRenglon()));
         for (int i = desde; i < hasta; i++) {
             Ln ln = lns.get(i);
             String n = ln.norm;
             String et = etiquetaRecortada(n);
+            // Candidatos para el rescate aritmético: importes del pie, menos los de conteos (piezas, paquetes, cajetillas)
+            if (i > ultimoArticulo && (esPie(ln) || esTotalFinal(ln) || !ln.norm.matches(".*[A-Z]{3,}.*"))
+                    && !P_TOTAL_NO.matcher(n).find() && !n.matches(".*(\\bPIEZAS\\b|\\bCANTIDAD\\b|CAJETILLAS|PAQUETES).*")) {
+                numerosPie.addAll(dineros(ln));
+            }
             if (esTotalFinal(ln)) {
-                if (total == null || i == finItems) total = ultimoNumero(ln);
+                if (total == null || i == finItems) total = valorPie(ln);
                 continue;
             }
             if (!esPie(ln)) continue;
-            Double v = ultimoNumero(ln);
+            Double v = valorPie(ln);
             if (v == null) continue;
             if (n.matches(".*\\bSUB\\.?\\s*T\\.?\\s+VENTA.*")) { if (subtotalVenta == null) subtotalVenta = v; }
             else if (n.contains("SUBTOTAL") || n.contains("SUB TOTAL") || "SUBTOTAL".equals(et) || n.contains("TOTAL VENTAS")
@@ -896,12 +1169,22 @@ public final class InterpreteTicket {
                     || n.matches("^-?\\s*\\(?\\d+\\s*%\\)?\\s.*")) { if (descuento == null) descuento = Math.abs(v); }
             else if (n.matches(".*\\bI\\.?E\\.?P\\.?S\\.?(\\b|=|:).*")) { if (ieps == null) ieps = v; }
             else if (n.matches(".*\\bI\\.?V\\.?A\\.?(\\b|=|:).*")) { if (iva == null) iva = v; }
-            else if (n.contains("IMPUESTOS") || "IMPUESTOS".equals(et)) { if (impuestos == null) impuestos = v; }
+            else if (n.contains("IMPUESTOS") || "IMPUESTOS".equals(et)) { if (impuestos == null) { impuestos = v; impuestosAlt = alternativaConCinco(ln, v); } }
             else if (n.matches(".*(COSTO\\s+(DE\\s+)?DISTRIBUCION|\\bFLETE\\b|COSTO DE ENVIO).*")) { cargos = (cargos == null ? 0 : cargos) + v; }
             else if (n.contains("CAJETILLAS")) { cajetillas = v; }
             else if (n.matches(".*(\\bPIEZAS\\b|TOTAL DE PRODUCTOS|\\bCANTIDAD\\s*:).*")) { if (piezas == null) piezas = v; }
         }
-        t.setSubtotal(subtotalVenta != null ? subtotalVenta : subtotal);
+        Double st = subtotalVenta != null ? subtotalVenta : subtotal;
+        if (impuestosAlt != null && total != null) {
+            // "S9.31": ¿$9.31 o 59.31? Lo decide la cuenta: subtotal + impuestos = total, o el IVA ya incluido en el total
+            if (explicaImpuesto(impuestosAlt, st, total) && !explicaImpuesto(impuestos, st, total)) impuestos = impuestosAlt;
+        }
+        // Ceros de matriz de puntos en el pie ("DESCUENTO: 8.88"): si subtotal − descuento = total exige 0, era 0
+        if (descuento != null && descuento > 0 && st != null && total != null && Math.abs(st - total) < 0.011
+                && !Solucionador.conCerosCorregidos(String.format(Locale.ROOT, "%.2f", descuento)).isEmpty()) {
+            for (double[] c : Solucionador.conCerosCorregidos(String.format(Locale.ROOT, "%.2f", descuento))) if (c[0] == 0) descuento = 0.0;
+        }
+        t.setSubtotal(st);
         t.setDescuento(descuento);
         t.setIva(iva);
         t.setIeps(ieps);
@@ -911,6 +1194,14 @@ public final class InterpreteTicket {
         t.setTotal(total);
         t.setPiezas(cajetillas != null ? cajetillas : piezas);
         if (cajetillas != null) t.getAvisos().add("CAJETILLAS");
+        return numerosPie;
+    }
+
+    private static boolean explicaImpuesto(Double imp, Double subtotal, Double total) {
+        if (imp == null || total == null) return false;
+        if (subtotal != null && Math.abs(subtotal + imp - total) <= 0.02) return true;
+        if (subtotal != null && Math.abs(subtotal - subtotal / 1.16 - imp) <= 0.02) return true;
+        return Math.abs(total - total / 1.16 - imp) <= 0.02 || Math.abs(total - total / 1.08 - imp) <= 0.02;
     }
 
     // ── Empaque (piezas por unidad) ─────────────────────────────────────────
@@ -949,7 +1240,21 @@ public final class InterpreteTicket {
     // ── Cuadre ─────────────────────────────────────────────────────────────
 
     public static Cuadre cuadrar(TicketLeido t) {
+        return cuadrar(t, List.of());
+    }
+
+    /**
+     * Cuadre; si no cuadra, se intenta con los números del pie ({@code numerosPie}): la foto inclinada deja el
+     * total un renglón arriba o abajo de su etiqueta, o la etiqueta no se leyó. Se acepta un número del pie como
+     * total si es la suma de los renglones, o la suma más otro número del pie (impuestos), o la suma con IEPS 8 %
+     * o IVA 16 %.
+     */
+    public static Cuadre cuadrar(TicketLeido t, List<Double> numerosPie) {
         Cuadre c = cuadrarTalCual(t);
+        if (!c.cuadra() && !numerosPie.isEmpty() && t.sumaLineas() > 0) {
+            Cuadre r = rescatarPie(t, numerosPie);
+            if (r != null) return r;
+        }
         // ¿Al total o al subtotal se le perdió el punto decimal (48041 en vez de 480.41)?
         if (!c.cuadra()) {
             Double total = t.getTotal(), subtotal = t.getSubtotal();
@@ -984,6 +1289,47 @@ public final class InterpreteTicket {
         } else if (t.getSubtotal() != null && Math.abs(t.getSubtotal() - c.sumaLineas() * 100) < 1 && c.sumaLineas() > 0) {
             t.setSubtotal(t.getSubtotal() / 100.0);                   // subtotal sin punto que sí es la suma
         }
+        return c;
+    }
+
+    private static Cuadre rescatarPie(TicketLeido t, List<Double> numerosPie) {
+        double suma = t.sumaLineas();
+        Double totalAntes = t.getTotal(), impAntes = t.getImpuestos();
+        List<Double> candidatos = new ArrayList<>(numerosPie);
+        candidatos.sort(Comparator.reverseOrder());
+        double mayorImporte = t.getLineas().stream().mapToDouble(LineaTicket::getImporte).max().orElse(0);
+        candidatos.removeIf(c -> c < 1 || c < mayorImporte - 0.005);
+        for (Double candidato : candidatos) {
+            double tol = 0.05 + 0.002 * candidato;
+            if (candidato < suma - tol) continue;
+            if (Math.abs(candidato - suma) <= tol) return adoptarTotal(t, candidato, null, totalAntes, impAntes);
+            for (Double otro : numerosPie) {
+                if (otro.equals(candidato) || otro <= 0) continue;
+                if (Math.abs(suma + otro - candidato) <= tol) return adoptarTotal(t, candidato, otro, totalAntes, impAntes);
+            }
+        }
+        for (double factor : new double[] { 1.08, 1.16 }) {
+            for (Double candidato : candidatos) {
+                double tol = 0.05 + 0.002 * candidato;
+                if (Math.abs(suma * factor - candidato) <= tol) {
+                    return adoptarTotal(t, candidato, TextoTicket.centavos(candidato - suma), totalAntes, impAntes);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Cuadre adoptarTotal(TicketLeido t, double total, Double impuestos, Double totalAntes, Double impAntes) {
+        boolean cambioTotal = totalAntes == null || Math.abs(totalAntes - total) > 0.005;
+        if (cambioTotal) t.setTotal(total);
+        if (impuestos != null && (impAntes == null || Math.abs(impAntes - impuestos) > 0.005)) t.setImpuestos(impuestos);
+        Cuadre c = cuadrarTalCual(t);
+        if (!c.cuadra()) {
+            t.setTotal(totalAntes);
+            t.setImpuestos(impAntes);
+            return null;
+        }
+        if (cambioTotal) t.getAvisos().add("El total no se leyó junto a su etiqueta: se tomó " + dinero(total) + " porque cuadra con la suma. Revísalo.");
         return c;
     }
 

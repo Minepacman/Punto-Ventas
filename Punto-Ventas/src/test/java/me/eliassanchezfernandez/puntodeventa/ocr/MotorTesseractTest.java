@@ -30,6 +30,15 @@ class MotorTesseractTest {
     }
 
     @Test
+    void pideLaSalidaTsvComoVariableYNoComoConfig() {
+        // Sin depender de tessdata/configs/tsv (un instalador sin ese archivo daba texto plano)
+        LocalizadorTesseract.Ubicacion u = new LocalizadorTesseract.Ubicacion(Path.of("/usr/bin/tesseract"), null, "prueba", "5.5.4", "spa+eng");
+        List<String> cmd = new MotorTesseract(u).comando();
+        assertThat(cmd).containsSequence("-c", "tessedit_create_tsv=1").containsSequence("stdin", "stdout");
+        assertThat(cmd).doesNotContain("tsv");
+    }
+
+    @Test
     void leeUnTicketSinteticoGiradoYTorcido() throws IOException {
         MotorTesseract motor = new MotorTesseract(tesseract().get());
         byte[] foto = PreprocesadorTicketTest.jpeg(PreprocesadorTicketTest.girar(PreprocesadorTicketTest.ticket(20), 90 + 2));

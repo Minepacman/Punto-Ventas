@@ -14,7 +14,12 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "tickets_proveedor",
-       indexes = @Index(name = "idx_tickets_proveedor_folio", columnList = "proveedor_id, folio"))
+       indexes = {
+           @Index(name = "idx_tickets_proveedor_folio", columnList = "proveedor_id, folio"),
+           // Dos cajas no pueden registrar a la vez el mismo folio del mismo proveedor con la misma repetición: la
+           // segunda falla en la base (y deshace su entrada) en vez de duplicar la mercancía. Índice único y no
+           // restricción: SQLite no acepta "alter table add constraint" y Hibernate sí crea índices en tablas ya existentes.
+           @Index(name = "uk_tickets_proveedor_folio_rep", columnList = "proveedor_id, folio, repeticion", unique = true) })
 @Getter
 @Setter
 @NoArgsConstructor
@@ -34,6 +39,9 @@ public class TicketProveedorRegistro {
 
     @Column(length = 60)
     private String folio;
+    /** 1 la primera vez que se registra este folio del proveedor, 2 si el usuario confirmó que es otra entrega, etc. */
+    @Column(name = "repeticion")
+    private Integer repeticion;
 
     @Column(name = "fecha_ticket")
     private LocalDate fechaTicket;

@@ -47,6 +47,20 @@ class SeleccionMotorOcrTest {
     }
 
     @Test
+    void automaticoConCuatroGigasEsTesseractPorqueOnnxUsaMasDeUnGigaNativo() {
+        // PC típica de tienda (4 GB): PaddleOCR ni se baja ni se mide; con 6 GB o más sí
+        Equipo pc4 = new Equipo("Windows 10", "amd64", 4 * GB, 2);
+        Decision d = SeleccionMotorOcr.decidir(Preferencia.AUTOMATICO, pc4, true, new EstadoPpOcr(true, null, false, null, null));
+        assertThat(d.motor()).isEqualTo(Motor.TESSERACT);
+        assertThat(d.medirPpOcr()).isFalse();
+        assertThat(d.descargarModelos()).isFalse();
+        Equipo pc6 = new Equipo("Windows 10", "amd64", 6 * GB - 400L * 1024 * 1024, 2);   // "6 GB" que reporta 5.6
+        assertThat(SeleccionMotorOcr.decidir(Preferencia.AUTOMATICO, pc6, true, new EstadoPpOcr(true, null, false, null, null))
+                .medirPpOcr()).isTrue();
+        assertThat(SeleccionMotorOcr.RAM_MINIMA_PPOCR).isGreaterThan(5 * GB);
+    }
+
+    @Test
     void automaticoSinMedidaMideEnSegundoPlanoYMientrasUsaTesseract() {
         Decision d = SeleccionMotorOcr.decidir(Preferencia.AUTOMATICO, PC_X64_8GB, true, new EstadoPpOcr(true, null, false, null, null));
         assertThat(d.motor()).isEqualTo(Motor.TESSERACT);

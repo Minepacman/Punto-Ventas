@@ -411,9 +411,13 @@ public class TicketProveedorService {
         if (s.renglones() == null || s.renglones().isEmpty()) throw new NegocioException("El ticket no tiene productos para registrar.");
         String folio = s.folio() == null || s.folio().isBlank() ? null : s.folio().trim();
         if (folio != null && folio.length() > 60) folio = folio.substring(0, 60);
-        if (folio != null && !s.registrarAunqueSeRepita()) {
-            String rep = avisoRepetido(prov.getId(), folio);
-            if (rep != null) throw new NegocioException(rep + " Si de verdad es otra entrega, marca «Registrar de todos modos».");
+        int repeticion = 1;
+        if (folio != null) {
+            List<TicketProveedorRegistro> previos = registroRepo.findByProveedorIdAndFolioOrderByRegistradoEnDesc(prov.getId(), folio);
+            if (!previos.isEmpty() && !s.registrarAunqueSeRepita()) {
+                throw new NegocioException(avisoRepetido(prov.getId(), folio) + " Si de verdad es otra entrega, marca «Registrar de todos modos».");
+            }
+            repeticion = previos.size() + 1;
         }
         double factor = factorSeguro(s.factorCosto());
         for (RenglonAplicar r : s.renglones()) {
@@ -470,7 +474,15 @@ public class TicketProveedorService {
         reg.setTotalRegistrado(TextoTicket.centavos(totalRegistrado));
         reg.setOrigen(s.origen() == null ? null : (s.origen().length() > 40 ? s.origen().substring(0, 40) : s.origen()));
         reg.setTexto(s.texto() == null ? null : (s.texto().length() > 19000 ? s.texto().substring(0, 19000) : s.texto()));
-        reg = registroRepo.save(reg);
+        reg.setRepeticion(repeticion);
+        try {
+            reg = registroRepo.saveAndFlush(reg);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // Otra caja registró este mismo folio entre la revisión de arriba y este insert (restricción única en la
+            // base): se deshace toda la entrada de mercancía de esta caja
+            throw new NegocioException("Otra caja acaba de registrar este mismo ticket (folio " + folio + ") del proveedor "
+                    + prov.getNombre() + ". No se registró nada aquí: revisa el historial antes de volver a intentarlo.");
+        }
 
         Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         auditoriaService.registrar(sesionService.getCajeroActual(), "TICKET_PROVEEDOR_REGISTRADO",

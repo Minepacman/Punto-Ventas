@@ -463,7 +463,7 @@ cubierto por pruebas unitarias y por el ticket de muestra, pero no se volvió a 
   cargador "hijo primero" que ve el jar descargado (probado con el jar real y sin ORT en el classpath: lee el ticket
   de muestra en 0.9 s). Si ORT no carga se anota `ppocr.onnx=false` en `ocr.properties` y se usa Tesseract sin error.
 - **Selección** (`ocr/SeleccionMotorOcr`, 14 pruebas): Rápido = Tesseract; Preciso = PaddleOCR si es de 64 bits y
-  carga (mientras baja, Tesseract); Automático = 32 bits → Tesseract; RAM < ~3 GB → Tesseract; ORT no carga →
+  carga (mientras baja, Tesseract); Automático = 32 bits → Tesseract; RAM < ~6 GB → Tesseract (antes ~3 GB; ver 12e-8); ORT no carga →
   Tesseract; si no, mide el ticket de muestra incluido (`/ocr/ticket-muestra.jpg`, sintético) en segundo plano:
   ≤ 5 s → PaddleOCR. La medida se guarda con una huella (sistema, arquitectura, núcleos, GB) y se repite si cambia.
   Preferencia y medida por computadora en `ocr.properties` (no en la BD). Configuración → Funciones → "Lector de
@@ -496,27 +496,32 @@ incluido solo arranca de esa versión de macOS en adelante; en una más vieja se
 firma el `.app` con Developer ID, revisar que `--mac-sign` firme también `app/ocr/tesseract/{bin,lib}`. Licencias en
 `AVISOS-TERCEROS.md` y, junto al binario, `ocr/tesseract/LICENSE-tesseract.txt` + `ocr/tesseract/licencias/`.
 
-### 12e. Lo que NO quedó resuelto (para la siguiente pasada)
+### 12e. Lo que NO quedó resuelto (para la siguiente pasada) — estado al 2026-11-16 en §12f
 
-1. **Ceros de matriz de puntos** (`Ø`): Tesseract los lee `8`/`6` (`0.00 → 8.80`, `1.0 → 1.8`); PaddleOCR casi nunca.
-   Con Tesseract hace falta corrección en el intérprete (cuadre cantidad × precio = importe probando 8→0 / 6→0) o
-   un modelo entrenado para esa fuente.
-2. **Papel ondulado**: renglones que suben y bajan a lo ancho. Tesseract junta columnas de renglones vecinos y
-   PaddleOCR, al agrupar por altura, mezcla el importe de un renglón con el siguiente (los dos peores tickets: CER
-   13–17 % aun con PaddleOCR). Falta enderezado local (por franjas) o agrupar por vecindad horizontal en vez de por
-   altura global.
-3. **Renglones que se pierden con PaddleOCR**: el primer artículo de un ticket con QR arriba y dos artículos de otro no
-   salieron (la detección los unió con un vecino). Probar `box_thresh` más bajo y partir cajas demasiado altas.
-4. **Asteriscos y símbolos**: `*` sale `|`, `×`, `X` o se pierde; `$` a veces `S`. No afecta importes pero sí las
-   claves que empiezan con `*`.
+1. ~~**Ceros de matriz de puntos**~~ (`Ø` leído `8`/`6`): resuelto en el intérprete. `Solucionador.variantes` prueba cada
+   cifra con sus 8/6 como 0 y gana la combinación que cuadra cantidad × precio − descuento = importe (renglón en
+   amarillo con el motivo); en el pie, `DESCUENTO: 8.88` pasa a 0 cuando subtotal = total lo exige.
+2. **Papel ondulado**: mejorado. `PostprocesoPpOcr.renglones` ya no agrupa por la altura promedio del renglón sino por
+   el fragmento **vecino a lo ancho** (el más cercano en x sin encimarse), con tolerancia que crece con el hueco;
+   además el intérprete acepta el importe en otra columna (`resolver` prueba cualquier número con centavos como
+   importe) y renglones de solo números con cuentas exactas (descripción perdida, en amarillo). Queda sin enderezado
+   local por franjas; los dos tickets más arrugados (t11, t15) siguen mal.
+3. **Renglones que se pierden con PaddleOCR**: sigue. Con la agrupación nueva ya no se *mezclan*, pero la detección
+   aún se come la descripción bajo un doblez (t12: 3 de 6 descripciones) y el primer renglón bajo un QR (t03).
+   Pendiente probar `box_thresh` más bajo y partir cajas demasiado altas (no se midió en esta pasada).
+4. ~~**Asteriscos y símbolos**~~: `×`, `¥`, `|`, `]`, `}`, `)` se tratan como ruido o como el `1` que suelen ser
+   (`fichas`); `TOTA]` → `TOTAL`, `IUA` → `IVA`, `TOTALAPAGAR` → `TOTAL A PAGAR` (`etiquetas`); `S9.31` contra `59.31` lo
+   decide la cuenta subtotal + impuestos = total o IVA incluido (`alternativaConCinco`).
 5. **Recorte al papel**: con Tesseract no mejora (11.6 % contra 11.7 % sin recorte) y podría cortar renglones si el
    papel toca otra hoja blanca; encendido para Tesseract, apagado para PaddleOCR. Falta una máscara que blanquee el
    fondo fuera del papel sin perder renglones que tocan la orilla.
 6. **180°** se decide por confianza (segunda lectura completa): en una PC vieja duplica el tiempo de las fotos de
-   cabeza. Mejor: el clasificador de ángulo de PaddleOCR (`cls`, 0.6 MB) o leer solo una franja.
+   cabeza. Mejor: el clasificador de ángulo de PaddleOCR (`cls`, 0.6 MB) o leer solo una franja. **Sigue pendiente.**
 7. **Nota a mano**: ningún motor la lee (esperado): captura manual.
-8. **PC vieja real**: tiempos no medidos en hardware de 2 núcleos; tampoco el uso de memoria nativa de ORT
-   (~200–300 MB fuera del heap de 384 MB) en un equipo de 4 GB.
+8. **PC vieja real**: tiempos no medidos en hardware de 2 núcleos. Memoria nativa de ORT: medida en simulación de 2
+   núcleos subía a ~1.2 GB y no volvía (arena del CPU allocator); ahora `MotorPpOcr` crea las sesiones con
+   `setCPUArenaAllocator(false)` y sin *memory pattern*, y el umbral de "Automático" para PaddleOCR subió de ~3 a
+   **~6 GB de RAM** (`SeleccionMotorOcr.RAM_MINIMA_PPOCR`): la PC típica de tienda (4 GB) se queda con Tesseract.
 9. ~~Empaquetado Windows/Linux de Tesseract y `brew install` en el runner Intel~~: preparado (tabla 12d); falta la
     primera corrida del flujo de release para confirmarlo en Windows x64/x86, macOS Intel y Linux.
 10. ~~Espejo de descargas~~: `RecursosPpOcr` prueba primero la release `ocr-modelos-1` del proyecto y después la
@@ -525,3 +530,61 @@ firma el `.app` con Developer ID, revisar que `--mac-sign` firme también `app/o
 11. **Endpoint móvil** que llame a `LectorTicketsService.leer(foto, espera)` y el intérprete (otro agente).
 12. **Modo mixto** (Tesseract y re-lectura con PaddleOCR de renglones dudosos) no implementado: con PaddleOCR a ~1.5 s
     en equipos aptos no hace falta y en los no aptos no hay PaddleOCR. Revaluar con medidas en PC real.
+13. **Salida TSV de Tesseract**: `MotorTesseract` ya la pide con `-c tessedit_create_tsv=1` en vez del config `tsv`, así
+    que una `tessdata` sin `configs/tsv` sirve igual (`LocalizadorTesseract` dejó de descartarla).
+
+### 12f. De la foto al ticket: medición de extremo a extremo (2026-11-16)
+
+Hasta aquí solo se había medido el OCR (CER e importes). Esta pasada mide lo que importa al tendero: foto → motor →
+`InterpreteTicket` → campos del ticket comparados con `tNN.esperado.json` (los mismos 16 fixtures de
+`InterpreteTicketMuestrasTest`, 623 campos: proveedor, folio, fecha, totales y cada renglón con clave, descripción,
+cantidad, empaque, precio, descuento e importe; una descripción cuenta bien con parecido Jaro-Winkler ≥ 0.85) y si la suma
+de renglones **cuadra** con el total. Arnés opt-in `TicketsRealesExtremoAExtremoTest` (variables en su javadoc; también
+mide el intérprete sobre textos ya leídos con `APP_TICKETS_TEXTOS`). La nota a mano (t04) no se evalúa.
+
+**Ojo con la entrada**: el proceso de pruebas de esta sesión no podía leer las fotos originales (cuarentena de macOS),
+así que corrió sobre las 16 imágenes **ya preparadas** por el preproceso de Tesseract de la sesión anterior (recorte,
+aplanado, enderezado y ampliación; una de ellas sí fue el JPEG original). Para Tesseract es casi lo mismo; para PaddleOCR
+la imagen ampliada le resta un poco (en la sesión anterior, 95.8 % de importes sobre preparadas contra 98.8 % sobre las
+fotos). Conviene repetir con las fotos originales (`APP_TICKETS_FOTOS` a la carpeta del dueño).
+
+| Motor | Campos correctos antes → después | Tickets que cuadran antes → después | Renglones encontrados (de 58) |
+|---|---|---|---|
+| Tesseract 5.5.4 (el de las PC viejas) | 60.7 % → **65.8 %** | 0/15 → **4/15** | 70 (con basura) → 73 |
+| PaddleOCR (PP-OCRv6 small) | 71.3 % → **82.7 %** | 6/15 → **13/16** (t13 trae dos tickets) | 55 → 56 |
+
+Por ticket (PaddleOCR, después): 100 % t06; 98 % t05; 92 % t01; 91 % t08; 88–89 % t02, t07, t09, t10, t16; 86 % t14;
+79 % t12 (tres descripciones que la detección no vio; sin total en la foto); 71 % t13 (dos tickets: el primero perdió el
+encabezado y la descripción); 62 % t03 (la descripción del primer renglón bajo el QR no salió); 50 % t11 y 33 % t15
+(papel muy arrugado / hoja carta en ángulo: columnas revueltas por el OCR). Con Tesseract los tickets térmicos limpios
+quedan en 88–92 % (t01, t03, t10, t16) y los de matriz de puntos o arrugados en 28–66 %.
+
+Qué se corrigió para llegar ahí (todo con prueba en `InterpreteTicketCorreccionesTest` y `PostprocesoPpOcrTest`):
+agrupación de fragmentos por vecino horizontal (PaddleOCR); importe en cualquier columna; renglones sin descripción pero
+con cuentas exactas o con clave; renglón de solo "número y clave" absorbido por el de arriba; clave larga al final de la
+descripción; clave con el número de renglón pegado (`7023427` → `023427`); ceros de matriz de puntos; centavos
+truncados (`34.5`, `17.2`); números partidos (`324. 00`, `468 .81`); `|`/`]` sueltos = 1; unidad pegada al precio
+(`$20.52c/u`); basura corta al final del renglón ya no convierte el importe en descripción; `pr: 126 DANONE…` ya no es
+encabezado; etiquetas con corchetes/dos letras cambiadas; valor del pie = último número con centavos; **rescate
+aritmético del pie** (el total un renglón arriba de su etiqueta o sin etiqueta: se adopta el número del pie que es la suma
+de renglones, la suma más otro número del pie, o la suma con IEPS 8 % / IVA 16 %, con aviso); `S9.31`/`59.31` por
+aritmética; fechas `11-13 2026` y años mal leídos (`2028` → `2026`); fecha de pasado mañana se voltea; después de
+"AGRUPACIONES DE PRECIOS"/"FORMA DE PAGO" ya no se buscan artículos.
+
+**Veredicto**: la etiqueta **Beta se queda**. El criterio era ≥ 95 % de renglones correctos y totales que cuadren con el
+motor predeterminado; Tesseract (el que toca en PC de 4 GB) está en 66 % de campos y 4 de 15 tickets cuadran; PaddleOCR
+en 83 % y 13 de 16. Lo que falta no es del intérprete sino del OCR en fotos malas (papel arrugado, dobleces, QR encima):
+descripciones que no se detectan y columnas revueltas antes de llegar al texto. Siguiente paso con más efecto:
+`box_thresh` más bajo y partir cajas altas en PaddleOCR, y repetir la medición con las fotos originales.
+
+Pendiente de empaquetado (no se tocó en esta pasada): primera corrida del flujo de release con Tesseract en Windows
+x64/x86 (vcpkg estático), macOS Intel y el `.deb`/`.rpm` con dependencia del sistema (tabla 12d); espejo de modelos
+PP-OCR en la release `ocr-modelos-1` (`ocr-modelos.yml`, una vez desde `main`); en una PC de 32 bits real comprobar que
+sin PaddleOCR la pantalla lo explique. Interfaz pendiente (plan aprobado, sin hacer): obligar a confirmar cada renglón
+amarillo antes de «Registrar entrada» (o "Confirmar todos los dudosos" con conteo), que cambiar de proveedor no pierda lo
+editado, recorte de la foto por renglón (la `y` de `Renglon` está en coordenadas de la imagen enderezada/recortada, no
+de la foto original: si se gira 90° no corresponde; hay que devolver la imagen orientada o el giro y el recorte en
+`ResultadoOcr`) y la pantalla "Lo que aprendí de este proveedor" (`aprendidoDe`/`olvidar` ya existen). Varias cajas: el
+folio repetido ahora lleva `tickets_proveedor.repeticion` con índice único (proveedor, folio, repetición) que PostgreSQL
+sí crea (Hibernate no lo crea en SQLite, donde no hace falta: un proceso y escrituras en serie); la segunda caja recibe
+"Otra caja acaba de registrar este mismo ticket" y su entrada se deshace.

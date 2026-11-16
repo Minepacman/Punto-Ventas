@@ -128,7 +128,10 @@ public final class MotorTesseract implements MotorOcr {
         cmd.add(String.valueOf(ajustes.psm()));
         cmd.add("--dpi");
         cmd.add("300");
-        cmd.add("tsv");
+        // Salida TSV pedida como variable, no con el config "tsv": así no depende de que la carpeta tessdata traiga
+        // configs/tsv (la de un instalador mal armado no lo trae y Tesseract contestaba texto plano)
+        cmd.add("-c");
+        cmd.add("tessedit_create_tsv=1");
         return cmd;
     }
 

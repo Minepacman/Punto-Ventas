@@ -147,23 +147,43 @@ public final class PostprocesoPpOcr {
         return p;
     }
 
-    /** Fragmentos → renglones (por altura; dentro del renglón, de izquierda a derecha) */
+    /**
+     * Fragmentos → renglones. Un fragmento se une al renglón cuyo fragmento <b>vecino a lo ancho</b> (el más
+     * cercano en x, sin encimarse) queda a su misma altura: con papel ondulado o una foto inclinada el importe
+     * de la derecha está varios píxeles más arriba o abajo que la descripción, pero sigue alineado con lo que
+     * tiene al lado. Comparar contra la altura promedio de todo el renglón (lo de antes) mezclaba el importe de
+     * un renglón con la descripción del siguiente. Dentro del renglón, de izquierda a derecha.
+     */
     public static List<Renglon> renglones(List<Fragmento> fragmentos, double escala) {
         List<Fragmento> orden = new ArrayList<>(fragmentos);
         orden.removeIf(f -> f.texto().isBlank());
-        orden.sort(Comparator.comparingDouble(f -> (f.y0() + f.y1()) / 2.0));
+        orden.sort(Comparator.comparingDouble(PostprocesoPpOcr::centroY));
         List<List<Fragmento>> filas = new ArrayList<>();
-        List<double[]> datos = new ArrayList<>();   // {centro y, alto}
         for (Fragmento f : orden) {
-            double cy = (f.y0() + f.y1()) / 2.0, alto = f.y1() - f.y0();
-            int ultima = filas.size() - 1;
-            if (ultima >= 0 && Math.abs(datos.get(ultima)[0] - cy) < 0.6 * Math.max(alto, datos.get(ultima)[1])) {
-                filas.get(ultima).add(f);
-            } else {
-                filas.add(new ArrayList<>(List.of(f)));
-                datos.add(new double[] {cy, alto});
+            double cy = centroY(f), alto = f.y1() - f.y0();
+            List<Fragmento> mejor = null;
+            double mejorDist = Double.MAX_VALUE;
+            for (int r = filas.size() - 1; r >= 0 && r >= filas.size() - 8; r--) {
+                List<Fragmento> fila = filas.get(r);
+                Fragmento vecino = null;
+                double hueco = Double.MAX_VALUE;
+                boolean encimado = false;
+                for (Fragmento g : fila) {
+                    double h = Math.max(g.x0() - f.x1(), f.x0() - g.x1());
+                    if (h < -0.5 * Math.min(f.x1() - f.x0(), g.x1() - g.x0())) { encimado = true; break; }
+                    if (h < hueco) { hueco = h; vecino = g; }
+                }
+                if (encimado || vecino == null) continue;            // uno encima del otro: renglones distintos
+                double altoVecino = vecino.y1() - vecino.y0();
+                double tol = 0.6 * Math.max(alto, altoVecino) + 0.03 * Math.max(0, hueco);
+                tol = Math.min(tol, 1.1 * Math.max(alto, altoVecino));
+                double dist = Math.abs(centroY(vecino) - cy);
+                if (dist < tol && dist < mejorDist) { mejorDist = dist; mejor = fila; }
             }
+            if (mejor != null) mejor.add(f);
+            else filas.add(new ArrayList<>(List.of(f)));
         }
+        filas.sort(Comparator.comparingDouble(fila -> fila.stream().mapToDouble(PostprocesoPpOcr::centroY).average().orElse(0)));
         List<Renglon> salida = new ArrayList<>();
         for (List<Fragmento> fila : filas) {
             fila.sort(Comparator.comparingInt(Fragmento::x0));
@@ -180,5 +200,9 @@ public final class PostprocesoPpOcr {
             salida.add(new Renglon(sb.toString(), c == 0 ? 0 : suma / c, (int) Math.round(arriba / escala)));
         }
         return salida;
+    }
+
+    private static double centroY(Fragmento f) {
+        return (f.y0() + f.y1()) / 2.0;
     }
 }

@@ -9,7 +9,7 @@ import java.util.Locale;
  *   <li><b>Rápido</b>: siempre Tesseract.</li>
  *   <li><b>Preciso</b>: PaddleOCR si el equipo puede (no en Windows de 32 bits, ONNX Runtime carga y los
  *       modelos ya se bajaron); mientras se bajan, Tesseract.</li>
- *   <li><b>Automático</b>: Windows de 32 bits → Tesseract; menos de ~3 GB de RAM → Tesseract; si
+ *   <li><b>Automático</b>: Windows de 32 bits → Tesseract; menos de ~6 GB de RAM → Tesseract; si
  *       PaddleOCR no carga → Tesseract sin mostrar error; si no, se mide PaddleOCR una vez en segundo
  *       plano con un ticket de muestra (≤ 5 s → PaddleOCR, si no Tesseract). La medida se guarda con
  *       una huella del equipo y se repite solo si cambia el hardware.</li>
@@ -45,8 +45,12 @@ public final class SeleccionMotorOcr {
         public String etiqueta() { return etiqueta; }
     }
 
-    /** RAM mínima (total del equipo) para considerar PaddleOCR en automático */
-    public static final long RAM_MINIMA_PPOCR = 3L * 1024 * 1024 * 1024 - 256L * 1024 * 1024; // "~3 GB": equipos de 3 GB reportan algo menos
+    /**
+     * RAM mínima (total del equipo) para considerar PaddleOCR en automático: ~6 GB. ONNX Runtime usa hasta ~1.2 GB
+     * de memoria nativa fuera del heap mientras lee; en una PC de 4 GB con la caja abierta eso la deja paginando
+     * (medido en PC de 2 núcleos simulada). Los equipos reportan algo menos de la cifra redonda: se descuenta medio GB.
+     */
+    public static final long RAM_MINIMA_PPOCR = 6L * 1024 * 1024 * 1024 - 512L * 1024 * 1024;
     /** Tiempo máximo del ticket de muestra para elegir PaddleOCR en automático */
     public static final double SEGUNDOS_MAXIMOS_PPOCR = 5.0;
 
@@ -161,7 +165,7 @@ public final class SeleccionMotorOcr {
         if (!pp.incluido()) return "esta versión del programa aún no trae PaddleOCR";
         if (equipo.es32Bits()) return "PaddleOCR no funciona en " + (equipo.esWindows() ? "Windows" : "sistemas") + " de 32 bits";
         if (automatico && equipo.ramBytes() > 0 && equipo.ramBytes() < RAM_MINIMA_PPOCR) {
-            return String.format(Locale.ROOT, "la computadora tiene %.1f GB de memoria (PaddleOCR pide unos 3 GB)", equipo.ramGb());
+            return String.format(Locale.ROOT, "la computadora tiene %.1f GB de memoria (PaddleOCR pide unos 6 GB)", equipo.ramGb());
         }
         if (Boolean.FALSE.equals(pp.cargaOnnx())) return "PaddleOCR no pudo arrancar en este procesador";
         return null;
