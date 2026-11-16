@@ -31,6 +31,12 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
     public static final String TRANSACTION_MODE = "transaction_mode";
     /** Tamaño que HikariCP pone por su cuenta (10 en HikariCP 6) */
     private static final int POOL_POR_DEFECTO_HIKARI = new HikariConfig().getMaximumPoolSize();
+    /** mmap_size de SQLite: 64 MB con Java de 64 bits, 0 (lectura normal) con Java de 32 bits */
+    static final String MMAP_BYTES = mmapPara(System.getProperty("sun.arch.data.model"));
+
+    static String mmapPara(String bitsJvm) {
+        return "32".equals(bitsJvm) ? "0" : "67108864";
+    }
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
@@ -65,8 +71,10 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
             propiedadSiFalta(ds, "journal_size_limit", "33554432");
             propiedadSiFalta(ds, "cache_size", "-8000");
             propiedadSiFalta(ds, "temp_store", "MEMORY");
-            // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro
-            propiedadSiFalta(ds, "mmap_size", "67108864");
+            // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro.
+            // Con Java de 32 bits no: cada conexión del pool mapea su propia ventana y el proceso entero
+            // (memoria de Java, archivo de arranque rápido, JavaFX) cabe en 2 GB de direcciones.
+            propiedadSiFalta(ds, "mmap_size", MMAP_BYTES);
             propiedadSiFalta(ds, "foreign_keys", "true");
             // Las conexiones físicas las crea FuenteConexionesSqlite (ConexionSqlite: BEGIN según la
             // transacción y recuperación si el BEGIN falla por BUSY)

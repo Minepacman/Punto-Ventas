@@ -169,6 +169,8 @@ public final class Ventanas {
         stage.setMinHeight(Math.min(ALTO_MINIMO, area.getHeight()));
         stage.setMaximized(true);
         stage.show();
+        // Mide los primeros cuadros (casi sin costo): si el equipo es lento se ofrece el modo ligero
+        MedidorFluidez.medir(stage.getScene());
     }
 
     /**

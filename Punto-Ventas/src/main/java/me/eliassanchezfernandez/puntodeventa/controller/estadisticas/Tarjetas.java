@@ -64,6 +64,37 @@ public final class Tarjetas {
         return c;
     }
 
+    /** ¿Se ve? (ella y todos sus contenedores visibles y en una escena; una pestaña no elegida no se ve) */
+    public static boolean visibleEnPantalla(Node n) {
+        if (n == null || n.getScene() == null) return false;
+        for (Node p = n; p != null; p = p.getParent()) if (!p.isVisible()) return false;
+        return true;
+    }
+
+    /**
+     * Corre {@code accion} (una sola vez) cuando el nodo se vea: ya, o cuando su pestaña se elija. Así las
+     * secciones de pestañas que nadie abre no arman cientos de tablas en memoria (ver SeccionSurtido).
+     */
+    public static void cuandoSeVea(Node n, Runnable accion) {
+        if (visibleEnPantalla(n)) {
+            accion.run();
+            return;
+        }
+        java.util.List<Node> vigilados = new java.util.ArrayList<>();
+        for (Node p = n; p != null; p = p.getParent()) vigilados.add(p);
+        boolean[] hecho = {false};
+        javafx.beans.InvalidationListener[] oyente = new javafx.beans.InvalidationListener[1];
+        oyente[0] = o -> {
+            if (hecho[0] || !visibleEnPantalla(n)) return;
+            hecho[0] = true;
+            for (Node p : vigilados) p.visibleProperty().removeListener(oyente[0]);
+            n.sceneProperty().removeListener(oyente[0]);
+            accion.run();
+        };
+        for (Node p : vigilados) p.visibleProperty().addListener(oyente[0]);
+        n.sceneProperty().addListener(oyente[0]);
+    }
+
     /** Alto de una tabla según sus filas (encabezado + filas de 2.6em), acotado */
     public static void ajustarAlto(TableView<?> tabla, int filas, double minimo, double maximo) {
         double alto = 38 + Math.max(1, filas) * 34.0 + 2;

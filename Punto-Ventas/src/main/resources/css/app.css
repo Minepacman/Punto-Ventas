@@ -120,9 +120,7 @@
     -pos-shadow-1:        rgba(27, 35, 46, 0.07);
     -pos-shadow-2:        rgba(27, 35, 46, 0.12);
 
-    /* Radios. Solo como referencia: JavaFX resuelve variables de COLOR, no de tamaño; usar
-       -pos-radius en -fx-*-radius lanza ClassCastException Double→Size en cada pasada de estilo
-       (y la esquina no se aplica). En las reglas va el número literal (6 / 10). */
+    /* Radios */
     -pos-radius:          6px;
     -pos-radius-lg:       10px;
 
@@ -1693,11 +1691,11 @@ TilePane > .button:armed,
 /* Imagen del producto: zona para arrastrar/soltar en el formulario y marco del detalle */
 .imagen-zona {
     -fx-background-color: -pos-surface-alt;
-    -fx-background-radius: 10;
+    -fx-background-radius: 10; /* = -pos-radius-lg: JavaFX no resuelve variables en radios (ClassCastException en cada pase de estilos) */
     -fx-border-color: -pos-border-strong;
     -fx-border-style: dashed;
     -fx-border-width: 2;
-    -fx-border-radius: 10;
+    -fx-border-radius: 10; /* = -pos-radius-lg: JavaFX no resuelve variables en radios (ClassCastException en cada pase de estilos) */
     -fx-alignment: center;
     -fx-cursor: hand;
 }
@@ -1711,10 +1709,10 @@ TilePane > .button:armed,
 }
 .imagen-marco {
     -fx-background-color: -pos-surface;
-    -fx-background-radius: 6;
+    -fx-background-radius: 6; /* = -pos-radius */
     -fx-border-color: -pos-border;
     -fx-border-width: 1;
-    -fx-border-radius: 6;
+    -fx-border-radius: 6; /* = -pos-radius */
     -fx-alignment: center;
     -fx-padding: 4;
 }
@@ -2068,7 +2066,7 @@ TilePane > .button:armed,
 .asistente-logo {
     -fx-background-color:  -pos-border, -pos-surface-alt;
     -fx-background-insets: 0, 1;
-    -fx-background-radius: 6, 5;
+    -fx-background-radius: 6, 5; /* = -pos-radius */
     -fx-alignment: center;
 }
 
@@ -2109,7 +2107,7 @@ TilePane > .button:armed,
     -fx-font-size: 12px;
     -fx-text-fill: -pos-accent-text;
     -fx-background-color: -pos-accent-subtle;
-    -fx-background-radius: 6;
+    -fx-background-radius: 6; /* = -pos-radius */
     -fx-padding: 8 12 8 12;
 }
 

@@ -298,6 +298,46 @@ class ServidorMovilTicketsProveedorTest {
         assertThat(cerrado.getRegistroId()).isEqualTo(res.get("registroId").asLong());
     }
 
+    /** Dos «Registrar entrada» a la vez (doble toque, red lenta) meten la mercancía UNA vez; un intento fallido no aparta el ticket */
+    @Test
+    void registrarDosVecesALaVezSoloDaEntradaUnaVez() throws Exception {
+        Proveedor lala = proveedorService.listarActivos().stream().filter(p -> p.getNombre().equals("Lala")).findFirst()
+                .orElseGet(() -> proveedorService.guardar(null, "Lala", null, null, null, Set.of(), null));
+        Producto mango = producto("Yog Lala Beb Mango 220 gr", 13.00, 18.00);
+        String token = usuario(Permiso.AJUSTAR_INVENTARIO, Permiso.VER_GANANCIAS);
+        String id = empezarLectura(token);
+        JsonNode d = esperarLectura(id, token, "");
+        JsonNode lm = linea(d, "Yog Lala Beb Mango");
+        List<Map<String, Object>> renglones = List.of(
+                Map.of("indice", lm.get("indice").asInt(), "productoId", mango.getId(), "cantidad", 3, "piezasPorUnidad", 1, "importe", 43.20));
+
+        // Sin proveedor falla en el servicio: el ticket NO queda apartado y se puede volver a intentar
+        HttpResponse<String> mal = json("POST", "/api/tickets-proveedor/registrar",
+                Map.of("id", id, "ticket", 0, "renglones", renglones), token);
+        assertThat(mal.statusCode()).as(mal.body()).isEqualTo(400);
+
+        Map<String, Object> cuerpo = Map.of("id", id, "ticket", 0, "proveedorId", lala.getId(), "folio", "",
+                "registrarAunqueSeRepita", true, "renglones", renglones);
+        java.util.concurrent.ExecutorService hilos = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.CountDownLatch salida = new java.util.concurrent.CountDownLatch(1);
+            List<java.util.concurrent.Future<Integer>> f = new java.util.ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                f.add(hilos.submit(() -> {
+                    salida.await();
+                    return json("POST", "/api/tickets-proveedor/registrar", cuerpo, token).statusCode();
+                }));
+            }
+            salida.countDown();
+            List<Integer> estados = new java.util.ArrayList<>();
+            for (var x : f) estados.add(x.get(30, java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(estados).as("uno entra; el otro: ya registrado (400) u ocupado (503)").containsOnlyOnce(200);
+        } finally {
+            hilos.shutdownNow();
+        }
+        assertThat(productoRepo.findById(mango.getId()).orElseThrow().getCantidadActual()).isEqualTo(3.0);
+    }
+
     @Test
     void permisosDelLectorYDeLosPrecios() throws Exception {
         String cajero = usuario();

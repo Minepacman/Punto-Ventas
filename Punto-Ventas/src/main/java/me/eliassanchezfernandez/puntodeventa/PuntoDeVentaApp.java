@@ -167,6 +167,8 @@ public class PuntoDeVentaApp extends Application {
             // La pantalla de login se abre con el contexto de Spring como
             // fábrica de controladores (ver Ventanas)
             Ventanas.mostrarLogin(stage, springContext);
+            // Cuánto tardó en abrir (registro para soporte; si fue muy lento se ofrecerá el modo ligero)
+            me.eliassanchezfernandez.puntodeventa.util.MedidorFluidez.anotarArranque();
             // Con la ventana dibujada arrancan las tareas diferidas (acceso móvil, migraciones, clima)
             Platform.runLater(ArranqueDiferido::senalarVentanaLista);
             CalentadorCds.programar(DEMORA_CDS_MS);

@@ -148,6 +148,56 @@ class CertificadosLocalesTest {
                 new String(Files.readAllBytes(dir.resolve("movil-ca.key")), java.nio.charset.StandardCharsets.ISO_8859_1).substring(30, 60));
     }
 
+    /**
+     * La CA queda limitada a la red local (nameConstraints crítico + pathLen 0): con su clave privada robada
+     * no se puede falsificar un sitio de internet ante los teléfonos que la instalaron.
+     */
+    @Test
+    void laCaSoloPuedeFirmarNombresYDireccionesDeLaRedLocal() throws Exception {
+        CertificadosLocales c = new CertificadosLocales(carpeta.resolve("claves"), relojFijo());
+        X509Certificate ca = c.ca();
+        assertThat(ca.getCriticalExtensionOIDs()).contains(CertificadosLocales.OID_NAME_CONSTRAINTS);
+        assertThat(ca.getBasicConstraints()).as("pathLen 0: no puede crear CA intermedias").isZero();
+
+        // Lo permitido valida; un sitio de internet (por nombre o por IP pública) no
+        assertThat(valida(ca, hoja(c, ca, Set.of("localhost", "tienda.local"), Set.of("192.168.1.20", "10.1.2.3", "172.20.0.1", "127.0.0.1")))).isTrue();
+        assertThat(valida(ca, hoja(c, ca, Set.of("www.banco.com.mx"), Set.of()))).as("dominio de internet").isFalse();
+        assertThat(valida(ca, hoja(c, ca, Set.of("local.evil.com"), Set.of()))).as("parecido a .local").isFalse();
+        assertThat(valida(ca, hoja(c, ca, Set.of(), Set.of("8.8.8.8")))).as("IP pública").isFalse();
+        assertThat(valida(ca, hoja(c, ca, Set.of("localhost", "accounts.google.com"), Set.of("192.168.1.20")))).as("un nombre ajeno tumba toda la hoja").isFalse();
+
+        // El servidor nunca pide nombres fuera de las restricciones: los descarta en vez de romper la cadena
+        X509Certificate s = c.servidor(List.of("localhost", "mi-pc", "mi-pc.lan", "tienda.local"), List.of("192.168.1.20", "8.8.8.8", "fe80::1")).certificado();
+        List<String> sans = new ArrayList<>();
+        for (List<?> san : s.getSubjectAlternativeNames()) sans.add(san.get(0) + ":" + san.get(1));
+        assertThat(sans).containsExactlyInAnyOrder("2:localhost", "2:tienda.local", "7:192.168.1.20");
+        assertThat(valida(ca, s)).isTrue();
+        assertThat(c.servidorVigentePara(List.of("localhost", "mi-pc", "tienda.local"), List.of("192.168.1.20", "8.8.8.8"))).isTrue();
+    }
+
+    private X509Certificate hoja(CertificadosLocales c, X509Certificate ca, Set<String> dns, Set<String> ips) throws Exception {
+        java.security.PrivateKey claveCa = java.security.KeyFactory.getInstance("EC").generatePrivate(
+                new java.security.spec.PKCS8EncodedKeySpec(Files.readAllBytes(c.carpeta().resolve(CertificadosLocales.ARCHIVO_CA_CLAVE))));
+        return CertificadosLocales.generarServidor(CertificadosLocales.nuevoPar().getPublic(), claveCa, ca, dns, ips,
+                java.time.ZonedDateTime.ofInstant(relojFijo().instant(), ZoneOffset.UTC), Duration.ofDays(30), new java.security.SecureRandom());
+    }
+
+    /**
+     * Valida como un teléfono: Chrome/Android e iOS aplican las nameConstraints de la raíz instalada. El PKIX del
+     * JDK no las aplica al certificado ancla, así que la cadena (firma, fechas) se valida con PKIX y las
+     * restricciones con X509CertSelector.setPathToNames, que comprueba si las nameConstraints de la CA permiten
+     * cada nombre de la hoja (también comprueba que el DER de la extensión sea válido).
+     */
+    private static boolean valida(X509Certificate ca, X509Certificate hoja) throws Exception {
+        PKIXParameters p = new PKIXParameters(Set.of(new TrustAnchor(ca, null)));
+        p.setRevocationEnabled(false);
+        p.setDate(java.util.Date.from(relojFijo().instant()));
+        CertPathValidator.getInstance("PKIX").validate(CertificateFactory.getInstance("X.509").generateCertPath(List.of(hoja)), p);
+        java.security.cert.X509CertSelector sel = new java.security.cert.X509CertSelector();
+        for (List<?> san : hoja.getSubjectAlternativeNames()) sel.addPathToName((Integer) san.get(0), (String) san.get(1));
+        return sel.match(ca);
+    }
+
     @Test
     void elPerfilParaIphoneLlevaLaCaEnBase64YUuidsEstables() {
         CertificadosLocales c = new CertificadosLocales(carpeta, relojFijo());

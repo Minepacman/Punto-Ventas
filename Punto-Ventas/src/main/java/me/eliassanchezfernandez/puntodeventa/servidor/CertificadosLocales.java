@@ -62,7 +62,12 @@ import java.util.UUID;
  * en macOS/Linux; en Windows heredan los permisos de la carpeta del perfil. Un respaldo
  * restaurado en otra computadora genera su propia CA: los teléfonos tendrán que instalar la nueva.
  *
- *  - CA: 10 años, basicConstraints CA:TRUE (crítico), keyUsage keyCertSign+cRLSign.
+ *  - CA: 10 años, basicConstraints CA:TRUE pathLen 0 (crítico), keyUsage keyCertSign+cRLSign y
+ *    nameConstraints (crítico) que SOLO permiten localhost, nombres .local y direcciones de red local
+ *    (10/8, 172.16/12, 192.168/16, 127/8). El teléfono confía en esta CA como raíz: sin las restricciones,
+ *    quien copiara la clave privada de la computadora podría falsificar cualquier sitio (banco, correo)
+ *    ante esos teléfonos. Con ellas, una hoja para otro nombre es rechazada por el propio teléfono.
+ *    Una CA guardada sin restricciones (versiones de prueba anteriores) se reemplaza al arrancar.
  *  - Servidor: 2 años (iOS rechaza hojas de más de 825 días), SAN con todas las IP de la red
  *    local, localhost, el nombre del equipo y el nombre .local configurado; extKeyUsage serverAuth.
  *    Se vuelve a emitir solo cuando cambian las direcciones, cuando le queda menos de un mes o
@@ -93,6 +98,16 @@ public class CertificadosLocales {
     private static final String OID_BASIC_CONSTRAINTS = "2.5.29.19";
     private static final String OID_AKI = "2.5.29.35";
     private static final String OID_EKU = "2.5.29.37";
+    static final String OID_NAME_CONSTRAINTS = "2.5.29.30";
+
+    /** Nombres DNS permitidos por la CA (y sus subdominios): localhost y la zona .local (mDNS) */
+    static final List<String> DNS_PERMITIDOS = List.of("localhost", "local");
+    /** Redes permitidas por la CA: dirección y máscara (privadas y loopback) */
+    static final List<int[]> REDES_PERMITIDAS = List.of(
+            new int[] { 10, 0, 0, 0, 8 },
+            new int[] { 172, 16, 0, 0, 12 },
+            new int[] { 192, 168, 0, 0, 16 },
+            new int[] { 127, 0, 0, 0, 8 });
     private static final String OID_SERVER_AUTH = "1.3.6.1.5.5.7.3.1";
 
     /** Clave privada y certificado listos para el servidor TLS */
@@ -203,12 +218,15 @@ public class CertificadosLocales {
                 X509Certificate cert = leerCertificado(Files.readAllBytes(pc));
                 ZonedDateTime ahora = ahora();
                 boolean vigente = cert.getNotAfter().toInstant().isAfter(ahora.plus(RENOVAR_ANTES).toInstant());
-                if (vigente && mismaClave(clave, cert.getPublicKey())) {
+                boolean restringida = cert.getExtensionValue(OID_NAME_CONSTRAINTS) != null;
+                if (vigente && restringida && mismaClave(clave, cert.getPublicKey())) {
                     claveCa = clave;
                     certCa = cert;
                     return;
                 }
-                System.err.println("⚠ El certificado de la CA local venció o no corresponde a su clave: se crea otro.");
+                System.err.println(restringida
+                        ? "⚠ El certificado de la CA local venció o no corresponde a su clave: se crea otro."
+                        : "⚠ La CA local no limita los nombres que puede firmar: se crea otra (hay que instalarla de nuevo en los teléfonos).");
             }
         } catch (IOException | GeneralSecurityException | RuntimeException e) {
             System.err.println("⚠ No se pudo leer la CA local (" + e.getMessage() + "): se crea otra.");
@@ -236,7 +254,7 @@ public class CertificadosLocales {
      */
     public synchronized Servidor servidor(Collection<String> nombresDns, Collection<String> ips) {
         cargarOCrearCa();
-        Set<String> dns = normalizar(nombresDns), direcciones = normalizar(ips);
+        Set<String> dns = dnsPermitidos(nombresDns), direcciones = ipsPermitidas(ips);
         Servidor actual = servidor != null ? servidor : leerServidorGuardado();
         if (actual != null && sirve(actual, dns, direcciones)) {
             servidor = actual;
@@ -258,7 +276,7 @@ public class CertificadosLocales {
     public synchronized boolean servidorVigentePara(Collection<String> nombresDns, Collection<String> ips) {
         cargarOCrearCa();
         Servidor actual = servidor != null ? servidor : leerServidorGuardado();
-        return actual != null && sirve(actual, normalizar(nombresDns), normalizar(ips));
+        return actual != null && sirve(actual, dnsPermitidos(nombresDns), ipsPermitidas(ips));
     }
 
     private Servidor leerServidorGuardado() {
@@ -295,6 +313,57 @@ public class CertificadosLocales {
             return false;
         }
         return dnsCert.equals(dns) && ipsCert.equals(ips);
+    }
+
+    /**
+     * Solo los nombres que la CA puede firmar (localhost y *.local): un nombre fuera de las restricciones
+     * haría que el teléfono rechazara el certificado completo, así que ni se incluye.
+     */
+    static Set<String> dnsPermitidos(Collection<String> c) {
+        Set<String> r = new TreeSet<>();
+        for (String d : normalizar(c)) {
+            for (String base : DNS_PERMITIDOS) {
+                if (d.equals(base) || (d.endsWith("." + base) && d.length() > base.length() + 1)) { r.add(d); break; }
+            }
+        }
+        return r;
+    }
+
+    /** Solo IPv4 dentro de {@link #REDES_PERMITIDAS} */
+    static Set<String> ipsPermitidas(Collection<String> c) {
+        Set<String> r = new TreeSet<>();
+        for (String ip : normalizar(c)) if (ipPermitida(ip)) r.add(ip);
+        return r;
+    }
+
+    static boolean ipPermitida(String ip) {
+        if (!ip.matches("\\d{1,3}(\\.\\d{1,3}){3}")) return false;
+        String[] p = ip.split("\\.");
+        long valor = 0;
+        for (String x : p) {
+            int n = Integer.parseInt(x);
+            if (n > 255) return false;
+            valor = (valor << 8) | n;
+        }
+        for (int[] red : REDES_PERMITIDAS) {
+            long base = ((long) red[0] << 24) | (red[1] << 16) | (red[2] << 8) | red[3];
+            long mascara = (0xFFFFFFFFL << (32 - red[4])) & 0xFFFFFFFFL;
+            if ((valor & mascara) == base) return true;
+        }
+        return false;
+    }
+
+    /** nameConstraints: permittedSubtrees [0] con los nombres DNS y las redes permitidas */
+    static byte[] restriccionesDeNombre() {
+        List<byte[]> subarboles = new ArrayList<>();
+        for (String d : DNS_PERMITIDOS) subarboles.add(Der.secuencia(Der.implicito(2, d.getBytes(StandardCharsets.US_ASCII))));
+        for (int[] red : REDES_PERMITIDAS) {
+            long mascara = (0xFFFFFFFFL << (32 - red[4])) & 0xFFFFFFFFL;
+            byte[] valor = new byte[] { (byte) red[0], (byte) red[1], (byte) red[2], (byte) red[3],
+                    (byte) (mascara >>> 24), (byte) (mascara >>> 16), (byte) (mascara >>> 8), (byte) mascara };
+            subarboles.add(Der.secuencia(Der.implicito(7, valor)));
+        }
+        return Der.secuencia(Der.explicito(0, Der.concatenar(subarboles.toArray(new byte[0][]))));
     }
 
     private static Set<String> normalizar(Collection<String> c) {
@@ -403,8 +472,9 @@ public class CertificadosLocales {
         byte[] nombre = nombre(nombreComun);
         byte[] ski = Der.octetos(sha1(bitsDeClave(par.getPublic())));
         byte[] extensiones = Der.secuencia(
-                extension(OID_BASIC_CONSTRAINTS, true, Der.secuencia(Der.booleano(true))),
+                extension(OID_BASIC_CONSTRAINTS, true, Der.secuencia(Der.booleano(true), Der.entero(0))),   // CA, pathLen 0
                 extension(OID_KEY_USAGE, true, Der.bitsBanderas(5, 6)),               // keyCertSign, cRLSign
+                extension(OID_NAME_CONSTRAINTS, true, restriccionesDeNombre()),      // solo red local
                 extension(OID_SKI, false, ski));
         return firmar(par.getPublic(), par.getPrivate(), nombre, nombre, ahora.minus(MARGEN_ATRAS), ahora.plus(vigencia), extensiones, azar);
     }
