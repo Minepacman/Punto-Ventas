@@ -351,6 +351,28 @@ def ejecutar(List<String> args, String mensajeFallo) {
     if (proceso.waitFor() != 0) throw new GradleException(mensajeFallo)
 }
 
+// Módulos del runtime de jpackage: los mismos que jpackage pondría por su cuenta (todo módulo del JDK que exporta
+// algo) MENOS las herramientas de desarrollo (compilador, javadoc, jshell, jlink, depurador, consola JMX…), que el
+// programa nunca carga y ocupan ~60 MB del instalador y del disco (equipos con 32 GB). Se calcula con el propio JDK
+// de jpackage (así vale igual para Windows de 32 bits, que trae otros módulos como jdk.crypto.mscapi). Se excluye
+// por nombre en vez de listar lo necesario: un módulo olvidado rompería algo raro (impresoras, TLS, locales) que
+// las pruebas no ven porque corren con el JDK completo. -PruntimeCompleto deja el comportamiento de antes.
+def MODULOS_DE_DESARROLLO = ['jdk.compiler', 'jdk.javadoc', 'jdk.jshell', 'jdk.jlink', 'jdk.jpackage', 'jdk.jartool',
+        'jdk.jdeps', 'jdk.jconsole', 'jdk.jdi', 'jdk.jdwp.agent', 'jdk.jstatd', 'jdk.attach', 'jdk.editpad',
+        'jdk.hotspot.agent', 'jdk.jcmd', 'jdk.management.agent', 'jdk.sctp', 'jdk.incubator.foreign',
+        'jdk.incubator.vector', 'jdk.incubator.concurrent']
+
+def modulosRuntime(File jdk) {
+    def java = new File(jdk, 'bin/java' + (System.getProperty('os.name').toLowerCase().contains('win') ? '.exe' : '')).absolutePath
+    def p = new ProcessBuilder([java, '--list-modules']).redirectErrorStream(true).start()
+    p.outputStream.close()
+    def salida = p.inputStream.text
+    if (p.waitFor() != 0) throw new GradleException("No se pudieron listar los módulos de $jdk:\n$salida")
+    salida.readLines()
+            .collect { it.trim().split('@')[0] }
+            .findAll { it && !it.startsWith('jdk.internal.') && !(it in MODULOS_DE_DESARROLLO) && !it.startsWith('Picked up') }
+}
+
 // ── Lector de tickets (OCR): Tesseract dentro del instalador ─────────────────────────────────
 // El programa usa el ejecutable "tesseract" como proceso aparte (ocr/LocalizadorTesseract): lo busca en
 // <carpeta app>/ocr/tesseract/{bin,lib,tessdata}. Esta tarea arma esa carpeta dentro de la entrada de jpackage
@@ -660,6 +682,11 @@ tasks.register('jpackageTask') {
         if (icono.exists()) args += ['--icon', icono.absolutePath]
         if (licencia.exists() && !esAppImage) args += ['--license-file', licencia.absolutePath]
         jvmOpciones.each { args += ['--java-options', it] }
+        if (!project.hasProperty('runtimeCompleto')) {
+            def modulos = modulosRuntime(jdkRuta)
+            logger.lifecycle("Runtime con ${modulos.size()} módulos (sin herramientas de desarrollo)")
+            args += ['--add-modules', modulos.join(',')]
+        }
         if (esMac) {
             args += ['--type', 'dmg', '--mac-package-identifier', 'me.eliassanchezfernandez.puntodeventa',
                      '--mac-package-name', 'Caja Libre']

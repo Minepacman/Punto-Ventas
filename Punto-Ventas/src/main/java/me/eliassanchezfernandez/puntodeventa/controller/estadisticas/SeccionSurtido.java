@@ -108,6 +108,9 @@ public final class SeccionSurtido implements SeccionEstadisticas<PlanSurtido> {
         return reabastecimientoService.planSurtido();
     }
 
+    /** Cuántas veces se ha pintado (solo el último pintado arma sus tablas pendientes) */
+    private int pintadas;
+
     @Override
     public void pintar(PlanSurtido p) {
         this.plan = p;
@@ -115,6 +118,7 @@ public final class SeccionSurtido implements SeccionEstadisticas<PlanSurtido> {
         boolean puedeOrdenar = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
         boxGrupos.getChildren().clear();
         List<Fila> todas = new ArrayList<>();
+        List<Runnable> porArmar = new ArrayList<>();
         int gruposMostrados = 0;
         for (GrupoSurtido g : p.grupos()) {
             List<LineaSurtido> lineas = soloPedir ? g.aPedir() : g.lineas();
@@ -124,41 +128,27 @@ public final class SeccionSurtido implements SeccionEstadisticas<PlanSurtido> {
             for (LineaSurtido l : lineas) filas.add(fila(g, l));
             todas.addAll(filas);
 
-            TableView<Fila> tabla = new TableView<>(FXCollections.observableArrayList(filas));
-            tabla.getColumns().setAll(columnas(false));
-            tabla.setPlaceholder(new Label("Nada que pedir por ahora."));
-            tabla.setRowFactory(tv -> new javafx.scene.control.TableRow<>() {
-                @Override protected void updateItem(Fila f, boolean vacio) {
-                    super.updateItem(f, vacio);
-                    getStyleClass().removeAll("fila-agotado", "fila-stock-bajo");
-                    if (vacio || f == null) return;
-                    if (Urgencia.AGOTADO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-agotado");
-                    else if (Urgencia.BAJO_MINIMO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-stock-bajo");
-                }
-            });
-            Tarjetas.ajustarAlto(tabla, filas.size(), 90, 320);
-
-            Button crear = new Button("Crear orden de compra en borrador…");
-            crear.getStyleClass().add("button-primary");
-            crear.setDisable(!puedeOrdenar || g.productosAPedir() == 0);
-            crear.setOnAction(e -> crearOrden(g, crear));
-            Label nota = new Label(!puedeOrdenar ? "Requiere el permiso «Gestionar proveedores y órdenes de compra»."
-                    : g.productosAPedir() == 0 ? "Nada que pedir por ahora."
-                    : g.tieneProveedor() ? "Se guarda como borrador con " + g.productosAPedir() + " producto(s); revísala en Inventario → Órdenes de compra."
-                    : "Este grupo no tiene proveedor: al crear la orden se te pedirá elegir uno.");
-            nota.getStyleClass().add("hint");
-            nota.setWrapText(true);
-            HBox pie = new HBox(10, crear, nota);
-            pie.setAlignment(Pos.CENTER_LEFT);
-
             String titulo = g.nombre() + "  —  " + g.productosAPedir() + " por pedir"
                     + (p.conCostos() && g.costoPedido() > 0 ? " · " + Moneda.formato(g.costoPedido()) : "")
                     + " · visita: " + g.diasVisita() + " · próximo surtido en " + g.horizonteDias() + " día(s)";
-            TitledPane tp = new TitledPane(titulo, new VBox(8, tabla, pie));
+            // La tabla de cada grupo se arma hasta que se ve (pestaña Reabastecimiento elegida y grupo abierto):
+            // con 50 proveedores eran ~150 MB de nodos en memoria aunque nadie abriera esta pestaña.
+            TitledPane tp = new TitledPane(titulo, null);
             tp.setExpanded(g.productosAPedir() > 0);
             tp.setAnimated(false);
+            Runnable armar = () -> {
+                if (tp.getContent() == null) tp.setContent(contenidoGrupo(g, filas, puedeOrdenar));
+            };
+            tp.expandedProperty().addListener((o, antes, abierto) -> {
+                if (abierto) armar.run();
+            });
+            if (tp.isExpanded()) porArmar.add(armar);
             boxGrupos.getChildren().add(tp);
         }
+        int esta = ++pintadas;
+        Tarjetas.cuandoSeVea(boxGrupos, () -> {
+            if (esta == pintadas) porArmar.forEach(Runnable::run);   // un repintado posterior manda
+        });
         tablaExportar.getColumns().setAll(columnas(true));
         tablaExportar.setItems(FXCollections.observableArrayList(todas));
 
@@ -232,5 +222,37 @@ public final class SeccionSurtido implements SeccionEstadisticas<PlanSurtido> {
     public void pintarError(String mensaje) {
         lblResumen.setText("No se pudo calcular el plan de surtido: " + mensaje);
         boxGrupos.getChildren().clear();
+    }
+
+    /** Tabla del grupo y su pie (botón de orden y nota) */
+    private Node contenidoGrupo(GrupoSurtido g, List<Fila> filas, boolean puedeOrdenar) {
+        TableView<Fila> tabla = new TableView<>(FXCollections.observableArrayList(filas));
+        tabla.getColumns().setAll(columnas(false));
+        tabla.setPlaceholder(new Label("Nada que pedir por ahora."));
+        tabla.setRowFactory(tv -> new javafx.scene.control.TableRow<>() {
+            @Override protected void updateItem(Fila f, boolean vacio) {
+                super.updateItem(f, vacio);
+                getStyleClass().removeAll("fila-agotado", "fila-stock-bajo");
+                if (vacio || f == null) return;
+                if (Urgencia.AGOTADO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-agotado");
+                else if (Urgencia.BAJO_MINIMO.getEtiqueta().equals(f.urgencia())) getStyleClass().add("fila-stock-bajo");
+            }
+        });
+        Tarjetas.ajustarAlto(tabla, filas.size(), 90, 320);
+
+        Button crear = new Button("Crear orden de compra en borrador…");
+        crear.getStyleClass().add("button-primary");
+        crear.setDisable(!puedeOrdenar || g.productosAPedir() == 0);
+        crear.setOnAction(e -> crearOrden(g, crear));
+        Label nota = new Label(!puedeOrdenar ? "Requiere el permiso «Gestionar proveedores y órdenes de compra»."
+                : g.productosAPedir() == 0 ? "Nada que pedir por ahora."
+                : g.tieneProveedor() ? "Se guarda como borrador con " + g.productosAPedir() + " producto(s); revísala en Inventario → Órdenes de compra."
+                : "Este grupo no tiene proveedor: al crear la orden se te pedirá elegir uno.");
+        nota.getStyleClass().add("hint");
+        nota.setWrapText(true);
+        HBox pie = new HBox(10, crear, nota);
+        pie.setAlignment(Pos.CENTER_LEFT);
+
+        return new VBox(8, tabla, pie);
     }
 }
