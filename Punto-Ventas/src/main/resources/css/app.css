@@ -63,6 +63,11 @@
     -pos-band-line:       rgba(255, 255, 255, 0.16);
     -pos-band-fill:       rgba(255, 255, 255, 0.10);
     -pos-band-fill-hover: rgba(255, 255, 255, 0.18);
+    -pos-band-button-bg:       #40566F;   /* banda + 14 % de blanco, opaco */
+    -pos-band-button-bg-hover: #566980;   /* banda + 24 % de blanco        */
+    -pos-band-button-border:   #8C99A8;   /* banda + 48 % de blanco        */
+    -pos-band-danger-text:     #FFD9DC;
+    -pos-band-danger-border:   #E8939A;
     -pos-login-bg:        linear-gradient(to bottom right, #2A4566 0%, #1B3049 100%);
 
     /* ---------- Texto -------------------------------------------------- */
@@ -961,34 +966,40 @@ TilePane > .button:armed,
     -fx-border-width: 0 0 0 1;
 }
 
-/* Botones sobre la banda oscura: translúcidos, texto blanco. */
+/* Botones sobre la banda oscura (Bloquear, Cerrar sesión): relleno OPACO un poco más claro que
+   la banda, borde claro y texto blanco. Antes eran capas translúcidas (borde inferior negro +
+   borde blanco + relleno blanco) que, apiladas, daban un gris apagado sobre cualquier banda.
+   Los colores salen de la banda (tokens -pos-band-button-*), así siguen al tema y al acento. */
 .main-toolbar .button {
-    -color-button-bg:             -pos-band-fill;
+    -color-button-bg:             -pos-band-button-bg;
     -color-button-fg:             -pos-band-text;
-    -color-button-border:         rgba(255, 255, 255, 0.28);
-    -color-button-edge:           rgba(0, 0, 0, 0.25);
-    -color-button-bg-hover:       -pos-band-fill-hover;
+    -color-button-border:         -pos-band-button-border;
+    -color-button-edge:           -pos-band-button-border;
+    -color-button-bg-hover:       -pos-band-button-bg-hover;
     -color-button-fg-hover:       -pos-band-text;
-    -color-button-border-hover:   rgba(255, 255, 255, 0.45);
-    -color-button-bg-focused:     -pos-band-fill;
+    -color-button-border-hover:   -pos-band-text;
+    -color-button-bg-focused:     -pos-band-button-bg;
     -color-button-fg-focused:     -pos-band-text;
-    -color-button-border-focused: #FFFFFF;
-    -color-button-bg-pressed:     rgba(0, 0, 0, 0.22);
+    -color-button-border-focused: -pos-band-text;
+    -color-button-bg-pressed:     -pos-band-border;
     -color-button-fg-pressed:     -pos-band-text;
-    -color-button-border-pressed: rgba(255, 255, 255, 0.28);
+    -color-button-border-pressed: -pos-band-button-border;
     -pos-button-ring:             rgba(255, 255, 255, 0.35);
 }
 
+/* Salir: destructivo, se distingue por el borde y el texto rojizos; al pasar se rellena de rojo */
 .main-toolbar .button-danger {
-    -color-button-fg:             #FFD9DC;
-    -color-button-border:         rgba(255, 150, 158, 0.55);
-    -color-button-bg-hover:       rgba(178, 58, 67, 0.55);
+    -color-button-fg:             -pos-band-danger-text;
+    -color-button-border:         -pos-band-danger-border;
+    -color-button-edge:           -pos-band-danger-border;
+    -color-button-bg-hover:       -pos-danger;
     -color-button-fg-hover:       #FFFFFF;
-    -color-button-border-hover:   rgba(255, 150, 158, 0.85);
-    -color-button-fg-focused:     #FFD9DC;
-    -color-button-border-focused: #FFD9DC;
-    -color-button-bg-pressed:     rgba(130, 42, 49, 0.75);
+    -color-button-border-hover:   -pos-band-danger-text;
+    -color-button-fg-focused:     -pos-band-danger-text;
+    -color-button-border-focused: -pos-band-danger-text;
+    -color-button-bg-pressed:     -pos-danger-pressed;
     -color-button-fg-pressed:     #FFFFFF;
+    -color-button-border-pressed: -pos-band-danger-border;
     -pos-button-ring:             rgba(255, 150, 158, 0.40);
 }
 
@@ -1435,6 +1446,9 @@ TilePane > .button:armed,
 .corte-value {
     -fx-text-fill: -pos-text;
     -fx-alignment: center-right;
+    /* Notas largas («$65.51 (incluye −$2.90 de devoluciones)»): segundo renglón en vez de «…» */
+    -fx-wrap-text: true;
+    -fx-text-alignment: right;
 }
 
 .corte-total-label {
@@ -1667,6 +1681,8 @@ TilePane > .button:armed,
 .text-warning { -fx-text-fill: -pos-warning-text; }
 .text-accent  { -fx-text-fill: -pos-accent-text; }
 .text-mono    { -fx-font-family: "Monospaced"; }
+/* Vista previa del ticket: imita el papel, su letra no crece con la escala de Apariencia */
+.ticket-papel { -fx-font-size: 11px; }
 
 /* Pista bajo un campo ("Alerta cuando el stock llegue a este valor") */
 .hint {
@@ -1870,6 +1886,10 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text-on-accent;
 }
 
+/* Gráficas (Estadísticas). Todo sale de los tokens, así se leen igual en Claro, Oscuro, Alto
+   contraste y Vidrio: rejilla con -pos-border (la -subtle desaparecía sobre el fondo oscuro), ejes
+   y marcas con -pos-border-strong, cifras y títulos de los ejes con -pos-text-muted, barras y
+   línea con el acento. */
 .chart {
     -fx-padding: 4;
 }
@@ -1878,9 +1898,15 @@ TilePane > .button:armed,
     -fx-background-color: -pos-surface;
 }
 
-.chart-vertical-grid-lines,
-.chart-horizontal-grid-lines {
-    -fx-stroke: -pos-border-subtle;
+.chart .chart-vertical-grid-lines,
+.chart .chart-horizontal-grid-lines {
+    -fx-stroke: -pos-border;
+    -fx-stroke-dash-array: 3 3;
+}
+
+.chart .chart-vertical-zero-line,
+.chart .chart-horizontal-zero-line {
+    -fx-stroke: -pos-border-strong;
 }
 
 .axis {
@@ -1888,17 +1914,39 @@ TilePane > .button:armed,
     -fx-tick-label-font-size: 11px;
 }
 
-.chart-series-line {
+.chart .axis {
+    -fx-axis-color: -pos-border-strong;
+}
+
+.chart .axis > .axis-tick-mark,
+.chart .axis > .axis-minor-tick-mark {
+    -fx-stroke: -pos-border-strong;
+}
+
+.chart .axis > .axis-label,
+.chart > .chart-title,
+.chart-legend-item {
+    -fx-text-fill: -pos-text-muted;
+}
+
+.chart > .chart-legend {
+    -fx-background-color: transparent;
+}
+
+.chart-series-line,
+.default-color0.chart-series-line {
     -fx-stroke: -pos-accent;
     -fx-stroke-width: 2px;
 }
 
+.chart-bar,
 .default-color0.chart-bar {
     -fx-bar-fill: -pos-accent;
     -fx-background-color: -pos-accent;
     -fx-background-radius: 3 3 0 0;
 }
 
+.chart-line-symbol,
 .default-color0.chart-line-symbol {
     -fx-background-color: -pos-accent, -pos-surface;
     -fx-background-insets: 0, 2;

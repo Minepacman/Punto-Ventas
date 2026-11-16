@@ -54,7 +54,7 @@
                         <ComboBox fx:id="cmbProveedor" prefWidth="240" promptText="Elige el proveedor"/>
                     </HBox>
                     <HBox spacing="8" alignment="CENTER_LEFT">
-                        <ComboBox fx:id="cmbModoSugerencia" prefWidth="290"/>
+                        <ComboBox fx:id="cmbModoSugerencia" minWidth="-Infinity"/>
                         <Button fx:id="btnSugerir" text="Sugerir pedido" onAction="#onSugerir"><graphic><Icono nombre="idea"/></graphic></Button>
                     </HBox>
                 </FlowPane>

@@ -31,16 +31,17 @@
                         <Label fx:id="lblRutaTitulo" text="Archivo" styleClass="field-label"/>
                         <Label fx:id="lblRuta" wrapText="true"/>
                     </VBox>
-                    <HBox spacing="24">
+                    <!-- Con letra grande los registros pasan debajo del tamaño en vez de recortarse -->
+                    <FlowPane hgap="24" vgap="8">
                         <VBox spacing="2">
                             <Label text="Tamaño" styleClass="field-label"/>
-                            <Label fx:id="lblTamano"/>
+                            <Label fx:id="lblTamano" minWidth="-Infinity"/>
                         </VBox>
                         <VBox spacing="2">
                             <Label text="Registros" styleClass="field-label"/>
                             <GridPane fx:id="gridRegistros" hgap="12" vgap="2"/>
                         </VBox>
-                    </HBox>
+                    </FlowPane>
 
                     <Separator/>
                     <Label text="Respaldo" styleClass="form-section-title"/>

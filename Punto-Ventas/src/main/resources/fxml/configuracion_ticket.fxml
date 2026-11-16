@@ -68,12 +68,17 @@
         <VBox spacing="8" alignment="TOP_CENTER">
             <padding><Insets topRightBottomLeft="20"/></padding>
             <Label text="Vista previa" styleClass="form-section-title"/>
-            <VBox fx:id="hojaTicket" styleClass="card" alignment="TOP_CENTER" spacing="6" maxWidth="-Infinity">
-                <padding><Insets topRightBottomLeft="12"/></padding>
-                <ImageView fx:id="imgLogo" fitHeight="60" preserveRatio="true" managed="false" visible="false"/>
-                <Label fx:id="lblVistaPrevia" wrapText="false"
-                       styleClass="text-mono, text-small"/>
-            </VBox>
+            <!-- El papel conserva su ancho (48 columnas en 80 mm): si la ventana es angosta se desplaza, nunca recorta -->
+            <ScrollPane fitToWidth="true" styleClass="edge-to-edge" VBox.vgrow="ALWAYS">
+                <StackPane alignment="TOP_CENTER">
+                    <VBox fx:id="hojaTicket" styleClass="card" alignment="TOP_CENTER" spacing="6" maxWidth="-Infinity">
+                        <padding><Insets topRightBottomLeft="12"/></padding>
+                        <ImageView fx:id="imgLogo" fitHeight="60" preserveRatio="true" managed="false" visible="false"/>
+                        <Label fx:id="lblVistaPrevia" wrapText="false" minWidth="-Infinity"
+                               styleClass="text-mono, ticket-papel"/>
+                    </VBox>
+                </StackPane>
+            </ScrollPane>
         </VBox>
     </center>
 

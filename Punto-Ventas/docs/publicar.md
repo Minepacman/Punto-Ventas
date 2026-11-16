@@ -122,6 +122,13 @@ en `ubuntu-latest` tres archivos con el mismo `jpackageTask`:
   paquete ARM publicado (en un Linux ARM el buscador abre la página de la versión).
 - Para instalar sin interfaz: `sudo apt install ./PuntoDeVenta-<v>-linux-x64.deb`; para
   actualizar, instalar el nuevo encima (mismo nombre de paquete, versión mayor).
+- **Lector de tickets**: el `.deb` depende de `tesseract-ocr` y `tesseract-ocr-spa` (Debian main / Ubuntu
+  universe) y el `.rpm` de `/usr/bin/tesseract` y `(tesseract-langpack-spa or tesseract-ocr-traineddata-spanish)`
+  (Fedora / openSUSE); `apt`/`dnf`/`zypper` los instalan solos (con `dpkg -i` hay que correr después
+  `sudo apt -f install`). El `.tar.gz` no declara nada: `sudo apt install tesseract-ocr tesseract-ocr-spa`,
+  `sudo dnf install tesseract tesseract-langpack-spa` o, en Arch, `tesseract tesseract-data-spa` (optdepends del
+  PKGBUILD). Sin Tesseract el programa sigue funcionando y la pantalla del lector ofrece escribir el texto.
+  `-PdependenciasOcr=false` construye los paquetes sin esas dependencias.
 
 ### Repositorios Linux (evaluación, nada publicado todavía)
 
@@ -163,6 +170,57 @@ brew tap minepacman/tap && brew install --cask punto-de-venta
 - **Cada versión** (si no hay `TAP_TOKEN`): con la release ya publicada,
   `scripts/actualizar-cask.sh 1.0.1` en el tap (baja `SHA256SUMS.txt` y reescribe `version` y
   las sumas), commit y push. Los prelanzamientos no van al cask.
+
+## Lector de tickets (Tesseract) en los instaladores
+
+Cada instalador lleva Tesseract en `<app>/ocr/tesseract/{bin,lib,tessdata}` (lo busca `ocr/LocalizadorTesseract`)
+con los idiomas `spa` y `eng` de **tessdata_fast 4.1.0** (SHA-256 fijos en `packaging/tesseract/tessdata.sha256`) y
+`tessdata/configs/tsv` (sin él Tesseract no contesta en TSV y la lectura no se entiende). `jpackageTask` llama a
+`empaquetarTesseract`; Gradle no baja nada de internet.
+
+| Instalador | De dónde sale | Tamaño (sin comprimir) | Comprobación en el flujo |
+|---|---|---|---|
+| macOS arm64 / x64 | `brew install tesseract` en el runner; `empaquetarTesseract` copia el ejecutable y sus ~15 bibliotecas de Homebrew, las reapunta y firma ad hoc; idiomas de `bajar-tessdata.sh` (`-PtessdataDir`) | 14.7 MB | `comprobar-dmg.sh`: monta el `.dmg`, revisa firmas, que nada apunte a Homebrew, `minos`, y lee el ticket de muestra |
+| Windows x64 / x86 | `tesseract-windows.yml`: `tesseract.exe` **estático** compilado con vcpkg (commit fijo, `packaging/tesseract/windows/`) — sin DLLs ni runtime de Visual C++; `-PtesseractDir` | ≈ 13–15 MB (estimado: exe 6–8 MB + idiomas 6.4 MB) | arquitectura del exe (PE Machine), y desde la app-image intermedia (`build/jpackage-temp`, `--temp`) arranca y lee el ticket |
+| Linux deb / rpm | Tesseract de la distribución (dependencia del paquete) | 0 | `Depends`/`Requires` del paquete; en el runner se instala el `.deb` y se lee el ticket con `/usr/bin/tesseract` |
+| Linux tar.gz | — (instalarlo aparte, ver «Linux») | 0 | — |
+
+- `-PexigirTesseract=true` (el flujo lo usa) hace fallar la construcción si no se pudo incluir; sin él solo avisa y el
+  instalador sale sin lector incluido (el programa usará un Tesseract del sistema si lo hay). `-PincluirTesseract=false`
+  lo omite.
+- La compilación con vcpkg tarda ~10–20 min por arquitectura y se guarda en la caché de Actions. Una etiqueta `v*` solo
+  ve la caché de `main` (o la suya): `tesseract-windows.yml` corre también al llegar a `main` un cambio en
+  `packaging/tesseract/` y a mano (Actions → «Tesseract para Windows» → Run workflow), para que la release la encuentre
+  lista. Con o sin caché se comprueba antes de usarla.
+- El de 32 bits es opcional como su instalador: si su compilación falla, el `.exe` x86 sale **sin** lector incluido
+  (aviso en el flujo) y en esa PC el lector ofrece escribir el texto o leer el ticket desde el teléfono.
+- macOS: Homebrew compila para la versión del runner (`minos`): el Tesseract incluido solo arranca en ese macOS o
+  posterior (la del runner `macos-latest` / `macos-15-intel`; el paso «Lector de tickets dentro del dmg» la imprime). En uno más viejo `LocalizadorTesseract` lo descarta (no arranca) y se usa uno del
+  sistema o la captura manual. Un dmg construido en tu Mac hereda el `minos` de tu Homebrew (p. ej. 27.2).
+- Para probar en local: `bash packaging/tesseract/bajar-tessdata.sh build/tessdata` y
+  `./gradlew jpackageTask -PtessdataDir=build/tessdata -PexigirTesseract=true`; luego
+  `bash packaging/tesseract/comprobar-dmg.sh build/installer/*.dmg`. En Windows:
+  `pwsh packaging/tesseract/windows/construir.ps1 -Arquitectura x64 -Destino build/ocr-tesseract-x64`, el mismo
+  `bajar-tessdata.sh` (Git Bash) hacia `build/ocr-tesseract-x64/tessdata` y
+  `gradlew.bat jpackageTask "-PtesseractDir=build/ocr-tesseract-x64"`.
+- Licencias: `ocr/tesseract/LICENSE-tesseract.txt` y `ocr/tesseract/licencias/` (una por biblioteca enlazada; en
+  Windows las `copyright` de cada puerto de vcpkg, en macOS los LICENSE/COPYING de cada fórmula). Resumen en
+  `AVISOS-TERCEROS.md`.
+
+### Espejo de los modelos de PaddleOCR (`ocr-modelos-1`)
+
+El programa baja bajo demanda ONNX Runtime y los modelos PP-OCRv6 (`ocr/RecursosPpOcr`): primero de la release
+`ocr-modelos-1` de este repositorio y, si falla, de la fuente original (Maven Central / modelscope.cn), siempre con
+el mismo SHA-256. Esa release la crea, una sola vez, el flujo manual `ocr-modelos.yml` (baja de las fuentes
+originales, verifica, publica como **prelanzamiento** no «latest» y vuelve a bajar del espejo para comprobarlo):
+
+```bash
+gh workflow run ocr-modelos.yml -R Minepacman/Punto-Ventas      # el flujo debe estar ya en main
+```
+
+Mientras no exista, el programa usa la fuente original sin que nadie lo note. Si cambia un modelo: etiqueta nueva
+(`ocr-modelos-2`) y cambiar a la vez `RecursosPpOcr` y `packaging/ocr-modelos/recursos.txt` (`EspejoOcrModelosTest`
+revisa que coincidan); no reemplazar los archivos de `ocr-modelos-1`, porque las versiones instaladas esperan esas sumas.
 
 ## Construir en tu Mac (para probar)
 

@@ -11,6 +11,11 @@
 #   · -linux-x64.deb · -linux-x64.rpm · -linux-x64.tar.gz (Linux también es opcional)
 # Si existe el secreto TAP_TOKEN, al final se actualiza el cask de Homebrew en Minepacman/homebrew-tap.
 #
+# Lector de tickets (OCR, docs/investigacion-ocr-tickets.md §12d): cada instalador lleva Tesseract en
+# <app>/ocr/tesseract y se comprueba que arranque y lea src/main/resources/ocr/ticket-muestra.jpg DESDE la app ya
+# empaquetada. Windows: tesseract.exe estático de vcpkg (flujo tesseract-windows.yml, con caché); macOS: el de Homebrew;
+# Linux: el .deb/.rpm dependen del tesseract de la distribución (se instala el .deb en el runner para probarlo).
+#
 # Seguridad (docs/publicar.md):
 #  - Solo se dispara con etiquetas v*: en GitHub conviene una regla (ruleset) para que solo el dueño pueda crear
 #    etiquetas v*. Nada de pull_request_target ni workflow_dispatch con entradas que lleguen a un shell.
@@ -81,9 +86,17 @@ jobs:
             *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
+  tesseract-windows:
+    # tesseract.exe estático (x64 y x86) + spa/eng; artefactos tesseract-windows-x64 / -x86. El x86 es opcional.
+    name: Tesseract para Windows
+    needs: version
+    uses: ./.github/workflows/tesseract-windows.yml
+
   windows-x64:
     name: Windows x64 (exe)
-    needs: version
+    needs: [version, tesseract-windows]
+    # aunque el Tesseract x86 (opcional) haya fallado; si falta el x64, la descarga de su artefacto detiene este trabajo
+    if: ${{ !cancelled() && needs.version.result == 'success' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -109,8 +122,23 @@ jobs:
       - name: Anotar pruebas fallidas
         if: failure()
         run: python ../.github/scripts/anotar-pruebas.py build/test-results
+      - name: Tesseract compilado (x64)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: tesseract-windows-x64
+          path: Punto-Ventas/build/ocr-tesseract-x64
       - name: Instalador
-        run: .\gradlew.bat jpackageTask --no-daemon
+        # bash: cada -P entre comillas (con pwsh un valor con punto se parte; ver el trabajo x86)
+        shell: bash
+        run: ./gradlew.bat jpackageTask --no-daemon "-PtesseractDir=build/ocr-tesseract-x64" "-PexigirTesseract=true"
+      - name: Lector de tickets dentro de la app empaquetada
+        # jpackage deja la app-image intermedia en build/jpackage-temp (--temp): se prueba el tesseract.exe de ahí
+        shell: bash
+        run: |
+          exe=$(find build/jpackage-temp -path '*/app/ocr/tesseract/bin/tesseract.exe' | head -1)
+          if [ -z "$exe" ]; then echo "::error::La app empaquetada no trae app/ocr/tesseract/bin/tesseract.exe"; exit 1; fi
+          echo "Probando $exe"
+          bash packaging/tesseract/comprobar.sh "$exe" "$(dirname "$(dirname "$exe")")/tessdata" src/main/resources/ocr/ticket-muestra.jpg
       - name: Renombrar
         shell: pwsh
         env:
@@ -129,7 +157,8 @@ jobs:
     # jpackage corre desde el JDK de 32 bits (lanzador, runtime y "-arch x86" de WiX salen de él) y toma la plantilla
     # packaging/windows-x86/main.wxs (Platform="x86"); sin ella el MSI quedaba marcado x64 y Windows de 32 bits lo rechazaba.
     name: Windows x86 (exe, opcional)
-    needs: version
+    needs: [version, tesseract-windows]
+    if: ${{ !cancelled() && needs.version.result == 'success' }}
     runs-on: windows-latest
     continue-on-error: true
     # v1.0.4: este trabajo se quedó 36 min sin escribir nada. No era jpackage ni WiX: build.gradle lanzaba jpackage con
@@ -161,13 +190,37 @@ jobs:
           if ($env:WIX -and (Test-Path "$env:WIX\bin\candle.exe")) { "$env:WIX\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8; exit 0 }
           choco install wixtoolset --version 3.14.1 -y --no-progress
           "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Tesseract compilado (x86)
+        # Si su compilación falló (es opcional), el instalador de 32 bits sale sin lector incluido: el programa
+        # entonces ofrece escribir el texto o leer el ticket desde el teléfono con una computadora que sí lo tenga.
+        id: tesseractx86
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: tesseract-windows-x86
+          path: Punto-Ventas/build/ocr-tesseract-x86
       - name: Instalador de 32 bits
         # bash (Git Bash del runner) a propósito: con pwsh, el shell por defecto en Windows, "-PjavafxVersion=17.0.8" llegaba
         # a Gradle partido en "-PjavafxVersion=17" y ".0.8" (v1.0.3: "Task '.0.8' not found"). Cada -P va además entre comillas.
         shell: bash
         env:
           JDK_X86: ${{ steps.jdkx86.outputs.path }}
-        run: ./gradlew.bat jpackageTask -x test --no-daemon "-PjavafxVersion=17.0.8" "-PjavafxPlatform=win-x86" "-PjdkJpackage=$JDK_X86"
+        run: |
+          ocr=()
+          if [ -f build/ocr-tesseract-x86/bin/tesseract.exe ]; then
+            ocr=("-PtesseractDir=build/ocr-tesseract-x86" "-PexigirTesseract=true")
+          else
+            echo "::warning::Sin Tesseract de 32 bits: el instalador x86 sale sin lector de tickets incluido"
+          fi
+          ./gradlew.bat jpackageTask -x test --no-daemon "-PjavafxVersion=17.0.8" "-PjavafxPlatform=win-x86" "-PjdkJpackage=$JDK_X86" "${ocr[@]}"
+      - name: Lector de tickets dentro de la app empaquetada (32 bits)
+        if: steps.tesseractx86.outcome == 'success'
+        shell: bash
+        run: |
+          exe=$(find build/jpackage-x86-temp -path '*/app/ocr/tesseract/bin/tesseract.exe' | head -1)
+          if [ -z "$exe" ]; then echo "::error::La app empaquetada no trae app/ocr/tesseract/bin/tesseract.exe"; exit 1; fi
+          echo "Probando $exe"
+          bash packaging/tesseract/comprobar.sh "$exe" "$(dirname "$(dirname "$exe")")/tessdata" src/main/resources/ocr/ticket-muestra.jpg
       - name: Comprobar que el instalador es de 32 bits
         # Si algo quedó de 64 bits es mejor no publicar el x86 (el trabajo es opcional) que publicar uno que Windows de 32 bits rechaza.
         shell: pwsh
@@ -215,10 +268,19 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - name: Tesseract de Homebrew e idiomas fijos
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: |
+          brew install tesseract
+          bash packaging/tesseract/bajar-tessdata.sh build/tessdata
       - name: Pruebas
         run: ./gradlew test --no-daemon
       - name: Instalador
-        run: ./gradlew jpackageTask --no-daemon
+        run: ./gradlew jpackageTask --no-daemon -PtessdataDir=build/tessdata -PexigirTesseract=true
+      - name: Lector de tickets dentro del dmg
+        run: bash packaging/tesseract/comprobar-dmg.sh build/installer/*.dmg
       - name: Renombrar
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -246,8 +308,17 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - name: Tesseract de Homebrew e idiomas fijos
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALL_CLEANUP: '1'
+        run: |
+          brew install tesseract
+          bash packaging/tesseract/bajar-tessdata.sh build/tessdata
       - name: Instalador
-        run: ./gradlew jpackageTask -x test --no-daemon
+        run: ./gradlew jpackageTask -x test --no-daemon -PtessdataDir=build/tessdata -PexigirTesseract=true
+      - name: Lector de tickets dentro del dmg
+        run: bash packaging/tesseract/comprobar-dmg.sh build/installer/*.dmg
       - name: Renombrar
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -291,6 +362,19 @@ jobs:
           mkdir -p build/publicar
           for f in build/installer/*.deb; do mv "$f" "build/publicar/PuntoDeVenta-$VERSION-linux-x64.deb"; done
           dpkg-deb --info "build/publicar/PuntoDeVenta-$VERSION-linux-x64.deb"
+      - name: El .deb trae el lector de tickets (instalarlo y leer el ticket de muestra)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          deb="build/publicar/PuntoDeVenta-$VERSION-linux-x64.deb"
+          deps=$(dpkg-deb -f "$deb" Depends)
+          echo "Depends: $deps"
+          for p in tesseract-ocr tesseract-ocr-spa; do
+            echo "$deps" | tr ',' '\n' | sed 's/^ *//; s/ .*//' | grep -x "$p" > /dev/null || { echo "::error::El .deb no depende de $p"; exit 1; }
+          done
+          sudo apt-get install -y -qq --no-install-recommends "./$deb"
+          test -x /opt/punto-de-venta/bin/PuntoDeVenta
+          bash packaging/tesseract/comprobar.sh /usr/bin/tesseract "" src/main/resources/ocr/ticket-muestra.jpg
       - name: Paquete rpm (opcional)
         continue-on-error: true
         env:
@@ -298,6 +382,10 @@ jobs:
         run: |
           ./gradlew jpackageTask -x test --no-daemon -PlinuxType=rpm
           for f in build/installer/*.rpm; do mv "$f" "build/publicar/PuntoDeVenta-$VERSION-linux-x64.rpm"; done
+          echo "Requires del rpm:"
+          rpm -qpR "build/publicar/PuntoDeVenta-$VERSION-linux-x64.rpm" | tee build/rpm-requires.txt
+          grep -x '/usr/bin/tesseract' build/rpm-requires.txt > /dev/null || { echo "::error::El .rpm no depende de /usr/bin/tesseract"; exit 1; }
+          grep 'tesseract-langpack-spa' build/rpm-requires.txt > /dev/null || { echo "::error::El .rpm no pide el español de Tesseract"; exit 1; }
       - name: Portable tar.gz (opcional)
         continue-on-error: true
         env:
@@ -353,6 +441,9 @@ jobs:
             echo "| Ubuntu / Debian / Mint | \`PuntoDeVenta-$VERSION-linux-x64.deb\` |"
             echo "| Fedora / openSUSE | \`PuntoDeVenta-$VERSION-linux-x64.rpm\` |"
             echo "| Otro Linux | \`PuntoDeVenta-$VERSION-linux-x64.tar.gz\` |"
+            echo
+            echo "**Lector de tickets (Beta):** en Windows y Mac viene incluido. En Linux el \`.deb\` y el \`.rpm\` instalan Tesseract solos;"
+            echo "con el \`.tar.gz\` instálalo aparte: \`sudo apt install tesseract-ocr tesseract-ocr-spa\` (Debian/Ubuntu) o \`sudo dnf install tesseract tesseract-langpack-spa\` (Fedora)."
             echo
             echo "Los archivos **\"Source code\"** y \`codigo-fuente.zip\` son el código del programa para programadores: **no los necesitas para usarlo**."
             echo "Si tu programa ya está instalado, ábrelo y usa *Acerca de → Buscar actualizaciones*."

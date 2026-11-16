@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -98,6 +99,9 @@ public class InventarioController implements Initializable {
     private Modo modo = Modo.ENTRADA;
 
     @Override public void initialize(URL url, ResourceBundle rb) {
+        // Ni encabezados ni cifras con «…» aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaInventario);
+        ColumnasTabla.llenarCon(tablaInventario, colDescripcion);   // Estado siempre a la vista; la descripción cede o crece
         configurarColumnas();
         EtiquetaBeta.marcar(btnLeerTicket, FuncionBeta.LECTOR_TICKETS);
         tablaInventario.setItems(lista);

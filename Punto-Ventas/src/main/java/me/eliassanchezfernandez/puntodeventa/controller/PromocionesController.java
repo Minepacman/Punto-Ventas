@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -110,6 +111,8 @@ public class PromocionesController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Encabezados completos aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaPromociones);
         configurarColumnas();
         tablaPromociones.setItems(lista);
         tablaPromociones.setPlaceholder(new Label("No hay promociones registradas."));

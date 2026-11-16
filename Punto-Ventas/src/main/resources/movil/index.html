@@ -98,7 +98,10 @@ h1, h2, h3, p { margin: 0; }
   transition: transform .06s ease, background .15s ease;
 }
 .btn:active { transform: scale(.98); }
-a.btn { text-decoration: none; }   /* enlaces con aspecto de botón (p. ej. "Llamar" con tel:) */
+/* Enlaces con aspecto de botón o de fila (p. ej. "Llamar" con tel:, clientes del fiado): sin el azul
+   subrayado del navegador. :where() no suma especificidad, así .btn-primario sigue poniendo su color */
+:where(a.btn, a.fila) { color: inherit; text-decoration: none; }
+a.fila:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 .btn[disabled] { opacity: .55; pointer-events: none; }
 .btn-primario { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn-primario:hover { background: var(--accent-hover); }
@@ -488,7 +491,7 @@ html, body { overflow-x: clip; }
 :root[data-tema="alto-contraste"] .btn, :root[data-tema="alto-contraste"] .campo,
 :root[data-tema="alto-contraste"] .tarjeta, :root[data-tema="alto-contraste"] .kpi,
 :root[data-tema="alto-contraste"] .fila { border: 2px solid var(--text); box-shadow: none; }
-:root[data-tema="alto-contraste"] a { text-decoration: underline; }
+:root[data-tema="alto-contraste"] a:not(.btn):not(.fila) { text-decoration: underline; }
 :root[data-tema="alto-contraste"] :focus-visible { outline-width: 4px; }
 /* Vidrio (beta): fondo de manchas de color y paneles esmerilados (backdrop-filter) con borde de luz */
 :root[data-vidrio] body {

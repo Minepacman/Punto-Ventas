@@ -126,6 +126,16 @@ public final class Paleta {
         t.put("-pos-band-line", alto ? "rgba(255, 255, 255, 0.60)" : "rgba(255, 255, 255, 0.16)");
         t.put("-pos-band-fill", alto ? "rgba(255, 255, 255, 0.16)" : "rgba(255, 255, 255, 0.10)");
         t.put("-pos-band-fill-hover", alto ? "rgba(255, 255, 255, 0.30)" : "rgba(255, 255, 255, 0.18)");
+        // Botones sobre la banda (Bloquear, Cerrar sesión, Salir): relleno OPACO un poco más claro que la
+        // banda (las capas translúcidas apiladas se veían grises en todos los temas) y borde claro
+        Rgb danger = alto ? c("#FF9AA2") : c("#E8939A");
+        Rgb botonBanda = alto ? Rgb.NEGRO : bandaPlana.aclarar(0.14);
+        t.put("-pos-band-button-bg", botonBanda.hex());
+        t.put("-pos-band-button-bg-hover", (alto ? c("#333333") : bandaPlana.aclarar(0.24)).hex());
+        t.put("-pos-band-button-border", (alto ? Rgb.BLANCO : bandaPlana.aclarar(0.48)).hex());
+        // Rosado claro que se lee sobre el botón con cualquier acento (con el turquesa quedaba en 4.35:1)
+        t.put("-pos-band-danger-text", (alto ? Rgb.BLANCO : c("#FFD9DC").conContrasteMinimo(botonBanda, minTexto)).hex());
+        t.put("-pos-band-danger-border", danger.hex());
         Rgb loginArriba = alto ? Rgb.NEGRO : Rgb.deHsl(hsl[0], Math.min(hsl[1] * 0.75, 0.5), oscuro ? 0.18 : 0.28);
         Rgb loginAbajo = alto ? Rgb.NEGRO : Rgb.deHsl(hsl[0], Math.min(hsl[1] * 0.75, 0.5), oscuro ? 0.09 : 0.20);
         t.put("-pos-login-bg", "linear-gradient(to bottom right, " + loginArriba.hex() + " 0%, " + loginAbajo.hex() + " 100%)");

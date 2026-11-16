@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -185,6 +186,14 @@ public class CorteController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Ni encabezados ni cifras con «…» aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaDepartamentos);
+        ColumnasTabla.ajustar(tablaMovimientos);
+        ColumnasTabla.ajustar(tablaCortes);
+        ColumnasTabla.ajustar(tablaVouchers);
+        ColumnasTabla.ajustar(tablaBajos);
+        // El monto con su nota de devoluciones conserva su ancho; el departamento toma lo que sobra
+        ColumnasTabla.llenarCon(tablaDepartamentos, colDepto);
         colDepto.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getKey()));
         // Netos de las devoluciones del periodo, con la nota de cuánto se devolvió de ese departamento
         colMonto.setCellValueFactory(c -> new SimpleStringProperty(moneda(c.getValue().getValue())

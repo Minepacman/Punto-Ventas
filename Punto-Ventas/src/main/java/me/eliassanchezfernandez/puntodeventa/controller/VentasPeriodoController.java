@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -103,6 +104,9 @@ public class VentasPeriodoController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Ni encabezados ni cifras con «…» aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaVentas);
+        ColumnasTabla.ajustar(tablaDetalle);
         configurarColumnas();
         EtiquetaBeta.marcar(btnFacturar, FuncionBeta.FACTURACION_CFDI);
         tablaVentas.setItems(ventas);
