@@ -2,7 +2,6 @@ package me.eliassanchezfernandez.puntodeventa.ocr;
 
 import me.eliassanchezfernandez.puntodeventa.util.CalentadorCds;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -32,6 +31,8 @@ public final class LocalizadorTesseract {
     public static final String VARIABLE = "CAJA_LIBRE_TESSERACT";
     /** Subcarpeta dentro de la carpeta "app" del instalador */
     public static final String CARPETA_INCLUIDA = "ocr/tesseract";
+    /** Config de Tesseract que activa la salida TSV (la que interpreta {@link TsvTesseract}) */
+    static final String CONFIG_TSV = "configs/tsv";
 
     /**
      * @param ejecutable ruta al programa
@@ -57,6 +58,10 @@ public final class LocalizadorTesseract {
         for (Candidato c : candidatos) {
             if (!Files.isRegularFile(c.ejecutable()) || !Files.isExecutable(c.ejecutable())) continue;
             Path tessdata = c.tessdata() != null && Files.isDirectory(c.tessdata()) ? c.tessdata() : null;
+            // MotorTesseract pide la salida con el config "tsv": una carpeta de idiomas sin configs/tsv daría texto
+            // plano que no se entiende. Se ignora esa carpeta y se prueba con la propia del programa (la del sistema
+            // la trae; la de un instalador mal armado no, y entonces el candidato se descarta en idiomas()).
+            if (tessdata != null && !Files.isRegularFile(tessdata.resolve(CONFIG_TSV))) tessdata = null;
             String version = version(c.ejecutable());
             if (version == null) continue;            // no arranca (bibliotecas faltantes, arquitectura equivocada)
             String idiomas = idiomas(c.ejecutable(), tessdata);
@@ -93,18 +98,33 @@ public final class LocalizadorTesseract {
             carpetas.add(Path.of("/usr/local/bin"));
             carpetas.add(Path.of("/usr/bin"));
         }
-        String path = entorno.getOrDefault("PATH", entorno.getOrDefault("Path", ""));
-        for (String parte : path.split(File.pathSeparator)) {
-            if (!parte.isBlank()) {
-                try {
-                    carpetas.add(Path.of(parte.trim()));
-                } catch (RuntimeException e) {
-                    // entrada inválida del PATH
-                }
+        for (String parte : partesDelPath(entorno, windows)) {
+            try {
+                carpetas.add(Path.of(parte));
+            } catch (RuntimeException e) {
+                // entrada inválida del PATH
             }
         }
         for (Path c : carpetas) lista.add(new Candidato(c.resolve(exe), null, "instalado en " + c));
         return lista;
+    }
+
+    /**
+     * Carpetas del PATH según el sistema DESTINO (no el que corre la prueba): en Windows se separan con
+     * {@code ;} y pueden venir entre comillas ({@code "C:\Program Files\Tesseract-OCR"}); en los demás, con {@code :}.
+     * La variable se llama {@code Path} en Windows ({@code System.getenv()} allá no distingue mayúsculas, un mapa
+     * de prueba sí).
+     */
+    static List<String> partesDelPath(Map<String, String> entorno, boolean windows) {
+        String path = entorno.get("PATH");
+        if (path == null) path = entorno.getOrDefault("Path", "");
+        List<String> partes = new ArrayList<>();
+        for (String parte : path.split(windows ? ";" : ":")) {
+            String p = parte.trim();
+            if (windows && p.length() >= 2 && p.startsWith("\"") && p.endsWith("\"")) p = p.substring(1, p.length() - 1).trim();
+            if (!p.isEmpty()) partes.add(p);
+        }
+        return partes;
     }
 
     private static Path hermanoTessdata(Path ejecutable) {

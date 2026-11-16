@@ -353,42 +353,174 @@ def ejecutar(List<String> args, String mensajeFallo) {
 
 // ── Lector de tickets (OCR): Tesseract dentro del instalador ─────────────────────────────────
 // El programa usa el ejecutable "tesseract" como proceso aparte (ocr/LocalizadorTesseract): lo busca en
-// <carpeta app>/ocr/tesseract/{bin,lib,tessdata}. Esta tarea arma esa carpeta dentro de la entrada de jpackage.
-//   macOS: copia el tesseract de Homebrew (brew install tesseract tesseract-lang) con sus bibliotecas que no son
-//          del sistema, las reapunta a @executable_path/../lib / @loader_path y las firma ad hoc (≈ 12 MB + idiomas).
-//   Windows / Linux: aún no (ver docs/investigacion-ocr-tickets.md, "Empaquetado de Tesseract por plataforma");
-//          sin la carpeta, el programa usa un Tesseract instalado en el sistema si lo hay.
-// -PincluirTesseract=false la omite. Idiomas: spa + eng de tessdata_fast (≈ 6.4 MB).
+// <carpeta app>/ocr/tesseract/{bin,lib,tessdata}. Esta tarea arma esa carpeta dentro de la entrada de jpackage
+// (build/install/<proyecto>/lib/ocr/tesseract → <app>/ocr/tesseract). Gradle NO baja nada de internet aquí.
+//   macOS:   copia el tesseract de Homebrew (brew install tesseract) con sus bibliotecas que no son del sistema, las
+//            reapunta a @executable_path/../lib / @loader_path y las firma ad hoc. Idiomas: de -PtessdataDir=<carpeta>
+//            (el CI la llena con packaging/tesseract/bajar-tessdata.sh) o de Homebrew (brew install tesseract-lang).
+//   Windows: -PtesseractDir=<carpeta ya armada> con bin/tesseract.exe (estático, de vcpkg) y tessdata/; la arma
+//            .github/workflows/tesseract-windows.yml (packaging/tesseract/windows/construir.ps1). Se revisa que el exe
+//            sea de la arquitectura del instalador (x86 con -PjavafxPlatform=win-x86, si no x64).
+//   Linux:   no se incluye: el .deb y el .rpm declaran la dependencia del tesseract de la distribución (jpackageTask).
+// En todas, spa/eng deben ser los de tessdata_fast 4.1.0 (SHA-256 en packaging/tesseract/tessdata.sha256).
+// -PincluirTesseract=false la omite; -PexigirTesseract=true (CI) convierte "no se pudo incluir" en error.
+// -PtesseractDir funciona en cualquier sistema (copia la carpeta tal cual y la comprueba).
+def sumasTessdata() {
+    def sumas = [:]
+    file('packaging/tesseract/tessdata.sha256').eachLine { linea ->
+        def partes = linea.trim().split(/\s+/)
+        if (partes.length == 2) sumas[partes[1].replaceFirst(/^\*/, '')] = partes[0].toLowerCase()
+    }
+    if (!sumas.containsKey('spa.traineddata') || !sumas.containsKey('eng.traineddata')) {
+        throw new GradleException('packaging/tesseract/tessdata.sha256 debe traer spa.traineddata y eng.traineddata')
+    }
+    sumas
+}
+
+def sha256De(File f) {
+    def md = java.security.MessageDigest.getInstance('SHA-256')
+    f.withInputStream { entrada ->
+        byte[] buf = new byte[65536]
+        int n
+        while ((n = entrada.read(buf)) > 0) md.update(buf, 0, n)
+    }
+    md.digest().encodeHex().toString()
+}
+
+// Copia spa/eng de "origen" a "datos" exigiendo las sumas fijas (todas las plataformas llevan los mismos idiomas)
+def copiarIdiomas(File origen, File datos) {
+    datos.mkdirs()
+    sumasTessdata().each { nombre, suma ->
+        def td = new File(origen, nombre).canonicalFile
+        if (!td.isFile()) throw new GradleException("Falta $td (en macOS: brew install tesseract-lang o -PtessdataDir=<carpeta>)")
+        def real = sha256De(td)
+        if (real != suma) throw new GradleException("$td no es el de tessdata_fast 4.1.0 (sha256 $real, se esperaba $suma)")
+        java.nio.file.Files.copy(td.toPath(), new File(datos, nombre).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    }
+    def licencia = new File(origen, 'LICENSE-tessdata_fast.txt')
+    if (licencia.isFile()) java.nio.file.Files.copy(licencia.toPath(), new File(datos, licencia.name).toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+    agregarConfigTsv(datos)
+}
+
+// tessdata/configs/tsv: ocr/MotorTesseract pide la salida con el config "tsv"; sin ese archivo Tesseract devuelve
+// texto plano y la lectura no se entiende (ocr/LocalizadorTesseract descarta una tessdata sin él).
+def agregarConfigTsv(File datos) {
+    def configs = new File(datos, 'configs')
+    configs.mkdirs()
+    java.nio.file.Files.copy(file('packaging/tesseract/configs/tsv').toPath(), new File(configs, 'tsv').toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+}
+
+// Campo Machine de la cabecera PE de un .exe (0x14C = x86, 0x8664 = x64)
+def maquinaPe(File exe) {
+    def b = exe.bytes
+    def le = { int i, int n -> long v = 0; for (int k = n - 1; k >= 0; k--) v = (v << 8) | (b[i + k] & 0xFF); v }
+    int pe = (int) le(0x3C, 4)
+    if (b.length < pe + 6 || b[pe] != (byte) 'P' || b[pe + 1] != (byte) 'E') throw new GradleException("$exe no es un ejecutable PE")
+    (int) le(pe + 4, 2)
+}
+
+def copiarArbol(File origen, File destino) {
+    def base = origen.toPath()
+    java.nio.file.Files.walk(base).withCloseable { flujo ->
+        flujo.each { p ->
+            def d = destino.toPath().resolve(base.relativize(p).toString())
+            if (java.nio.file.Files.isDirectory(p)) java.nio.file.Files.createDirectories(d)
+            else java.nio.file.Files.copy(p, d, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES)
+        }
+    }
+}
+
 tasks.register('empaquetarTesseract') {
     group = 'distribution'
-    description = 'Copia Tesseract (macOS: el de Homebrew) a build/install/.../lib/ocr/tesseract para el instalador'
+    description = 'Arma build/install/.../lib/ocr/tesseract para el instalador (macOS: Homebrew; Windows: -PtesseractDir)'
     mustRunAfter 'installDist'
-    onlyIf { (project.findProperty('incluirTesseract') ?: 'true').toString() != 'false' }
+    // todo lo del proyecto se lee al configurar (usar "project" dentro de doLast está obsoleto en Gradle 9)
+    def incluir = (project.findProperty('incluirTesseract') ?: 'true').toString() != 'false'
+    def exigir = (project.findProperty('exigirTesseract') ?: 'false').toString() == 'true'
+    def tessdataDir = project.findProperty('tessdataDir') ? file(project.findProperty('tessdataDir')) : null
+    def preparado = project.findProperty('tesseractDir') ? file(project.findProperty('tesseractDir')) : null
+    def destinoProv = layout.buildDirectory.dir("install/${project.name}/lib/ocr/tesseract")
+    def plataformaFx = javafxPlataforma
+    onlyIf { incluir }
     doLast {
         def os = System.getProperty('os.name').toLowerCase()
-        def destino = layout.buildDirectory.dir("install/${project.name}/lib/ocr/tesseract").get().asFile
+        def esWindows = os.contains('win')
+        def esMac = os.contains('mac')
+        def destino = destinoProv.get().asFile
         destino.deleteDir()
-        if (!os.contains('mac')) {
-            logger.warn("empaquetarTesseract: en ${System.getProperty('os.name')} aún no se incluye Tesseract en el instalador")
-            return
+        def faltante = { String motivo ->
+            if (exigir) throw new GradleException("empaquetarTesseract: $motivo (-PexigirTesseract=true)")
+            logger.warn("empaquetarTesseract: $motivo; el instalador saldrá sin lector de tickets incluido " +
+                    '(el programa usará un Tesseract instalado en el sistema si lo hay)')
         }
-        def candidatos = ['/opt/homebrew/bin/tesseract', '/usr/local/bin/tesseract'].collect { new File(it) }
-        def exe = candidatos.find { it.canExecute() }
-        if (exe == null) {
-            logger.warn('empaquetarTesseract: no hay Tesseract de Homebrew (brew install tesseract tesseract-lang); el instalador saldrá sin lector de tickets')
-            return
-        }
-        exe = exe.canonicalFile
-        def prefijo = exe.path.startsWith('/opt/homebrew') ? '/opt/homebrew' : '/usr/local'
-        def tessdata = new File(prefijo, 'share/tessdata')
-        def bin = new File(destino, 'bin'); def libDir = new File(destino, 'lib'); def datos = new File(destino, 'tessdata')
-        [bin, libDir, datos].each { it.mkdirs() }
         def correr = { List<String> cmd ->
             def p = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+            p.outputStream.close()
             def salida = p.inputStream.text
             if (p.waitFor() != 0) throw new GradleException("Falló: ${cmd.join(' ')}\n$salida")
             salida
         }
+        def exeNombre = esWindows ? 'tesseract.exe' : 'tesseract'
+
+        if (preparado) {
+            // ── Carpeta ya armada (Windows en el CI): se copia tal cual y se comprueba ──
+            def origen = preparado
+            def exeOrigen = new File(origen, "bin/$exeNombre")
+            if (!exeOrigen.isFile()) { faltante("no está $exeOrigen"); return }
+            copiarArbol(origen, destino)
+            def datos = new File(destino, 'tessdata')
+            if (tessdataDir) copiarIdiomas(tessdataDir, datos)
+            agregarConfigTsv(datos)
+            // los idiomas deben ser los fijos, vengan de donde vengan
+            sumasTessdata().each { nombre, suma ->
+                def td = new File(datos, nombre)
+                if (!td.isFile() || sha256De(td) != suma) throw new GradleException("$td falta o no es el de tessdata_fast 4.1.0")
+            }
+            def exeCopia = new File(destino, "bin/$exeNombre")
+            if (esWindows) {
+                int esperada = plataformaFx == 'win-x86' ? 0x14C : 0x8664
+                int maquina = maquinaPe(exeCopia)
+                if (maquina != esperada) {
+                    throw new GradleException(String.format('%s es Machine=0x%X y el instalador es 0x%X (%s)', exeCopia, maquina, esperada,
+                            plataformaFx == 'win-x86' ? 'x86' : 'x64'))
+                }
+            }
+            exeCopia.setExecutable(true)
+            def version = correr([exeCopia.path, '--version']).readLines().first()
+            def idiomas = correr([exeCopia.path, '--tessdata-dir', datos.path, '--list-langs'])
+            if (!idiomas.readLines()*.trim().containsAll(['spa', 'eng'])) {
+                throw new GradleException("El Tesseract de $origen no ve spa y eng:\n$idiomas")
+            }
+            long bytes = 0
+            destino.eachFileRecurse { if (it.isFile()) bytes += it.length() }
+            logger.lifecycle("empaquetarTesseract: $version desde $origen, ${String.format('%.1f', bytes / 1048576.0)} MB en $destino")
+            return
+        }
+        if (esWindows) {
+            faltante('en Windows hace falta -PtesseractDir=<carpeta con bin/tesseract.exe y tessdata> ' +
+                    '(la arma .github/workflows/tesseract-windows.yml o packaging/tesseract/windows/construir.ps1)')
+            return
+        }
+        if (!esMac) {
+            logger.lifecycle('empaquetarTesseract: en Linux no se incluye; el .deb y el .rpm dependen del tesseract de la ' +
+                    'distribución y con el .tar.gz se instala aparte (docs/publicar.md)')
+            return
+        }
+
+        // ── macOS: el de Homebrew ──
+        def candidatos = ['/opt/homebrew/bin/tesseract', '/usr/local/bin/tesseract'].collect { new File(it) }
+        def exe = candidatos.find { it.canExecute() }
+        if (exe == null) {
+            faltante('no hay Tesseract de Homebrew (brew install tesseract)')
+            return
+        }
+        exe = exe.canonicalFile
+        def prefijo = exe.path.startsWith('/opt/homebrew') ? '/opt/homebrew' : '/usr/local'
+        def bin = new File(destino, 'bin'); def libDir = new File(destino, 'lib'); def datos = new File(destino, 'tessdata')
+        def licencias = new File(destino, 'licencias')
+        [bin, libDir, datos, licencias].each { it.mkdirs() }
         // dependencias que no son del sistema (Homebrew), en todo el árbol
         // (las "@rpath/x" de Homebrew están junto a la biblioteca que las pide: webp → sharpyuv)
         def dependencias = { File f ->
@@ -400,6 +532,7 @@ tasks.register('empaquetarTesseract') {
                                        : new File(ruta).canonicalFile
         }
         def copiadas = [:]   // nombre de archivo -> archivo copiado
+        def kegs = new LinkedHashSet<File>([exe.parentFile.parentFile])   // Cellar/<fórmula>/<versión> (licencias)
         def pendientes = new ArrayDeque<List>()
         dependencias(exe).each { pendientes.add([it, exe]) }
         while (!pendientes.isEmpty()) {
@@ -412,6 +545,7 @@ tasks.register('empaquetarTesseract') {
             java.nio.file.Files.copy(origen.toPath(), copia.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
             copia.setWritable(true)
             copiadas[nombre] = copia
+            kegs << origen.parentFile.parentFile
             dependencias(origen).each { if (!copiadas.containsKey(new File(it).name)) pendientes.add([it, origen]) }
         }
         def exeCopia = new File(bin, 'tesseract')
@@ -431,23 +565,48 @@ tasks.register('empaquetarTesseract') {
         }
         // install_name_tool invalida la firma: firma ad hoc (en Apple Silicon sin firma no arranca)
         (copiadas.values() + [exeCopia]).each { correr(['codesign', '--force', '--sign', '-', it.path]) }
-        ['spa', 'eng'].each { idioma ->
-            def td = new File(tessdata, "${idioma}.traineddata").canonicalFile
-            if (!td.isFile()) throw new GradleException("Falta $td (brew install tesseract-lang)")
-            java.nio.file.Files.copy(td.toPath(), new File(datos, td.name).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-        }
-        // licencia (Apache-2.0) junto al programa
+        copiarIdiomas(tessdataDir ?: new File(prefijo, 'share/tessdata'), datos)
+        // licencias: la de Tesseract (Apache-2.0) junto al programa y la de cada biblioteca (archivos LICENSE/COPYING/
+        // NOTICE que Homebrew deja en la raíz de cada fórmula) en licencias/<fórmula>-<archivo>
         def licencia = new File(exe.parentFile.parentFile, 'LICENSE')
         if (licencia.isFile()) java.nio.file.Files.copy(licencia.toPath(), new File(destino, 'LICENSE-tesseract.txt').toPath(),
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        kegs.each { File keg ->
+            def formula = keg.parentFile.name
+            keg.listFiles()?.findAll { it.isFile() && it.name =~ /(?i)^(licen[cs]e|copying|copyright|notice|authors|patents)/ }?.each {
+                java.nio.file.Files.copy(it.toPath(), new File(licencias, "${formula}-${it.name}.txt".replace('.txt.txt', '.txt')).toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
         // comprobación: que arranque con sus propias bibliotecas y vea los idiomas
         def version = correr([exeCopia.path, '--version']).readLines().first()
         def idiomas = correr([exeCopia.path, '--tessdata-dir', datos.path, '--list-langs'])
-        if (!idiomas.contains('spa')) throw new GradleException("El Tesseract empaquetado no ve spa.traineddata:\n$idiomas")
+        if (!idiomas.readLines()*.trim().containsAll(['spa', 'eng'])) throw new GradleException("El Tesseract empaquetado no ve spa y eng:\n$idiomas")
+        // Homebrew compila para la versión de macOS donde corre: el lector incluido solo arranca de esa versión en
+        // adelante (en una más vieja el programa no lo encuentra útil y cae a un Tesseract del sistema o a escribir el texto)
+        def clave = { String v -> v.tokenize('.').collect { String.format('%05d', it as int) }.join('.') }
+        def minimo = (copiadas.values() + [exeCopia]).collect { File f ->
+            def m = correr(['vtool', '-show-build', f.path]) =~ /minos\s+([0-9.]+)/
+            m.find() ? m.group(1) : '0'
+        }.max { clave(it) }
         long bytes = 0
         destino.eachFileRecurse { if (it.isFile()) bytes += it.length() }
-        logger.lifecycle("empaquetarTesseract: $version, ${copiadas.size()} bibliotecas, ${String.format('%.1f', bytes / 1048576.0)} MB en $destino")
+        logger.lifecycle("empaquetarTesseract: $version, ${copiadas.size()} bibliotecas, ${String.format('%.1f', bytes / 1048576.0)} MB " +
+                "en $destino; requiere macOS $minimo o posterior (minos de Homebrew)")
     }
+}
+
+// Lector de tickets en Linux: el Tesseract de la distribución, declarado como dependencia del paquete (jpackage lo
+// agrega a "Depends:" del .deb y a "Requires:" del .rpm, después de las que detecta solo). El programa lo encuentra
+// en /usr/bin (ocr/LocalizadorTesseract). El .tar.gz no puede declarar nada: se documenta en docs/publicar.md.
+//   deb (Debian/Ubuntu/Mint): tesseract-ocr + tesseract-ocr-spa (Debian main / Ubuntu universe; trae eng).
+//   rpm: el ejecutable como archivo (Fedora lo llama "tesseract" y openSUSE "tesseract-ocr") y el español con
+//        dependencia booleana (rpm ≥ 4.13): Fedora "tesseract-langpack-spa", openSUSE "tesseract-ocr-traineddata-spanish".
+// -PdependenciasOcr=false las quita (para probar el paquete en una distribución sin esos nombres).
+def dependenciasOcrLinux(String tipo) {
+    if ((project.findProperty('dependenciasOcr') ?: 'true').toString() == 'false') return ''
+    tipo == 'rpm' ? '/usr/bin/tesseract, (tesseract-langpack-spa or tesseract-ocr-traineddata-spanish)'
+                  : 'tesseract-ocr, tesseract-ocr-spa'
 }
 
 tasks.register('jpackageTask') {
@@ -521,6 +680,12 @@ tasks.register('jpackageTask') {
                 args += ['--resource-dir', file('packaging/windows-x86').absolutePath,
                          '--temp', temporal.absolutePath,
                          '--verbose']
+            } else {
+                // --temp conserva la app-image intermedia (images/…/PuntoDeVenta/app/ocr/tesseract): release.yml
+                // comprueba desde ahí que el tesseract.exe incluido arranque y lea el ticket de muestra.
+                def temporal = layout.buildDirectory.dir('jpackage-temp').get().asFile
+                temporal.deleteDir()
+                args += ['--temp', temporal.absolutePath]
             }
         } else {
             // Linux. Nombre de paquete en minúsculas (lo exigen dpkg/rpm); se instala en /opt/punto-de-venta.
@@ -536,6 +701,8 @@ tasks.register('jpackageTask') {
                          '--linux-deb-maintainer', '142938186+Minepacman@users.noreply.github.com',
                          '--linux-rpm-license-type', 'GPLv3',
                          '--linux-app-category', (linuxType == 'rpm' ? 'Applications/Productivity' : 'misc')]
+                def dependencias = dependenciasOcrLinux(linuxType)
+                if (dependencias) args += ['--linux-package-deps', dependencias]
             }
         }
         logger.lifecycle("jpackage: " + args.join(' '))
