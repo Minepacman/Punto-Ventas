@@ -101,16 +101,54 @@ public class AccesoMovilService {
         return ConfiguracionService.sugerirNombreLocal(configuracionService.obtener().getNombreTienda());
     }
 
-    /** Sesión abierta con el nombre de su usuario, lista para mostrar */
-    public record SesionInfo(SesionMovil sesion, String usuario) { }
+    /**
+     * Sesión abierta con el nombre de su usuario, lista para mostrar, y los avisos de ESE teléfono
+     * (la suscripción push ligada a la sesión; null = sin avisos).
+     */
+    public record SesionInfo(SesionMovil sesion, String usuario, me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush avisos) {
+        public SesionInfo(SesionMovil sesion, String usuario) { this(sesion, usuario, null); }
+    }
 
     public List<SesionInfo> sesionesActivas() {
         sesionService.verificarAdmin();
+        java.util.Map<Long, me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush> porSesion = new java.util.HashMap<>();
+        for (var s : pushService.listarTodas()) {
+            if (s.getSesionMovilId() == null) continue;
+            var otra = porSesion.get(s.getSesionMovilId());
+            if (otra == null || (!otra.isActiva() && s.isActiva())) porSesion.put(s.getSesionMovilId(), s);
+        }
         return sesionMovilService.listarActivas().stream()
                 .map(s -> new SesionInfo(s, sesionMovilService.cajeroDe(s)
-                        .map(c -> c.getUsuario() + " (" + c.getNombreCompleto() + ")").orElse("(usuario eliminado)")))
+                        .map(c -> c.getUsuario() + " (" + c.getNombreCompleto() + ")").orElse("(usuario eliminado)"),
+                        porSesion.get(s.getId())))
                 .toList();
     }
+
+    /** Línea de estado de los avisos de un teléfono, en palabras sencillas */
+    public static String estadoAvisos(me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush s) {
+        if (s == null) return "Sin avisos";
+        if (!s.isActiva()) return "Avisos en pausa";
+        if (s.getUltimoError() != null && (s.getUltimoOk() == null || s.getUltimoError().isAfter(s.getUltimoOk()))) {
+            return "Avisos activos (el último no llegó)";
+        }
+        return "Avisos activos";
+    }
+
+    /**
+     * Manda un aviso de prueba al teléfono (ADMIN). Sale a internet (servicio de Google/Apple/Mozilla):
+     * llamarlo fuera del hilo de la pantalla.
+     */
+    public NotificacionesPushService.Envio enviarPrueba(Long suscripcionId) {
+        sesionService.verificarAdmin();
+        NotificacionesPushService.Envio e = pushService.enviarPruebaASuscripcion(suscripcionId);
+        auditoriaService.registrar(sesionService.getCajeroActual(), "PUSH_PRUEBA_ESCRITORIO",
+                "Aviso de prueba a la suscripción id " + suscripcionId + ": " + e.detalle(),
+                (me.eliassanchezfernandez.puntodeventa.model.Cajero) null);
+        return e;
+    }
+
+    /** Direcciones (HTTP) que abren directo el asistente de avisos del teléfono */
+    public List<String> urlsAvisos(int puertoHttp) { return servidor.urlsAvisos(puertoHttp); }
 
     // ── HTTPS, certificado local y notificaciones ─────────────────────────
 

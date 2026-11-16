@@ -90,6 +90,11 @@ import java.util.function.Supplier;
  *   GET  /api/sesion          (Bearer)                          -> valida el token, devuelve permisos
  *   POST /api/sesion/recordar {recordar}  (Bearer)             -> sesión permanente / 48 h
  *   POST /api/logout          (Bearer)                          -> revoca el token
+ *   POST /api/sesion/traspaso {destino: seguro|inicio} (Bearer) -> código de UN solo uso (3 / 15 min) para pasar la sesión a
+ *                                                    la página segura (url https con #traspaso=...) o al icono de inicio del iPhone
+ *                                                    (manifiesto con start_url propio). Ver TraspasosSesion.
+ *   POST /api/sesion/canjear  {codigo}  (sin token)            -> canjea el código: sesión NUEVA con la misma vigencia; la
+ *                                                    original se cierra (la sesión «se muda»). Fallos cuentan como intento de login.
  *
  *   GET  /api/estadisticas?periodo=dia|semana|mes   (VER_HISTORIAL)
  *   GET  /api/ventas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD (VER_HISTORIAL, máx. 93 días y 500 ventas)
@@ -243,6 +248,19 @@ public class ServidorMovilService {
     /** Pruebas: puerto HTTPS a usar (0 = libre; null = según configuración) */
     volatile Integer puertoHttpsForzado;
     private volatile Pagina paginaCache;
+    /** Pruebas: se puede cambiar por uno con reloj propio */
+    volatile TraspasosSesion traspasos;
+
+    private TraspasosSesion traspasos() {
+        TraspasosSesion t = traspasos;
+        if (t == null) {
+            synchronized (this) {
+                t = traspasos;
+                if (t == null) traspasos = t = new TraspasosSesion(reloj);
+            }
+        }
+        return t;
+    }
     private volatile String nombreEquipo;
 
     /** La página lista para servir: normal, comprimida, su ETag y la CSP con el hash de su script */
@@ -365,7 +383,8 @@ public class ServidorMovilService {
                         }
                     });
                     h.createContext("/", this::atender);
-                    h.setExecutor(hilos);
+                    if (hilosHttps == null) hilosHttps = crearPoolHttps();
+                    h.setExecutor(hilosHttps);
                     h.start();
                     servidorHttps = h;
                     System.out.println("🔒 Acceso móvil seguro (HTTPS) en el puerto " + h.getAddress().getPort());
@@ -385,6 +404,9 @@ public class ServidorMovilService {
         if (h == null) return;
         servidorHttps = null;
         h.stop(0);
+        ThreadPoolExecutor p = hilosHttps;
+        hilosHttps = null;
+        if (p != null) p.shutdownNow();
     }
 
     /** Puertos HTTPS a probar: el fijado por el administrador, o el HTTP + 1 y los siguientes */
@@ -460,11 +482,41 @@ public class ServidorMovilService {
         return urls;
     }
 
+    /** Dirección (HTTP) que abre el asistente «Recibir avisos en este teléfono» (pide iniciar sesión si hace falta) */
+    public List<String> urlsAvisos(int puertoHttp) {
+        List<String> urls = new ArrayList<>();
+        for (Inet4Address a : ipsLan()) urls.add("http://" + a.getHostAddress() + ":" + puertoHttp + "/#/avisos");
+        return urls;
+    }
+
     /** Página pública con la guía para instalar el certificado, en cada dirección HTTP */
     public List<String> urlsCertificado(int puertoHttp) {
         List<String> urls = new ArrayList<>();
         for (Inet4Address a : ipsLan()) urls.add("http://" + a.getHostAddress() + ":" + puertoHttp + "/certificado");
         return urls;
+    }
+
+    /**
+     * Hilos del HTTPS: el HttpsServer del JDK lee el saludo TLS y la petición con lecturas BLOQUEANTES
+     * en el hilo de trabajo, y los navegadores abren conexiones «por si acaso» (Chrome pre-conecta)
+     * que no mandan nada hasta maxReqTime (10 s). Con 2 hilos fijos, dos de esas conexiones dejaban
+     * esperando 10 s a la petición real (el asistente de avisos se quedaba en «Revisando…»). Aquí los
+     * HILOS_HTTPS se crean desde el principio (no solo con la cola llena) y mueren tras 30 s sin uso;
+     * las consultas pesadas siguen limitadas por su semáforo.
+     */
+    static final int HILOS_HTTPS = 8;
+    private volatile ThreadPoolExecutor hilosHttps;
+
+    static ThreadPoolExecutor crearPoolHttps() {
+        AtomicInteger n = new AtomicInteger();
+        ThreadPoolExecutor p = new ThreadPoolExecutor(HILOS_HTTPS, HILOS_HTTPS, 30, TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(COLA_MAXIMA), r -> {
+                    Thread t = new Thread(r, "acceso-movil-seguro-" + n.incrementAndGet());
+                    t.setDaemon(true);
+                    return t;
+                }, new ThreadPoolExecutor.AbortPolicy());
+        p.allowCoreThreadTimeOut(true);
+        return p;
     }
 
     /** 2–4 hilos y cola de 32: con la cola llena se rechaza (el servidor cierra la conexión) en vez de crecer sin límite */
@@ -619,6 +671,8 @@ public class ServidorMovilService {
                 case "/api/sesion"          -> { exigir(metodo, "GET");  sesion(ex); }
                 case "/api/sesion/recordar" -> { exigir(metodo, "POST"); recordar(ex); }
                 case "/api/logout"          -> { exigir(metodo, "POST"); logout(ex); }
+                case "/api/sesion/traspaso" -> { exigir(metodo, "POST"); crearTraspaso(ex); }
+                case "/api/sesion/canjear"  -> { exigir(metodo, "POST"); canjearTraspaso(ex); }
                 case "/api/estadisticas"    -> { exigir(metodo, "GET");  estadisticas(ex); }
                 case "/api/ventas"          -> { exigir(metodo, "GET");  ventas(ex); }
                 case "/api/inventario"      -> { exigir(metodo, "GET");  inventario(ex); }
@@ -713,7 +767,7 @@ public class ServidorMovilService {
         if (p == null) { error(ex, 500, "ERROR", "Falta la página móvil."); return; }
         var h = ex.getResponseHeaders();
         h.set("Content-Type", "text/html; charset=utf-8");
-        h.set("Content-Security-Policy", p.csp());
+        h.set("Content-Security-Policy", cspPagina(ex, p.csp()));
         cabecerasComunes(ex);
         // La página sí se puede guardar, pero siempre revalidando (ETag): pesa 58 KB y casi nunca cambia
         h.set("Cache-Control", "no-cache");
@@ -734,6 +788,28 @@ public class ServidorMovilService {
         }
         ex.sendResponseHeaders(200, cuerpo.length);
         ex.getResponseBody().write(cuerpo);
+    }
+
+    /**
+     * Abierta por http, la página puede «tocar» la dirección segura de ESTA misma computadora
+     * (mismo host, puerto https) para saber si el teléfono ya acepta el certificado de la tienda
+     * (asistente de avisos). Solo se agrega ese origen a connect-src; nada externo.
+     */
+    String cspPagina(HttpExchange ex, String base) {
+        if (ex instanceof com.sun.net.httpserver.HttpsExchange) return base;
+        String origen = origenSeguro(ex);
+        return origen == null ? base : base.replace("connect-src 'self'", "connect-src 'self' " + origen);
+    }
+
+    private static final java.util.regex.Pattern HOST_SIMPLE = java.util.regex.Pattern.compile("[a-z0-9.-]{1,253}|\\[[0-9a-f:.]{2,45}\\]");
+
+    /** https://<host de la petición>:<puerto https>, o null si el HTTPS está apagado o el host es raro */
+    private String origenSeguro(HttpExchange ex) {
+        int puerto = getPuertoHttps();
+        if (puerto == 0) return null;
+        String host = hostSinPuerto(ex).toLowerCase(Locale.ROOT);
+        if (!HOST_SIMPLE.matcher(host).matches()) return null;
+        return "https://" + host + ":" + puerto;
     }
 
     // ── Archivos estáticos (icono y manifiesto) ───────────────────────────
@@ -805,6 +881,7 @@ public class ServidorMovilService {
     /** Manifiesto mínimo para "Agregar a pantalla de inicio" (nombre, icono y color de la app) */
     Map<String, Object> manifiesto() {
         Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", "/");             // identidad fija de la app aunque cambie start_url (traspaso al icono de inicio)
         m.put("name", "Caja Libre");
         m.put("short_name", "Caja Libre");
         m.put("description", "Acceso móvil a Caja Libre (punto de venta) en la red local");
@@ -830,6 +907,10 @@ public class ServidorMovilService {
 
     private void estatico(HttpExchange ex, String metodo, String ruta) throws IOException {
         if (!"GET".equals(metodo) && !"HEAD".equals(metodo)) throw new MetodoNoPermitido("GET, HEAD");
+        if ("/manifest.webmanifest".equals(ruta)) {
+            String inicio = parametros(ex).get("inicio");
+            if (inicio != null && TraspasosSesion.formatoValido(inicio)) { manifiestoConInicio(ex, metodo, inicio); return; }
+        }
         Estatico e = cargarEstatico(ruta);
         if (e == null) { error(ex, 404, "NO_ENCONTRADO", "No encontrado."); return; }
         var h = ex.getResponseHeaders();
@@ -851,6 +932,23 @@ public class ServidorMovilService {
         }
         ex.sendResponseHeaders(200, e.cuerpo().length);
         ex.getResponseBody().write(e.cuerpo());
+    }
+
+    /**
+     * Manifiesto para «Agregar a inicio» con el código de traspaso en start_url (fragmento): al abrir
+     * por primera vez desde el icono, la página canjea el código y no pide la contraseña otra vez.
+     * El código solo se repite (no se valida aquí) y nunca se guarda en caché.
+     */
+    private void manifiestoConInicio(HttpExchange ex, String metodo, String codigo) throws IOException {
+        Map<String, Object> m = manifiesto();
+        m.put("start_url", "/#traspaso=" + codigo + "&ir=avisos");
+        byte[] cuerpo = json().writeValueAsBytes(m);
+        var h = ex.getResponseHeaders();
+        h.set("Content-Type", "application/manifest+json");
+        cabecerasComunes(ex);      // no-store
+        if ("HEAD".equals(metodo)) { ex.sendResponseHeaders(200, -1); return; }
+        ex.sendResponseHeaders(200, cuerpo.length);
+        ex.getResponseBody().write(cuerpo);
     }
 
     /** Nombre del negocio configurado en el escritorio (solo se entrega a quien ya tiene sesión) */
@@ -988,6 +1086,55 @@ public class ServidorMovilService {
         }
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("ok", true);
+        responder(ex, 200, r);
+    }
+
+    // ── Traspaso de la sesión a la página segura / al icono de inicio ──────
+
+    private void crearTraspaso(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        String destino = texto(leerJson(ex).get("destino"), 10).trim();
+        if (destino.isEmpty()) destino = "seguro";
+        if (!destino.equals("seguro") && !destino.equals("inicio")) throw new CuerpoInvalido(400, "Destino inválido. Usa seguro o inicio.");
+        boolean seguro = destino.equals("seguro");
+        String origen = origenSeguro(ex);
+        if (seguro && origen == null) {
+            error(ex, 409, "SIN_HTTPS", "La conexión segura no está encendida en la computadora de la tienda.");
+            return;
+        }
+        java.time.Duration vigencia = seguro ? TraspasosSesion.VIGENCIA_SEGURO : TraspasosSesion.VIGENCIA_INICIO;
+        String codigo = traspasos().emitir(v.get().sesion().getId(), SesionMovilService.hash(tokenDe(ex)), vigencia);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("codigo", codigo);
+        r.put("venceEnSegundos", vigencia.toSeconds());
+        if (seguro) r.put("url", origen + "/#traspaso=" + codigo + "&ir=avisos");
+        else r.put("manifiesto", "/manifest.webmanifest?inicio=" + codigo);
+        responder(ex, 200, r);
+    }
+
+    private void canjearTraspaso(HttpExchange ex) throws IOException {
+        String ip = ipDe(ex);
+        long espera = limitador.segundosDeEspera(ip);
+        if (espera > 0) { demasiadosIntentos(ex, espera); return; }
+        String codigo = texto(leerJson(ex).get("codigo"), 64).trim();
+        Optional<TraspasosSesion.Pendiente> p = traspasos().canjear(codigo);
+        Optional<SesionValida> original = p.flatMap(x -> sesionMovilService.validarPorHash(x.tokenHash()))
+                .filter(o -> o.sesion().getId().equals(p.get().sesionId()));
+        if (original.isEmpty()) {
+            limitador.registrarFallo(ip);
+            error(ex, 401, "TRASPASO_INVALIDO", "Este enlace ya se usó o venció. Entra con tu usuario y contraseña.");
+            return;
+        }
+        Cajero cajero = original.get().cajero();
+        Long anterior = original.get().sesion().getId();
+        var emitida = sesionMovilService.emitir(cajero, original.get().sesion().isPermanente(), ip, ex.getRequestHeaders().getFirst("User-Agent"));
+        sesionMovilService.revocarPorId(anterior);
+        auditoriaService.registrar(cajero, "LOGIN_MOVIL_TRASPASO", "ip " + ip + ": la sesión móvil id " + anterior
+                + " pasó a la sesión id " + emitida.sesion().getId() + (ex instanceof com.sun.net.httpserver.HttpsExchange ? " (página segura)" : ""),
+                (Cajero) null);
+        Map<String, Object> r = datosSesion(new SesionValida(emitida.sesion(), cajero));
+        r.put("token", emitida.token());
         responder(ex, 200, r);
     }
 

@@ -239,9 +239,19 @@ public class NotificacionesPushService {
     /** Notificación de prueba a este teléfono, ahora mismo (sin horas de silencio ni repetidos) */
     public Envio enviarPrueba(Cajero cajero, String endpoint) {
         SuscripcionPush s = propia(cajero, endpoint).orElseThrow(() -> new NegocioException("Este teléfono no tiene notificaciones activadas."));
-        return enviar(s, new Mensaje("Caja Libre: notificaciones activas",
+        return enviar(s, mensajePrueba(), false);
+    }
+
+    /** Prueba a un teléfono elegido en el escritorio (la verificación de administrador la hace AccesoMovilService) */
+    public Envio enviarPruebaASuscripcion(Long suscripcionId) {
+        SuscripcionPush s = repo.findById(suscripcionId).orElseThrow(() -> new NegocioException("Ese teléfono ya no tiene avisos activados."));
+        return enviar(s, mensajePrueba(), false);
+    }
+
+    private Mensaje mensajePrueba() {
+        return new Mensaje("Caja Libre: avisos activos",
                 "Así llegarán los avisos de " + nombreNegocioCorto() + ": proveedores, productos que se acaban, caducidades y hora pico.",
-                "prueba", "/#/config"), false);
+                "prueba", "/#/config");
     }
 
     private String nombreNegocioCorto() {
