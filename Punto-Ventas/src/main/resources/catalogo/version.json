@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "fecha": "2026-11-12",
+  "productos": 24887,
+  "por_fuente": {
+    "obf": 573,
+    "off": 24040,
+    "opf": 200,
+    "opff": 74
+  },
+  "por_categoria": {
+    "Abarrotes": 6368,
+    "Bebidas": 2114,
+    "Bebés": 174,
+    "Botanas": 1400,
+    "Carnes y embutidos": 1441,
+    "Congelados": 405,
+    "Dulces": 1135,
+    "Enlatados": 422,
+    "Higiene personal": 1050,
+    "Limpieza": 104,
+    "Lácteos": 2711,
+    "Mascotas": 107,
+    "Otros": 5882,
+    "Panadería": 1574
+  },
+  "fragmentos": 1000,
+  "esquema_fragmentos": "api/v1/<ultimos 3 digitos del codigo normalizado>.json",
+  "archivos": {
+    "catalogo-mx.csv": {
+      "sha256": "5a3db80080f92b39e4f103209140ba4065d6b66c41606c9090363a0a023c374a",
+      "bytes": 3496028
+    },
+    "catalogo-mx.jsonl": {
+      "sha256": "436f8afc95c6fa4aaa8cad347714be80f6aa29deb080b33c8abf434b0251e238",
+      "bytes": 7061737
+    }
+  },
+  "atribucion": "Contiene información de Open Food Facts, disponible bajo la Open Database License (ODbL)"
+}

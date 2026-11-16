@@ -121,6 +121,8 @@ public class ProductosController implements Initializable {
     @FXML private Label       lblCatalogoAtribucion;
     @FXML private Button      btnCatalogoUsar;
     @FXML private Button      btnCatalogoDeshacer;
+    @FXML private Button      btnCatalogoNoGracias;
+    @FXML private Button      btnCatalogoOcultar;
     @FXML private StackPane   zonaImagen;
     @FXML private ImageView   imgProducto;
     @FXML private Label       lblSinImagen;
@@ -875,24 +877,27 @@ public class ProductosController implements Initializable {
      * hasta "Guardar Producto".
      */
     private void procesarImagen(Supplier<byte[]> fuente, String origen) {
+        procesarImagen(fuente, origen, false);
+    }
+
+    /** @param silencioso la foto propuesta por el catálogo: si no baja (sin internet) no hay ventana de error */
+    private void procesarImagen(Supplier<byte[]> fuente, String origen, boolean silencioso) {
         int mia = ++secuenciaImagen;
-        lblImagenEstado.setText("Procesando imagen…");
+        lblImagenEstado.setText(silencioso ? "Bajando la foto…" : "Procesando imagen…");
         Thread t = new Thread(() -> {
             ProductoImagenService.Normalizada n;
             try {
                 n = ProductoImagenService.normalizar(fuente.get());
-            } catch (NegocioException e) {
-                Platform.runLater(() -> {
-                    if (mia != secuenciaImagen) return;
-                    lblImagenEstado.setText(AYUDA_IMAGEN);
-                    alerta(Alert.AlertType.ERROR, "Imagen no válida", e.getMessage());
-                });
-                return;
             } catch (RuntimeException e) {
+                String msg = e instanceof NegocioException ? e.getMessage() : "No se pudo procesar la imagen: " + e.getMessage();
                 Platform.runLater(() -> {
                     if (mia != secuenciaImagen) return;
+                    if (silencioso) {
+                        lblImagenEstado.setText("No se pudo bajar la foto. Puedes agregarla después.");
+                        return;
+                    }
                     lblImagenEstado.setText(AYUDA_IMAGEN);
-                    alerta(Alert.AlertType.ERROR, "Imagen no válida", "No se pudo procesar la imagen: " + e.getMessage());
+                    alerta(Alert.AlertType.ERROR, "Imagen no válida", msg);
                 });
                 return;
             }
@@ -933,28 +938,35 @@ public class ProductosController implements Initializable {
     private void onCancelarFormulario() {
         mostrarVistas(true, false, false);
     }
-
     // ─────────────────────────────────────────────────────────────────────
     //  CATÁLOGO DE CÓDIGOS DE BARRAS (autollenado al dar de alta)
     //
-    //  Al capturar un código (Enter del lector o al salir del campo) se busca
-    //  en CatalogoCodigosService fuera del hilo de JavaFX; con la ficha se
-    //  proponen descripción, departamento e imagen SOLO en los campos vacíos.
-    //  Un aviso dice qué se llenó y de dónde, con Deshacer / Usar estos datos.
+    //  Al capturar un código (Enter del lector, salir del campo o terminar de
+    //  teclear un código válido) se busca en CatalogoCodigosService fuera del
+    //  hilo de JavaFX. Si aparece, un aviso pregunta:
+    //    «Encontramos este producto: Coca-Cola 600 ml. ¿Usar estos datos?»
+    //    [Usar estos datos] [No, gracias]
+    //  «Usar» llena SOLO los campos vacíos (descripción, departamento, foto; lo que
+    //  el usuario ya escribió no se toca) y pasa al precio, que nunca se llena.
+    //  Después queda «Deshacer». Sin internet: «Sin internet: escribe los datos».
     //  En edición solo actúa el botón "Buscar datos".
     // ─────────────────────────────────────────────────────────────────────
 
     private enum CampoCatalogo { DESCRIPCION, DEPARTAMENTO, IMAGEN }
 
+    /** Espera tras la última tecla antes de consultar un código tecleado a mano */
+    private static final javafx.util.Duration ESPERA_TECLEO = javafx.util.Duration.millis(600);
+
     /** Cuenta de consultas: una respuesta tardía de otro código no pisa la actual */
     private int secuenciaCatalogo;
     /** Último código consultado automáticamente (no se repite la consulta al salir del campo varias veces) */
     private String codigoCatalogoConsultado;
+    /** Consulta en vuelo: se cancela (interrumpe la red) si el código cambia */
+    private java.util.concurrent.CompletableFuture<CatalogoCodigosService.Consulta> consultaEnCurso;
+    private javafx.animation.PauseTransition esperaTecleo;
     private CatalogoCodigosService.Ficha fichaCatalogo;
     /** Campos que llenó el catálogo (lo que Deshacer revierte) */
     private final java.util.EnumSet<CampoCatalogo> llenadosPorCatalogo = java.util.EnumSet.noneOf(CampoCatalogo.class);
-    /** Campos de la ficha que NO se aplicaron porque el usuario ya tenía algo (lo que "Usar estos datos" aplica) */
-    private final java.util.EnumSet<CampoCatalogo> pendientesCatalogo = java.util.EnumSet.noneOf(CampoCatalogo.class);
     /** Valores previos para Deshacer */
     private String descripcionAntesCatalogo;
     private Departamento departamentoAntesCatalogo;
@@ -968,20 +980,64 @@ public class ProductosController implements Initializable {
         txtCodigoBarras.focusedProperty().addListener((o, tenia, tiene) -> {
             if (tenia && !tiene && productoEnEdicion == null && vistaFormulario.isVisible()) consultarCatalogo(false);
         });
-        // Si el usuario cambia el código, el aviso anterior ya no corresponde
+        esperaTecleo = new javafx.animation.PauseTransition(ESPERA_TECLEO);
+        esperaTecleo.setOnFinished(e -> {
+            if (productoEnEdicion == null && vistaFormulario.isVisible()) consultarCatalogo(false);
+        });
         txtCodigoBarras.textProperty().addListener((o, a, b) -> {
-            if (hboxCatalogo.isVisible() && codigoCatalogoConsultado != null
-                    && !codigoCatalogoConsultado.equals(b == null ? "" : b.trim())) {
-                ocultarCatalogo();
+            String nuevo = b == null ? "" : b.trim();
+            // Si el usuario cambia el código, el aviso y la consulta anteriores ya no corresponden
+            if (codigoCatalogoConsultado != null && !codigoCatalogoConsultado.equals(nuevo)) {
+                cancelarConsultaCatalogo();
+                codigoCatalogoConsultado = null;
+                if (hboxCatalogo.isVisible() && llenadosPorCatalogo.isEmpty()) ocultarCatalogo();
+            }
+            // Un código completo tecleado a mano (dígito de control válido) se busca solo, sin Enter
+            esperaTecleo.stop();
+            if (productoEnEdicion == null && me.eliassanchezfernandez.puntodeventa.util.CodigoBarras.normalizar(nuevo).isPresent()) {
+                esperaTecleo.playFromStart();
             }
         });
         lblCatalogoAtribucion.setText(CatalogoCodigosService.ATRIBUCION);
+        // Enter sobre «Usar estos datos» lo acepta (el lector y el teclado van rápido)
+        btnCatalogoUsar.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                e.consume();
+                onCatalogoUsar();
+            }
+        });
+    }
+
+    /**
+     * «Dar de alta» desde Ventas (código que no existe): abre el formulario nuevo con el código
+     * puesto y busca sus datos. Si había un alta a medias con datos, pregunta antes de perderla.
+     */
+    public void nuevoConCodigo(String codigo) {
+        if (!sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS)) return;
+        boolean aMedias = vistaFormulario.isVisible() && productoEnEdicion == null
+                && txtDescripcion.getText() != null && !txtDescripcion.getText().isBlank();
+        if (aMedias) {
+            Alert a = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Tienes un producto nuevo sin guardar. ¿Lo descartas para dar de alta el código " + codigo + "?",
+                    ButtonType.YES, ButtonType.NO);
+            a.setHeaderText("Producto sin guardar");
+            Ventanas.estilizar(a);
+            if (a.showAndWait().orElse(ButtonType.NO) != ButtonType.YES) return;
+        }
+        onNuevo();
+        txtCodigoBarras.setText(codigo == null ? "" : codigo.trim());
+        onCodigoBarrasChanged();
+        consultarCatalogo(false);
+        Platform.runLater(() -> {
+            if (!hboxYaExiste.isVisible()) txtDescripcion.requestFocus();
+        });
     }
 
     /** Enter en el campo de código (los lectores lo envían al final) */
     @FXML
     private void onCodigoBarrasEnter() {
         onCodigoBarrasChanged();
+        if (esperaTecleo != null) esperaTecleo.stop();
         if (productoEnEdicion == null) consultarCatalogo(false);
         if (!hboxYaExiste.isVisible()) txtDescripcion.requestFocus();
     }
@@ -990,6 +1046,13 @@ public class ProductosController implements Initializable {
     @FXML
     private void onBuscarCatalogo() {
         consultarCatalogo(true);
+    }
+
+    private void cancelarConsultaCatalogo() {
+        secuenciaCatalogo++;
+        if (consultaEnCurso != null) consultaEnCurso.cancel(true);
+        consultaEnCurso = null;
+        if (btnBuscarCatalogo != null) btnBuscarCatalogo.setDisable(false);
     }
 
     private void consultarCatalogo(boolean manual) {
@@ -1002,97 +1065,108 @@ public class ProductosController implements Initializable {
         if (!manual && codigo.equals(codigoCatalogoConsultado)) return;
         if (me.eliassanchezfernandez.puntodeventa.util.CodigoBarras.normalizar(codigo).isEmpty()) {
             if (manual) {
-                mostrarCatalogo("Este código no es un código de barras EAN/UPC.",
-                        "El catálogo solo tiene códigos de barras comerciales (8, 12 o 13 dígitos). Los códigos internos se capturan a mano.",
-                        false, false);
+                mostrarCatalogo("Este código no es un código de barras de fábrica.",
+                        "Solo se buscan códigos de barras comerciales (8, 12 o 13 dígitos). Los códigos propios de la tienda se capturan a mano.",
+                        false, false, false);
             }
             return;
         }
+        cancelarConsultaCatalogo();
         codigoCatalogoConsultado = codigo;
-        int mia = ++secuenciaCatalogo;
+        int mia = secuenciaCatalogo;
         if (manual) {
-            mostrarCatalogo("Buscando «" + codigo + "» en el catálogo…", "", false, false);
+            mostrarCatalogo("Buscando los datos de «" + codigo + "»…", "", false, false, false);
             btnBuscarCatalogo.setDisable(true);
         }
-        catalogoCodigosService.buscarEnSegundoPlano(codigo).thenAccept(r -> Platform.runLater(() -> {
-            btnBuscarCatalogo.setDisable(false);
+        var futuro = catalogoCodigosService.consultarEnSegundoPlano(codigo);
+        consultaEnCurso = futuro;
+        futuro.thenAccept(r -> Platform.runLater(() -> {
             if (mia != secuenciaCatalogo || !vistaFormulario.isVisible()) return;
+            btnBuscarCatalogo.setDisable(false);
+            consultaEnCurso = null;
             if (!codigo.equals(txtCodigoBarras.getText() == null ? "" : txtCodigoBarras.getText().trim())) return;
-            if (r.isPresent()) {
-                aplicarFichaCatalogo(r.get());
-            } else if (manual) {
-                mostrarCatalogo("«" + codigo + "» no está en el catálogo.",
-                        catalogoCodigosService.isEnLinea()
-                                ? "Captura los datos a mano. Si no hay internet, solo se consulta la copia local."
-                                : "Captura los datos a mano. La consulta en internet está apagada (Configuración → Códigos de barras).",
-                        false, false);
+            if (hboxYaExiste.isVisible()) return;
+            switch (r.resultado()) {
+                case ENCONTRADO -> proponerFichaCatalogo(r.ficha());
+                case SIN_CONEXION -> mostrarCatalogo("Sin internet: escribe los datos.",
+                        manual ? "No se pudo consultar el código en internet. Puedes guardar el producto a mano." : "",
+                        false, false, false);
+                case NO_ENCONTRADO -> {
+                    if (manual) {
+                        mostrarCatalogo("No encontramos «" + codigo + "».",
+                                catalogoCodigosService.isEnLinea()
+                                        ? "Escribe los datos a mano."
+                                        : "Escribe los datos a mano. La búsqueda en internet está apagada (Configuración → Códigos de barras).",
+                                false, false, false);
+                    }
+                }
+                default -> { }
             }
         }));
     }
 
-    /** Llena los campos vacíos con la ficha y muestra el aviso; recuerda lo previo para Deshacer */
-    private void aplicarFichaCatalogo(CatalogoCodigosService.Ficha ficha) {
+    /** Muestra lo encontrado y pregunta; todavía no cambia ningún campo */
+    private void proponerFichaCatalogo(CatalogoCodigosService.Ficha ficha) {
         fichaCatalogo = ficha;
         llenadosPorCatalogo.clear();
-        pendientesCatalogo.clear();
         var datos = ficha.datos();
         descripcionDelCatalogo = me.eliassanchezfernandez.puntodeventa.util.AutollenadoProducto.descripcion(datos);
         departamentoDelCatalogo = me.eliassanchezfernandez.puntodeventa.util.AutollenadoProducto
                 .departamento(datos.getCategoria(), comboDepartamento.getItems()).orElse(null);
 
-        if (!descripcionDelCatalogo.isEmpty()) {
-            if (txtDescripcion.getText() == null || txtDescripcion.getText().isBlank()) {
-                descripcionAntesCatalogo = txtDescripcion.getText();
-                txtDescripcion.setText(descripcionDelCatalogo);
-                llenadosPorCatalogo.add(CampoCatalogo.DESCRIPCION);
-            } else if (!descripcionDelCatalogo.equals(txtDescripcion.getText().trim())) {
-                pendientesCatalogo.add(CampoCatalogo.DESCRIPCION);
-            }
+        java.util.List<String> partes = new java.util.ArrayList<>();
+        if (departamentoDelCatalogo != null) partes.add("Departamento: " + departamentoDelCatalogo.getNombre());
+        if (datos.tieneImagen() && catalogoCodigosService.isEnLinea()) partes.add("con foto");
+        String detalle = String.join(" · ", partes);
+        String descripcionActual = txtDescripcion.getText() == null ? "" : txtDescripcion.getText().trim();
+        if (!descripcionActual.isEmpty() && !descripcionActual.equals(descripcionDelCatalogo)) {
+            detalle = (detalle.isEmpty() ? "" : detalle + ". ") + "Lo que ya escribiste se conserva.";
         }
-        if (departamentoDelCatalogo != null) {
-            if (comboDepartamento.getValue() == null) {
-                departamentoAntesCatalogo = null;
-                comboDepartamento.setValue(departamentoDelCatalogo);
-                llenadosPorCatalogo.add(CampoCatalogo.DEPARTAMENTO);
-            } else if (!departamentoDelCatalogo.getId().equals(comboDepartamento.getValue().getId())) {
-                pendientesCatalogo.add(CampoCatalogo.DEPARTAMENTO);
-            }
+        mostrarCatalogo("Encontramos este producto: «" + descripcionDelCatalogo + "». ¿Usar estos datos?",
+                detalle, true, false, true);
+        // Si la persona solo escaneó (nada escrito aún), Enter acepta
+        javafx.scene.Node foco = txtDescripcion.getScene() == null ? null : txtDescripcion.getScene().getFocusOwner();
+        if ((foco == txtCodigoBarras || foco == txtDescripcion) && descripcionActual.isEmpty()) {
+            btnCatalogoUsar.requestFocus();
         }
-        boolean puedeBajarImagen = datos.tieneImagen() && catalogoCodigosService.isEnLinea();
-        if (puedeBajarImagen) {
-            if (imagenPendiente == null && !imagenGuardada) {
-                imagenAntesCatalogo = null;
-                origenImagenAntesCatalogo = null;
-                bajarImagenDelCatalogo(datos.getImagen());
-                llenadosPorCatalogo.add(CampoCatalogo.IMAGEN);
-            } else {
-                pendientesCatalogo.add(CampoCatalogo.IMAGEN);
-            }
-        }
-        mostrarResultadoCatalogo();
     }
 
-    /** "Usar estos datos": aplica también lo que no se tocó por tener ya un valor (todo reversible) */
+    /** «Usar estos datos»: llena solo lo vacío, baja la foto si no hay y pasa al precio */
     @FXML
     private void onCatalogoUsar() {
         if (fichaCatalogo == null) return;
-        if (pendientesCatalogo.remove(CampoCatalogo.DESCRIPCION)) {
+        var datos = fichaCatalogo.datos();
+        llenadosPorCatalogo.clear();
+        if (!descripcionDelCatalogo.isEmpty() && (txtDescripcion.getText() == null || txtDescripcion.getText().isBlank())) {
             descripcionAntesCatalogo = txtDescripcion.getText();
             txtDescripcion.setText(descripcionDelCatalogo);
             llenadosPorCatalogo.add(CampoCatalogo.DESCRIPCION);
         }
-        if (pendientesCatalogo.remove(CampoCatalogo.DEPARTAMENTO)) {
-            departamentoAntesCatalogo = comboDepartamento.getValue();
+        if (departamentoDelCatalogo != null && comboDepartamento.getValue() == null) {
+            departamentoAntesCatalogo = null;
             comboDepartamento.setValue(departamentoDelCatalogo);
             llenadosPorCatalogo.add(CampoCatalogo.DEPARTAMENTO);
         }
-        if (pendientesCatalogo.remove(CampoCatalogo.IMAGEN)) {
-            imagenAntesCatalogo = imagenPendiente;
-            origenImagenAntesCatalogo = origenImagen;
-            bajarImagenDelCatalogo(fichaCatalogo.datos().getImagen());
+        if (datos.tieneImagen() && catalogoCodigosService.isEnLinea() && imagenPendiente == null && !imagenGuardada) {
+            imagenAntesCatalogo = null;
+            origenImagenAntesCatalogo = null;
+            procesarImagen(() -> productoImagenService.descargarDesdeUrl(datos.getImagen()),
+                    "catálogo de códigos (Open Food Facts)", true);
             llenadosPorCatalogo.add(CampoCatalogo.IMAGEN);
         }
-        mostrarResultadoCatalogo();
+        String detalle = llenadosPorCatalogo.isEmpty()
+                ? "No había nada vacío que llenar."
+                : "Se llenó " + nombresCampos(llenadosPorCatalogo) + ".";
+        mostrarCatalogo("Listo. Ahora escribe el precio de venta.", detalle + " Revisa los datos antes de guardar.",
+                false, !llenadosPorCatalogo.isEmpty(), false);
+        if (txtPrecioVenta.isEditable() && !txtPrecioVenta.isDisabled()) txtPrecioVenta.requestFocus();
+    }
+
+    /** «No, gracias»: cierra el aviso sin tocar nada */
+    @FXML
+    private void onCatalogoNoGracias() {
+        ocultarCatalogo();
+        if (txtDescripcion.getText() == null || txtDescripcion.getText().isBlank()) txtDescripcion.requestFocus();
     }
 
     /** Deshacer: regresa cada campo que llenó el catálogo a lo que tenía (si el usuario no lo cambió después) */
@@ -1126,54 +1200,16 @@ public class ProductosController implements Initializable {
         ocultarCatalogo();
     }
 
-    @FXML
-    private void onCatalogoCerrar() {
-        ocultarCatalogo();
-    }
-
-    private void bajarImagenDelCatalogo(String url) {
-        procesarImagen(() -> productoImagenService.descargarDesdeUrl(url), "catálogo de códigos (Open Food Facts)");
-    }
-
-    /** Arma el aviso con lo encontrado, lo llenado, lo pendiente y la procedencia */
-    private void mostrarResultadoCatalogo() {
-        var datos = fichaCatalogo.datos();
-        StringBuilder titulo = new StringBuilder("Encontrado en el catálogo: «").append(descripcionDelCatalogo).append("»");
-        if (datos.getCategoria() != null) titulo.append(" · ").append(datos.getCategoria());
-        titulo.append(fichaCatalogo.origen() == CatalogoCodigosService.Origen.LOCAL ? " (copia local)" : " (en línea)");
-
-        StringBuilder detalle = new StringBuilder();
-        if (!llenadosPorCatalogo.isEmpty()) {
-            detalle.append("Se llenó: ").append(nombresCampos(llenadosPorCatalogo)).append(". ");
-        }
-        if (!pendientesCatalogo.isEmpty()) {
-            detalle.append("Ya tenías ").append(nombresCampos(pendientesCatalogo))
-                    .append(": no se cambió; «Usar estos datos» lo reemplaza. ");
-        }
-        if (llenadosPorCatalogo.isEmpty() && pendientesCatalogo.isEmpty()) {
-            detalle.append("No había nada que llenar. ");
-        }
-        if (departamentoDelCatalogo == null && datos.getCategoria() != null && !"Otros".equalsIgnoreCase(datos.getCategoria())) {
-            detalle.append("Categoría del catálogo: ").append(datos.getCategoria())
-                    .append(" (no hay un departamento equivalente; créalo en Departamentos si lo quieres). ");
-        }
-        if (datos.tieneImagen() && !catalogoCodigosService.isEnLinea()) {
-            detalle.append("La imagen no se baja porque la consulta en internet está apagada. ");
-        }
-        detalle.append("Revisa el precio y el resto de los datos antes de guardar.");
-        mostrarCatalogo(titulo.toString(), detalle.toString().trim(), !pendientesCatalogo.isEmpty(), !llenadosPorCatalogo.isEmpty());
-    }
-
     private static String nombresCampos(java.util.Set<CampoCatalogo> campos) {
         java.util.List<String> n = new java.util.ArrayList<>();
-        if (campos.contains(CampoCatalogo.DESCRIPCION)) n.add("descripción");
-        if (campos.contains(CampoCatalogo.DEPARTAMENTO)) n.add("departamento");
-        if (campos.contains(CampoCatalogo.IMAGEN)) n.add("imagen");
+        if (campos.contains(CampoCatalogo.DESCRIPCION)) n.add("la descripción");
+        if (campos.contains(CampoCatalogo.DEPARTAMENTO)) n.add("el departamento");
+        if (campos.contains(CampoCatalogo.IMAGEN)) n.add("la foto");
         if (n.size() <= 1) return String.join("", n);
-        return String.join(", ", n.subList(0, n.size() - 1)) + " e " + n.get(n.size() - 1);
+        return String.join(", ", n.subList(0, n.size() - 1)) + " y " + n.get(n.size() - 1);
     }
 
-    private void mostrarCatalogo(String titulo, String detalle, boolean usar, boolean deshacer) {
+    private void mostrarCatalogo(String titulo, String detalle, boolean usar, boolean deshacer, boolean noGracias) {
         lblCatalogoTitulo.setText(titulo);
         lblCatalogoDetalle.setText(detalle);
         lblCatalogoDetalle.setVisible(!detalle.isEmpty());
@@ -1182,8 +1218,21 @@ public class ProductosController implements Initializable {
         btnCatalogoUsar.setManaged(usar);
         btnCatalogoDeshacer.setVisible(deshacer);
         btnCatalogoDeshacer.setManaged(deshacer);
+        btnCatalogoNoGracias.setVisible(noGracias);
+        btnCatalogoNoGracias.setManaged(noGracias);
+        btnCatalogoOcultar.setVisible(!noGracias);
+        btnCatalogoOcultar.setManaged(!noGracias);
+        // La atribución solo cuando se muestran datos del catálogo
+        boolean conDatos = usar || deshacer;
+        lblCatalogoAtribucion.setVisible(conDatos);
+        lblCatalogoAtribucion.setManaged(conDatos);
         hboxCatalogo.setVisible(true);
         hboxCatalogo.setManaged(true);
+    }
+
+    @FXML
+    private void onCatalogoCerrar() {
+        ocultarCatalogo();
     }
 
     private void ocultarCatalogo() {
@@ -1193,18 +1242,17 @@ public class ProductosController implements Initializable {
 
     /** Al limpiar el formulario: sin ficha, sin aviso y las respuestas en vuelo se descartan */
     private void reiniciarCatalogo() {
-        secuenciaCatalogo++;
+        cancelarConsultaCatalogo();
+        if (esperaTecleo != null) esperaTecleo.stop();
         codigoCatalogoConsultado = null;
         fichaCatalogo = null;
         llenadosPorCatalogo.clear();
-        pendientesCatalogo.clear();
         descripcionAntesCatalogo = null;
         departamentoAntesCatalogo = null;
         imagenAntesCatalogo = null;
         origenImagenAntesCatalogo = null;
         descripcionDelCatalogo = null;
         departamentoDelCatalogo = null;
-        if (btnBuscarCatalogo != null) btnBuscarCatalogo.setDisable(false);
         if (hboxCatalogo != null) ocultarCatalogo();
     }
 

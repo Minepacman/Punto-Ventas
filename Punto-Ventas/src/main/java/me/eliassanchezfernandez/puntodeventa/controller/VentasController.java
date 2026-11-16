@@ -485,16 +485,51 @@ public class VentasController implements Initializable {
         String codigo = captura.get().codigo();
         Optional<Producto> encontrado = ventaService.buscarPorCodigo(codigo);
         if (encontrado.isEmpty()) {
-            alerta(Alert.AlertType.WARNING, "Producto no encontrado",
-                    "No existe un producto activo con el código \"" + codigo + "\".\n" +
-                    "Usa Buscar (F6) para localizarlo por nombre.");
-            txtCodigo.selectAll();
+            avisarNoEncontrado(codigo);
             return;
         }
 
         agregarAlTicket(encontrado.get(), captura.get().cantidad());
         txtCodigo.clear();
         txtCodigo.requestFocus();
+    }
+
+    /** Lo pone MainController: abre Productos → Nuevo con el código (y sus datos del catálogo) */
+    private java.util.function.Consumer<String> alDarDeAlta;
+
+    public void setAlDarDeAlta(java.util.function.Consumer<String> alDarDeAlta) {
+        this.alDarDeAlta = alDarDeAlta;
+    }
+
+    /**
+     * Código que no existe: con permiso de editar productos se ofrece «Dar de alta» (no es el
+     * botón por omisión: el Enter de un lector no debe sacar al cajero de Ventas).
+     */
+    private void avisarNoEncontrado(String codigo) {
+        String texto = "No existe un producto activo con el código \"" + codigo + "\".\n"
+                + "Usa Buscar (F6) para localizarlo por nombre.";
+        boolean puedeAlta = alDarDeAlta != null && sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS)
+                && !codigo.isBlank();
+        if (!puedeAlta) {
+            alerta(Alert.AlertType.WARNING, "Producto no encontrado", texto);
+            txtCodigo.selectAll();
+            return;
+        }
+        ButtonType darDeAlta = new ButtonType("Dar de alta", ButtonBar.ButtonData.OTHER);
+        Alert a = new Alert(Alert.AlertType.WARNING, texto + "\n¿Es un producto nuevo? «Dar de alta» lo registra con sus datos del catálogo.",
+                darDeAlta, ButtonType.CLOSE);
+        a.setTitle("Producto no encontrado");
+        a.setHeaderText("Producto no encontrado");
+        a.initOwner(txtCodigo.getScene() == null ? null : txtCodigo.getScene().getWindow());
+        Ventanas.estilizar(a);
+        ((Button) a.getDialogPane().lookupButton(darDeAlta)).setDefaultButton(false);
+        ((Button) a.getDialogPane().lookupButton(ButtonType.CLOSE)).setDefaultButton(true);
+        if (a.showAndWait().orElse(ButtonType.CLOSE) == darDeAlta) {
+            txtCodigo.clear();
+            alDarDeAlta.accept(codigo);
+            return;
+        }
+        txtCodigo.selectAll();
     }
 
     /** Diálogo de búsqueda por nombre o código (solo productos activos) */

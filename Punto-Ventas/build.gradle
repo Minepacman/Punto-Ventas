@@ -204,6 +204,34 @@ tasks.register('firmarDatosDonacion', JavaExec) {
     args 'publicar-donacion', '--salida', rootProject.file('../claves/donacion.pdvd').absolutePath
 }
 
+// ── Catálogo de códigos de barras incluido en el programa (repo hermano codigos-barras-mx, ODbL) ──
+// Copia el CSV del catálogo, comprimido, y su version.json a src/main/resources/catalogo/. Correrlo antes de
+// publicar si el catálogo cambió:  ./gradlew actualizarCatalogoIncluido [-PcatalogoDir=../../codigos-barras-mx]
+tasks.register('actualizarCatalogoIncluido') {
+    group = 'catalogo'
+    description = 'Copia datos/catalogo-mx.csv (gzip) y api/v1/version.json del repo codigos-barras-mx al jar; luego commit'
+    doLast {
+        def dir = file(project.findProperty('catalogoDir') ?: '../../codigos-barras-mx')
+        def csv = new File(dir, 'datos/catalogo-mx.csv')
+        def version = new File(dir, 'api/v1/version.json')
+        if (!csv.isFile() || !version.isFile()) {
+            throw new GradleException("No encuentro ${csv} o ${version}; indica -PcatalogoDir=<ruta del repo codigos-barras-mx>")
+        }
+        def sha = java.security.MessageDigest.getInstance('SHA-256').digest(csv.bytes).encodeHex().toString()
+        def anunciado = new groovy.json.JsonSlurper().parse(version).archivos['catalogo-mx.csv'].sha256
+        if (sha != anunciado) throw new GradleException("El sha256 del CSV (${sha}) no coincide con version.json (${anunciado})")
+        def destino = file('src/main/resources/catalogo')
+        destino.mkdirs()
+        new File(destino, 'catalogo-mx.csv.gz').withOutputStream { out ->
+            def gz = new java.util.zip.GZIPOutputStream(out, 64 * 1024)
+            gz.write(csv.bytes)
+            gz.finish()
+        }
+        new File(destino, 'version.json').bytes = version.bytes
+        println "Catálogo incluido: ${new File(destino, 'catalogo-mx.csv.gz').length()} bytes comprimidos, sha256 ${sha}"
+    }
+}
+
 // Opciones de la JVM pensadas para PCs de 2-4 GB de RAM y disco duro (también las usa jpackage).
 // Medido (2 núcleos, Spring+JavaFX): TieredStopAtLevel=1 ahorra 0.3-0.5 s; Serial vs G1 igual pero con menos
 // memoria. El archivo CDS de la aplicación (pos.jsa) lo crea el propio programa en su carpeta tras el primer

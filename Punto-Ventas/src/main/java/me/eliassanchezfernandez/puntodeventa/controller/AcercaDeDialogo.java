@@ -110,7 +110,11 @@ public class AcercaDeDialogo {
         marca.setOnAction(e -> mostrarTexto(owner, "Marca y términos adicionales (GPLv3 §7)", "/AVISOS-ADICIONALES.md", "/MARCA.md"));
         HBox botones = new HBox(10, terceros, marca);
         botones.setAlignment(Pos.CENTER_LEFT);
-        return new VBox(6, titulo, gratuito, estado, llave, botones);
+        Label datos = new Label("Catálogo de códigos de barras: " + me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService.ATRIBUCION
+                + " (" + me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService.REPOSITORIO + ").");
+        datos.setWrapText(true);
+        datos.getStyleClass().add("hint");
+        return new VBox(6, titulo, gratuito, estado, llave, datos, botones);
     }
 
     /** Muestra uno o varios archivos de texto del jar, uno tras otro, en un cuadro de solo lectura */

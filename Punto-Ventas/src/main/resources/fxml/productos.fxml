@@ -143,7 +143,7 @@
                         <Label text="Descripción *" styleClass="field-label"/>
                         <TextField fx:id="txtDescripcion"
                                    promptText="Nombre del producto"/>
-                        <!-- Aviso del autollenado: qué se encontró en el catálogo, qué se llenó y cómo deshacerlo -->
+                        <!-- Aviso del autollenado: «Encontramos este producto… ¿Usar estos datos?», después Deshacer -->
                         <HBox fx:id="hboxCatalogo"
                               visible="false" managed="false"
                               spacing="6" alignment="TOP_LEFT"
@@ -154,10 +154,12 @@
                                 <Label fx:id="lblCatalogoDetalle" text="" wrapText="true"/>
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Button fx:id="btnCatalogoUsar" text="Usar estos datos" onAction="#onCatalogoUsar"
+                                            styleClass="button-success" visible="false" managed="false"/>
+                                    <Button fx:id="btnCatalogoNoGracias" text="No, gracias" onAction="#onCatalogoNoGracias"
                                             visible="false" managed="false"/>
                                     <Button fx:id="btnCatalogoDeshacer" text="Deshacer" onAction="#onCatalogoDeshacer"
                                             visible="false" managed="false"/>
-                                    <Button text="Ocultar" onAction="#onCatalogoCerrar"/>
+                                    <Button fx:id="btnCatalogoOcultar" text="Ocultar" onAction="#onCatalogoCerrar"/>
                                     <Label fx:id="lblCatalogoAtribucion" text="Datos de Open Food Facts (ODbL)" styleClass="hint"/>
                                 </HBox>
                             </VBox>

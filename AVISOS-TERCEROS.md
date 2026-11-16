@@ -42,10 +42,16 @@ MPL 2.0 <https://www.mozilla.org/MPL/2.0/>; GPL v2 con Classpath Exception
 
 **Datos.** El catálogo de códigos de barras de productos comunes de México es un proyecto aparte
 (repositorio <https://github.com/Minepacman/codigos-barras-mx>, datos de Open Food Facts y proyectos
-hermanos bajo la Open Database License, ODbL 1.0). El programa lo descarga por internet, a petición
-del usuario o una vez por semana en segundo plano, para proponer descripción, departamento e imagen al
-dar de alta un producto por su código de barras; donde se muestran esos datos aparece la atribución
-«Datos de Open Food Facts (ODbL)» (Configuración → Códigos de barras permite apagar la consulta).
+hermanos bajo la Open Database License, ODbL 1.0, <https://opendatacommons.org/licenses/odbl/1-0/>;
+contenido bajo la Database Contents License, DbCL 1.0). Contiene información de Open Food Facts, disponible
+bajo la Open Database License (ODbL). El programa trae una copia sin modificar de ese catálogo
+(`catalogo/catalogo-mx.csv.gz` dentro del jar, la misma que publica el repositorio) y, si la búsqueda en
+internet está encendida, baja la versión más nueva una vez por semana, consulta por código los fragmentos
+del repositorio y, como último recurso, la API pública de Open Food Facts
+(<https://world.openfoodfacts.org>), para proponer descripción, departamento y foto al dar de alta un
+producto por su código de barras; donde se muestran esos datos aparece la atribución «Datos de Open Food
+Facts (ODbL)» (Configuración → Códigos de barras permite apagar la consulta en internet). Las fotos de los
+productos son de Open Food Facts (CC BY-SA 3.0) y solo se bajan al pedirlas.
 El pronóstico del clima y la búsqueda de ciudades por nombre vienen de Open-Meteo
 (<https://open-meteo.com>, datos bajo CC BY 4.0) cuando el usuario activa esa función o busca su ciudad.
 El botón «Detectar mi ubicación» (asistente inicial y Configuración → Ubicación y clima) estima la ciudad a
