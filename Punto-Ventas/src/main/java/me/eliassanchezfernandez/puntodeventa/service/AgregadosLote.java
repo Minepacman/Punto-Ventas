@@ -133,8 +133,9 @@ public class AgregadosLote {
             for (DetalleVenta d : v.getDetalles()) {
                 Producto p = d.getProducto();
                 if (p == null) continue;
-                double cantidad = Math.max(0, d.getCantidad() - d.getCantidadDevueltaOCero());
-                double importe = Math.max(0, d.getImporte() - d.getImporteDevueltoOCero());
+                double cantidad = AgregadosService.cantidadNeta(d);
+                double importe = AgregadosService.importeNeto(d);
+                if (cantidad <= 0 && importe <= 0) continue;   // renglón devuelto completo: no se vendió
                 piezas += cantidad;
                 delDia.computeIfAbsent(p.getId(), k -> new ProductoDiario(dia, p))
                       .sumar(franja, cantidad, importe);

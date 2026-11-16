@@ -7,11 +7,17 @@ import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.repository.DevolucionRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
+import me.eliassanchezfernandez.puntodeventa.model.Departamento;
+import me.eliassanchezfernandez.puntodeventa.service.ConsultasMovilService;
 import me.eliassanchezfernandez.puntodeventa.service.DevolucionService;
+import me.eliassanchezfernandez.puntodeventa.service.EstadisticasService;
+import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -21,6 +27,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * Devoluciones simultáneas contra PostgreSQL real (las transacciones sí corren a la vez): varias
@@ -32,6 +39,8 @@ class DevolucionPostgresTest extends BasePostgresTest {
     @Autowired private DevolucionService devolucionService;
     @Autowired private DevolucionRepository devolucionRepo;
     @Autowired private VentaRepository ventaRepo;
+    @Autowired private EstadisticasService estadisticasService;
+    @Autowired private ConsultasMovilService consultasMovilService;
 
     private List<Throwable> enParalelo(List<Runnable> acciones) throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(acciones.size());
@@ -115,5 +124,43 @@ class DevolucionPostgresTest extends BasePostgresTest {
             assertThat(devoluciones).isEqualTo(3);
             assertThat(stockActual(p)).isEqualTo(26 + 3);
         }
+    }
+
+    /** Las consultas netas de devoluciones (corte por tasa/departamento, Estadísticas, celular) corren en PostgreSQL */
+    @Test
+    void losReportesNetosDeDevolucionesFuncionanEnPostgres() throws Exception {
+        iniciarComoAdmin();
+        Departamento dep = new Departamento();
+        dep.setNombre("PG netos " + sufijo());
+        dep = productoService.guardarDepartamento(dep);
+        Producto p = producto("PG neto " + sufijo(), 10, 30);       // costo 5
+        p.setDepartamento(dep);
+        p = productoService.guardar(p);
+        LocalDate hoy = LocalDate.now();
+        EstadisticasService.Periodo dia = EstadisticasService.Periodo.dia(hoy);
+        double cajasAntes = estadisticasService.ventasPorCaja(dia).stream().mapToDouble(EstadisticasService.VentasPorCaja::total).sum();
+        double cajeroAntes = estadisticasService.ventasPorCajero(dia).stream().mapToDouble(EstadisticasService.VentasCajero::total).sum();
+        double horasAntes = estadisticasService.ventasPorHora(dia).stream().mapToDouble(EstadisticasService.VentasHora::total).sum();
+        double hoyAntes = estadisticasService.resumenHoy(LocalDateTime.now()).cifras().total();
+        double gananciaAntes = consultasMovilService.estadisticas(dia, "Hoy", true).ganancia();
+        double movilAntes = consultasMovilService.ventas(hoy, hoy, 0, 1).importe();
+
+        Venta v = ventaService.cobrar(List.of(ventaService.crearDetalle(p, 4)), Venta.FormaPago.EFECTIVO, 100);
+        devolucionService.devolver(new DevolucionService.Solicitud(v.getId(),
+                List.of(new DevolucionService.Linea(v.getDetalles().get(0).getId(), 1, true)), "PG"), null);
+
+        VentaService.ResumenCorte r = ventaService.resumenDelDia();
+        assertThat(r.porDepartamento.get(dep.getNombre())).isCloseTo(30.0, within(0.001));
+        assertThat(r.devueltoDeDepartamento(dep.getNombre())).isCloseTo(10.0, within(0.001));
+        assertThat(r.devolucionesPorTasaIva).isNotEmpty();
+        assertThat(estadisticasService.ventasPorCaja(dia).stream().mapToDouble(EstadisticasService.VentasPorCaja::total).sum()
+                - cajasAntes).isCloseTo(30.0, within(0.001));
+        assertThat(estadisticasService.ventasPorCajero(dia).stream().mapToDouble(EstadisticasService.VentasCajero::total).sum()
+                - cajeroAntes).isCloseTo(30.0, within(0.001));
+        assertThat(estadisticasService.ventasPorHora(dia).stream().mapToDouble(EstadisticasService.VentasHora::total).sum()
+                - horasAntes).isCloseTo(30.0, within(0.001));
+        assertThat(estadisticasService.resumenHoy(LocalDateTime.now()).cifras().total() - hoyAntes).isCloseTo(30.0, within(0.001));
+        assertThat(consultasMovilService.estadisticas(dia, "Hoy", true).ganancia() - gananciaAntes).isCloseTo(15.0, within(0.001));
+        assertThat(consultasMovilService.ventas(hoy, hoy, 0, 1).importe() - movilAntes).isCloseTo(30.0, within(0.001));
     }
 }

@@ -49,7 +49,9 @@ import java.util.TreeSet;
  *    ({@link #calcularDia}).
  *  - pares_productos y producto_clima: sobre la ventana móvil de las últimas
  *    {@link #VENTANA_DIAS} días; se rehacen completos en cada corrida (son
- *    pocos datos y así reflejan las cancelaciones sin lógica extra).
+ *    pocos datos y así reflejan las cancelaciones y devoluciones sin lógica
+ *    extra). Lo devuelto se resta del renglón ({@link #cantidadNeta}) y un
+ *    renglón devuelto completo no cuenta.
  *
  * Corre todas las noches a las 03:00, al arrancar si está desactualizado y
  * con el botón "Recalcular" de Estadísticas. Las ventas canceladas nunca
@@ -329,8 +331,10 @@ public class AgregadosService {
             if (v.isCancelada()) continue;
             TreeMap<Long, Producto> enTicket = new TreeMap<>();
             for (DetalleVenta d : v.getDetalles()) {
-                // El "producto común" (artículos sueltos fuera del catálogo) no forma pares: no es un producto real
-                if (d.getProducto() != null && d.getProducto().getId() != null && !d.esProductoComun()) {
+                // El "producto común" (artículos sueltos fuera del catálogo) no forma pares: no es un producto real.
+                // Un renglón devuelto por completo tampoco: el cliente al final no se lo llevó.
+                if (d.getProducto() != null && d.getProducto().getId() != null && !d.esProductoComun()
+                        && cantidadNeta(d) > 0) {
                     enTicket.put(d.getProducto().getId(), d.getProducto());
                 }
             }
@@ -407,12 +411,14 @@ public class AgregadosService {
             for (DetalleVenta d : v.getDetalles()) {
                 Producto p = d.getProducto();
                 if (p == null || p.getId() == null || d.esProductoComun()) continue;   // el común no "depende" del clima
+                double piezas = cantidadNeta(d);          // lo devuelto no se vendió
+                if (piezas <= 0) continue;
                 productos.put(p.getId(), p);
-                piezasProducto.merge(p.getId(), d.getCantidad(), Double::sum);
-                piezasTotal += d.getCantidad();
+                piezasProducto.merge(p.getId(), piezas, Double::sum);
+                piezasTotal += piezas;
                 for (String clave : claves) {
-                    piezasPorClave.computeIfAbsent(clave, k -> new HashMap<>()).merge(p.getId(), d.getCantidad(), Double::sum);
-                    totalPorClave.merge(clave, d.getCantidad(), Double::sum);
+                    piezasPorClave.computeIfAbsent(clave, k -> new HashMap<>()).merge(p.getId(), piezas, Double::sum);
+                    totalPorClave.merge(clave, piezas, Double::sum);
                 }
             }
         }
@@ -439,6 +445,20 @@ public class AgregadosService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    /**
+     * Piezas que el cliente se quedó de un renglón: vendidas menos devueltas (a milésimas,
+     * nunca negativo). Regla de los análisis de ventas (agregados diarios, canasta, clima):
+     * la devolución resta en el día de la VENTA, como si esas piezas no se hubieran vendido.
+     */
+    public static double cantidadNeta(DetalleVenta d) {
+        return Math.max(0, ResumenDiario.VentaRedondeo.milesimas(d.getCantidad() - d.getCantidadDevueltaOCero()));
+    }
+
+    /** Importe que el cliente pagó y no le fue reembolsado (a centavos, nunca negativo); misma regla */
+    public static double importeNeto(DetalleVenta d) {
+        return Math.max(0, ResumenDiario.VentaRedondeo.centavos(d.getImporte() - d.getImporteDevueltoOCero()));
+    }
 
     private void marcarActualizado() {
         Configuracion c = configuracion();

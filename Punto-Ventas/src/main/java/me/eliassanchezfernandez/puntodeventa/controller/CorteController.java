@@ -169,6 +169,8 @@ public class CorteController implements Initializable {
     @FXML private TableColumn<Producto, String> colBajoMinimo;
 
     private final ObservableList<Map.Entry<String, Double>> porDepartamento = FXCollections.observableArrayList();
+    /** Lo devuelto por departamento en el periodo mostrado (nota junto al neto) */
+    private Map<String, Double> devolucionesPorDepartamento = Map.of();
     private final ObservableList<Producto> bajos = FXCollections.observableArrayList();
     private final ObservableList<VentaService.VoucherTarjeta> vouchers = FXCollections.observableArrayList();
     private final ObservableList<MovimientoCaja> movimientos = FXCollections.observableArrayList();
@@ -180,7 +182,9 @@ public class CorteController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         colDepto.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getKey()));
-        colMonto.setCellValueFactory(c -> new SimpleStringProperty(moneda(c.getValue().getValue())));
+        // Netos de las devoluciones del periodo, con la nota de cuánto se devolvió de ese departamento
+        colMonto.setCellValueFactory(c -> new SimpleStringProperty(moneda(c.getValue().getValue())
+                + VentaService.ResumenCorte.notaDevoluciones(devolucionesPorDepartamento.getOrDefault(c.getValue().getKey(), 0.0))));
         tablaDepartamentos.setItems(porDepartamento);
         tablaDepartamentos.setPlaceholder(new Label("Sin ventas en el periodo."));
 
@@ -600,12 +604,12 @@ public class CorteController implements Initializable {
         mostrarFila(lblTransferenciaTitulo, lblTransferencia, r.transferencia);
         mostrarFila(lblValesTitulo, lblVales, r.vales);
         lblSubtotal.setText(moneda(r.subtotal));
-        lblIva.setText(moneda(r.iva));
+        lblIva.setText(moneda(r.iva) + VentaService.ResumenCorte.notaDevoluciones(r.ivaDevoluciones));
         // Desglose por tasa solo cuando el periodo mezcla tasas (básicos al 0 % con artículos al 16 %)
         boolean mixto = CalculoIva.esMixto(r.porTasaIva);
         lblIvaPorTasaTitulo.setVisible(mixto); lblIvaPorTasaTitulo.setManaged(mixto);
         lblIvaPorTasa.setVisible(mixto);       lblIvaPorTasa.setManaged(mixto);
-        lblIvaPorTasa.setText(mixto ? textoIvaPorTasa(r.porTasaIva) : "");
+        lblIvaPorTasa.setText(mixto ? textoIvaPorTasa(r) : "");
         lblCanceladas.setText(r.numCanceladas + " (" + moneda(r.totalCanceladas) + ")");
         mostrarFila(lblCreditoTitulo, lblCredito, r.credito);
         mostrarAbonosClientes(e);
@@ -631,6 +635,7 @@ public class CorteController implements Initializable {
                     moneda(r.productosComunes), Math.round(ProductoComun.MARGEN_GANANCIA * 100), moneda(r.gananciaProductosComunes)));
         }
 
+        devolucionesPorDepartamento = r.devolucionesPorDepartamento;
         porDepartamento.setAll(r.porDepartamento.entrySet());
         bajos.setAll(r.productosBajos);
         vouchers.setAll(r.vouchers);
@@ -666,15 +671,27 @@ public class CorteController implements Initializable {
 
     /** "Gravado 16 %: $100.00 (IVA $16.00) · Tasa 0 %: $84.00 · Exento: $20.00" */
     static String textoIvaPorTasa(java.util.List<CalculoIva.Grupo> grupos) {
+        return textoIvaPorTasa(grupos, g -> 0.0);
+    }
+
+    /** Igual, con la nota de lo devuelto en cada tasa: "Tasa 0 %: $84.00 (incluye −$28.50 de devoluciones)" */
+    static String textoIvaPorTasa(VentaService.ResumenCorte r) {
+        return textoIvaPorTasa(r.porTasaIva, r::devueltoDeTasa);
+    }
+
+    private static String textoIvaPorTasa(java.util.List<CalculoIva.Grupo> grupos,
+                                          java.util.function.ToDoubleFunction<CalculoIva.Grupo> devuelto) {
         java.util.List<String> partes = new java.util.ArrayList<>();
         for (CalculoIva.Grupo g : grupos) {
+            String texto;
             if (g.gravado()) {
-                partes.add("Gravado " + g.tasaIva().porcentaje() + " %: " + Moneda.formato(g.base()) + " (IVA " + Moneda.formato(g.iva()) + ")");
+                texto = "Gravado " + g.tasaIva().porcentaje() + " %: " + Moneda.formato(g.base()) + " (IVA " + Moneda.formato(g.iva()) + ")";
             } else if (g.exento()) {
-                partes.add("Exento: " + Moneda.formato(g.base()));
+                texto = "Exento: " + Moneda.formato(g.base());
             } else {
-                partes.add("Tasa 0 %: " + Moneda.formato(g.base()));
+                texto = "Tasa 0 %: " + Moneda.formato(g.base());
             }
+            partes.add(texto + VentaService.ResumenCorte.notaDevoluciones(devuelto.applyAsDouble(g)));
         }
         return String.join("  ·  ", partes);
     }

@@ -349,7 +349,8 @@ public class VentasPeriodoController implements Initializable {
         lblResumen.setText(String.format(
                 "%d venta(s)  ·  %s producto(s)  ·  Subtotal: %s  ·  IVA: %s  ·  Total: %s%s%s",
                 activas.size(), formatoCantidad(piezas), Moneda.formato(total - iva), Moneda.formato(iva), Moneda.formato(total),
-                devuelto > 0.004 ? "  ·  Devoluciones de estas ventas: −" + Moneda.formato(devuelto) : "",
+                devuelto > 0.004 ? "  ·  Devoluciones de estas ventas: −" + Moneda.formato(devuelto)
+                                   + " (neto " + Moneda.formato(total - devuelto) + ")" : "",
                 canceladas > 0 ? "  ·  " + canceladas + " cancelada(s) no incluida(s)" : ""));
     }
 
