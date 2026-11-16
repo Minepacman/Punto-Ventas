@@ -2382,8 +2382,15 @@ public class ServidorMovilService {
                 "teléfono · " + l.resultado().origen(), t.getTexto(), renglones, repetido);
         int idx = ticket;
         protegido(ex, Permiso.AJUSTAR_INVENTARIO, true, cajero -> {
-            var res = ticketProveedorService.aplicar(solicitud, null);
-            l.registrados.add(idx);
+            // Se aparta ANTES de registrar: dos toques seguidos (o dos peticiones a la vez) no meten la mercancía dos veces
+            if (!l.registrados.add(idx)) throw new NegocioException("Este ticket ya se registró.");
+            me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.Resultado res;
+            try {
+                res = ticketProveedorService.aplicar(solicitud, null);
+            } catch (RuntimeException e) {
+                l.registrados.remove(idx);
+                throw e;
+            }
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("ok", true);
             r.put("registroId", res.registroId());
