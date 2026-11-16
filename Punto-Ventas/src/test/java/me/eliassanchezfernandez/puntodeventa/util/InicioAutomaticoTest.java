@@ -1,6 +1,8 @@
 package me.eliassanchezfernandez.puntodeventa.util;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
@@ -28,6 +30,7 @@ class InicioAutomaticoTest {
     }
 
     @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "Rutas de Mac/Linux")
     void macEscribeYBorraElLaunchAgentConElPaqueteApp(@TempDir Path casa) throws Exception {
         Path lanzador = Path.of("/Applications/PuntoDeVenta.app/Contents/MacOS/PuntoDeVenta");
         var e = new InicioAutomatico.Entorno(InicioAutomatico.Sistema.MAC, casa, null);
@@ -43,6 +46,7 @@ class InicioAutomaticoTest {
     }
 
     @Test
+    @DisabledOnOs(value = OS.WINDOWS, disabledReason = "Rutas de Mac/Linux")
     void linuxUsaXdgAutostart(@TempDir Path casa) throws Exception {
         Path lanzador = Path.of("/opt/punto-de-venta/bin/PuntoDeVenta");
         var e = new InicioAutomatico.Entorno(InicioAutomatico.Sistema.LINUX, casa, null);

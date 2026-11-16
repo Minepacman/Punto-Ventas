@@ -373,7 +373,12 @@ class ServidorMovilTicketsProveedorTest {
         String token = usuario();
         byte[] grande = new byte[TicketsPorRevisarService.MAX_FOTO_BYTES + 1];
         System.arraycopy(foto, 0, grande, 0, foto.length);
-        assertThat(imagen("/api/tickets-proveedor/leer", grande, "image/jpeg", token).statusCode()).isEqualTo(413);
+        // El servidor rechaza sin leer todo el cuerpo: según el sistema el cliente recibe el 413 o la conexión cerrada
+        try {
+            assertThat(imagen("/api/tickets-proveedor/leer", grande, "image/jpeg", token).statusCode()).isEqualTo(413);
+        } catch (java.io.IOException conexionCerrada) {
+            // Linux: "Broken pipe" al seguir mandando la foto después del rechazo; también es un rechazo
+        }
         assertThat(imagen("/api/tickets-proveedor/leer", "no soy una foto, soy texto".getBytes(), "image/jpeg", token).statusCode()).isEqualTo(415);
         assertThat(imagen("/api/tickets-proveedor/leer", foto, "text/plain", token).statusCode()).isEqualTo(415);
         assertThat(imagen("/api/tickets-proveedor/pendiente", "texto".getBytes(), "image/png", token).statusCode()).isEqualTo(415);

@@ -89,7 +89,7 @@ class MotorTesseractTest {
         assertThat(c.get(0).tessdata()).isEqualTo(propio.getParent().resolve("tessdata"));
         assertThat(c.get(1).ejecutable()).isEqualTo(app.resolve("ocr/tesseract/bin/tesseract"));
         assertThat(c.get(1).tessdata()).isEqualTo(app.resolve("ocr/tesseract/tessdata"));
-        assertThat(c).extracting(x -> x.ejecutable().toString()).contains("/opt/homebrew/bin/tesseract", "/no/existe/tesseract");
+        assertThat(c).extracting(x -> x.ejecutable().toString().replace('\\', '/')).contains("/opt/homebrew/bin/tesseract", "/no/existe/tesseract");
 
         List<LocalizadorTesseract.Candidato> w = LocalizadorTesseract.candidatos(null,
                 Map.of("ProgramFiles", "C:\\Program Files", "CAJA_LIBRE_TESSERACT", "D:\\t\\tesseract.exe"), null, true, "tesseract.exe");
