@@ -300,15 +300,15 @@ public class ConfiguracionController implements Initializable {
      */
     @FXML void onCatalogoCodigos() {
         CatalogoCodigosService.Estado e = catalogoCodigosService.estado();
-        CheckBox enLinea = new CheckBox("Buscar datos de productos en internet");
+        CheckBox enLinea = new CheckBox("Buscar datos del producto por código de barras (internet)");
         enLinea.setSelected(e.enLinea());
         enLinea.setWrapText(true);
         enLinea.setDisable(!sesionService.esAdmin());
-        Label nota = new Label("Al dar de alta un producto por su código de barras, se proponen descripción, departamento e imagen "
-                + "a partir de un catálogo libre de productos que se venden en México (unos 25 000). El catálogo completo se "
-                + "descarga una vez por semana en segundo plano, unos minutos después de entrar; si un código no está en la copia "
-                + "local se consulta en internet y la foto se baja de Open Food Facts. Apagado, solo se usa la copia ya descargada "
-                + "y no se baja ninguna imagen. Nunca se envía nada de la tienda: solo se pide el código.");
+        Label nota = new Label("Al dar de alta un producto por su código de barras, el programa propone descripción, departamento "
+                + "y foto a partir de un catálogo libre de productos que se venden en México (unos 25 000, ya incluido en el "
+                + "programa). Encendido, una vez por semana se baja la versión más nueva y, si un código no está, se consulta en "
+                + "internet (catálogo y Open Food Facts); la foto también se baja de Open Food Facts. Apagado, solo se usa el "
+                + "catálogo incluido y no se baja ninguna foto. Nunca se envía nada de la tienda: solo se pide el código.");
         nota.setWrapText(true);
         nota.setPrefWidth(460);
         nota.getStyleClass().add("hint");

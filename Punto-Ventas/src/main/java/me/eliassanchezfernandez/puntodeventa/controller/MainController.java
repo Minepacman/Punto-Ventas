@@ -148,6 +148,8 @@ public class MainController implements Initializable {
         labelAtajos.setText(resumenAtajos(mac));
         lnkAtajos.setText("Atajos " + Atajo.AYUDA_ATAJOS.etiquetaCorta(mac));
         configurarRefrescoDePestanas();
+        // Ventas: «Dar de alta» un código que no existe abre Productos → Nuevo con el código y sus datos
+        if (ventasViewController != null) ventasViewController.setAlDarDeAlta(this::darDeAltaDesdeVentas);
         configurarCierreDeVentana();
         configurarClima();
         // Ya con la ventana en pantalla: asistente inicial → tutorial → donación (BienvenidaService decide cuáles)
@@ -595,6 +597,12 @@ public class MainController implements Initializable {
             case BLOQUEAR        -> onBloquear();
             default -> { }
         }
+    }
+
+    private void darDeAltaDesdeVentas(String codigo) {
+        if (!tabPane.getTabs().contains(tabProductos)) return;
+        tabPane.getSelectionModel().select(tabProductos);   // construye o recarga la pantalla
+        if (productosViewController != null) productosViewController.nuevoConCodigo(codigo);
     }
 
     /** Las pestañas que el usuario no puede ver se quitaron del TabPane: el atajo no hace nada */

@@ -636,12 +636,19 @@ public class ConfiguracionService {
     /** Lo anota el sistema al cargar una copia nueva del catálogo (sin permiso ni bitácora: la pone CatalogoCodigosService) */
     @Transactional
     public void guardarEstadoCatalogoCodigos(String version, String sha256, int productos, java.time.LocalDateTime cuando) {
+        guardarEstadoCatalogoCodigos(version, sha256, productos, cuando, cuando);
+    }
+
+    /** Igual, con la fecha de la última revisión en línea aparte (al cargar el catálogo incluido en el programa se conserva la que había) */
+    @Transactional
+    public void guardarEstadoCatalogoCodigos(String version, String sha256, int productos, java.time.LocalDateTime cuando,
+                                             java.time.LocalDateTime revisado) {
         Configuracion c = obtenerParaEditar();
         c.setCatalogoCodigosVersion(limpiar(version));
         c.setCatalogoCodigosSha256(limpiar(sha256));
         c.setCatalogoCodigosProductos(productos);
         c.setCatalogoCodigosDescargado(cuando);
-        c.setCatalogoCodigosRevisado(cuando);
+        c.setCatalogoCodigosRevisado(revisado);
         guardarConfig(c);
     }
 
