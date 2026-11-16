@@ -132,7 +132,7 @@
           <a class="btn btn-secundario btn-grande" href="#pantallas">Ver cómo funciona<svg aria-hidden="true" class="icono"><use href="#i-flecha"/></svg></a>
         </div>
         <p class="hero-nota">Para abarrotes, verdulerías, misceláneas, papelerías y cualquier negocio de mostrador. <a href="#requisitos">Funciona en PCs viejas</a>.</p>
-        <a class="aviso-version" href="#novedades"><svg aria-hidden="true" class="icono"><use href="#i-chispas"/></svg>Próxima versión 1.0.5: fiado, devoluciones, IVA por producto y más</a>
+        <a class="aviso-version" href="#novedades"><svg aria-hidden="true" class="icono"><use href="#i-chispas"/></svg>Próxima versión 1.0.5: devoluciones, IVA por producto, promociones a la mano y más</a>
       </div>
       <div class="hero-visual reveal retraso-1">
         <div class="ventana">
@@ -234,7 +234,7 @@
         <article class="tarjeta reveal retraso-2"><div class="ico"><svg aria-hidden="true" class="icono"><use href="#i-cpu"/></svg></div><h3>Corre en PCs viejas</h3><p>Hecho para equipos con 2–4 GB de RAM, disco duro mecánico y pantalla de 1024×768. También Mac y Linux.</p></article>
         <article class="tarjeta reveal"><div class="ico"><svg aria-hidden="true" class="icono"><use href="#i-bd"/></svg></div><h3>Respaldos automáticos</h3><p>Vienen encendidos: una copia al día y se guardan las últimas siete. Restauras desde Configuración y exportas cualquier tabla a CSV, Excel o PDF.</p></article>
         <article class="tarjeta reveal retraso-1"><div class="ico"><svg aria-hidden="true" class="icono"><use href="#i-candado"/></svg></div><h3>Bloquear y cambiar de cajero</h3><p>Con <kbd>Ctrl</kbd>+<kbd>L</kbd> la caja vuelve al inicio de sesión sin cerrar el programa. Si había un ticket a medias, queda en espera.</p></article>
-        <article class="tarjeta enlace-nuevo reveal retraso-2"><div class="ico verde"><svg aria-hidden="true" class="icono"><use href="#i-chispas"/></svg></div><h3>Y lo que viene en la 1.0.5</h3><p>Fiado con abonos, devoluciones con vale, IVA por producto, alta por código de barras, caducidades y más. <a href="#novedades">Ver las novedades</a>.</p></article>
+        <article class="tarjeta enlace-nuevo reveal retraso-2"><div class="ico verde"><svg aria-hidden="true" class="icono"><use href="#i-chispas"/></svg></div><h3>Y lo que viene en la 1.0.5</h3><p>Devoluciones con vale, IVA por producto, alta por código de barras, caducidades, promociones en su propia pestaña y más. <a href="#novedades">Ver las novedades</a>.</p></article>
       </div>
     </div>
   </section>
@@ -251,7 +251,7 @@
         <article class="grupo-nuevo reveal">
           <h3><svg aria-hidden="true" class="icono"><use href="#i-tienda"/></svg>Vender y cobrar</h3>
           <ul>
-            <li><b>Clientes con crédito (fiado).</b> Nueva pestaña Clientes (<kbd>F2</kbd>). Al cobrar eliges «A cuenta», sola o junto con efectivo. Cada cliente tiene su límite y su estado de cuenta, y los abonos entran al corte.</li>
+            <li><b>Promociones en su propia pestaña.</b> Ahora están junto a Ventas, en <kbd>F2</kbd>: ves de un vistazo qué ofertas hay, cuáles están vigentes y cuántas piezas quedan de las que son hasta agotar.</li>
             <li><b>Devoluciones de artículos.</b> Regresas algunos artículos de una venta y devuelves el dinero en efectivo o con un vale de compra impreso con código de barras. Lo devuelto puede volver al inventario o quedar como merma. El vale se usa en el cobro completo o en partes.</li>
             <li><b>Producto común.</b> Con <kbd>Ctrl</kbd>+<kbd>P</kbd> vendes algo que no está en tu catálogo: escribes nombre, precio y cantidad, y listo.</li>
             <li><b>IVA por producto.</b> Cada producto puede llevar 16 %, 0 % o exento, o usar el de la tienda. También lo cambias para todo un departamento de una vez. El corte separa el IVA por tasa.</li>
@@ -271,7 +271,7 @@
             <li><b>Estadísticas con «Hoy».</b> Al abrir ves lo vendido hoy contra ayer, la semana pasada y hace un año, a la misma hora. Lo demás va en pestañas: Resumen, Horarios pico, Cajeros y horas, Productos más vendidos, Reabastecimiento, Recomendaciones y Clima.</li>
             <li><b>Reportes netos.</b> El corte y los reportes ya restan las devoluciones del día.</li>
             <li><b>Cajón con motivo y bitácora.</b> Quien no tiene permiso de abrir el cajón escribe el motivo y si entra o sale dinero. Cada apertura queda registrada y el administrador la ve en la pantalla Bitácora.</li>
-            <li><b>Varias cajas sin dobles cobros.</b> <span class="pastilla-beta">Beta</span> Cancelar una venta o recibir una orden desde dos cajas a la vez ya no cuenta dos veces, y el fiado y los vales respetan su límite aunque cobren dos cajas al mismo tiempo.</li>
+            <li><b>Varias cajas sin dobles cobros.</b> <span class="pastilla-beta">Beta</span> Cancelar una venta o recibir una orden desde dos cajas a la vez ya no cuenta dos veces, y los vales respetan su saldo aunque cobren dos cajas al mismo tiempo.</li>
           </ul>
         </article>
         <article class="grupo-nuevo reveal retraso-1">
@@ -301,7 +301,7 @@
       <div class="vista-rapida reveal" id="vista-rapida">
         <div class="pestanas" role="tablist" aria-label="Pantallas del programa">
           <button type="button" role="tab" aria-selected="true" aria-controls="vr-ventas" id="tab-ventas"><svg aria-hidden="true" class="icono"><use href="#i-tienda"/></svg>Ventas</button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="vr-clientes" id="tab-clientes"><svg aria-hidden="true" class="icono"><use href="#i-usuarios"/></svg>Clientes</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="vr-promociones" id="tab-promociones"><svg aria-hidden="true" class="icono"><use href="#i-porcentaje"/></svg>Promociones</button>
           <button type="button" role="tab" aria-selected="false" aria-controls="vr-productos" id="tab-productos"><svg aria-hidden="true" class="icono"><use href="#i-paquete"/></svg>Productos</button>
           <button type="button" role="tab" aria-selected="false" aria-controls="vr-inventario" id="tab-inventario"><svg aria-hidden="true" class="icono"><use href="#i-camion"/></svg>Inventario</button>
           <button type="button" role="tab" aria-selected="false" aria-controls="vr-corte" id="tab-corte"><svg aria-hidden="true" class="icono"><use href="#i-tijeras"/></svg>Corte</button>
@@ -312,9 +312,9 @@
           <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F1 · Ventas</span></div><img src="img/capturas/ventas.webp" alt="Pestaña Ventas con un ticket en captura, el total en grande y sugerencias de venta abajo" width="1600" height="900" loading="lazy"></div>
           <p class="pie-panel">Rápida. Clara. Con el teclado.</p>
         </div>
-        <div class="panel" id="vr-clientes" role="tabpanel" aria-labelledby="tab-clientes" hidden>
-          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F2 · Clientes</span></div><img src="img/capturas/clientes.webp" alt="Pestaña Clientes: tres clientes con lo que deben, su límite de crédito y cuánto se les puede fiar todavía; total por cobrar $317.00" width="1600" height="900" loading="lazy"></div>
-          <p class="pie-panel">Quién te debe, cuánto y hasta cuánto le puedes fiar. <span class="pastilla-version">1.0.5</span></p>
+        <div class="panel" id="vr-promociones" role="tabpanel" aria-labelledby="tab-promociones" hidden>
+          <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F2 · Promociones</span></div><img src="img/capturas/promociones.webp" alt="Pestaña Promociones: 3x2 en Ruffles, 10 % en Limpieza el fin de semana, jitomate a $26 los martes y agua a 10 pesos hasta agotar, con su vigencia y estado" width="1600" height="900" loading="lazy"></div>
+          <p class="pie-panel">Todas tus ofertas en un lugar, con su vigencia y si están activas ahora. <span class="pastilla-version">1.0.5</span></p>
         </div>
         <div class="panel" id="vr-productos" role="tabpanel" aria-labelledby="tab-productos" hidden>
           <div class="ventana"><div class="ventana-barra"><i></i><i></i><i></i><span>F3 · Productos</span></div><img src="img/capturas/producto-alta.webp" alt="Alta de un producto nuevo: al escribir el código, el programa encontró «Maruchan habanero 64 g» en su catálogo y ofrece usar esos datos" width="1600" height="900" loading="lazy"></div>
@@ -372,32 +372,32 @@
             <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Esc regresa al ticket sin perder nada.</span></li>
             <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Con impresora térmica, imprime el ticket y abre el cajón.</span></li>
             <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Reimprime el último ticket con <kbd>Ctrl</kbd>+<kbd>I</kbd>.</span></li>
-            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>A cuenta (fiado) y vale de la tienda, solos o junto con efectivo. <span class="pastilla-version">1.0.5</span></span></li>
+            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Vale de la tienda, solo o junto con efectivo. <span class="pastilla-version">1.0.5</span></span></li>
           </ul>
         </div>
         <div class="pantalla-visual reveal retraso-1">
           <div class="ventana" style="max-width:460px;margin:0 auto">
             <div class="ventana-barra"><i></i><i></i><i></i><span>Cobrar</span></div>
-            <img src="img/capturas/cobro.webp" alt="Ventana de cobro: total a cobrar $237.75, efectivo recibido $500.00, campos de tarjeta, a cuenta y vale de la tienda, billetes rápidos y cambio de $262.25" width="640" height="913" loading="lazy">
+            <img src="img/capturas/cobro.webp" alt="Ventana de cobro: total a cobrar $237.75, efectivo recibido $500.00, campos de tarjeta y vale de la tienda, billetes rápidos y cambio de $262.25" width="640" height="781" loading="lazy">
           </div>
         </div>
       </div>
 
       <div class="pantalla">
         <div class="pantalla-texto reveal">
-          <span class="sobretitulo">Clientes y fiado <span class="pastilla-version">1.0.5</span></span>
-          <h3>El fiado, sin libreta</h3>
-          <p>Das de alta al cliente con su límite. Al cobrar eliges «A cuenta» y la venta se le anota sola. Cuando viene a pagar registras el abono, y su estado de cuenta te dice qué se llevó y cuándo.</p>
+          <span class="sobretitulo">Promociones <span class="pastilla-version">1.0.5</span></span>
+          <h3>Las ofertas, a una tecla</h3>
+          <p>Con <kbd>F2</kbd> abres la pestaña Promociones: 2×1 o 3×2, porcentaje de descuento o precio especial, para un producto o un departamento completo. Tú decides las fechas, los días de la semana, el horario y si es hasta agotar.</p>
           <ul>
-            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Si alguien quiere pasarse de su límite, hace falta la autorización del administrador.</span></li>
-            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Los abonos en efectivo cuentan en el corte del día.</span></li>
-            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Desde el teléfono ves quién te debe y le puedes llamar.</span></li>
+            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Se aplican solas al cobrar y el ticket muestra el nombre de la promoción.</span></li>
+            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Ves cuáles están vigentes ahora y cuántas piezas quedan de las de hasta agotar.</span></li>
+            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Los cajeros sin permiso solo las consultan.</span></li>
           </ul>
         </div>
         <div class="pantalla-visual reveal retraso-1">
           <div class="ventana">
-            <div class="ventana-barra"><i></i><i></i><i></i><span>F2 · Clientes</span></div>
-            <img src="img/capturas/clientes.webp" alt="Pestaña Clientes: Juan Pérez debe $96.00, Maestra Carmen $111.00 y Rosa Martínez $110.00, cada uno con su límite y lo que todavía se le puede fiar" width="1600" height="900" loading="lazy">
+            <div class="ventana-barra"><i></i><i></i><i></i><span>F2 · Promociones</span></div>
+            <img src="img/capturas/promociones.webp" alt="Pestaña Promociones con cuatro ofertas de ejemplo, su tipo, valor, vigencia y estado, y el formulario para crear una nueva" width="1600" height="900" loading="lazy">
           </div>
         </div>
       </div>
@@ -523,13 +523,13 @@
           <h3>El corte del día en una sola pantalla</h3>
           <p>Dinero inicial, ventas en efectivo, tarjeta, transferencia y vales, entradas y salidas de efectivo, lo que debe haber en el cajón, canceladas, ganancia (solo para quien tiene permiso de verla) y productos que se quedaron bajos. Corte del turno o del día, por caja o general.</p>
           <ul>
-            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Con la 1.0.5 también muestra lo vendido a cuenta, los abonos, las devoluciones y las ventas netas.</span></li>
+            <li><svg aria-hidden="true" class="icono"><use href="#i-check"/></svg><span>Con la 1.0.5 también muestra las devoluciones, el IVA por tasa y las ventas netas.</span></li>
           </ul>
         </div>
         <div class="pantalla-visual reveal retraso-1">
           <div class="ventana">
             <div class="ventana-barra"><i></i><i></i><i></i><span>Corte</span></div>
-            <img src="img/capturas/corte.webp" alt="Pestaña Corte del turno: fondo inicial, ventas en efectivo, abonos de clientes, total esperado en caja, IVA, ventas a cuenta, devoluciones, ventas por departamento y ventas netas del turno" width="1600" height="900" loading="lazy">
+            <img src="img/capturas/corte.webp" alt="Pestaña Corte del turno: fondo inicial, ventas en efectivo, entradas y salidas, total esperado en caja, IVA, devoluciones, ventas por departamento y ventas netas del turno" width="1600" height="900" loading="lazy">
           </div>
         </div>
       </div>
@@ -720,7 +720,7 @@
         <h3><svg aria-hidden="true" class="icono"><use href="#i-teclado"/></svg>Atajos de teclado (pulsa <kbd>F10</kbd> en el programa para verlos)</h3>
         <dl>
           <dt><kbd>F1</kbd></dt><dd>Ir a Ventas</dd>
-          <dt><kbd>F2</kbd></dt><dd>Ir a Clientes (fiado y abonos) <span class="pastilla-version">1.0.5</span></dd>
+          <dt><kbd>F2</kbd></dt><dd>Ir a Promociones <span class="pastilla-version">1.0.5</span></dd>
           <dt><kbd>F3</kbd></dt><dd>Ir a Productos</dd>
           <dt><kbd>F4</kbd></dt><dd>Ir a Inventario</dd>
           <dt><kbd>F5</kbd></dt><dd>Ir a Estadísticas</dd>
@@ -868,7 +868,6 @@
         <details><summary>¿Cómo actualizo? ¿Pierdo mis datos?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Cuando hay versión nueva, el programa muestra un enlace discreto en la barra de abajo (nunca descarga ni instala nada solo). Bajas el instalador, lo ejecutas encima del anterior y listo: la base de datos y la configuración no se tocan. En Mac arrastras la app nueva sobre la anterior; en Linux instalas el paquete nuevo.</p></div></details>
         <details><summary>¿Puedo tener varias cajas?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí. Una computadora de la tienda corre el servidor PostgreSQL (gratis) y las demás cajas se conectan a él por la red local; las existencias y los cortes se comparten. El programa trae la migración desde una sola caja y una guía paso a paso. Para una tienda con una sola caja no necesitas nada de esto. Esta función sigue en Beta: funciona, pero todavía la estamos probando en tiendas con varias cajas.</p></div></details>
         <details><summary>¿Puedo facturar (CFDI)?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí, factura por venta y factura global con CFDI 4.0 a través de Facturama, un proveedor autorizado por el SAT. Necesitas contratar una cuenta con ellos (ese servicio sí tiene costo, que le pagas a Facturama); el programa solo se conecta con tus credenciales. Si no facturas, simplemente no lo configuras. La facturación sigue en Beta: pruébala con calma antes de depender de ella.</p></div></details>
-        <details><summary>¿Puedo llevar el fiado de mis clientes?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Con la versión 1.0.5, sí. Cada cliente tiene su límite, al cobrar eliges «A cuenta» y registras los abonos cuando paga. La versión que se descarga hoy (1.0.4) todavía no lo trae; cuando salga la 1.0.5, el programa te avisa para actualizar.</p></div></details>
         <details><summary>¿Sirve para verdulería, papelería o tortillería?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Sí. Maneja venta por pieza y a granel (kilos con decimales, báscula opcional), productos sin código de barras con foto, departamentos y promociones. Lo único que no es: un sistema de restaurante con mesas y comandas.</p></div></details>
         <details><summary>¿Y si se descompone la computadora?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Si tenías respaldos activos, instalas el programa en la computadora nueva y restauras el último respaldo desde Configuración: vuelven productos, ventas, cortes y usuarios. Por eso insistimos tanto en guardar copias fuera del equipo.</p></div></details>
         <details><summary>¿Quién hace esto y por qué debería confiar?<svg aria-hidden="true" class="icono"><use href="#i-abajo"/></svg></summary><div class="resp"><p>Lo hace una sola persona, <span data-dato="autor.nombre">Elias Oziel Sánchez Fernández</span>, y todo el código es público en GitHub: cualquiera puede revisarlo. Las contraseñas se guardan cifradas, hay bitácora de todo lo que hacen los usuarios, y el programa no se comunica con ningún servidor salvo en los casos opcionales que se explican arriba. En <a href="creador.html">Sobre el creador</a> están su contacto y sus otros proyectos.</p></div></details>
