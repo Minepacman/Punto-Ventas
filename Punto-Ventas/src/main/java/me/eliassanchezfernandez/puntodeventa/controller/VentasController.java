@@ -175,6 +175,10 @@ public class VentasController implements Initializable {
     @Autowired private ImagenProductoCache    imagenes;
     @Autowired private FacturacionDialogos    facturacionDialogos;
     @Autowired private MovimientoCajaDialogo  movimientoCajaDialogo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CuentaClienteService cuentaClienteService;
+
+    /** Cliente al que se anota la parte "A cuenta (fiado)" del ticket en cobro (null = sin fiado) */
+    private CobroDialogo.ClienteFiado clienteFiado;
 
     private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
@@ -806,13 +810,15 @@ public class VentasController implements Initializable {
         } else {
             // Un pago sospechoso (cambio enorme o tecleado por el lector) pasa por la ventana de cobro,
             // que lo muestra y exige una confirmación distinta del Enter
+            CobroDialogo.Fiado fiado = new CobroDialogo.Fiado(this::elegirClienteFiado, clienteFiado);
             Optional<Map<Venta.FormaPago, Double>> elegido = CobroDialogo.mostrar(
-                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector);
+                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector, fiado);
             if (elegido.isEmpty()) {                  // Esc: nada cambia, el ticket sigue en captura
                 txtCodigo.requestFocus();
                 return;
             }
             montos = elegido.get();
+            clienteFiado = montos.containsKey(Venta.FormaPago.CREDITO) ? fiado.elegido() : null;
         }
         cobrarCon(montos);
     }
@@ -835,6 +841,8 @@ public class VentasController implements Initializable {
         for (Map.Entry<Venta.FormaPago, Double> e : montos.entrySet()) {
             if (e.getKey() == Venta.FormaPago.TARJETA && tarjeta != null) {
                 pagos.add(new PagoVenta(e.getKey(), e.getValue(), tarjeta.terminal(), tarjeta.ultimos4(), tarjeta.autorizacion()));
+            } else if (e.getKey() == Venta.FormaPago.CREDITO) {
+                pagos.add(PagoVenta.aCuenta(clienteFiado != null ? clienteFiado.id() : null, e.getValue()));
             } else {
                 pagos.add(new PagoVenta(e.getKey(), e.getValue()));
             }
@@ -848,6 +856,10 @@ public class VentasController implements Initializable {
         } catch (PermisoRequeridoException e) {
             // Falta un permiso del ticket (p. ej. renglón restaurado con mayoreo o
             // existencia que otra caja se llevó): pedir autorización y reintentar con los mismos montos
+            if (e.getPermiso() == Permiso.AJUSTAR_CREDITO) {
+                // Fiado que rebasa el límite del cliente: primero se dice cuánto debe y cuánto quedaría
+                alerta(Alert.AlertType.WARNING, "Límite de crédito", e.getMessage());
+            }
             if (asegurarPermiso(e.getPermiso())) {
                 cobrarCon(montos);
                 return;
@@ -891,6 +903,21 @@ public class VentasController implements Initializable {
         txtCodigo.requestFocus();
     }
 
+    /**
+     * Buscador de clientes para el fiado (F6 en la ventana de cobro). El alta rápida exige
+     * VENDER_A_CREDITO o la autorización de un administrador, que se queda en el ticket para el cobro.
+     */
+    private Optional<CobroDialogo.ClienteFiado> elegirClienteFiado(javafx.stage.Window owner) {
+        return ClienteSelectorDialogo.mostrar(owner, cuentaClienteService, nombre -> {
+            try {
+                return cuentaClienteService.crearRapido(nombre, autorizaciones);
+            } catch (PermisoRequeridoException e) {
+                if (!asegurarPermiso(e.getPermiso())) return null;
+                return cuentaClienteService.crearRapido(nombre, autorizaciones);
+            }
+        });
+    }
+
     /** La venta no se guardó por un error inesperado: decirlo claro y dejar el ticket tal cual para reintentar */
     private void avisarVentaNoGuardada(RuntimeException e) {
         System.err.println("No se pudo guardar la venta: " + e);
@@ -921,7 +948,9 @@ public class VentasController implements Initializable {
         ultimaVentaCobrada = venta;
         lblVentaCobradaTitulo.setText("Venta " + venta.getFolioMostrado() + " cobrada");
         lblVentaCobradaDetalle.setText("Total " + Moneda.formato(venta.getTotal())
-                + "  ·  Pagó " + Moneda.formato(venta.getPagoCon()));
+                + "  ·  Pagó " + Moneda.formato(venta.getPagoCon())
+                + (venta.getClienteNombre() != null ? "  ·  A cuenta de " + venta.getClienteNombre()
+                        + (venta.getSaldoCliente() != null ? " (debe " + Moneda.formato(venta.getSaldoCliente()) + ")" : "") : ""));
         lblVentaCobradaCambio.setText(Moneda.formato(venta.getCambio()));
         boolean puedeFacturar = false;
         try {
@@ -1703,6 +1732,7 @@ public class VentasController implements Initializable {
         itemsTicket.clear();
         autorizaciones.clear();
         tarjetaCapturada = null;
+        clienteFiado = null;
         txtCodigo.clear();
         camposPago.values().forEach(TextField::clear);
         labelTotal.setText("$0.00");

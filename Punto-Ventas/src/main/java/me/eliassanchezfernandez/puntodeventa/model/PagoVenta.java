@@ -44,6 +44,20 @@ public class PagoVenta {
     @Column(name = "autorizacion", length = 20)
     private String autorizacion;
 
+    /**
+     * Pago "A cuenta" (fiado): cliente al que se le carga. No se guarda en esta tabla
+     * (la venta guarda el cliente); solo viaja de la pantalla al servicio.
+     */
+    @Transient
+    private Long clienteId;
+
+    /** Pago a cuenta del cliente indicado */
+    public static PagoVenta aCuenta(Long clienteId, double monto) {
+        PagoVenta p = new PagoVenta(Venta.FormaPago.CREDITO, monto);
+        p.setClienteId(clienteId);
+        return p;
+    }
+
     public PagoVenta(Venta.FormaPago formaPago, double monto) {
         this.formaPago = formaPago;
         this.monto = monto;

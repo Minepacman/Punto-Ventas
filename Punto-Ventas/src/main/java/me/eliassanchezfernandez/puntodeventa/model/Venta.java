@@ -122,6 +122,24 @@ public class Venta {
         return caja == null || caja <= 0 ? 1 : caja;
     }
 
+    // ── Venta a cuenta (fiado) ───────────────────────────────────────────
+
+    /** Cliente al que se le cargó la parte "A cuenta" (null si no hubo fiado) */
+    @Column(name = "cliente_id")
+    private Long clienteId;
+
+    /** Nombre del cliente al momento de la venta (para el ticket y el historial) */
+    @Column(name = "cliente_nombre", length = 150)
+    private String clienteNombre;
+
+    /** Lo que el cliente quedó debiendo justo después de esta venta (se imprime en el ticket) */
+    @Column(name = "saldo_cliente")
+    private Double saldoCliente;
+
+    public boolean esACuenta() {
+        return clienteId != null;
+    }
+
     // ── Renglones y pagos ────────────────────────────────────────────────
 
     @OneToMany(mappedBy = "venta", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -175,7 +193,7 @@ public class Venta {
     }
 
     public enum FormaPago {
-        EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("Crédito"),
+        EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("A cuenta"),
         TRANSFERENCIA("Transferencia"), VALES("Vales");
 
         private final String etiqueta;

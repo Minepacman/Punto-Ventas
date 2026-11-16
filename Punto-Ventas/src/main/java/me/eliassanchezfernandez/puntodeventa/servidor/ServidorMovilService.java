@@ -97,6 +97,7 @@ import java.util.function.Supplier;
  *   GET  /api/productos/{id}/imagen[?mini=1]         (cualquier usuario) -> JPEG con ETag; 404 si no tiene
  *   POST /api/inventario/ajuste {productoId, tipo: entrada|ajuste|merma, cantidad, motivo, proveedor?, costo?}
  *                                                    (AJUSTAR_INVENTARIO)
+ *   GET  /api/clientes/saldos                         (VENDER_A_CREDITO) -> "Quién me debe": clientes con saldo, total por cobrar
  *   GET  /api/proveedores                             (cualquier usuario) -> agenda: días de entrega/preventa, próxima visita
  *                                                    y nota media (esta solo con VER_GANANCIAS o GESTIONAR_PROVEEDORES)
  *   POST /api/proveedores/guardar {id?, nombre, telefono?, contacto?, diasEntrega:[1..7], diasPreventa:[1..7], notas?}
@@ -185,6 +186,7 @@ public class ServidorMovilService {
     @Autowired private ProductoService      productoService;
     @Autowired private ProductoImagenService productoImagenService;
     @Autowired private ProveedorService     proveedorService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CuentaClienteService cuentaClienteService;
     @Autowired private AnunciadorMdns       anunciador;
     @Autowired private TutorialesService    tutorialesService;
     @Autowired private AvisosService        avisosService;
@@ -619,6 +621,7 @@ public class ServidorMovilService {
                 case "/api/inventario"      -> { exigir(metodo, "GET");  inventario(ex); }
                 case "/api/inventario/ajuste" -> { exigir(metodo, "POST"); ajusteInventario(ex); }
                 case "/api/proveedores"     -> { exigir(metodo, "GET");  proveedores(ex); }
+                case "/api/clientes/saldos" -> { exigir(metodo, "GET");  saldosClientes(ex); }
                 case "/api/proveedores/guardar" -> { exigir(metodo, "POST"); guardarProveedor(ex); }
                 case "/api/avisos"          -> { exigir(metodo, "GET");  avisos(ex); }
                 case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
@@ -1017,6 +1020,7 @@ public class ServidorMovilService {
         secciones.put("inventarioAjustar", ajustar);
         boolean gestionarProveedores = c.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
         secciones.put("proveedores", true);
+        secciones.put("clientes", c.tienePermiso(Permiso.VENDER_A_CREDITO));
         secciones.put("proveedoresEditar", gestionarProveedores);
         secciones.put("proveedoresCostos", gestionarProveedores || c.tienePermiso(Permiso.VER_GANANCIAS));
         // "Escanear ticket" sigue siendo una DEMO (las líneas son de ejemplo): apagada hasta tener OCR real.
@@ -1487,6 +1491,29 @@ public class ServidorMovilService {
         }
         r.put("proveedores", lista);
         return r;
+    }
+
+    /** "Quién me debe" (solo lectura): clientes con saldo, de mayor a menor deuda, y el total por cobrar */
+    private void saldosClientes(HttpExchange ex) throws IOException {
+        protegido(ex, Permiso.VENDER_A_CREDITO, cajero -> {
+            List<Map<String, Object>> lista = new ArrayList<>();
+            double total = 0;
+            for (me.eliassanchezfernandez.puntodeventa.model.Cliente c : cuentaClienteService.conSaldo()) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", c.getId());
+                m.put("nombre", c.getNombre());
+                m.put("telefono", c.getTelefono());
+                m.put("saldo", me.eliassanchezfernandez.puntodeventa.service.VentaService.redondear(c.getSaldoDeuda()));
+                m.put("limite", c.tieneLimite() ? c.getLimiteCredito() : null);
+                m.put("activo", c.isActivo());
+                lista.add(m);
+                if (c.getSaldoDeuda() > 0) total += c.getSaldoDeuda();
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("total", me.eliassanchezfernandez.puntodeventa.service.VentaService.redondear(total));
+            r.put("clientes", lista);
+            return r;
+        });
     }
 
     /** Agenda completa para cualquier usuario con sesión; el servicio decide si entrega la nota media */

@@ -109,4 +109,29 @@ class MigracionSqliteTest {
         DriverManagerDataSource ds = new DriverManagerDataSource("jdbc:sqlite:" + archivo);
         assertThat(MigracionSqlite.migrar(ds)).isEmpty();
     }
+
+    @Test
+    void quitaLaRestriccionDeCategoriasDeMovimientosDeCajaParaLosAbonosDeClientes() throws Exception {
+        archivo = Files.createTempFile("pos-movcaja-", ".db");
+        Files.deleteIfExists(archivo);
+        DriverManagerDataSource ds = new DriverManagerDataSource("jdbc:sqlite:" + archivo);
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("CREATE TABLE movimientos_caja (caja integer, monto float not null, fecha timestamp not null, id integer, "
+                    + "tipo varchar(10) not null check (tipo in ('ENTRADA','SALIDA')), categoria varchar(20) not null check "
+                    + "(categoria in ('CAMBIO','OTRA_ENTRADA','RETIRO','PAGO_PROVEEDOR','GASTO','DEVOLUCION','OTRA_SALIDA')), "
+                    + "concepto varchar(250) not null, primary key (id))");
+            st.execute("INSERT INTO movimientos_caja VALUES (1, 100, '2026-11-01 10:00:00', 1, 'ENTRADA', 'CAMBIO', 'Cambio')");
+        }
+
+        assertThat(MigracionSqlite.migrar(ds)).contains("movimientos_caja");
+
+        try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
+            st.execute("INSERT INTO movimientos_caja VALUES (1, 50, '2026-11-01 11:00:00', 2, 'ENTRADA', 'ABONO_CLIENTE', 'Abono')");
+            try (ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM movimientos_caja")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(2);
+            }
+        }
+        assertThat(MigracionSqlite.migrar(ds)).as("idempotente").doesNotContain("movimientos_caja");
+    }
 }

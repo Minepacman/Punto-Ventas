@@ -28,7 +28,9 @@ public enum Permiso {
     ABRIR_CAJON        ("Abrir el cajón de dinero sin dar motivo"),
     GESTIONAR_PROVEEDORES ("Gestionar proveedores y órdenes de compra"),
     FACTURAR           ("Emitir facturas (CFDI)"),
-    CANCELAR_FACTURA   ("Cancelar facturas (CFDI)");
+    CANCELAR_FACTURA   ("Cancelar facturas (CFDI)"),
+    VENDER_A_CREDITO   ("Vender a cuenta (fiado) y dar de alta clientes"),
+    AJUSTAR_CREDITO    ("Fiar por encima del límite, cambiar límites y ajustar saldos de clientes");
 
     private final String descripcion;
 
@@ -53,6 +55,9 @@ public enum Permiso {
      * ABRIR_CAJON: quien lo tiene abre el cajón sin explicar nada; quien no lo tiene
      * también puede abrirlo, pero debe decir el motivo y si entra o sale dinero (y cuánto):
      * todo queda en la bitácora y, si hubo dinero, en el corte.
+     * VENDER_A_CREDITO (fiado) es del gerente; a un cajero se lo concede el administrador o
+     * autoriza cada venta. AJUSTAR_CREDITO (pasar el límite de un cliente, cambiar límites,
+     * ajustar saldos) solo del administrador.
      * CAJERO: ninguno (todo lo de la lista es de administrador, USR-13).
      */
     public static Set<Permiso> porDefecto(Cajero.Rol rol) {
@@ -60,7 +65,7 @@ public enum Permiso {
         return switch (rol) {
             case ADMIN   -> EnumSet.allOf(Permiso.class);
             case GERENTE -> EnumSet.of(EDITAR_PRODUCTOS, CAMBIAR_PRECIOS, ABRIR_CAJON, GESTIONAR_PROVEEDORES, FACTURAR,
-                                       MOVIMIENTOS_CAJA);
+                                       MOVIMIENTOS_CAJA, VENDER_A_CREDITO);
             case CAJERO  -> EnumSet.noneOf(Permiso.class);
         };
     }

@@ -129,11 +129,22 @@ public class TicketService {
             d.linea(dosColumnas(v.getFormaPago().getEtiqueta(), Moneda.formato(v.getPagoCon()), cols));
         }
         d.linea(dosColumnas("Cambio", Moneda.formato(v.getCambio()), cols));
+        lineasFiado(v, cols).forEach(d::linea);
         d.linea(raya);
         if (c.getTicketPie() != null) ajustar(c.getTicketPie(), cols).forEach(d::centrada);
         ajustar(c.getTicketAgradecimiento() != null ? c.getTicketAgradecimiento() : "¡Gracias por su compra!", cols)
                 .forEach(d::centrada);
         return d;
+    }
+
+    /** "A cuenta de <cliente> · Saldo: $X" (solo en ventas con fiado); el saldo es el de ese momento */
+    static List<String> lineasFiado(Venta v, int cols) {
+        List<String> l = new ArrayList<>();
+        if (v.getClienteNombre() == null) return l;
+        String texto = "A cuenta de " + v.getClienteNombre()
+                + (v.getSaldoCliente() != null ? " · Saldo: " + Moneda.formato(v.getSaldoCliente()) : "");
+        l.addAll(ajustar(texto, cols));
+        return l;
     }
 
     /**
@@ -233,6 +244,7 @@ public class TicketService {
         d.linea(dosColumnas("Tarjeta", Moneda.formato(r.tarjeta), cols));
         if (r.transferencia > 0) d.linea(dosColumnas("Transferencia", Moneda.formato(r.transferencia), cols));
         if (r.vales > 0) d.linea(dosColumnas("Vales", Moneda.formato(r.vales), cols));
+        if (r.credito > 0) d.linea(dosColumnas("A cuenta (fiado)", Moneda.formato(r.credito), cols));
         for (VentaService.TarjetaTerminal t : r.tarjetaPorTerminal) {
             d.linea(dosColumnas("  " + t.terminal() + " (" + t.pagos() + ")", Moneda.formato(t.monto()), cols));
         }
@@ -315,6 +327,67 @@ public class TicketService {
         d.vacia();
         d.centrada("_".repeat(Math.min(cols - 4, 28)));
         d.centrada(m.esEntrada() ? "Recibió" : "Entregó / Recibió");
+        return d;
+    }
+
+    /** Comprobante de un abono a la cuenta de un cliente (fiado), con lo que queda debiendo */
+    public DocumentoImpresion documentoAbono(me.eliassanchezfernandez.puntodeventa.model.CuentaClienteMovimiento m,
+                                             String clienteNombre, Configuracion c) {
+        int cols = columnas(c.getTicketAnchoMm());
+        String raya = "-".repeat(cols);
+        DocumentoImpresion d = new DocumentoImpresion();
+        d.titulo(c.getNombreTienda());
+        if (c.getTicketTelefono() != null) d.centrada("Tel: " + c.getTicketTelefono());
+        d.agregar("ABONO A CUENTA", DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.linea(raya);
+        d.linea(dosColumnas("Folio: A-" + m.getId(), m.getFecha().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        if (multiCaja()) d.linea(IdentidadCaja.etiqueta(m.getCaja()));
+        d.linea("Atendió: " + (m.getCajeroNombre() != null ? m.getCajeroNombre() : "—"));
+        d.linea(raya);
+        ajustar("Cliente: " + clienteNombre, cols).forEach(d::linea);
+        Venta.FormaPago forma = m.getFormaPagoEnum();
+        double abono = -m.getMonto();
+        d.linea(dosColumnas("Saldo anterior", Moneda.formato(m.getSaldoDespues() + abono), cols));
+        d.agregar(dosColumnas("Abono" + (forma != null ? " (" + forma.getEtiqueta().toLowerCase() + ")" : ""),
+                Moneda.formato(abono), cols), DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
+        d.agregar(dosColumnas("SALDO NUEVO", Moneda.formato(m.getSaldoDespues()), cols),
+                DocumentoImpresion.Alineacion.IZQUIERDA, true, true);
+        d.linea(raya);
+        d.centrada(m.getSaldoDespues() <= 0.004 ? "¡Cuenta liquidada! Gracias." : "¡Gracias por su pago!");
+        return d;
+    }
+
+    /** Estado de cuenta de un cliente (fiado) para entregárselo impreso */
+    public DocumentoImpresion documentoEstadoCuenta(CuentaClienteService.EstadoCuenta e, Configuracion c) {
+        int cols = columnas(c.getTicketAnchoMm());
+        String raya = "-".repeat(cols);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yy");
+        DocumentoImpresion d = new DocumentoImpresion();
+        d.titulo(c.getNombreTienda());
+        d.agregar("ESTADO DE CUENTA", DocumentoImpresion.Alineacion.CENTRO, true, false);
+        d.linea(raya);
+        ajustar("Cliente: " + e.cliente().getNombre(), cols).forEach(d::linea);
+        if (e.cliente().getTelefono() != null) d.linea("Tel: " + e.cliente().getTelefono());
+        if (e.cliente().tieneLimite()) d.linea(dosColumnas("Límite", Moneda.formato(e.cliente().getLimiteCredito()), cols));
+        d.linea(dosColumnas("Impreso", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")), cols));
+        if (e.desde() != null || e.hasta() != null) {
+            d.linea("Periodo: " + (e.desde() != null ? e.desde().format(fmt) : "inicio") + " a "
+                    + (e.hasta() != null ? e.hasta().format(fmt) : "hoy"));
+        }
+        d.linea(raya);
+        if (e.desde() != null) d.linea(dosColumnas("Saldo anterior", Moneda.formato(e.saldoInicial()), cols));
+        for (me.eliassanchezfernandez.puntodeventa.model.CuentaClienteMovimiento m : e.movimientos()) {
+            String que = m.getVentaFolio() != null && m.getMonto() > 0 ? "Venta " + m.getVentaFolio() : m.getTipoEtiqueta();
+            d.linea(dosColumnas(m.getFecha().format(fmt) + " " + recortar(que, Math.max(8, cols - 22)),
+                    (m.getMonto() >= 0 ? "+" : "-") + Moneda.formato(Math.abs(m.getMonto())), cols));
+        }
+        if (e.movimientos().isEmpty()) d.linea("Sin movimientos en el periodo.");
+        d.linea(raya);
+        d.linea(dosColumnas("Cargos", Moneda.formato(e.cargos()), cols));
+        d.linea(dosColumnas("Abonos", Moneda.formato(e.abonos()), cols));
+        d.agregar(dosColumnas(e.saldoFinal() < -0.004 ? "SALDO A FAVOR" : "SALDO", Moneda.formato(Math.abs(e.saldoFinal())), cols),
+                DocumentoImpresion.Alineacion.IZQUIERDA, true, true);
+        d.linea(raya);
         return d;
     }
 

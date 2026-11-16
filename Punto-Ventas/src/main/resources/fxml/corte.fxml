@@ -90,6 +90,8 @@
                         <Label text="Neto (entradas − salidas):" GridPane.rowIndex="7" GridPane.columnIndex="0" styleClass="corte-total-label"/>
                         <Label fx:id="lblNetoMovimientos" text="\$0.00" GridPane.rowIndex="7" GridPane.columnIndex="1" styleClass="corte-total-value"/>
                     </GridPane>
+                    <!-- Abonos de clientes (fiado): solo cuando hubo en el periodo -->
+                    <Label fx:id="lblAbonosClientes" text="" styleClass="hint" wrapText="true" visible="false" managed="false"/>
                 </VBox>
 
                 <!-- Fila 1: Pagos de contado / IVA y Ventas por Departamento -->
@@ -115,6 +117,11 @@
                                wrapText="true" visible="false" managed="false"/>
                         <Label text="Ventas canceladas:"  GridPane.rowIndex="7" GridPane.columnIndex="0"/>
                         <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="7" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <!-- Fiado: se vendió pero NO entró dinero al cajón (solo cuando hubo) -->
+                        <Label fx:id="lblCreditoTitulo"   text="Vendido a cuenta (fiado, no entra al cajón):" GridPane.rowIndex="8" GridPane.columnIndex="0"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label fx:id="lblCredito"         text="\$0.00" GridPane.rowIndex="8" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
                     </GridPane>
                 </VBox>
 

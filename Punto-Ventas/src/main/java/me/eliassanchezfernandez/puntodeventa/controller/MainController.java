@@ -63,6 +63,7 @@ public class MainController implements Initializable {
     @FXML private TabPane tabPane;
     @FXML private Tab     tabVentas;
     @FXML private Tab     tabProductos;
+    @FXML private Tab     tabClientes;
     @FXML private Tab     tabInventario;
     @FXML private Tab     tabConfig;
     @FXML private Tab     tabCorte;
@@ -84,6 +85,7 @@ public class MainController implements Initializable {
     // Ventas se incluye en main.fxml (fx:id del include + "Controller"); el resto se carga la primera vez que se abre su pestaña
     @FXML private VentasController     ventasViewController;
     private ProductosController  productosViewController;
+    private ClientesController   clientesViewController;
     private InventarioController inventarioViewController;
     private CorteController      corteViewController;
     private EstadisticasController estadisticasViewController;
@@ -361,6 +363,7 @@ public class MainController implements Initializable {
         // fx:id → pestaña, solo las que este usuario conserva (aplicarPermisos quita las demás)
         java.util.Map<String, Tab> todas = new java.util.LinkedHashMap<>();
         todas.put("tabVentas", tabVentas);
+        todas.put("tabClientes", tabClientes);
         todas.put("tabProductos", tabProductos);
         todas.put("tabInventario", tabInventario);
         todas.put("tabCorte", tabCorte);
@@ -514,6 +517,7 @@ public class MainController implements Initializable {
     private static String nombreCorto(Atajo a) {
         return switch (a) {
             case IR_VENTAS -> "Ventas";
+            case IR_CLIENTES -> "Clientes";
             case IR_PRODUCTOS -> "Productos";
             case IR_INVENTARIO -> "Inventario";
             case IR_ESTADISTICAS -> "Estadísticas";
@@ -563,6 +567,7 @@ public class MainController implements Initializable {
     private void ejecutarGlobal(Atajo atajo) {
         switch (atajo) {
             case IR_VENTAS       -> tabPane.getSelectionModel().select(tabVentas);
+            case IR_CLIENTES     -> seleccionarSiExiste(tabClientes);
             case IR_PRODUCTOS    -> seleccionarSiExiste(tabProductos);
             case IR_INVENTARIO   -> seleccionarSiExiste(tabInventario);
             case IR_ESTADISTICAS -> seleccionarSiExiste(tabEstadisticas);
@@ -590,6 +595,7 @@ public class MainController implements Initializable {
             if (tab == tabVentas     && ventasViewController     != null) ventasViewController.aplicarConfiguracion();
             if (recienCargada) return;
             if (tab == tabProductos  && productosViewController  != null) productosViewController.recargar();
+            if (tab == tabClientes   && clientesViewController   != null) clientesViewController.recargar();
             if (tab == tabInventario && inventarioViewController != null) inventarioViewController.recargar();
             if (tab == tabCorte      && corteViewController      != null) corteViewController.recargar();
             if (tab == tabEstadisticas && estadisticasViewController != null) estadisticasViewController.recargar();
@@ -598,7 +604,7 @@ public class MainController implements Initializable {
 
     /** FXML de cada pestaña que se carga al abrirla por primera vez */
     private String fxmlDe(Tab tab) {
-        // Clientes (F2) se agregará aquí cuando exista el módulo: "/fxml/clientes.fxml"
+        if (tab == tabClientes)     return "/fxml/clientes.fxml";
         if (tab == tabProductos)    return "/fxml/productos.fxml";
         if (tab == tabInventario)   return "/fxml/inventario.fxml";
         if (tab == tabConfig)       return "/fxml/configuracion.fxml";
@@ -617,6 +623,7 @@ public class MainController implements Initializable {
             Parent contenido = loader.load();
             Object controlador = loader.getController();
             if (controlador instanceof ProductosController c)    productosViewController = c;
+            if (controlador instanceof ClientesController c)     clientesViewController = c;
             if (controlador instanceof InventarioController c)   inventarioViewController = c;
             if (controlador instanceof CorteController c)        corteViewController = c;
             if (controlador instanceof EstadisticasController c) estadisticasViewController = c;

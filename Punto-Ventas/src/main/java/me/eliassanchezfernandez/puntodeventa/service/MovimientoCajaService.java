@@ -66,6 +66,9 @@ public class MovimientoCajaService {
 
     @Transactional
     public MovimientoCaja registrar(Solicitud s, Collection<Autorizacion> autorizaciones) {
+        if (s != null && s.categoria() != null && !s.categoria().isManual()) {
+            throw new NegocioException("«" + s.categoria().getEtiqueta() + "» se registra desde la pantalla de Clientes.");
+        }
         sesionService.verificarPermiso(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
         Autorizacion aut = sesionService.autorizacionUsada(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
         MovimientoCaja guardado = guardar(s, aut, null);
@@ -84,6 +87,16 @@ public class MovimientoCajaService {
     public MovimientoCaja registrarAlAbrirCajon(Tipo tipo, Categoria categoria, double monto, String motivo) {
         String concepto = motivo == null ? "" : motivo.trim();
         return guardar(new Solicitud(tipo, categoria, monto, concepto, null, null, null), null, "Al abrir el cajón: ");
+    }
+
+    /**
+     * Entrada de efectivo por el abono de un cliente a su cuenta (fiado). No exige
+     * MOVIMIENTOS_CAJA: recibir un pago es trabajo normal de la caja; el dinero entra al
+     * cajón y cuenta en el efectivo esperado del corte. Solo lo usa {@link CuentaClienteService}.
+     */
+    @Transactional
+    public MovimientoCaja registrarAbonoCliente(double monto, String concepto) {
+        return guardar(new Solicitud(Tipo.ENTRADA, Categoria.ABONO_CLIENTE, monto, concepto, null, null, null), null, null);
     }
 
     /** Valida y guarda; {@code prefijoConcepto} (opcional) antecede al concepto final */

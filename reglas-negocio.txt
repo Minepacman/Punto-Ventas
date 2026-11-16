@@ -610,12 +610,13 @@ VEN-09  Pago con tarjeta
 
 VEN-10  Venta a crédito
         Regla deseada: sin definir (las preguntas de Clientes no se respondieron).
-        Estado actual: Implementado de forma incompleta y RIESGOSA: cualquier
-        cajero puede elegir "Crédito" y la venta se registra como cobrada SIN
-        cliente, sin límite y sin generar deuda.
-        Estado vs. lo deseado: Sin definir. Recomendación: decidir pronto, o
-        quitar "Crédito" de la lista mientras no exista el módulo de clientes.
-        Fuente: model/Venta.java, controller/VentasController.java
+        Estado actual (2026-11-15): "A cuenta (fiado)" en la ventana de cobro,
+        sola o en pago dividido, SIEMPRE ligada a un cliente (F6 lo elige o lo da
+        de alta con solo el nombre). Exige VENDER_A_CREDITO (gerente por defecto)
+        o autorización. Ver CLI-03.
+        Estado vs. lo deseado: Propuesta implementada; el dueño la confirma.
+        Fuente: service/VentaService.java, service/CuentaClienteService.java,
+                controller/CobroDialogo.java
 
 VEN-11  Registro de la venta al cobrar
         Regla deseada: sin definir por el dueño; se mantiene: se guarda fecha y
@@ -953,29 +954,44 @@ Preguntas para definir (Corte):
 
 
 ================================================================================
-7. CLIENTES Y CRÉDITO (CLI) - SIN RESPUESTAS DEL DUEÑO
+7. CLIENTES Y CRÉDITO (CLI) - SIN RESPUESTAS DEL DUEÑO (propuesta implementada)
 ================================================================================
 
 CLI-01  Datos del cliente
         Regla deseada: sin definir por el dueño.
-        Estado actual: Parcial: solo existe la estructura de datos (nombre
-        obligatorio, teléfono, límite de crédito, saldo de deuda).
-        Estado vs. lo deseado: Sin definir.
-        Fuente: model/Cliente.java
+        Estado actual: nombre (obligatorio, sin repetir aunque cambien mayúsculas
+        o acentos), teléfono, nota, límite de crédito (vacío/0 = sin límite) y
+        activo. Un cliente desactivado ya no compra a cuenta pero conserva su
+        deuda y puede abonar. Alta/edición: VENDER_A_CREDITO o autorización;
+        cambiar el límite de un cliente existente: AJUSTAR_CREDITO (solo admin
+        por defecto) o autorización. Nunca se borran.
+        Estado vs. lo deseado: Propuesta; el dueño la confirma.
+        Fuente: model/Cliente.java, service/CuentaClienteService.java
 
-CLI-02  Pantalla de Clientes
-        Regla deseada: sin definir por el dueño.
-        Estado actual: No implementado: todos los botones de F2 avisan "no
-        disponible en esta versión".
-        Estado vs. lo deseado: Sin definir.
-        Fuente: controller/ClientesController.java
+CLI-02  Pantalla de Clientes (F2)
+        Estado actual: lista con lo que debe cada uno, límite y lo que aún se le
+        puede fiar; total por cobrar; Registrar abono, Estado de cuenta (imprimir
+        y exportar), Nuevo/Modificar y Ajustar saldo. En el celular, la sección
+        "Fiado" (Quién me debe) es solo de consulta (VENDER_A_CREDITO).
+        Fuente: controller/ClientesController.java, servidor/ServidorMovilService.java
 
 CLI-03  Venta a crédito ligada a cliente, límite y abonos
-        Regla deseada: sin definir por el dueño.
-        Estado actual: No implementado. Ver VEN-10: hoy se puede registrar una
-        venta "a crédito" sin cliente.
-        Estado vs. lo deseado: Sin definir.
-        Fuente: model/Venta.java, model/Cliente.java
+        Estado actual: cada cambio de saldo es un renglón del libro
+        cuenta_cliente_movimientos (cargo por venta, abono, ajuste, cancelación,
+        devolución) y, en la misma transacción, un UPDATE atómico del saldo del
+        cliente: el saldo es la suma del libro. Rebasar el límite exige
+        AJUSTAR_CREDITO o autorización de un solo uso (queda en la bitácora);
+        con varias cajas el límite se revisa en la base y no se rebasa dos
+        veces. Abonos: cualquier usuario con sesión; en efectivo entran al cajón
+        como "Abono de cliente (fiado)" y cuentan en el corte; con tarjeta o
+        transferencia solo bajan la deuda. Un abono no puede pasar de la deuda.
+        Cancelar una venta a cuenta quita de la cuenta lo pendiente de esa venta
+        (si ya había abonado, queda saldo a favor). Ajustes con motivo:
+        AJUSTAR_CREDITO. El ticket dice "A cuenta de <cliente> · Saldo: $X".
+        Corte: "Vendido a cuenta (fiado, no entra al cajón)" y los abonos del
+        periodo; el efectivo esperado solo suma lo cobrado en efectivo.
+        Estado vs. lo deseado: Propuesta; el dueño la confirma.
+        Fuente: model/CuentaClienteMovimiento.java, service/CuentaClienteService.java
 
 CLI-04  Plazos, intereses y eliminación de clientes con deuda
         Regla deseada: sin definir por el dueño.

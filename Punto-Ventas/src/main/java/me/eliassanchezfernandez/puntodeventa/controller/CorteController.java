@@ -62,6 +62,7 @@ public class CorteController implements Initializable {
     @Autowired private ImpresionService impresionService;
     @Autowired private IdentidadCaja identidadCaja;
     @Autowired private MovimientoCajaDialogo movimientoCajaDialogo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CuentaClienteService cuentaClienteService;
 
     // Barra
     @FXML private Button btnHacerCorte;
@@ -109,6 +110,10 @@ public class CorteController implements Initializable {
     @FXML private Label lblIvaPorTasaTitulo;
     @FXML private Label lblIvaPorTasa;
     @FXML private Label lblCanceladas;
+    // Fiado
+    @FXML private Label lblCreditoTitulo;
+    @FXML private Label lblCredito;
+    @FXML private Label lblAbonosClientes;
     // Totales
     @FXML private Label lblVentasTotalesTitulo;
     @FXML private Label lblVentasTotales;
@@ -600,6 +605,8 @@ public class CorteController implements Initializable {
         lblIvaPorTasa.setVisible(mixto);       lblIvaPorTasa.setManaged(mixto);
         lblIvaPorTasa.setText(mixto ? textoIvaPorTasa(r.porTasaIva) : "");
         lblCanceladas.setText(r.numCanceladas + " (" + moneda(r.totalCanceladas) + ")");
+        mostrarFila(lblCreditoTitulo, lblCredito, r.credito);
+        mostrarAbonosClientes(e);
 
         lblVentasTotalesTitulo.setText("Ventas " + que);
         lblGananciaTitulo.setText("Ganancia " + que);
@@ -660,6 +667,25 @@ public class CorteController implements Initializable {
             }
         }
         return String.join("  ·  ", partes);
+    }
+
+    /** Abonos de clientes del periodo: los de efectivo ya están en las entradas; los demás no entran al cajón */
+    private void mostrarAbonosClientes(CajaService.EstadoCaja e) {
+        String texto = "";
+        try {
+            var a = cuentaClienteService.abonosEntre(e.inicio, e.fin, e.ventas.caja);
+            if (a.total() > 0.004) {
+                texto = "Abonos de clientes (fiado): " + moneda(a.efectivo()) + " en efectivo (incluidos en las entradas)"
+                        + (a.otros() > 0.004 ? " y " + moneda(a.otros()) + " con tarjeta o transferencia (no entran al cajón)" : "")
+                        + ".";
+            }
+        } catch (RuntimeException ex) {
+            System.err.println("Corte: no se pudieron leer los abonos de clientes: " + ex.getMessage());
+        }
+        boolean ver = !texto.isEmpty();
+        lblAbonosClientes.setText(texto);
+        lblAbonosClientes.setVisible(ver);
+        lblAbonosClientes.setManaged(ver);
     }
 
     private static void mostrarFila(Label titulo, Label valor, double monto) {

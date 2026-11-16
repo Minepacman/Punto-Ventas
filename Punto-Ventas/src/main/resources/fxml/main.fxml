@@ -62,8 +62,8 @@
                             fx:id="ventasView"/>
             </Tab>
 
-            <!-- La pestaña "Clientes" (F2) se mostrará cuando exista el módulo: clientes.fxml y
-                 ClientesController se conservan; F2 queda sin asignar. -->
+            <!-- F2 – Clientes (fiado y abonos) -->
+            <Tab fx:id="tabClientes" text="F2 · Clientes"><graphic><Icono nombre="usuarios"/></graphic></Tab>
 
             <!-- F3 – Productos -->
             <Tab fx:id="tabProductos" text="F3 · Productos"><graphic><Icono nombre="etiqueta"/></graphic></Tab>

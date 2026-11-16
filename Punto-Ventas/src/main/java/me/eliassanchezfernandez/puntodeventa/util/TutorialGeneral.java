@@ -48,6 +48,11 @@ public final class TutorialGeneral {
                 + "«Producto común» lo cobra con solo teclear el nombre y el precio.",
                 List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.PRODUCTO_COMUN, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
                         Atajo.RECUPERAR_ESPERA, Atajo.COBRAR)));
+        p.add(new Paso("tabClientes", "Clientes (fiado)",
+                "La libreta del fiado: cuánto debe cada cliente, su límite y su estado de cuenta. Para fiar, "
+                + "al cobrar escribe el monto en «A cuenta (fiado)» y elige al cliente con F6 (o dalo de alta ahí "
+                + "mismo). Aquí registras los abonos: en efectivo entran al cajón y cuentan en el corte.",
+                List.of(Atajo.IR_CLIENTES)));
         p.add(new Paso("tabProductos", "Productos",
                 "Tu catálogo: códigos de barras, descripción, precio de costo y de venta, departamento, "
                 + "unidad, venta a granel y precio de mayoreo. También las promociones (NxM, por departamento, "

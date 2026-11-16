@@ -76,6 +76,48 @@ public final class CobroDialogo {
                                                                  List<Venta.FormaPago> habilitadas,
                                                                  Map<Venta.FormaPago, Double> iniciales,
                                                                  boolean inicialesPorLector) {
+        return mostrar(owner, total, habilitadas, iniciales, inicialesPorLector, null);
+    }
+
+    /** Cliente elegido para la parte "A cuenta (fiado)"; {@code limite} 0 = sin límite */
+    public record ClienteFiado(Long id, String nombre, double saldo, double limite) {
+        /** Cuánto más se le puede fiar (null = sin límite) */
+        public Double disponible() {
+            return limite > 0.004 ? Math.max(0, Math.round((limite - saldo) * 100.0) / 100.0) : null;
+        }
+
+        /** "Juan Pérez · debe $120.00 · límite $500.00" */
+        public String resumen() {
+            return nombre + " · " + (saldo < -0.004 ? "a favor " + Moneda.formato(-saldo) : "debe " + Moneda.formato(saldo))
+                    + (limite > 0.004 ? " · límite " + Moneda.formato(limite) : " · sin límite");
+        }
+    }
+
+    /**
+     * Lo que la ventana necesita para ofrecer "A cuenta (fiado)": cómo abrir el buscador de
+     * clientes. Después de cerrar, {@link #elegido()} dice a quién se le anotó.
+     */
+    public static final class Fiado {
+        private final java.util.function.Function<Window, Optional<ClienteFiado>> selector;
+        private ClienteFiado elegido;
+
+        public Fiado(java.util.function.Function<Window, Optional<ClienteFiado>> selector, ClienteFiado inicial) {
+            this.selector = selector;
+            this.elegido = inicial;
+        }
+
+        public ClienteFiado elegido() { return elegido; }
+    }
+
+    /**
+     * @param fiado null = sin la forma "A cuenta (fiado)". Con ella: F6 elige el cliente, F7 pone
+     *        todo a cuenta; el resto puede ir en efectivo u otra forma (pago dividido). Si lo
+     *        fiado rebasa el límite del cliente se avisa aquí y el servicio pide la autorización.
+     */
+    public static Optional<Map<Venta.FormaPago, Double>> mostrar(Window owner, double total,
+                                                                 List<Venta.FormaPago> habilitadas,
+                                                                 Map<Venta.FormaPago, Double> iniciales,
+                                                                 boolean inicialesPorLector, Fiado fiado) {
         Dialog<Map<Venta.FormaPago, Double>> dlg = new Dialog<>();
         dlg.setTitle("Cobrar");
         dlg.setHeaderText(null);
@@ -109,6 +151,44 @@ public final class CobroDialogo {
             String titulo = forma == Venta.FormaPago.EFECTIVO ? "Efectivo recibido:" : forma.getEtiqueta() + ":";
             grid.addRow(fila++, new Label(titulo), campo);
             GridPane.setHgrow(campo, Priority.ALWAYS);
+        }
+        // Fiado: campo propio con el cliente debajo (no es una forma de pago de Configuración)
+        TextField txtFiado = null;
+        Label lblCliente = new Label();
+        lblCliente.setWrapText(true);
+        lblCliente.getStyleClass().add("hint");
+        lblCliente.setMaxWidth(380);
+        Runnable elegirCliente = () -> { };
+        final Runnable[] alElegirCliente = { () -> { } };   // = recalcular, una vez definido
+        if (fiado != null) {
+            TextField campo = new TextField();
+            campo.setPromptText("0.00");
+            campo.setPrefColumnCount(10);
+            Double inicial = iniciales != null ? iniciales.get(Venta.FormaPago.CREDITO) : null;
+            if (inicial != null && inicial > 0) campo.setText(CalculoCobro.formatoCampo(inicial));
+            campos.put(Venta.FormaPago.CREDITO, campo);
+            txtFiado = campo;
+            Button btnCliente = new Button("Cliente…  F6");
+            btnCliente.getStyleClass().addAll("button-ghost", "button-sm");
+            btnCliente.setFocusTraversable(false);
+            btnCliente.setTooltip(new Tooltip("Elegir (o dar de alta) el cliente al que se le anota la cuenta"));
+            HBox filaFiado = new HBox(6, campo, btnCliente);
+            HBox.setHgrow(campo, Priority.ALWAYS);
+            grid.addRow(fila++, new Label("A cuenta (fiado):"), filaFiado);
+            grid.add(lblCliente, 1, fila++);
+            final TextField campoFiado = campo;
+            elegirCliente = () -> {
+                Optional<ClienteFiado> c = fiado.selector.apply(dlg.getDialogPane().getScene() != null
+                        ? dlg.getDialogPane().getScene().getWindow() : owner);
+                c.ifPresent(x -> {
+                    fiado.elegido = x;
+                    alElegirCliente[0].run();                    // recalcula con el cliente nuevo
+                });
+                campoFiado.requestFocus();
+                campoFiado.selectAll();
+            };
+            final Runnable elegir = elegirCliente;
+            btnCliente.setOnAction(e -> elegir.run());
         }
 
         // ── Botones rápidos ──────────────────────────────────────────────
@@ -151,6 +231,23 @@ public final class CobroDialogo {
             rapidos.getChildren().add(b);
         }
 
+        if (txtFiado != null) {
+            final TextField campoFiado = txtFiado;
+            final Runnable elegir = elegirCliente;
+            Button b = boton("Todo a cuenta  F7", "Anotar el total completo a la cuenta del cliente");
+            Runnable accion = () -> {
+                campos.values().forEach(TextField::clear);
+                campoFiado.setText(CalculoCobro.formatoCampo(total));
+                if (fiado.elegido == null) elegir.run();
+                campoFiado.requestFocus();
+                campoFiado.selectAll();
+            };
+            b.setOnAction(e -> accion.run());
+            teclasRapidas.put(KeyCode.F7, accion);
+            teclasRapidas.put(KeyCode.F6, elegir);
+            rapidos.getChildren().add(b);
+        }
+
         // ── Pagado / cambio / error ──────────────────────────────────────
         Label lblPagado = new Label();
         Label lblCambioTitulo = new Label("Cambio:");
@@ -166,7 +263,8 @@ public final class CobroDialogo {
         HBox.setHgrow(filaCambio.getChildren().get(1), Priority.ALWAYS);
         filaCambio.setAlignment(Pos.CENTER_LEFT);
 
-        Label ayuda = new Label("Enter cobra · Esc regresa · Tab cambia de forma de pago · Enter sin montos = efectivo exacto");
+        Label ayuda = new Label("Enter cobra · Esc regresa · Tab cambia de forma de pago · Enter sin montos = efectivo exacto"
+                + (fiado != null ? " · F6 cliente · F7 todo a cuenta" : ""));
         ayuda.getStyleClass().add("hint");
         ayuda.setWrapText(true);
 
@@ -210,6 +308,15 @@ public final class CobroDialogo {
                 return;
             }
             CalculoCobro.Resultado r = CalculoCobro.calcular(total, montos);
+            if (fiado != null) {
+                double aCuenta = montos.getOrDefault(Venta.FormaPago.CREDITO, 0.0);
+                ClienteFiado c = fiado.elegido;
+                lblCliente.setText(textoCliente(c, aCuenta));
+                if (aCuenta > 0 && c == null && r.esValido()) {
+                    r = new CalculoCobro.Resultado(r.total(), r.pagado(), r.efectivo(), r.noEfectivo(), r.faltante(), r.cambio(),
+                            "Elige a qué cliente se le anota la cuenta (F6).");
+                }
+            }
             actual[0] = r;
             lblPagado.setText(Moneda.formato(r.pagado()));
             if (!r.hayPago()) {
@@ -231,6 +338,7 @@ public final class CobroDialogo {
             recalcular.run();
         }));
         recalcular.run();
+        alElegirCliente[0] = recalcular;
 
         // Ritmo de las teclas en los campos: un código escaneado ahí llega como ráfaga + Enter
         campos.values().forEach(c -> {
@@ -307,6 +415,23 @@ public final class CobroDialogo {
         });
 
         return dlg.showAndWait();
+    }
+
+    /** Línea bajo el campo de fiado: el cliente elegido, lo que debe y si esta venta rebasa su límite */
+    static String textoCliente(ClienteFiado c, double aCuenta) {
+        if (c == null) return aCuenta > 0 ? "Sin cliente: pulsa F6 para elegirlo o darlo de alta." : "F6 elige el cliente · F7 todo a cuenta";
+        String texto = c.resumen();
+        Double disponible = c.disponible();
+        if (aCuenta > 0) {
+            double despues = Math.round((c.saldo() + aCuenta) * 100.0) / 100.0;
+            texto += "\nCon esta venta debería " + Moneda.formato(despues) + ".";
+            if (disponible != null && aCuenta > disponible + 0.004) {
+                texto += " Rebasa su límite: se pedirá la autorización de un administrador.";
+            }
+        } else if (disponible != null) {
+            texto += " · puede fiársele " + Moneda.formato(disponible);
+        }
+        return texto;
     }
 
     private static Button boton(String texto, String tooltip) {

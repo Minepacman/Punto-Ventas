@@ -46,6 +46,9 @@ public class MigracionSqlite implements InitializingBean {
                 Pattern.compile("producto_id bigint not null", Pattern.CASE_INSENSITIVE), "producto_id bigint"));
         REEMPLAZOS.put("ventas", Map.of(
                 Pattern.compile("\\s*check \\(forma_pago in \\([^)]*\\)\\)", Pattern.CASE_INSENSITIVE), ""));
+        // Categoría "Abono de cliente (fiado)": la restricción vieja solo admitía las categorías de entonces
+        REEMPLAZOS.put("movimientos_caja", Map.of(
+                Pattern.compile("\\s*check \\(categoria in \\([^)]*\\)\\)", Pattern.CASE_INSENSITIVE), ""));
         REEMPLAZOS.put("detalle_ventas", Map.of(
                 Pattern.compile("cantidad integer not null", Pattern.CASE_INSENSITIVE), "cantidad float not null"));
     }
@@ -62,6 +65,10 @@ public class MigracionSqlite implements InitializingBean {
     public static List<String> migrar(DataSource dataSource) throws SQLException {
         List<String> tablasMigradas = new java.util.ArrayList<>();
         try (Connection c = dataSource.getConnection()) {
+            if (esPostgres(c)) {
+                quitarRestriccionesPostgres(c);
+                return tablasMigradas;
+            }
             if (!esSqlite(c)) return tablasMigradas;
 
             // Antes de tocar nada: ¿hay algo que migrar? Si sí, respaldar el archivo
@@ -111,6 +118,22 @@ public class MigracionSqlite implements InitializingBean {
             st.execute("VACUUM INTO '" + destino.replace("'", "''") + "'");
         }
         System.out.println("ℹ️  Migración SQLite: respaldo creado en " + destino);
+    }
+
+    /**
+     * PostgreSQL sí permite quitar una restricción sin reconstruir la tabla. Hibernate nombra las
+     * CHECK de columna como {@code <tabla>_<columna>_check}; si no existe (base nueva) no pasa nada.
+     */
+    static void quitarRestriccionesPostgres(Connection c) throws SQLException {
+        try (Statement st = c.createStatement()) {
+            st.execute("ALTER TABLE IF EXISTS movimientos_caja DROP CONSTRAINT IF EXISTS movimientos_caja_categoria_check");
+        }
+        if (!c.getAutoCommit()) c.commit();
+    }
+
+    private static boolean esPostgres(Connection c) throws SQLException {
+        String producto = c.getMetaData().getDatabaseProductName();
+        return producto != null && producto.toLowerCase().contains("postgres");
     }
 
     private static boolean esSqlite(Connection c) throws SQLException {

@@ -64,11 +64,11 @@ class PagosDivididosTest extends BaseServicioTest {
     }
 
     @Test
-    void elCreditoNoEstaDisponibleHastaTenerClientes() {
+    void elFiadoSinClienteNoSeCobra() {
         Producto p = producto("Combo3", 100, 10);
         assertThatThrownBy(() -> ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)),
                 Venta.FormaPago.CREDITO, 100))
-                .isInstanceOf(NegocioException.class).hasMessageContaining("crédito");
+                .isInstanceOf(NegocioException.class).hasMessageContaining("cliente");
     }
 
     @Test

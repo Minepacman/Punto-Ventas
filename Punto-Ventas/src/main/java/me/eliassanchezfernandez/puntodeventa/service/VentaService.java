@@ -68,6 +68,8 @@ public class VentaService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FacturaRepository facturaRepo;
+    /** Fiado (cuentas de clientes). @Lazy: CuentaClienteService → MovimientoCajaService → CajaService → VentaService */
+    @Autowired @org.springframework.context.annotation.Lazy private CuentaClienteService cuentaClienteService;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -460,6 +462,11 @@ public class VentaService {
         double total = calcularTotal(detalles);
         List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
         double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
+        // 3a) Fiado: quien cobra puede vender a cuenta y el cliente existe y está activo (antes de tocar
+        //     inventario); el límite se revisa al cargar, en la base (paso 4b)
+        PagoVenta pagoACuenta = pagosValidos.stream()
+                .filter(p -> p.getFormaPago() == Venta.FormaPago.CREDITO).findFirst().orElse(null);
+        if (pagoACuenta != null) cuentaClienteService.validarParaCargo(pagoACuenta.getClienteId(), autorizaciones);
         Venta.FormaPago formaPrincipal = pagosValidos.stream()
                 .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
                 .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
@@ -545,6 +552,18 @@ public class VentaService {
         Venta guardada = ventaRepo.save(venta);
         guardada.setFolio(config.folioDe(guardada.getId()));
 
+        // 4b) Fiado: cargo a la cuenta del cliente con el límite revisado EN la base (varias cajas)
+        if (pagoACuenta != null) {
+            CuentaClienteService.Cargo cargo = cuentaClienteService.cargarVenta(pagoACuenta.getClienteId(),
+                    pagoACuenta.getMonto(), guardada.getId(), guardada.getFolio(), autorizaciones);
+            guardada.setClienteId(cargo.clienteId());
+            guardada.setClienteNombre(cargo.clienteNombre());
+            guardada.setSaldoCliente(cargo.saldoDespues());
+            if (cargo.autorizoExceso() != null && autorizadores.add(cargo.autorizoExceso())) {
+                guardada.setAutorizadaPorNombre(String.join(", ", autorizadores));
+            }
+        }
+
         // 5) Bitácora del inventario ya descontado
         for (Map.Entry<Long, double[]> e : existencias.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
@@ -593,7 +612,7 @@ public class VentaService {
         return c;
     }
 
-    /** Pagos: montos válidos, formas habilitadas (sin crédito), suma ≥ total y no-efectivo ≤ total */
+    /** Pagos: montos válidos, formas habilitadas (el fiado, con cliente), suma ≥ total y no-efectivo ≤ total */
     private List<PagoVenta> validarPagos(List<PagoVenta> pagos, double total, Configuracion config) {
         if (pagos == null || pagos.isEmpty()) {
             throw new NegocioException("Indica cómo pagó el cliente.");
@@ -607,9 +626,14 @@ public class VentaService {
             }
             if (p.getMonto() <= 0) continue;
             if (p.getFormaPago() == Venta.FormaPago.CREDITO) {
-                throw new NegocioException("La venta a crédito no está disponible hasta contar con el módulo de clientes.");
-            }
-            if (!config.permiteFormaPago(p.getFormaPago())) {
+                // Fiado: no depende de las formas de pago de Configuración; se anota a un solo cliente
+                if (p.getClienteId() == null) {
+                    throw new NegocioException("Elige a qué cliente se le anota la cuenta (fiado).");
+                }
+                if (validos.stream().anyMatch(v -> v.getFormaPago() == Venta.FormaPago.CREDITO)) {
+                    throw new NegocioException("Una venta solo se puede anotar a la cuenta de un cliente.");
+                }
+            } else if (!config.permiteFormaPago(p.getFormaPago())) {
                 throw new NegocioException("La forma de pago \"" + p.getFormaPago().getEtiqueta()
                         + "\" no está habilitada en Configuración.");
             }
@@ -640,6 +664,7 @@ public class VentaService {
      */
     private PagoVenta copiarPago(PagoVenta p) {
         PagoVenta nuevo = new PagoVenta(p.getFormaPago(), redondear(p.getMonto()));
+        if (p.getFormaPago() == Venta.FormaPago.CREDITO) nuevo.setClienteId(p.getClienteId());
         if (p.getFormaPago() != Venta.FormaPago.TARJETA) return nuevo;
         boolean capturado = DatosTarjeta.hayAlgo(p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion());
         var dispositivos = dispositivosService.obtener();
@@ -735,8 +760,13 @@ public class VentaService {
             }
         }
 
+        // 4) Fiado: lo que se anotó a la cuenta del cliente se le quita
+        double revertido = cuentaClienteService.revertirPorCancelacion(v.getId(), v.getFolio(), motivo.trim());
+
         auditoriaService.registrar(quien, "VENTA_CANCELADA",
-                "Venta #" + v.getId() + " — " + motivo.trim(), aut);
+                "Venta #" + v.getId() + " — " + motivo.trim()
+                        + (revertido > 0 ? " (se quitaron " + Moneda.formato(revertido) + " de la cuenta de "
+                                + (v.getClienteNombre() != null ? v.getClienteNombre() : "el cliente") + ")" : ""), aut);
         if (aut != null) aut.consumir();
         return v;
     }

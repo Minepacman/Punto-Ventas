@@ -76,7 +76,7 @@ class TutorialGeneralTest {
                 .doesNotContain("Corte", "Configuración", "Estadísticas");
 
         List<TutorialGeneral.Paso> admin = TutorialGeneral.pasosPara(
-                List.of("tabVentas", "tabProductos", "tabInventario", "tabCorte", "tabEstadisticas", "tabConfig"));
+                List.of("tabVentas", "tabClientes", "tabProductos", "tabInventario", "tabCorte", "tabEstadisticas", "tabConfig"));
         assertThat(admin.get(admin.size() - 3).tabId()).isEqualTo("tabConfig");   // Configuración es la última pestaña
         assertThat(admin).hasSameSizeAs(TutorialGeneral.pasos());
     }

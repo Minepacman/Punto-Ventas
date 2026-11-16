@@ -496,6 +496,7 @@ const ICONOS = {
   baja:       ['M22 17 13.5 8.5 8.5 13.5 2 7', 'M16 17h6v-6'],
   salir:      ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
   tienda:     ['m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7', 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8', 'M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4', 'M2 7h20'],
+  usuarios:   ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M5 7a4 4 0 1 0 8 0a4 4 0 1 0-8 0', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   camion:     ['M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2', 'M15 18H9', 'M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14', 'M15 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0', 'M5 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0'],
   pedido:     ['M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z', 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'M12 11h4', 'M12 16h4', 'M8 11h.01', 'M8 16h.01'],
   telefono:   ['M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'],
@@ -738,6 +739,8 @@ const api = {
 
   /** Agenda de proveedores: hoy (según la computadora), permisos y la lista con días, próxima visita y nota media (si puede verla) */
   proveedores: () => peticion('GET', '/api/proveedores'),
+  /** "Quién me debe": clientes con saldo (fiado), solo lectura */
+  saldosClientes: () => peticion('GET', '/api/clientes/saldos'),
   /** Crea (sin id) o edita (con id) un proveedor: {id?, nombre, telefono, contacto, diasEntrega:[1..7], diasPreventa:[1..7], notas} */
   guardarProveedor: datos => peticion('POST', '/api/proveedores/guardar', datos),
 
@@ -946,6 +949,7 @@ const SECCIONES = [   // `permiso` = clave de `secciones` que devuelve el servid
   { id: 'historial',    etiqueta: 'Ventas',     icono: 'recibo',  permiso: 'historial',      vista: vistaHistorial,    titulo: 'Historial de ventas' },
   { id: 'inventario',   etiqueta: 'Inventario', icono: 'paquete', permiso: 'inventario',     vista: vistaInventario,   titulo: 'Inventario' },
   { id: 'proveedores',  etiqueta: 'Proveedores', icono: 'camion', permiso: 'proveedores',    vista: vistaProveedores,  titulo: 'Proveedores' },
+  { id: 'clientes',     etiqueta: 'Fiado',      icono: 'usuarios', permiso: 'clientes',      vista: vistaClientes,     titulo: 'Quién me debe' },
   { id: 'escanear',     etiqueta: 'Escanear',   icono: 'camara',  permiso: 'escanearTicket', vista: vistaEscanear,     titulo: 'Escanear ticket' },
   { id: 'config',       etiqueta: 'Ajustes',    icono: 'ajustes', permiso: 'configuracion',  vista: vistaConfig,       titulo: 'Configuración' },
 ];
@@ -1332,6 +1336,32 @@ function selectorDias(etiqueta, seleccion, { preventa = false, editable = false 
 }
 
 const telefonoLimpio = t => (t || '').replace(/[^0-9+]/g, '');
+
+/* ============================================================================
+   VISTA: QUIÉN ME DEBE (fiado, solo lectura; requiere VENDER_A_CREDITO)
+   ============================================================================ */
+async function vistaClientes() {
+  const datos = await api.saldosClientes();
+  const caja = h('div', { class: 'pila' });
+  const deben = datos.clientes.filter(c => c.saldo > 0);
+  const aFavor = datos.clientes.filter(c => c.saldo < 0);
+  const fila = c => {
+    const tel = telefonoLimpio(c.telefono);
+    const detalle = [c.telefono || 'Sin teléfono', c.limite ? 'límite ' + dinero(c.limite) : 'sin límite', c.activo ? null : 'desactivado']
+      .filter(Boolean).join(' · ');
+    return h(tel ? 'a' : 'div', tel ? { class: 'fila', href: 'tel:' + tel } : { class: 'fila' },
+      h('div', { class: 'cuerpo' }, h('div', { class: 't' }, c.nombre), h('div', { class: 'd' }, detalle)),
+      h('div', { class: 'der' }, h('strong', null, c.saldo < 0 ? 'A favor ' + dinero(-c.saldo) : dinero(c.saldo))));
+  };
+  anexar(caja, [
+    h('div', { class: 'kpi' }, h('div', { class: 'e' }, 'Por cobrar en total'), h('div', { class: 'v' }, dinero(datos.total)),
+      h('div', { class: 'sub' }, deben.length + (deben.length === 1 ? ' cliente debe' : ' clientes deben'))),
+    h('section', null, h('div', { class: 'seccion-t' }, 'Clientes que deben'),
+      deben.length ? h('div', { class: 'lista-rej' }, deben.map(fila)) : h('div', { class: 'vacio' }, 'Nadie debe nada. Las ventas a cuenta (fiado) se anotan al cobrar en la caja.')),
+    aFavor.length ? h('section', null, h('div', { class: 'seccion-t' }, 'Con saldo a favor'), h('div', { class: 'lista-rej' }, aFavor.map(fila))) : null,
+    h('p', { class: 'nota' }, 'Solo consulta. Los abonos y los ajustes se registran en la computadora, en la pestaña Clientes (F2). Toca un cliente para llamarle.')]);
+  return caja;
+}
 
 /** opciones: {proveedorId} abre de entrada el detalle de ese proveedor (lo manda un aviso de la campana) */
 async function vistaProveedores(opciones = {}) {
@@ -2071,6 +2101,7 @@ const tutorial = {
       proveedores: 'Agenda de proveedores: el calendario de la semana muestra qué día llega cada entrega y qué día pasa el preventa (el vendedor que toma el pedido), con el día de hoy resaltado. Toca un proveedor para ver su teléfono y sus próximas visitas.'
         + (sec.proveedoresCostos ? ' Como puedes ver costos, también aparece la nota media: lo que se le compra en promedio por visita.' : '')
         + (sec.proveedoresEditar ? ' Tienes permiso para dar de alta proveedores y cambiar sus días de entrega y preventa.' : ' Los días los captura quien gestiona proveedores; tú los consultas.'),
+      clientes: 'Quién me debe: los clientes con cuenta (fiado) que deben, de mayor a menor, y el total por cobrar. Es solo consulta: los abonos se registran en la computadora. Toca un cliente para llamarle.',
       escanear: 'Permite tomar una foto del ticket del proveedor para dar entrada a la mercancía. Importante: por ahora la lectura de la foto es una DEMOSTRACIÓN, las líneas que aparecen son de ejemplo y nada cambia en el inventario hasta que marques y confirmes cada una.',
       config: 'Aquí decides si la sesión se mantiene abierta en este teléfono, activas las notificaciones (los avisos de la campana llegan al teléfono aunque la página esté cerrada), eliges el tema claro u oscuro y el texto grande, y cierras sesión. También puedes volver a ver este recorrido.',
     };
