@@ -852,7 +852,9 @@ public class VentasController implements Initializable {
         } else {
             // Un pago sospechoso (cambio enorme o tecleado por el lector) pasa por la ventana de cobro,
             // que lo muestra y exige una confirmación distinta del Enter
-            CobroDialogo.Fiado fiado = new CobroDialogo.Fiado(this::elegirClienteFiado, clienteFiado);
+            // Fiado oculto (FuncionesOcultas): sin campo «A cuenta», sin F6/F7 ni línea del cliente
+            CobroDialogo.Fiado fiado = me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas.FIADO_HABILITADO
+                    ? new CobroDialogo.Fiado(this::elegirClienteFiado, clienteFiado) : null;
             CobroDialogo.ValeTienda vale = new CobroDialogo.ValeTienda(valeService::consultar);
             Optional<Map<Venta.FormaPago, Double>> elegido = CobroDialogo.mostrar(
                     raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector,
@@ -862,7 +864,7 @@ public class VentasController implements Initializable {
                 return;
             }
             montos = elegido.get();
-            clienteFiado = montos.containsKey(Venta.FormaPago.CREDITO) ? fiado.elegido() : null;
+            clienteFiado = fiado != null && montos.containsKey(Venta.FormaPago.CREDITO) ? fiado.elegido() : null;
             valeCobro = montos.containsKey(Venta.FormaPago.VALE_COMPRA) ? vale.codigo() : null;
         }
         cobrarCon(montos);

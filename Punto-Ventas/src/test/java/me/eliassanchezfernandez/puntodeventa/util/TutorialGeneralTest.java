@@ -29,6 +29,8 @@ class TutorialGeneralTest {
         Matcher m = TAB_ID.matcher(Files.readString(MAIN_FXML));
         while (m.find()) enFxml.add(m.group(1));
         assertThat(enFxml).isNotEmpty();
+        // Clientes (fiado) está en el FXML pero MainController la quita mientras la función siga oculta
+        if (!FuncionesOcultas.FIADO_HABILITADO) enFxml.remove("tabClientes");
 
         Set<String> enTutorial = new HashSet<>();
         for (TutorialGeneral.Paso p : TutorialGeneral.pasos()) {
@@ -76,7 +78,7 @@ class TutorialGeneralTest {
                 .doesNotContain("Corte", "Configuración", "Estadísticas");
 
         List<TutorialGeneral.Paso> admin = TutorialGeneral.pasosPara(
-                List.of("tabVentas", "tabClientes", "tabProductos", "tabInventario", "tabCorte", "tabEstadisticas", "tabConfig"));
+                List.of("tabVentas", "tabPromociones", "tabProductos", "tabInventario", "tabClientes", "tabCorte", "tabEstadisticas", "tabConfig"));
         assertThat(admin.get(admin.size() - 3).tabId()).isEqualTo("tabConfig");   // Configuración es la última pestaña
         assertThat(admin).hasSameSizeAs(TutorialGeneral.pasos());
     }

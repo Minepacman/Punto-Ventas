@@ -130,6 +130,8 @@ public class UsuariosController implements Initializable {
             chk.setWrapText(true);
             chk.setMaxWidth(Double.MAX_VALUE);
             checksPermiso.put(p, chk);
+            // Permisos de funciones ocultas (FuncionesOcultas): la casilla existe y guarda su valor, pero no se muestra
+            if (!me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas.permisoVisible(p)) continue;
             rejilla.add(chk, i % 2, i / 2);
             i++;
         }

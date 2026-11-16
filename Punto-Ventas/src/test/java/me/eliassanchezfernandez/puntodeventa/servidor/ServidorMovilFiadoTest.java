@@ -26,6 +26,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Acceso móvil: "Quién me debe" (/api/clientes/saldos), solo lectura y solo con VENDER_A_CREDITO */
@@ -85,7 +87,19 @@ class ServidorMovilFiadoTest {
     }
 
     @Test
+    void conElFiadoOcultoLaSeccionNoSeOfreceYLaRutaNoExiste() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(FuncionesOcultas.FIADO_HABILITADO);
+        String conPermiso = token(Permiso.VENDER_A_CREDITO);
+        assertThat(JSON.readTree(enviar("GET", "/api/sesion", null, conPermiso).body()).get("secciones").get("clientes").asBoolean()).isFalse();
+        HttpResponse<String> r = enviar("GET", "/api/clientes/saldos", null, conPermiso);
+        assertThat(r.statusCode()).isEqualTo(404);
+        assertThat(r.body()).doesNotContain("clientes");
+        assertThat(enviar("GET", "/api/clientes/saldos", null, token()).statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void quienMeDebeSoloConPermisoYSoloLosQueDeben() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(FuncionesOcultas.FIADO_HABILITADO, "fiado oculto: FuncionesOcultas");
         Cliente debe = cuentaService.guardar(null, "Debe móvil " + UUID.randomUUID().toString().substring(0, 5),
                 "2821410000", null, 500, true, null);
         cuentaService.ajustar(debe.getId(), 120, "Deuda anterior", null);

@@ -3,6 +3,8 @@ package me.eliassanchezfernandez.puntodeventa;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Caducidad;
 import me.eliassanchezfernandez.puntodeventa.model.Cliente;
+import me.eliassanchezfernandez.puntodeventa.model.Promocion;
+import me.eliassanchezfernandez.puntodeventa.service.PromocionService;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Devolucion;
@@ -33,6 +35,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -178,21 +181,23 @@ public final class DatosDemoCapturas {
             cobrarEfectivo(ventaService, List.of(ventaService.crearDetalle(p, cantidad, true)));
         }
 
-        // ── Clientes con fiado ──
-        Cliente juan = cuentas.guardar(null, "Juan Pérez (taller)", "55 1234 0001", "Paga los viernes", 1500, true, List.of());
-        Cliente rosa = cuentas.guardar(null, "Rosa Martínez", null, null, 800, true, List.of());
-        Cliente maestra = cuentas.guardar(null, "Maestra Carmen", "55 1234 0002", null, 1000, true, List.of());
-        aCuenta(ventaService, juan, List.of(
-                ventaService.crearDetalle(productos.get("Coca-Cola 2 L"), 2, true),
-                ventaService.crearDetalle(productos.get("Huevo blanco 12 pz"), 1, true),
-                ventaService.crearDetalle(productos.get("Frijol negro 1 kg"), 2, true)));
-        aCuenta(ventaService, rosa, List.of(
-                ventaService.crearDetalle(productos.get("Leche Lala entera 1 L"), 2, true),
-                ventaService.crearDetalle(productos.get("Pan Bimbo blanco grande"), 1, true)));
-        aCuenta(ventaService, maestra, List.of(
-                ventaService.crearDetalle(productos.get("Jabón Roma 1 kg"), 1, true),
-                ventaService.crearDetalle(productos.get("Agua Ciel 1 L"), 6, true)));
-        cuentas.registrarAbono(juan.getId(), 100, Venta.FormaPago.EFECTIVO, null);
+        // ── Clientes con fiado (solo si la función está visible: FuncionesOcultas) ──
+        if (me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas.FIADO_HABILITADO) {
+            Cliente juan = cuentas.guardar(null, "Juan Pérez (taller)", "55 1234 0001", "Paga los viernes", 1500, true, List.of());
+            Cliente rosa = cuentas.guardar(null, "Rosa Martínez", null, null, 800, true, List.of());
+            Cliente maestra = cuentas.guardar(null, "Maestra Carmen", "55 1234 0002", null, 1000, true, List.of());
+            aCuenta(ventaService, juan, List.of(
+                    ventaService.crearDetalle(productos.get("Coca-Cola 2 L"), 2, true),
+                    ventaService.crearDetalle(productos.get("Huevo blanco 12 pz"), 1, true),
+                    ventaService.crearDetalle(productos.get("Frijol negro 1 kg"), 2, true)));
+            aCuenta(ventaService, rosa, List.of(
+                    ventaService.crearDetalle(productos.get("Leche Lala entera 1 L"), 2, true),
+                    ventaService.crearDetalle(productos.get("Pan Bimbo blanco grande"), 1, true)));
+            aCuenta(ventaService, maestra, List.of(
+                    ventaService.crearDetalle(productos.get("Jabón Roma 1 kg"), 1, true),
+                    ventaService.crearDetalle(productos.get("Agua Ciel 1 L"), 6, true)));
+            cuentas.registrarAbono(juan.getId(), 100, Venta.FormaPago.EFECTIVO, null);
+        }
 
         // ── Devolución con vale y una venta lista para devolver ──
         Venta conDevolucion = cobrarEfectivo(ventaService, List.of(
@@ -210,11 +215,39 @@ public final class DatosDemoCapturas {
                 ventaService.crearDetalle(productos.get("Leche Lala entera 1 L"), 1, true),
                 ventaService.crearDetalle(productos.get("Huevo blanco 12 pz"), 1, true)));
 
+        // ── Promociones (después de las ventas, y en productos que no van en el ticket de las capturas) ──
+        PromocionService promociones = ctx.getBean(PromocionService.class);
+        promocionDemo(promociones, productos.get("Ruffles Queso 50 g"), null, "3x2 en Ruffles", Promocion.Tipo.NXM, 0, 3, 2, null, null, null);
+        promocionDemo(promociones, null, limpieza, "Limpieza 10 % el fin de semana", Promocion.Tipo.PORCENTAJE, 10, null, null,
+                EnumSet.of(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY), null, null);
+        promocionDemo(promociones, productos.get("Jitomate"), null, "Martes de plaza", Promocion.Tipo.PRECIO_FIJO, 26, null, null,
+                EnumSet.of(DayOfWeek.TUESDAY), null, null);
+        promocionDemo(promociones, productos.get("Agua Ciel 1 L"), null, "Agua de 10 pesos (hasta agotar)", Promocion.Tipo.PRECIO_FIJO, 10,
+                null, null, null, 48, 6);
+
         ctx.getBean(CatalogoCodigosService.class).cargarIncluidoSiFalta();   // alta por código de barras sin internet
         ctx.getBean(AgregadosService.class).recalcularManual();
         productos.replaceAll((k, v) -> productoRepo.findById(v.getId()).orElseThrow());
         ultimo = new Sembrado(productos, conDevolucion.getId(), paraDevolver.getId());
         return ultimo;
+    }
+
+    private static void promocionDemo(PromocionService servicio, Producto producto, Departamento depto, String nombre,
+                                      Promocion.Tipo tipo, double valor, Integer n, Integer m, Set<DayOfWeek> dias,
+                                      Integer limitePiezas, Integer limitePorTicket) {
+        Promocion p = new Promocion();
+        p.setProducto(producto);
+        p.setDepartamento(depto);
+        p.setDescripcion(nombre);
+        p.setTipo(tipo);
+        p.setValor(valor);
+        p.setCantidadN(n);
+        p.setCantidadM(m);
+        p.setFechaInicio(LocalDate.now().minusDays(7));
+        if (dias != null) p.setDiasSemana(dias.stream().sorted().map(Enum::name).collect(java.util.stream.Collectors.joining(",")));
+        p.setLimitePiezas(limitePiezas);
+        p.setLimitePorTicket(limitePorTicket);
+        servicio.guardar(p);
     }
 
     private static Departamento depto(DepartamentoRepository repo, String nombre, TipoIva iva) {

@@ -6,7 +6,7 @@
 <?import javafx.geometry.Insets?>
 
 <!--
-    clientes.fxml  –  Clientes con cuenta (fiado), pestaña F2
+    clientes.fxml  –  Clientes con cuenta (fiado); pestaña oculta mientras FuncionesOcultas.FIADO_HABILITADO = false
     Controlador: ClientesController.java
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"

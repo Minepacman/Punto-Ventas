@@ -48,20 +48,26 @@ public final class TutorialGeneral {
                 + "«Producto común» lo cobra con solo teclear el nombre y el precio.",
                 List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.PRODUCTO_COMUN, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
                         Atajo.RECUPERAR_ESPERA, Atajo.COBRAR)));
-        p.add(new Paso("tabClientes", "Clientes (fiado)",
-                "La libreta del fiado: cuánto debe cada cliente, su límite y su estado de cuenta. Para fiar, "
-                + "al cobrar escribe el monto en «A cuenta (fiado)» y elige al cliente con F6 (o dalo de alta ahí "
-                + "mismo). Aquí registras los abonos: en efectivo entran al cajón y cuentan en el corte.",
-                List.of(Atajo.IR_CLIENTES)));
+        p.add(new Paso("tabPromociones", "Promociones",
+                "Las ofertas de la tienda: 2x1 o 3x2, porcentaje de descuento o precio especial, para un producto "
+                + "o un departamento completo, por fechas, días de la semana, horario o hasta agotar. Se aplican "
+                + "solas al vender y el ticket muestra el nombre de la promoción.",
+                List.of(Atajo.IR_PROMOCIONES)));
         p.add(new Paso("tabProductos", "Productos",
                 "Tu catálogo: códigos de barras, descripción, precio de costo y de venta, departamento, "
-                + "unidad, venta a granel y precio de mayoreo. También las promociones (NxM, por departamento, "
-                + "por horario o hasta agotar) y los departamentos.",
+                + "unidad, venta a granel y precio de mayoreo. Aquí también están los departamentos.",
                 List.of(Atajo.IR_PRODUCTOS)));
         p.add(new Paso("tabInventario", "Inventario",
                 "Existencias y movimientos: entradas de mercancía, ajustes, productos bajos de stock, "
                 + "proveedores y órdenes de compra. Cada venta descuenta existencias automáticamente.",
                 List.of(Atajo.IR_INVENTARIO)));
+        if (FuncionesOcultas.FIADO_HABILITADO) {
+            p.add(new Paso("tabClientes", "Clientes (fiado)",
+                    "La libreta del fiado: cuánto debe cada cliente, su límite y su estado de cuenta. Para fiar, "
+                    + "al cobrar escribe el monto en «A cuenta (fiado)» y elige al cliente con F6 (o dalo de alta ahí "
+                    + "mismo). Aquí registras los abonos: en efectivo entran al cajón y cuentan en el corte.",
+                    List.of(Atajo.IR_CLIENTES)));
+        }
         p.add(new Paso("tabCorte", "Corte",
                 "El corte de esta caja por turno: lo que debe haber en el cajón desde el corte anterior "
                 + "(fondo o lo que dejó el turno pasado, más ventas en efectivo, más entradas, menos salidas), "

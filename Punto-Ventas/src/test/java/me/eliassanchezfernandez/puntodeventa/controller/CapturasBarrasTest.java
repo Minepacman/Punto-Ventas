@@ -66,7 +66,8 @@ class CapturasBarrasTest {
 
     /** Contenido de una pestaña con la ventana maximizada: ancho de pantalla menos bordes, alto menos cabecera y barra de estado */
     private static final String[] PESTANAS = {
-            "/fxml/ventas.fxml", "/fxml/clientes.fxml", "/fxml/productos.fxml", "/fxml/inventario.fxml",
+            "/fxml/ventas.fxml", "/fxml/promociones.fxml", "/fxml/productos.fxml", "/fxml/inventario.fxml",
+            "/fxml/clientes.fxml",   // oculta mientras FuncionesOcultas.FIADO_HABILITADO = false; se revisa igual
             "/fxml/corte.fxml", "/fxml/estadisticas.fxml", "/fxml/configuracion.fxml",
     };
 
@@ -76,7 +77,6 @@ class CapturasBarrasTest {
             {"/fxml/ordenes_compra.fxml", 1100, 680},
             {"/fxml/movimientos.fxml", 1050, 600},
             {"/fxml/ventas_periodo.fxml", 1000, 640},
-            {"/fxml/promociones.fxml", 1000, 600},
             {"/fxml/facturas.fxml", 1100, 640},
             {"/fxml/clientes_fiscales.fxml", 900, 560},
             {"/fxml/usuarios.fxml", 1000, 690},
@@ -136,6 +136,11 @@ class CapturasBarrasTest {
                 } finally {
                     sesionService.getCajeroActual().setNombreCompleto(nombreAntes);
                 }
+                // La ventana principal con la pestaña F2 · Promociones abierta (se carga perezosamente como en uso real)
+                capturar("/fxml/main.fxml", anchoPantalla, altoVisible - 30, dir, cuenta, "main-promociones",
+                        raiz -> ((javafx.scene.control.TabPane) raiz.lookup(".main-tabs")).getTabs().stream()
+                                .filter(t -> "tabPromociones".equals(t.getId())).findFirst()
+                                .ifPresent(t -> t.getTabPane().getSelectionModel().select(t)));
                 for (String fxml : PESTANAS) {
                     // Ventana maximizada: pestañas (~42 px), cabecera (~56 px) y barra de estado (~28 px)
                     capturar(fxml, anchoPantalla - 16, altoVisible - 126, dir, cuenta);
@@ -162,6 +167,11 @@ class CapturasBarrasTest {
     }
 
     private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta, String nombre) throws Exception {
+        capturar(fxml, ancho, alto, dir, cuenta, nombre, raiz -> { });
+    }
+
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta, String nombre,
+                          java.util.function.Consumer<Parent> preparar) throws Exception {
         AtomicReference<Throwable> error = new AtomicReference<>();
         CountDownLatch listo = new CountDownLatch(1);
         Platform.runLater(() -> {
@@ -174,6 +184,7 @@ class CapturasBarrasTest {
                 Stage stage = new Stage();
                 stage.setScene(escena);
                 stage.show();
+                preparar.accept(raiz);
                 PauseTransition espera = new PauseTransition(Duration.millis(700));
                 espera.setOnFinished(e -> {
                     try {

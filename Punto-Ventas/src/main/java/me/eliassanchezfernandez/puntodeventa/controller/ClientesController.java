@@ -44,7 +44,7 @@ import java.util.ResourceBundle;
 import java.util.function.Supplier;
 
 /**
- * Clientes (F2): cuentas de crédito ("fiado"). Lista con lo que debe cada uno,
+ * Clientes (pestaña oculta mientras FuncionesOcultas.FIADO_HABILITADO = false): cuentas de crédito ("fiado"). Lista con lo que debe cada uno,
  * alta y edición, abonos (efectivo, tarjeta o transferencia; el efectivo entra
  * al corte), estado de cuenta (imprimir / exportar) y ajustes de saldo. Las
  * reglas y permisos los aplica {@link CuentaClienteService}; aquí solo se pide

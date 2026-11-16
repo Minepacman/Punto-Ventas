@@ -16,6 +16,7 @@ import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Franja;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.ProductoImagen;
 import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
@@ -679,7 +680,11 @@ public class ServidorMovilService {
                 case "/api/inventario"      -> { exigir(metodo, "GET");  inventario(ex); }
                 case "/api/inventario/ajuste" -> { exigir(metodo, "POST"); ajusteInventario(ex); }
                 case "/api/proveedores"     -> { exigir(metodo, "GET");  proveedores(ex); }
-                case "/api/clientes/saldos" -> { exigir(metodo, "GET");  saldosClientes(ex); }
+                case "/api/clientes/saldos" -> {
+                    // Fiado oculto (FuncionesOcultas): la ruta no existe, igual que cualquier otra desconocida
+                    if (!FuncionesOcultas.FIADO_HABILITADO) { error(ex, 404, "NO_ENCONTRADO", "No encontrado."); return; }
+                    exigir(metodo, "GET");  saldosClientes(ex);
+                }
                 case "/api/proveedores/guardar" -> { exigir(metodo, "POST"); guardarProveedor(ex); }
                 case "/api/avisos"          -> { exigir(metodo, "GET");  avisos(ex); }
                 case "/api/caducidades"     -> { exigir(metodo, "GET");  caducidades(ex); }
@@ -1216,7 +1221,7 @@ public class ServidorMovilService {
         secciones.put("inventarioAjustar", ajustar);
         boolean gestionarProveedores = c.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
         secciones.put("proveedores", true);
-        secciones.put("clientes", c.tienePermiso(Permiso.VENDER_A_CREDITO));
+        secciones.put("clientes", FuncionesOcultas.FIADO_HABILITADO && c.tienePermiso(Permiso.VENDER_A_CREDITO));
         secciones.put("proveedoresEditar", gestionarProveedores);
         secciones.put("proveedoresCostos", gestionarProveedores || c.tienePermiso(Permiso.VER_GANANCIAS));
         // "Escanear ticket" sigue siendo una DEMO (las líneas son de ejemplo): apagada hasta tener OCR real.

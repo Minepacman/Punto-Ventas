@@ -45,6 +45,8 @@ class AtajoTest {
         assertThat(Atajo.resolver(Atajo.Ambito.VENTAS, KeyCode.DELETE, false, false, false)).contains(Atajo.QUITAR_RENGLON);
         assertThat(Atajo.resolver(Atajo.Ambito.GLOBAL, KeyCode.F1, false, false, false)).contains(Atajo.IR_VENTAS);
         assertThat(Atajo.resolver(Atajo.Ambito.GLOBAL, KeyCode.DIGIT3, true, false, false)).contains(Atajo.IR_PRODUCTOS);
+        assertThat(Atajo.resolver(Atajo.Ambito.GLOBAL, KeyCode.F2, false, false, false)).contains(Atajo.IR_PROMOCIONES);
+        assertThat(Atajo.resolver(Atajo.Ambito.GLOBAL, KeyCode.DIGIT2, true, false, false)).contains(Atajo.IR_PROMOCIONES);
         assertThat(Atajo.resolver(Atajo.Ambito.GLOBAL, KeyCode.F10, false, false, false)).contains(Atajo.AYUDA_ATAJOS);
     }
 

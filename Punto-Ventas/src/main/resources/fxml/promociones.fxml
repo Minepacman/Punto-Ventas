@@ -8,22 +8,22 @@
 <!--
     promociones.fxml  –  Catálogo de promociones por producto o departamento
     Controlador: PromocionesController.java
-    Se abre como ventana modal desde Productos → Promociones.
+    Pestaña principal F2 · Promociones (MainController la carga al abrirla por primera vez).
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.PromocionesController"
             stylesheets="@../css/app.css">
 
     <top>
-        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+        <!-- Pasa a otro renglón si no cabe (letra grande): nunca recorta con «…» -->
+        <FlowPane styleClass="section-toolbar, barra-acciones">
             <padding><Insets topRightBottomLeft="10"/></padding>
-            <Button fx:id="btnNueva"    text="+ Nueva"     onAction="#onNueva"    styleClass="button-success"/>
+            <Button fx:id="btnNueva"    text="Nueva"    onAction="#onNueva"    styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
             <Button fx:id="btnEliminar" text="Eliminar" onAction="#onEliminar" styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
             <Label fx:id="lblSoloLectura" text="Solo consulta: no tienes permiso para crear o editar promociones."
                    visible="false" managed="false" styleClass="badge, badge-warning"/>
-            <Region HBox.hgrow="ALWAYS"/>
-            <Label text="Promociones" styleClass="form-section-title"><graphic><Icono nombre="estrella"/></graphic></Label>
-        </HBox>
+            <Label text="Se aplican solas al cobrar; el ticket muestra el nombre de la promoción." styleClass="hint"/>
+        </FlowPane>
     </top>
 
     <center>
@@ -31,6 +31,8 @@
 
             <!-- Tabla -->
             <TableView fx:id="tablaPromociones">
+                <!-- En la pestaña (1024 px) las columnas se reparten el ancho: Vigencia y Estado siempre a la vista -->
+                <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/></columnResizePolicy>
                 <columns>
                     <TableColumn fx:id="colAlcance"     text="Producto / Depto." prefWidth="180"/>
                     <TableColumn fx:id="colDescripcion" text="Descripción"       prefWidth="130"/>
@@ -146,12 +148,9 @@
 
                     <Region minHeight="8"/>
 
-                    <HBox spacing="12">
-                        <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar"
-                                styleClass="button-success"
-                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
-                        <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
-                    </HBox>
+                    <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar"
+                            styleClass="button-success"
+                            maxWidth="Infinity" prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
                 </VBox>
             </ScrollPane>
 

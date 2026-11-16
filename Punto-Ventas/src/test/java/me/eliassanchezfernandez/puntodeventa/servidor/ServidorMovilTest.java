@@ -540,10 +540,14 @@ class ServidorMovilTest {
         // "Escanear ticket" (demo de OCR) está apagado hasta tener OCR real; con AJUSTAR_INVENTARIO sigue la bandera
         assertThat(s.get("escanearTicket").asBoolean()).isEqualTo(ServidorMovilService.ESCANEAR_TICKET_HABILITADO);
 
-        // El admin lo ve todo (salvo la demo de "Escanear", que sigue la bandera)
+        // El admin lo ve todo (salvo la demo de "Escanear" y el fiado, que siguen su bandera)
         s = sesion(login("admin", "admin123", false).cuerpo().get("token").asText()).cuerpo().get("secciones");
         s.fields().forEachRemaining(e -> assertThat(e.getValue().asBoolean()).as(e.getKey())
-                .isEqualTo(!e.getKey().equals("escanearTicket") || ServidorMovilService.ESCANEAR_TICKET_HABILITADO));
+                .isEqualTo(switch (e.getKey()) {
+                    case "escanearTicket" -> ServidorMovilService.ESCANEAR_TICKET_HABILITADO;
+                    case "clientes" -> me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas.FIADO_HABILITADO;
+                    default -> true;
+                }));
     }
 
     @Test

@@ -1609,7 +1609,7 @@ async function vistaClientes() {
     h('section', null, h('div', { class: 'seccion-t' }, 'Clientes que deben'),
       deben.length ? h('div', { class: 'lista-rej' }, deben.map(fila)) : h('div', { class: 'vacio' }, 'Nadie debe nada. Las ventas a cuenta (fiado) se anotan al cobrar en la caja.')),
     aFavor.length ? h('section', null, h('div', { class: 'seccion-t' }, 'Con saldo a favor'), h('div', { class: 'lista-rej' }, aFavor.map(fila))) : null,
-    h('p', { class: 'nota' }, 'Solo consulta. Los abonos y los ajustes se registran en la computadora, en la pestaña Clientes (F2). Toca un cliente para llamarle.')]);
+    h('p', { class: 'nota' }, 'Solo consulta. Los abonos y los ajustes se registran en la computadora, en la pestaña Clientes. Toca un cliente para llamarle.')]);
   return caja;
 }
 

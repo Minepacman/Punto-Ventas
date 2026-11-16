@@ -91,7 +91,6 @@ public class ProductosController implements Initializable {
     @FXML private Button                        btnActivar;
     @FXML private Button                        btnDepartamentos;
     @FXML private Button                        btnVentasPeriodo;
-    @FXML private Button                        btnPromociones;
     @FXML private Button                        btnImportar;
     @FXML private Button                        btnCambiarIva;
     @FXML private Label                         lblSeleccion;
@@ -237,7 +236,6 @@ public class ProductosController implements Initializable {
         btnImportar.setDisable(!editar);
         actualizarBotonesSeleccion();
         btnVentasPeriodo.setDisable(!sesionService.tienePermiso(Permiso.VER_HISTORIAL));
-        // Promociones se puede consultar; la ventana bloquea guardar sin permiso
         // Dar de alta proveedores desde el formulario exige GESTIONAR_PROVEEDORES (elegir uno, no)
         boolean gestionaProveedores = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
         btnNuevoProveedor.setVisible(gestionaProveedores);
@@ -548,13 +546,6 @@ public class ProductosController implements Initializable {
     @FXML
     void onVentasPeriodo() {
         abrirModal("/fxml/ventas_periodo.fxml", "Ventas por período", 1000, 640);
-    }
-
-    /** Abre el catálogo de promociones (ventana modal) */
-    @FXML
-    void onPromociones() {
-        abrirModal("/fxml/promociones.fxml", "Promociones", 1000, 600);
-        cargarProductos(); // las promociones no cambian productos, pero refrescamos por consistencia
     }
 
     /** Asistente para migrar el catálogo desde otro punto de venta o Excel/CSV (ventana modal) */

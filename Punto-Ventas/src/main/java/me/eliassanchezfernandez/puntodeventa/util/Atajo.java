@@ -28,10 +28,12 @@ public enum Atajo {
 
     // ── Globales (ventana principal) ────────────────────────────────────
     IR_VENTAS      (Ambito.GLOBAL, Tecla.de(KeyCode.F1), Tecla.atajo(KeyCode.DIGIT1), "Ir a Ventas", null),
-    IR_CLIENTES    (Ambito.GLOBAL, Tecla.de(KeyCode.F2), Tecla.atajo(KeyCode.DIGIT2), "Ir a Clientes (fiado, abonos)", null),
+    IR_PROMOCIONES (Ambito.GLOBAL, Tecla.de(KeyCode.F2), Tecla.atajo(KeyCode.DIGIT2), "Ir a Promociones", null),
     IR_PRODUCTOS   (Ambito.GLOBAL, Tecla.de(KeyCode.F3), Tecla.atajo(KeyCode.DIGIT3), "Ir a Productos", null),
     IR_INVENTARIO  (Ambito.GLOBAL, Tecla.de(KeyCode.F4), Tecla.atajo(KeyCode.DIGIT4), "Ir a Inventario", null),
     IR_ESTADISTICAS(Ambito.GLOBAL, Tecla.de(KeyCode.F5), Tecla.atajo(KeyCode.DIGIT5), "Ir a Estadísticas", Permiso.VER_HISTORIAL),
+    /** Solo existe con {@link FuncionesOcultas#FIADO_HABILITADO}; F2 es ahora de Promociones */
+    IR_CLIENTES    (Ambito.GLOBAL, Tecla.mayus(KeyCode.F2), Tecla.atajo(KeyCode.DIGIT6), "Ir a Clientes (fiado, abonos)", null),
     AYUDA_ATAJOS   (Ambito.GLOBAL, Tecla.de(KeyCode.F10), null, "Ver la lista de atajos", null),
     BLOQUEAR       (Ambito.GLOBAL, Tecla.atajo(KeyCode.L), null, "Bloquear la pantalla / cambiar de cajero", null),
 
@@ -107,7 +109,7 @@ public enum Atajo {
                 case BACK_SPACE -> "Retroceso";
                 case ADD, PLUS  -> "+";
                 case SUBTRACT, MINUS -> "−";
-                case DIGIT1 -> "1"; case DIGIT2 -> "2"; case DIGIT3 -> "3"; case DIGIT4 -> "4"; case DIGIT5 -> "5";
+                case DIGIT1 -> "1"; case DIGIT2 -> "2"; case DIGIT3 -> "3"; case DIGIT4 -> "4"; case DIGIT5 -> "5"; case DIGIT6 -> "6";
                 default -> c.getName();
             };
         }
@@ -141,6 +143,16 @@ public enum Atajo {
     public Permiso getPermiso()      { return permiso; }
     public String getNota()          { return nota; }
 
+    /** ¿Se registra y se muestra? (los de funciones ocultas, no: ver {@link FuncionesOcultas}) */
+    public boolean disponible() {
+        return this != IR_CLIENTES || FuncionesOcultas.FIADO_HABILITADO;
+    }
+
+    /** Los atajos que hoy existen para el usuario, en el orden del catálogo */
+    public static List<Atajo> disponibles() {
+        return Arrays.stream(values()).filter(Atajo::disponible).toList();
+    }
+
     /** Teclas registrables como aceleradores (principal y alternativa) */
     public List<Tecla> teclas() {
         return alternativa == null ? List.of(principal) : List.of(principal, alternativa);
@@ -168,12 +180,13 @@ public enum Atajo {
         if (tecleado == null) return Optional.empty();
         return Arrays.stream(values())
                 .filter(a -> a.ambito == ambito)
+                .filter(Atajo::disponible)
                 .filter(a -> a.coincide(tecleado, atajoPulsado, mayusPulsado, altPulsado))
                 .findFirst();
     }
 
     public static List<Atajo> de(Ambito ambito) {
-        return Arrays.stream(values()).filter(a -> a.ambito == ambito).toList();
+        return Arrays.stream(values()).filter(a -> a.ambito == ambito).filter(Atajo::disponible).toList();
     }
 
     /**

@@ -62,14 +62,19 @@
                             fx:id="ventasView"/>
             </Tab>
 
-            <!-- F2 – Clientes (fiado y abonos) -->
-            <Tab fx:id="tabClientes" text="F2 · Clientes"><graphic><Icono nombre="usuarios"/></graphic></Tab>
+            <!-- F2 – Promociones (2x1, % por departamento, horario, hasta agotar): junto a Ventas porque es lo
+                 que se ofrece hoy en el mostrador. Mismo icono que tenía el botón de Productos. -->
+            <Tab fx:id="tabPromociones" text="F2 · Promociones"><graphic><Icono nombre="estrella"/></graphic></Tab>
 
             <!-- F3 – Productos -->
             <Tab fx:id="tabProductos" text="F3 · Productos"><graphic><Icono nombre="etiqueta"/></graphic></Tab>
 
             <!-- F4 – Inventario -->
             <Tab fx:id="tabInventario" text="F4 · Inventario"><graphic><Icono nombre="paquete"/></graphic></Tab>
+
+            <!-- Clientes (fiado y abonos): OCULTA mientras util/FuncionesOcultas.FIADO_HABILITADO = false
+                 (MainController la quita). Con la función encendida: Mayús+F2 / Ctrl+6. -->
+            <Tab fx:id="tabClientes" text="Clientes"><graphic><Icono nombre="usuarios"/></graphic></Tab>
 
             <!-- Corte (solo ADMIN) -->
             <Tab fx:id="tabCorte" text="Corte"><graphic><Icono nombre="tijeras"/></graphic></Tab>
@@ -90,7 +95,7 @@
             <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
             <Region HBox.hgrow="ALWAYS"/>
             <!-- El texto lo arma MainController desde el catálogo util/Atajo -->
-            <Label fx:id="labelAtajos" text="F1 Ventas · F3 Productos · F4 Inventario · F5 Estadísticas · F6 Buscar · F11 En espera · F12 Cobrar"/>
+            <Label fx:id="labelAtajos" text="F1 Ventas · F2 Promociones · F3 Productos · F4 Inventario · F5 Estadísticas · F6 Buscar · F11 En espera · F12 Cobrar"/>
             <Hyperlink fx:id="lnkAtajos" text="Atajos F10" onAction="#onAtajos" focusTraversable="false"/>
             <!-- Vuelve a mostrar el recorrido por las pestañas (TutorialGeneralDialogo) -->
             <Hyperlink fx:id="lnkTutorial" text="Tutorial" onAction="#onTutorial" focusTraversable="false">

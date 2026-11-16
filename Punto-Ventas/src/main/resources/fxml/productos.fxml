@@ -36,7 +36,6 @@
                     <Separator orientation="VERTICAL"/>
                     <Button fx:id="btnDepartamentos" text="Departamentos"      onAction="#onDepartamentos"><graphic><Icono nombre="carpeta"/></graphic></Button>
                     <Button fx:id="btnVentasPeriodo" text="Ventas por período" onAction="#onVentasPeriodo"><graphic><Icono nombre="calendario"/></graphic></Button>
-                    <Button fx:id="btnPromociones"   text="Promociones"      onAction="#onPromociones"><graphic><Icono nombre="estrella"/></graphic></Button>
                     <Button fx:id="btnImportar"      text="Importar"         onAction="#onImportar"><graphic><Icono nombre="subir"/></graphic>
                         <tooltip><Tooltip text="Migrar el catálogo desde eleventa, SICAR, Abarrotes PDV, MyBusiness, Loyverse o Excel/CSV"/></tooltip>
                     </Button>

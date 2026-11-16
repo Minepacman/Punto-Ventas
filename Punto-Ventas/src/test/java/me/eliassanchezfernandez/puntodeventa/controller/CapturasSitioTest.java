@@ -50,7 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Capturas de la ventana principal para el sitio público, con la tienda de ejemplo de
- * {@link DatosDemoCapturas}: Ventas con un ticket en captura, ventana de cobro, Clientes (fiado),
+ * {@link DatosDemoCapturas}: Ventas con un ticket en captura, ventana de cobro, Promociones, Clientes (fiado, solo si está visible),
  * Productos, Inventario y «Por caducar», Corte, Estadísticas, Configuración y «Devolver artículos».
  * Ventana de 1280×800 (área de la escena 1280×720) a doble densidad. Solo a petición, porque necesita
  * una pantalla:
@@ -128,7 +128,8 @@ class CapturasSitioTest {
             double total = 2 * 20 + 20 + 29 + 0.75 * 65 + 48 + 52;
             modal(() -> CobroDialogo.mostrar(stage, total, configuracionService.formasPagoHabilitadas(),
                     Map.of(Venta.FormaPago.EFECTIVO, 500.0), false,
-                    new CobroDialogo.Fiado(w -> Optional.empty(), null),
+                    me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas.FIADO_HABILITADO
+                            ? new CobroDialogo.Fiado(w -> Optional.empty(), null) : null,
                     new CobroDialogo.ValeTienda(valeService::consultar)), dir.resolve("cobro.png"));
 
             // ── Pestañas ──
