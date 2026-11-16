@@ -209,10 +209,10 @@ public final class HojaApariencia {
      */
     /**
      * Vidrio "ligero" para equipos modestos o sin aceleración gráfica (lo decide {@link AplicadorApariencia}):
-     * mismo fondo decorativo y mismos paneles, pero tablas y listas OPACAS y sin sombra en las tarjetas de
-     * Configuración. Con el dibujo por software, una tabla translúcida obliga a repintar los degradados del
-     * fondo en cada cuadro al desplazarla: 9.2 → 15.6 ms de CPU de dibujo por cuadro (+70 %) medido en
-     * 5 000 filas (docs/rendimiento-1.0.5.md). Opaca se ve casi igual (el velo ya era del 82 %).
+     * se ve igual (mismo degradado, mismas manchas, mismos paneles), pero las tres manchas se pintan una sola
+     * vez en una imagen ({@link #manchasPng}) en lugar de tres radial-gradient que JavaFX recalcula píxel por
+     * píxel bajo todo lo que se repinta. Con el dibujo por software, desplazar 5 000 filas costaba +70 % de CPU
+     * de dibujo por cuadro con vidrio; ligero, +17 % (docs/rendimiento-1.0.5.md).
      */
     static volatile boolean vidrioLigero;
 
@@ -242,14 +242,20 @@ public final class HojaApariencia {
                 + " 0%, rgba(255, 255, 255, 0.0) 45%)";
         String panel = superficie.rgba(velo);
         String panelFuerte = superficie.rgba(veloFuerte);
-        String panelTabla = ligero ? superficie.hex() : panelFuerte;
         String sombra = oscuro ? "rgba(0, 0, 0, 0.45)" : "rgba(27, 35, 46, 0.16)";
         Rgb banda = Rgb.deHex(t.getOrDefault("-pos-band-bg-flat", "#213A58"));
 
         StringBuilder sb = new StringBuilder("/* Vidrio */\n");
         // En JavaFX la primera capa es la de abajo: lienzo, luego las manchas
         sb.append(".root { -fx-background-color: ")
-                .append("linear-gradient(to bottom right, ").append(lienzo.hex()).append(" 0%, ").append(lienzo2.hex()).append(" 100%), ")
+                .append("linear-gradient(to bottom right, ").append(lienzo.hex()).append(" 0%, ").append(lienzo2.hex()).append(" 100%)");
+        String manchasPng = ligero ? manchasPng(lienzo, lienzo2, oscuro, mancha1, mancha2, mancha3) : null;
+        if (manchasPng != null) {
+            // Ligero: las mismas manchas, pintadas UNA vez en una imagen chica que JavaFX estira (los tres
+            // degradados radiales se recalculaban píxel por píxel en cada cuadro con el dibujo por software)
+            sb.append(" !important; -fx-background-image: url(\"").append(manchasPng)
+                    .append("\") !important; -fx-background-size: auto !important; -fx-background-repeat: no-repeat !important; }\n");
+        } else sb.append(", ")
                 .append("radial-gradient(center 12% 8%, radius 55%, ").append(mancha1.rgba(oscuro ? 0.75 : 0.95)).append(" 0%, ").append(mancha1.rgba(0)).append(" 100%), ")
                 .append("radial-gradient(center 92% 18%, radius 45%, ").append(mancha2.rgba(oscuro ? 0.65 : 0.85)).append(" 0%, ").append(mancha2.rgba(0)).append(" 100%), ")
                 .append("radial-gradient(center 70% 100%, radius 60%, ").append(mancha3.rgba(oscuro ? 0.60 : 0.80)).append(" 0%, ").append(mancha3.rgba(0)).append(" 100%) !important; }\n");
@@ -262,8 +268,7 @@ public final class HojaApariencia {
         sb.append(paneles).append(" { -fx-background-color: ").append(panel).append(", ").append(brillo)
                 .append(" !important; -fx-background-insets: 0 !important; -fx-background-radius: 14 !important; ")
                 .append("-fx-border-color: ").append(bordeVidrio).append(" !important; -fx-border-width: 1 !important; -fx-border-radius: 14 !important; }\n");
-        sb.append(ligero ? ".login-card" : ".config-card, .login-card").append(" { -fx-effect: dropshadow(three-pass-box, ")
-                .append(sombra).append(", 18, 0, 0, 6) !important; }\n");
+        sb.append(".config-card, .login-card { -fx-effect: dropshadow(three-pass-box, ").append(sombra).append(", 18, 0, 0, 6) !important; }\n");
         sb.append(".login-card { -fx-background-color: ").append(panelFuerte).append(", ").append(brillo)
                 .append(" !important; -fx-background-radius: 18 !important; -fx-border-color: ").append(bordeVidrio)
                 .append(" !important; -fx-border-radius: 18 !important; }\n");
@@ -273,7 +278,7 @@ public final class HojaApariencia {
         sb.append(".tab-pane > .tab-header-area > .tab-header-background { -fx-background-color: ").append(superficie.rgba(oscuro ? 0.35 : 0.45)).append(" !important; }\n");
         sb.append(".status-bar { -fx-background-color: ").append(superficie.rgba(oscuro ? 0.45 : 0.55)).append(" !important; }\n");
         // Tablas y listas: casi opacas (se leen igual), solo esquinas y borde de luz
-        sb.append(".table-view, .list-view, .tree-table-view { -fx-background-color: ").append(panelTabla)
+        sb.append(".table-view, .list-view, .tree-table-view { -fx-background-color: ").append(panelFuerte)
                 .append(" !important; -fx-background-radius: 10 !important; -fx-border-color: ").append(bordeVidrio)
                 .append(" !important; -fx-border-radius: 10 !important; }\n");
         // Banda: el color de la banda un poco translúcido, con línea de luz arriba
@@ -281,5 +286,59 @@ public final class HojaApariencia {
                 .append(", linear-gradient(to bottom, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.0) 60%) !important; }\n");
         sb.append(".total-box { -fx-background-radius: 14 !important; -fx-border-color: rgba(255, 255, 255, 0.30) !important; -fx-border-radius: 14 !important; }\n");
         return sb.toString();
+    }
+    /**
+     * Ancho y alto de la imagen de las manchas del vidrio ligero. Se dibuja SIN escalar (background-size: auto):
+     * estirar una imagen chica a toda la ventana costaba en el dibujo por software tanto como los degradados.
+     * Medido con 5 000 filas: vidrio completo 21.6 ms de dibujo por cuadro, ligero 12.9, sin vidrio 11.0-12.5.
+     * Si la ventana es más grande, el borde que sobra muestra el degradado de abajo (mismo tono que las orillas).
+     */
+    static final int MANCHAS_ANCHO = 1440, MANCHAS_ALTO = 900;
+
+    /** Última imagen generada (clave = colores): aplicar la misma apariencia o abrir la vista previa no la repite */
+    private static volatile String[] ultimaManchas;
+
+    /**
+     * Fondo del vidrio (degradado + 3 manchas) en un PNG chico como URL data:, o null si no se pudo (entonces
+     * se usan los degradados de siempre). Mismos centros y radios que la versión con radial-gradient.
+     */
+    static String manchasPng(Rgb lienzo, Rgb lienzo2, boolean oscuro, Rgb m1, Rgb m2, Rgb m3) {
+        String clave = lienzo + "|" + lienzo2 + "|" + oscuro + "|" + m1 + "|" + m2 + "|" + m3;
+        String[] cache = ultimaManchas;
+        if (cache != null && cache[0].equals(clave)) return cache[1];
+        String png = generarManchasPng(lienzo, lienzo2, oscuro, m1, m2, m3);
+        if (png != null) ultimaManchas = new String[]{clave, png};
+        return png;
+    }
+
+    private static String generarManchasPng(Rgb lienzo, Rgb lienzo2, boolean oscuro, Rgb m1, Rgb m2, Rgb m3) {
+        try {
+            int w = MANCHAS_ANCHO, h = MANCHAS_ALTO;
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g = img.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+            g.setPaint(new java.awt.GradientPaint(0, 0, color(lienzo, 1), w, h, color(lienzo2, 1)));
+            g.fillRect(0, 0, w, h);
+            mancha(g, w, h, 0.12, 0.08, 0.55, m1, oscuro ? 0.75 : 0.95);
+            mancha(g, w, h, 0.92, 0.18, 0.45, m2, oscuro ? 0.65 : 0.85);
+            mancha(g, w, h, 0.70, 1.00, 0.60, m3, oscuro ? 0.60 : 0.80);
+            g.dispose();
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            if (!javax.imageio.ImageIO.write(img, "png", out)) return null;
+            return "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(out.toByteArray());
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
+    }
+
+    private static void mancha(java.awt.Graphics2D g, int w, int h, double cx, double cy, double radio, Rgb c, double alfa) {
+        float r = (float) (radio * Math.max(w, h));
+        g.setPaint(new java.awt.RadialGradientPaint((float) (cx * w), (float) (cy * h), r,
+                new float[]{0f, 1f}, new java.awt.Color[]{color(c, alfa), color(c, 0)}));
+        g.fillRect(0, 0, w, h);
+    }
+
+    private static java.awt.Color color(Rgb c, double alfa) {
+        return new java.awt.Color(c.r(), c.g(), c.b(), (int) Math.round(Math.max(0, Math.min(1, alfa)) * 255));
     }
 }

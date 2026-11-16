@@ -121,17 +121,17 @@ class HojaAparienciaTest {
     }
 
     @Test
-    void elVidrioLigeroDejaLasTablasOpacasYQuitaLaSombraDeLasTarjetas() {
+    void elVidrioLigeroPintaLasManchasEnUnaImagenYDejaLoDemasIgual() {
         Apariencia a = Apariencia.porDefecto().conVidrio(true);
         String completo = HojaApariencia.vidrio(a, false);
         String ligero = HojaApariencia.vidrio(a, true);
-        String tablaCompleta = completo.lines().filter(l -> l.startsWith(".table-view")).findFirst().orElseThrow();
-        String tablaLigera = ligero.lines().filter(l -> l.startsWith(".table-view")).findFirst().orElseThrow();
-        assertThat(tablaCompleta).contains("rgba(");
-        assertThat(tablaLigera).doesNotContain("rgba(").contains("#");
-        assertThat(completo).contains(".config-card, .login-card { -fx-effect");
-        assertThat(ligero).doesNotContain(".config-card, .login-card { -fx-effect").contains(".login-card { -fx-effect");
-        // Lo demás del vidrio (fondo decorativo, paneles) no cambia
-        assertThat(ligero).contains("radial-gradient").contains(".card, .card-flat");
+        assertThat(completo).contains("radial-gradient").doesNotContain("data:image/png");
+        assertThat(ligero).doesNotContain("radial-gradient").contains("-fx-background-image: url(\"data:image/png;base64,");
+        // Paneles, tablas y sombras: idénticos
+        String sinRaiz = completo.lines().filter(l -> !l.startsWith(".root")).reduce("", String::concat);
+        String sinRaizLigero = ligero.lines().filter(l -> !l.startsWith(".root")).reduce("", String::concat);
+        assertThat(sinRaizLigero).isEqualTo(sinRaiz);
+        // La imagen se genera una vez por combinación de colores
+        assertThat(HojaApariencia.vidrio(a, true)).isEqualTo(ligero);
     }
 }
