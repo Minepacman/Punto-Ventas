@@ -52,3 +52,6 @@ donadores.jsonl
 
 # Carpetas de trabajo de skills de diseño
 .taste-skill/
+
+# Reglas de negocio: privadas, solo locales
+reglas-negocio.txt
