@@ -224,7 +224,13 @@ public class Venta {
 
     public enum FormaPago {
         EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("A cuenta"),
-        TRANSFERENCIA("Transferencia"), VALES("Vales");
+        TRANSFERENCIA("Transferencia"), VALES("Vales"),
+        /**
+         * Vale de compra de la propia tienda (lo entregó una devolución, ValeService). No es dinero
+         * nuevo: no entra al cajón ni se habilita en Configuración; tiene su campo en la ventana de cobro.
+         * (VALES son los vales de despensa de empresas.)
+         */
+        VALE_COMPRA("Vale de la tienda");
 
         private final String etiqueta;
 

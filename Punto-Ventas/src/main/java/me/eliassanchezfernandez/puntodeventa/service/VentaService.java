@@ -71,6 +71,8 @@ public class VentaService {
     /** Fiado (cuentas de clientes). @Lazy: CuentaClienteService → MovimientoCajaService → CajaService → VentaService */
     @Autowired @org.springframework.context.annotation.Lazy private CuentaClienteService cuentaClienteService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.DevolucionRepository devolucionRepo;
+    /** Vales de compra de la tienda (forma de pago VALE_COMPRA). @Lazy por simetría con el fiado */
+    @Autowired @org.springframework.context.annotation.Lazy private ValeService valeService;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
@@ -468,6 +470,13 @@ public class VentaService {
         PagoVenta pagoACuenta = pagosValidos.stream()
                 .filter(p -> p.getFormaPago() == Venta.FormaPago.CREDITO).findFirst().orElse(null);
         if (pagoACuenta != null) cuentaClienteService.validarParaCargo(pagoACuenta.getClienteId(), autorizaciones);
+        // 3a') Vales de la tienda: existen, no vencieron y les alcanza (antes de tocar inventario); el saldo
+        //      se descuenta con un UPDATE condicionado al guardar (paso 4c)
+        for (PagoVenta p : pagosValidos) {
+            if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) {
+                p.setValeCodigo(valeService.validarParaCobro(p.getValeCodigo(), p.getMonto()));
+            }
+        }
         Venta.FormaPago formaPrincipal = pagosValidos.stream()
                 .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
                 .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
@@ -565,6 +574,11 @@ public class VentaService {
             }
         }
 
+        // 4c) Vales de la tienda: el saldo baja EN la base solo si alcanza (dos cajas con el mismo vale)
+        for (PagoVenta p : guardada.getPagos()) {
+            if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) valeService.usarEnVenta(guardada, p);
+        }
+
         // 5) Bitácora del inventario ya descontado
         for (Map.Entry<Long, double[]> e : existencias.entrySet()) {
             Producto p = productosPorId.get(e.getKey());
@@ -626,7 +640,15 @@ public class VentaService {
                 throw new NegocioException("El monto pagado no es válido.");
             }
             if (p.getMonto() <= 0) continue;
-            if (p.getFormaPago() == Venta.FormaPago.CREDITO) {
+            if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) {
+                // Vale de la tienda: no depende de Configuración; cada vale una sola vez por venta
+                String codigo = ValeService.normalizar(p.getValeCodigo());
+                if (codigo.isEmpty()) throw new NegocioException("Escanea o escribe el código del vale de la tienda.");
+                if (validos.stream().anyMatch(v -> v.getFormaPago() == Venta.FormaPago.VALE_COMPRA
+                        && codigo.equals(ValeService.normalizar(v.getValeCodigo())))) {
+                    throw new NegocioException("El mismo vale se puso dos veces en el pago.");
+                }
+            } else if (p.getFormaPago() == Venta.FormaPago.CREDITO) {
                 // Fiado: no depende de las formas de pago de Configuración; se anota a un solo cliente
                 if (p.getClienteId() == null) {
                     throw new NegocioException("Elige a qué cliente se le anota la cuenta (fiado).");
@@ -666,6 +688,7 @@ public class VentaService {
     private PagoVenta copiarPago(PagoVenta p) {
         PagoVenta nuevo = new PagoVenta(p.getFormaPago(), redondear(p.getMonto()));
         if (p.getFormaPago() == Venta.FormaPago.CREDITO) nuevo.setClienteId(p.getClienteId());
+        if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) nuevo.setValeCodigo(ValeService.normalizar(p.getValeCodigo()));
         if (p.getFormaPago() != Venta.FormaPago.TARJETA) return nuevo;
         boolean capturado = DatosTarjeta.hayAlgo(p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion());
         var dispositivos = dispositivosService.obtener();
@@ -767,6 +790,8 @@ public class VentaService {
 
         // 4) Fiado: lo que se anotó a la cuenta del cliente se le quita
         double revertido = cuentaClienteService.revertirPorCancelacion(v.getId(), v.getFolio(), motivo.trim());
+        // 5) Vales de la tienda: lo que se pagó con un vale regresa al vale
+        valeService.revertirPorCancelacion(v.getId(), v.getFolioMostrado());
 
         auditoriaService.registrar(quien, "VENTA_CANCELADA",
                 "Venta #" + v.getId() + " — " + motivo.trim()
@@ -938,6 +963,10 @@ public class VentaService {
         r.totalDevoluciones = redondear(((Number) devs[1]).doubleValue());
         r.ivaDevoluciones   = redondear(((Number) devs[2]).doubleValue());
         r.devolucionesACuenta = redondear(((Number) devs[3]).doubleValue());
+        r.devolucionesEnVale  = redondear(((Number) devs[4]).doubleValue());
+        double[] emitidos = valeService.emitidosEntre(inicio, fin, caja);
+        r.numValesEmitidos = (int) emitidos[0];
+        r.valesEmitidos    = emitidos[1];
         if (r.numDevoluciones > 0) {
             Double costo = devolucionRepo.costoRecuperadoEntre(inicio, fin, caja);
             r.ganancia -= r.totalDevoluciones - (costo != null ? costo : 0.0);
@@ -987,6 +1016,7 @@ public class VentaService {
         r.credito         = redondear(r.credito);
         r.transferencia   = redondear(r.transferencia);
         r.vales           = redondear(r.vales);
+        r.valesTienda     = redondear(r.valesTienda);
         r.ganancia        = redondear(r.ganancia);
         r.totalCanceladas = redondear(r.totalCanceladas);
         r.productosBajos.addAll(productoService.productosConStockBajo());
@@ -1007,6 +1037,7 @@ public class VentaService {
             case CREDITO  -> r.credito  += monto;
             case TRANSFERENCIA -> r.transferencia += monto;
             case VALES    -> r.vales    += monto;
+            case VALE_COMPRA -> r.valesTienda += monto;
         }
     }
 
@@ -1051,6 +1082,13 @@ public class VentaService {
          * lugar de darse en efectivo: no sale del cajón (el efectivo reembolsado ya está en las salidas)
          */
         public double devolucionesACuenta;
+        /** Parte de {@link #totalDevoluciones} que se entregó como vale de compra (no salió del cajón) */
+        public double devolucionesEnVale;
+        /** Vales de compra entregados en el periodo (no sale efectivo) */
+        public int    numValesEmitidos;
+        public double valesEmitidos;
+        /** Cobrado con vales de la tienda (VALE_COMPRA): no es dinero que entre al cajón */
+        public double valesTienda;
 
         /** Ventas del periodo menos lo reembolsado por devoluciones de artículos */
         public double getVentasNetas() { return redondear(ventasTotales - totalDevoluciones); }

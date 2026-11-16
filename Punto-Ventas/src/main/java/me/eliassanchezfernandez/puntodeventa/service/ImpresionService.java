@@ -61,6 +61,7 @@ public class ImpresionService {
     @Autowired private CajaService cajaService;
     @Autowired private MovimientoCajaService movimientoCajaService;
     @Autowired private DevolucionService devolucionService;
+    @Autowired private ValeService valeService;
     @Autowired private OrdenCompraService ordenCompraService;
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
@@ -145,6 +146,48 @@ public class ImpresionService {
         } catch (Throwable e) {
             return Resultado.fallo(mensaje("La venta se guardó, pero no se pudo imprimir el ticket", e));
         }
+    }
+
+    // ── Abono de cliente (fiado) ──────────────────────────────────────────
+
+    /**
+     * Después de registrar un abono: si fue en efectivo, abre el cajón con las MISMAS reglas que al
+     * cobrar una venta en efectivo (opción «Abrir el cajón al cobrar en efectivo» encendida y
+     * impresora térmica). Con tarjeta o transferencia no hace nada. Queda en la bitácora (CAJON_ABIERTO).
+     */
+    public CompletableFuture<Resultado> despuesDeAbonoAsync(CuentaClienteService.Abono abono) {
+        final Cajero cajero = sesionService.getCajeroActual();
+        return CompletableFuture.supplyAsync(() -> despuesDeAbono(abono, cajero), hilo);
+    }
+
+    public Resultado despuesDeAbono(CuentaClienteService.Abono abono) {
+        return despuesDeAbono(abono, sesionService.getCajeroActual());
+    }
+
+    private Resultado despuesDeAbono(CuentaClienteService.Abono abono, Cajero cajero) {
+        try {
+            if (abono == null || abono.movimientoCaja() == null) return Resultado.omitido("El abono no fue en efectivo.");
+            ConfiguracionDispositivos c = dispositivos.obtener();
+            if (!c.isAbrirCajonEfectivo() || c.getModoImpresora() != ConfiguracionDispositivos.ModoImpresora.TERMICA) {
+                return Resultado.omitido("Apertura automática del cajón desactivada.");
+            }
+            fabrica.apply(c).abrirCajon();
+            String cliente = abono.cliente() != null ? abono.cliente().getNombre() : "cliente";
+            auditarCajonAbierto(cajero, "Abono A-" + abono.movimiento().getId() + " de " + cliente + " por "
+                    + Moneda.formato(abono.monto()) + " (automático al recibir un abono en efectivo)", null);
+            return Resultado.impreso("Cajón abierto.");
+        } catch (Throwable e) {
+            return Resultado.fallo(mensaje("El abono se guardó, pero no se pudo abrir el cajón", e));
+        }
+    }
+
+    // ── Vale de compra ───────────────────────────────────────────────────
+
+    /** Imprime un vale de compra para entregarlo al cliente (con sesión; auditado) */
+    public CompletableFuture<Resultado> imprimirValeAsync(Long valeId) {
+        me.eliassanchezfernandez.puntodeventa.model.Vale vale = valeService.obtener(valeId);
+        DocumentoImpresion doc = ticketService.documentoVale(vale, configuracionService.obtener());
+        return imprimirDocumentoAsync(doc, "VALE_IMPRESO", "Vale " + vale.getCodigoMostrado() + " (" + vale.getFolio() + ")");
     }
 
     /** Cada apertura del cajón queda en la bitácora; si la bitácora falla, el cajón ya se abrió: no se avisa como error */

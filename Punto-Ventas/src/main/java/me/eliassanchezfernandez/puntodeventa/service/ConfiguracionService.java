@@ -168,6 +168,26 @@ public class ConfiguracionService {
         return guardada;
     }
 
+    /**
+     * Cuántos días dura un vale de compra (devoluciones) desde que se entrega; 0 = no vence.
+     * Solo ADMIN. Aplica a los vales que se entreguen de aquí en adelante.
+     */
+    @Transactional
+    public Configuracion guardarVigenciaVales(int dias) {
+        sesionService.verificarAdmin();
+        if (dias < 0 || dias > 3650) {
+            throw new NegocioException("La vigencia de los vales debe estar entre 0 (no vencen) y 3650 días.");
+        }
+        Configuracion c = obtenerParaEditar();
+        int antes = c.getValeVigenciaDiasOCero();
+        if (antes == dias) return c;
+        c.setValeVigenciaDias(dias == 0 ? null : dias);
+        Configuracion guardada = guardarConfig(c);
+        auditar("Vales de compra", "vigencia=" + (antes == 0 ? "sin vencimiento" : antes + " días"),
+                "vigencia=" + (dias == 0 ? "sin vencimiento" : dias + " días"));
+        return guardada;
+    }
+
     // ── Opciones habilitadas ──────────────────────────────────────────────
 
     public boolean isPedirFondoCaja()    { return obtener().isPedirFondoCaja(); }

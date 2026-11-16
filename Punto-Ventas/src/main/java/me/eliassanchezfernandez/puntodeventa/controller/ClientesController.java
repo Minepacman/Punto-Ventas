@@ -296,6 +296,14 @@ public class ClientesController implements Initializable {
             Ventanas.alerta(Alert.AlertType.ERROR, "No se registró el abono", e.getMessage());
             return;
         }
+        // Abono en efectivo: el cajón se abre igual que al cobrar una venta en efectivo (misma opción de Configuración)
+        if (abono.movimientoCaja() != null) {
+            impresionService.despuesDeAbonoAsync(abono).whenComplete((res, error) -> {
+                if (res != null && res.esFallo()) {
+                    Platform.runLater(() -> Ventanas.alerta(Alert.AlertType.WARNING, "Cajón de dinero", res.mensaje()));
+                }
+            });
+        }
         recargar();
         seleccionar(c.getId());
         String texto = String.format("Abono de %s registrado.\n\n%s %s.", Moneda.formato(abono.monto()), c.getNombre(),

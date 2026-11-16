@@ -127,6 +127,15 @@
                                visible="false" managed="false"/>
                         <Label fx:id="lblDevArticulos"    text="" GridPane.rowIndex="9" GridPane.columnIndex="1" styleClass="corte-value"
                                visible="false" managed="false"/>
+                        <!-- Vales de compra de la tienda: ni entran ni salen del cajón (solo cuando hubo) -->
+                        <Label fx:id="lblValesTiendaTitulo" text="Pagado con vales de la tienda (no entra al cajón):" GridPane.rowIndex="10" GridPane.columnIndex="0"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label fx:id="lblValesTienda"     text="\$0.00" GridPane.rowIndex="10" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
+                        <Label fx:id="lblValesEmitidosTitulo" text="Vales entregados por devoluciones (no salió del cajón):" GridPane.rowIndex="11" GridPane.columnIndex="0"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label fx:id="lblValesEmitidos"   text="" GridPane.rowIndex="11" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
                     </GridPane>
                 </VBox>
 
