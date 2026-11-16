@@ -954,6 +954,39 @@ CRT-11  Quién ve las ganancias (NUEVA)
         configurable (USR-16) para dárselo a quien el administrador decida.
         Fuente: controller/MainController.java, controller/CorteController.java
 
+CRT-12  Devoluciones en el corte y en los reportes (NUEVA)
+        Regla: ningún reporte cuenta como vendido lo que el cliente devolvió. Lo
+        único que cambia es EN QUÉ DÍA se resta:
+        - Caja (corte de turno o del día, corte impreso, "Vendido hoy" en
+          Ventas): la devolución resta el día en que se hizo, en la caja que
+          reembolsó, porque ese día salió el dinero. Las ventas se muestran
+          cobradas y aparte "Devoluciones −$X" y "Ventas netas". Subtotal, IVA,
+          IVA por tasa y ventas por departamento ya son NETOS (venta del periodo
+          menos lo devuelto en el periodo) con la nota "(incluye −$X de
+          devoluciones)" en pantalla y "incluye devoluciones -$X" en el impreso.
+          Un departamento con devoluciones y sin ventas en el periodo sale en
+          negativo. La ganancia resta lo reembolsado menos el costo de lo que
+          regresó al anaquel (lo de merma se pierde completo).
+        - Análisis de ventas (Estadísticas: Hoy y sus comparaciones, semana/mes/
+          año, por franja, por cajero, por hora, por caja, por clima, productos
+          más vendidos; hora pico de los avisos; Estadísticas, ventas y ganancia
+          del celular; recomendaciones "se compran juntos", productos por clima y
+          sugerencias en Ventas; exportaciones de esas tablas): la devolución
+          resta en el día de la VENTA, como si esas piezas nunca se hubieran
+          vendido (cantidad vendida − devuelta por renglón; un renglón devuelto
+          completo no cuenta). El número de tickets no cambia. La ganancia del
+          celular resta lo reembolsado y el costo de las piezas devueltas.
+        - Historial de ventas: cada venta muestra su total cobrado y, si tuvo
+          devoluciones, "Devoluciones: −$X (neto $Y)"; el resumen de abajo
+          también da el neto.
+        Al devolver se marca la venta (fecha de última devolución), así los
+        agregados del día de esa venta se recalculan en la siguiente
+        actualización; la canasta y el clima se rehacen completos cada vez.
+        Estado actual: Implementado.
+        Fuente: VentaService.resumenCompletoEntre, DevolucionRepository,
+        VentaRepository.NETO, AgregadosService.cantidadNeta, EstadisticasService,
+        ConsultasMovilService, TicketService.documentoCorte
+
 Preguntas para definir (Corte):
   - CRT-09/CRT-11: ¿quién puede HACER el corte (no solo ver la ganancia)? ¿Un
     cajero puede hacer su propio corte por cajero sin ver ganancias?

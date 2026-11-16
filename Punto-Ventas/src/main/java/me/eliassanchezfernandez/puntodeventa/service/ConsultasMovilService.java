@@ -43,6 +43,7 @@ public class ConsultasMovilService {
     /**
      * Una página de ventas del rango (más recientes primero; incluye canceladas) con renglones
      * y productos cargados, y los totales del rango COMPLETO calculados con una consulta agregada.
+     * {@code importe}: sin canceladas y NETO de devoluciones (restan en el día de la venta).
      */
     public record PaginaVentas(List<Venta> ventas, boolean hayMas, long ventasEnRango, long canceladas, double importe) { }
 
@@ -85,7 +86,7 @@ public class ConsultasMovilService {
         // 3) Totales del rango completo sin cargar filas
         Object[] t = em.createQuery("SELECT COUNT(v.id), "
                         + "COALESCE(SUM(CASE WHEN v.cancelada = true THEN 1 ELSE 0 END), 0), "
-                        + "COALESCE(SUM(CASE WHEN v.cancelada = true THEN 0.0 ELSE v.total END), 0.0) "
+                        + "COALESCE(SUM(CASE WHEN v.cancelada = true THEN 0.0 ELSE v.total - COALESCE(v.totalDevuelto, 0.0) END), 0.0) "
                         + "FROM Venta v WHERE v.fecha >= :ini AND v.fecha < :fin", Object[].class)
                 .setParameter("ini", ini).setParameter("fin", fin)
                 .getSingleResult();
@@ -159,14 +160,17 @@ public class ConsultasMovilService {
     }
 
     /**
-     * Ganancia estimada del rango (sin canceladas): importe del renglón menos su costo (el
-     * guardado al vender o, si falta, el costo actual del producto). Una consulta agregada; el
-     * redondeo a centavos se hace sobre la suma (antes se redondeaba cada renglón: puede
-     * diferir en centavos con granel).
+     * Ganancia estimada del rango (sin canceladas y neta de devoluciones): importe del renglón
+     * menos lo reembolsado, menos el costo de las piezas que el cliente se quedó (el guardado al
+     * vender o, si falta, el costo actual del producto). Lo devuelto resta en el día de la VENTA
+     * (análisis de ventas, como Estadísticas); la pérdida por merma la refleja el corte del día de
+     * la devolución. Una consulta agregada; el redondeo a centavos se hace sobre la suma (antes se
+     * redondeaba cada renglón: puede diferir en centavos con granel).
      */
     double ganancia(LocalDate desde, LocalDate hasta) {
         Number g = em.createQuery("SELECT COALESCE(SUM((d.precioVenta * d.cantidad - d.descuento) "
-                        + "- COALESCE(d.costoUnitario, p.precioCosto) * d.cantidad), 0.0) "
+                        + "- COALESCE(d.importeDevuelto, 0.0) "
+                        + "- COALESCE(d.costoUnitario, p.precioCosto) * (d.cantidad - COALESCE(d.cantidadDevuelta, 0.0))), 0.0) "
                         + "FROM DetalleVenta d JOIN d.venta v JOIN d.producto p "
                         + "WHERE v.fecha >= :ini AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)", Number.class)
                 .setParameter("ini", desde.atStartOfDay()).setParameter("fin", hasta.plusDays(1).atStartOfDay())

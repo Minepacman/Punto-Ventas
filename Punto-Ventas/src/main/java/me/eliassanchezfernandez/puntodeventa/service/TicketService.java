@@ -172,6 +172,12 @@ public class TicketService {
     }
 
     /** Líneas "Gravado 16% / IVA 16% / Tasa 0% / Exento" con sus importes (ticket y corte) */
+    /** "  incluye devoluciones      -$X" bajo una cifra neta del corte (vacío si no se devolvió nada) */
+    static java.util.Optional<String> lineaDevoluciones(double devuelto, int cols) {
+        if (devuelto < 0.005) return java.util.Optional.empty();
+        return java.util.Optional.of(dosColumnas("  incluye devoluciones", "-" + Moneda.formato(devuelto), cols));
+    }
+
     static List<String> desglosePorTasa(List<CalculoIva.Grupo> grupos, int cols) {
         List<String> l = new ArrayList<>();
         for (CalculoIva.Grupo g : grupos) {
@@ -250,8 +256,16 @@ public class TicketService {
         }
         d.linea(raya);
         d.linea(dosColumnas("Subtotal", Moneda.formato(r.subtotal), cols));
-        if (CalculoIva.esMixto(r.porTasaIva)) desglosePorTasa(r.porTasaIva, cols).forEach(d::linea);
+        // Subtotal, desglose e IVA son NETOS de las devoluciones del periodo (igual que la pantalla de Corte);
+        // debajo de cada cifra que incluye devoluciones va cuánto se restó
+        if (CalculoIva.esMixto(r.porTasaIva)) {
+            for (CalculoIva.Grupo g : r.porTasaIva) {
+                desglosePorTasa(List.of(g), cols).forEach(d::linea);
+                lineaDevoluciones(r.devueltoDeTasa(g), cols).ifPresent(d::linea);
+            }
+        }
         d.linea(dosColumnas("IVA", Moneda.formato(r.iva), cols));
+        lineaDevoluciones(r.ivaDevoluciones, cols).ifPresent(d::linea);
         d.agregar(dosColumnas("VENTAS (" + r.numVentas + ")", Moneda.formato(r.ventasTotales), cols),
                 DocumentoImpresion.Alineacion.IZQUIERDA, true, false);
         d.linea(dosColumnas("Canceladas (" + r.numCanceladas + ")", Moneda.formato(r.totalCanceladas), cols));
@@ -281,7 +295,10 @@ public class TicketService {
         if (!r.porDepartamento.isEmpty()) {
             d.linea(raya);
             d.negrita("Por departamento");
-            r.porDepartamento.forEach((n, m) -> d.linea(dosColumnas(n, Moneda.formato(m), cols)));
+            r.porDepartamento.forEach((n, m) -> {
+                d.linea(dosColumnas(n, Moneda.formato(m), cols));
+                lineaDevoluciones(r.devueltoDeDepartamento(n), cols).ifPresent(d::linea);
+            });
         }
         if (!r.vouchers.isEmpty()) {
             d.linea(raya);

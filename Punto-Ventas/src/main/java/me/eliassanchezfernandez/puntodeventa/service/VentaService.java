@@ -824,12 +824,17 @@ public class VentaService {
 
     // ── Corte del día ─────────────────────────────────────────────────────
 
-    /** Total vendido hoy en ESTA caja sin contar canceladas */
+    /**
+     * Total vendido hoy en ESTA caja sin contar canceladas, menos lo reembolsado hoy en esta caja
+     * por devoluciones (regla de caja, como las «ventas netas» del corte).
+     */
+    @Transactional(readOnly = true)
     public double totalVentasHoy() {
         LocalDateTime inicio = LocalDate.now().atStartOfDay();
         LocalDateTime fin    = inicio.plusDays(1);
         Double total = ventaRepo.sumTotalEntre(inicio, fin, identidadCaja.numero());
-        return total != null ? total : 0.0;
+        Object[] devs = devolucionRepo.resumenEntre(inicio, fin, identidadCaja.numero()).get(0);
+        return redondear((total != null ? total : 0.0) - ((Number) devs[1]).doubleValue());
     }
 
     /**
@@ -916,15 +921,36 @@ public class VentaService {
         r.iva           = ((Number) activas[3]).doubleValue();
 
         // IVA por tasa (16 %, 0 %, exento) sumado en SQL sobre los renglones; los renglones anteriores
-        // al IVA por producto entran con la tasa de su venta (util/CalculoIva)
+        // al IVA por producto entran con la tasa de su venta (util/CalculoIva). NETO: se le restan las
+        // devoluciones hechas en el periodo (día de la devolución, como el efectivo del corte); lo
+        // devuelto de cada tasa queda en devolucionesPorTasaIva para la nota "(incluye −$X …)".
+        Map<String, double[]> tasas = new LinkedHashMap<>();   // clave → {tasa, exento, importe, iva, importeDev, ivaDev}
         for (Object[] f : ventaRepo.ivaPorTasa(inicio, fin, caja)) {
-            double base = ((Number) f[2]).doubleValue();
-            double ivaGrupo = ((Number) f[3]).doubleValue();
-            if (Math.abs(base) < 0.005 && Math.abs(ivaGrupo) < 0.005) continue;
-            r.porTasaIva.add(new me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo(
-                    ((Number) f[0]).doubleValue(), Boolean.TRUE.equals(f[1]), redondear(base), redondear(ivaGrupo)));
+            double[] t = grupoTasa(tasas, f);
+            t[2] += ((Number) f[2]).doubleValue();
+            t[3] += ((Number) f[3]).doubleValue();
+        }
+        for (Object[] f : devolucionRepo.ivaPorTasaEntre(inicio, fin, caja)) {
+            double[] t = grupoTasa(tasas, f);
+            t[4] += ((Number) f[2]).doubleValue();
+            t[5] += ((Number) f[3]).doubleValue();
+        }
+        for (double[] t : tasas.values()) {
+            double importe = redondear(t[2] - t[4]), ivaGrupo = redondear(t[3] - t[5]);
+            double importeDev = redondear(t[4]), ivaDev = redondear(t[5]);
+            boolean exento = t[1] > 0;
+            if (Math.abs(importe) >= 0.005 || Math.abs(ivaGrupo) >= 0.005 || importeDev >= 0.005) {
+                // base = importe − IVA (la consulta suma importes con IVA incluido)
+                r.porTasaIva.add(new me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo(
+                        t[0], exento, redondear(importe - ivaGrupo), ivaGrupo));
+            }
+            if (importeDev >= 0.005) {
+                r.devolucionesPorTasaIva.add(new me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo(
+                        t[0], exento, redondear(importeDev - ivaDev), ivaDev));
+            }
         }
         me.eliassanchezfernandez.puntodeventa.util.CalculoIva.ordenar(r.porTasaIva);
+        me.eliassanchezfernandez.puntodeventa.util.CalculoIva.ordenar(r.devolucionesPorTasaIva);
 
         Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin, caja).get(0);
         r.numCanceladas   = ((Number) canceladas[0]).intValue();
@@ -941,6 +967,9 @@ public class VentaService {
         if (r.numDevoluciones > 0) {
             Double costo = devolucionRepo.costoRecuperadoEntre(inicio, fin, caja);
             r.ganancia -= r.totalDevoluciones - (costo != null ? costo : 0.0);
+            // Subtotal e IVA del corte, netos: lo que se queda la tienda y el IVA que realmente cobró
+            r.subtotal -= r.totalDevoluciones - r.ivaDevoluciones;
+            r.iva      -= r.ivaDevoluciones;
         }
 
         // El cambio sale del efectivo; las ventas anteriores al pago dividido van todas a su forma de pago
@@ -968,17 +997,43 @@ public class VentaService {
         // Productos comunes (fuera del catálogo, Ctrl+P): no tienen departamento, así que van en "Sin
         // departamento"; se sacan a su propio renglón y se informa su ganancia estimada (ProductoComun)
         Object[] comunes = ventaRepo.importeProductoComun(inicio, fin, caja, ProductoComun.CODIGO).get(0);
-        r.productosComunes = redondear(((Number) comunes[0]).doubleValue());
-        r.gananciaProductosComunes = redondear(r.productosComunes - ((Number) comunes[1]).doubleValue());
-        if (r.productosComunes > 0.004) {
-            Double sinDepto = r.porDepartamento.get("Sin departamento");
-            if (sinDepto != null) {
-                double resto = redondear(sinDepto - r.productosComunes);
-                if (resto > 0.004) r.porDepartamento.put("Sin departamento", resto);
-                else r.porDepartamento.remove("Sin departamento");
+        double comunesVendidos = redondear(((Number) comunes[0]).doubleValue());
+        r.gananciaProductosComunes = redondear(comunesVendidos - ((Number) comunes[1]).doubleValue());
+
+        // Devoluciones del periodo por departamento (día de la devolución): restan del departamento del
+        // producto devuelto y quedan aparte para la nota "(incluye −$X de devoluciones)"
+        if (r.numDevoluciones > 0) {
+            for (Object[] f : devolucionRepo.importesPorDepartamentoEntre(inicio, fin, caja)) {
+                String nombre = f[0] != null ? (String) f[0] : "Sin departamento";
+                r.devolucionesPorDepartamento.merge(nombre, ((Number) f[1]).doubleValue(), Double::sum);
             }
-            r.porDepartamento.put(ResumenCorte.DEPARTAMENTO_PRODUCTOS_COMUNES, r.productosComunes);
         }
+        double comunesDevueltos = 0;
+        if (r.numDevoluciones > 0) {
+            Double dev = devolucionRepo.importeProductoComunEntre(inicio, fin, caja, ProductoComun.CODIGO);
+            comunesDevueltos = redondear(dev != null ? dev : 0.0);
+        }
+        // Productos comunes: no tienen departamento ("Sin departamento"), se sacan a su propio renglón
+        if (comunesVendidos > 0.004 || comunesDevueltos > 0.004) {
+            moverAComunes(r.porDepartamento, comunesVendidos);
+            moverAComunes(r.devolucionesPorDepartamento, comunesDevueltos);
+        }
+        // Netos: venta del periodo menos lo devuelto en el periodo; un departamento sin ventas pero con
+        // devoluciones aparece en negativo. Se ordenan de nuevo de mayor a menor.
+        Map<String, Double> netos = new LinkedHashMap<>(r.porDepartamento);
+        r.devolucionesPorDepartamento.replaceAll((k, v) -> redondear(v));
+        r.devolucionesPorDepartamento.values().removeIf(v -> v < 0.005);
+        r.devolucionesPorDepartamento.forEach((k, v) -> netos.merge(k, -v, Double::sum));
+        r.porDepartamento.clear();
+        netos.entrySet().stream()
+                .map(e -> Map.entry(e.getKey(), redondear(e.getValue())))
+                .filter(e -> Math.abs(e.getValue()) >= 0.005 || r.devolucionesPorDepartamento.containsKey(e.getKey()))
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .forEach(e -> r.porDepartamento.put(e.getKey(), e.getValue()));
+        // Productos comunes y su ganancia estimada, netos de lo devuelto (como la ganancia del corte,
+        // que resta todo lo reembolsado de lo que no regresa al anaquel)
+        r.productosComunes = redondear(comunesVendidos - comunesDevueltos);
+        r.gananciaProductosComunes = redondear(r.gananciaProductosComunes - comunesDevueltos);
         r.ventasTotales   = redondear(r.ventasTotales);
         r.subtotal        = redondear(r.subtotal);
         r.iva             = redondear(r.iva);
@@ -999,6 +1054,26 @@ public class VentaService {
         return r;
     }
 
+    /** Grupo de tasa de IVA {tasa, exento(1/0), importe, iva, importeDev, ivaDev} para la fila [tasa, exento, …] */
+    private static double[] grupoTasa(Map<String, double[]> tasas, Object[] f) {
+        double tasa = ((Number) f[0]).doubleValue();
+        boolean exento = Boolean.TRUE.equals(f[1]);
+        String clave = Math.round(tasa * 10000) + (exento ? "E" : "");
+        return tasas.computeIfAbsent(clave, k -> new double[] { tasa, exento ? 1 : 0, 0, 0, 0, 0 });
+    }
+
+    /** Pasa {@code monto} de "Sin departamento" al renglón de productos comunes (no tienen departamento) */
+    private static void moverAComunes(Map<String, Double> porDepartamento, double monto) {
+        if (monto <= 0.004) return;
+        Double sinDepto = porDepartamento.get("Sin departamento");
+        if (sinDepto != null) {
+            double resto = redondear(sinDepto - monto);
+            if (resto > 0.004) porDepartamento.put("Sin departamento", resto);
+            else porDepartamento.remove("Sin departamento");
+        }
+        porDepartamento.put(ResumenCorte.DEPARTAMENTO_PRODUCTOS_COMUNES, monto);
+    }
+
     private static void sumarPago(ResumenCorte r, Venta.FormaPago forma, double monto) {
         if (forma == null) forma = Venta.FormaPago.EFECTIVO;
         switch (forma) {
@@ -1017,14 +1092,22 @@ public class VentaService {
         /** Periodo [inicio, fin) que se sumó */
         public LocalDateTime inicio;
         public LocalDateTime fin;
+        /** Ventas cobradas en el periodo (BRUTAS: las devoluciones van aparte, ver {@link #getVentasNetas}) */
         public double ventasTotales;
+        /**
+         * Subtotal e IVA NETOS: lo de las ventas del periodo menos lo de las devoluciones hechas en
+         * el periodo (así subtotal + IVA = ventas netas). Lo devuelto: {@link #ivaDevoluciones}.
+         */
         public double subtotal;
         public double iva;
         /**
-         * Desglose del IVA por tasa (gravado 16 %, tasa 0 %, exento): base e impuesto de cada grupo.
-         * Con una sola tasa en el periodo el corte no lo muestra (ya está en {@link #iva}).
+         * Desglose del IVA por tasa (gravado 16 %, tasa 0 %, exento): base (sin IVA) e impuesto de cada
+         * grupo, NETOS de las devoluciones del periodo. Con una sola tasa el corte no lo muestra (ya
+         * está en {@link #iva}).
          */
         public final List<me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo> porTasaIva = new ArrayList<>();
+        /** Lo devuelto en el periodo por tasa (base e IVA, en positivo): la nota "(incluye −$X …)" */
+        public final List<me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo> devolucionesPorTasaIva = new ArrayList<>();
         public double efectivo;
         public double tarjeta;
         public double credito;
@@ -1058,7 +1141,31 @@ public class VentaService {
         public boolean gananciaVisible = true;
         /** Nombre con el que los productos comunes aparecen en {@link #porDepartamento} */
         public static final String DEPARTAMENTO_PRODUCTOS_COMUNES = "Productos comunes (sin catálogo)";
+        /** Ventas por departamento NETAS de las devoluciones del periodo (de mayor a menor; puede haber negativos) */
         public final Map<String, Double> porDepartamento = new LinkedHashMap<>();
+        /** Lo devuelto en el periodo por departamento (en positivo), para la nota "(incluye −$X de devoluciones)" */
+        public final Map<String, Double> devolucionesPorDepartamento = new LinkedHashMap<>();
+
+        /** Lo devuelto de un grupo de {@link #porTasaIva} (base + IVA, con IVA incluido); 0 si nada */
+        public double devueltoDeTasa(me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo g) {
+            for (me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo d : devolucionesPorTasaIva) {
+                if (d.exento() == g.exento() && Math.abs(d.tasa() - g.tasa()) < 0.00005) return redondear(d.base() + d.iva());
+            }
+            return 0;
+        }
+
+        /** "  (incluye −$X de devoluciones)" si se devolvió algo; "" si no (pantalla de Corte) */
+        public static String notaDevoluciones(double devuelto) {
+            return devuelto >= 0.005
+                    ? "  (incluye −" + me.eliassanchezfernandez.puntodeventa.util.Moneda.formato(devuelto) + " de devoluciones)"
+                    : "";
+        }
+
+        /** Lo devuelto de un departamento de {@link #porDepartamento}; 0 si nada */
+        public double devueltoDeDepartamento(String nombre) {
+            return devolucionesPorDepartamento.getOrDefault(nombre, 0.0);
+        }
+
         public final List<Producto> productosBajos = new ArrayList<>();
         /** Cobros con tarjeta del día por terminal (los capturados a mano en Ventas) */
         public final List<TarjetaTerminal> tarjetaPorTerminal = new ArrayList<>();

@@ -473,13 +473,16 @@ public class EstadisticasService {
      * Cuatro consultas de una fila cada una (hoy y los tres días de referencia) más
      * la primera venta; nunca se cargan tickets. Las ventas canceladas no cuentan,
      * igual que en el corte; el "producto común" es una venta como cualquier otra.
+     * Lo devuelto resta en el día de la venta (análisis de ventas, ver reglas-negocio.txt).
      */
     @Transactional(readOnly = true)
     public ResumenHoy resumenHoy(LocalDateTime ahora) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
         LocalDate hoy = ahora.toLocalDate();
         java.time.LocalTime hora = ahora.toLocalTime();
-        Object[] f = ventaRepository.resumenActivas(hoy.atStartOfDay(), hoy.plusDays(1).atStartOfDay(), null).get(0);
+        // Neto de devoluciones en el día de la venta, igual que los días de referencia y resumen_diario
+        LocalDateTime finHoy = hoy.plusDays(1).atStartOfDay();
+        Object[] f = ventaRepository.resumenActivasConCorte(hoy.atStartOfDay(), finHoy, finHoy).get(0);
         CifrasDia deHoy = new CifrasDia(ResumenDiario.VentaRedondeo.centavos(((Number) f[1]).doubleValue()), ((Number) f[0]).intValue());
         LocalDate primeraVenta = ventaRepository.findPrimeraActiva().map(v -> v.getFecha().toLocalDate()).orElse(null);
         List<ComparacionDia> comparaciones = List.of(
@@ -597,7 +600,7 @@ public class EstadisticasService {
             String clave = c != null ? c.getCategoria() : "Sin datos de clima";
             double[] a = acumulado.computeIfAbsent(clave, k -> new double[2]);
             a[0]++;
-            a[1] += v.getTotal();
+            a[1] += v.getTotalNeto();   // lo devuelto no se vendió
         }
         List<VentasClima> r = new ArrayList<>();
         acumulado.forEach((k, a) -> r.add(new VentasClima(k, (int) a[0], ResumenDiario.VentaRedondeo.centavos(a[1]))));
@@ -623,7 +626,8 @@ public class EstadisticasService {
 
     /**
      * Total, número de ventas y ticket promedio de cada cajero del periodo, de mayor a menor.
-     * Lee directo de las ventas (incluye hoy). Las ventas canceladas no cuentan. VER_HISTORIAL.
+     * Lee directo de las ventas (incluye hoy). Las ventas canceladas no cuentan y lo devuelto
+     * resta en el día de la venta (el número de ventas no cambia). VER_HISTORIAL.
      */
     @Transactional(readOnly = true)
     public List<VentasCajero> ventasPorCajero(Periodo p) {
@@ -685,7 +689,7 @@ public class EstadisticasService {
     @Transactional(readOnly = true)
     public List<VentasPorCaja> ventasPorCaja(Periodo p) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
-        List<Object[]> filas = ventaRepository.ventasPorCaja(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
+        List<Object[]> filas = ventaRepository.ventasNetasPorCaja(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
         double granTotal = filas.stream().mapToDouble(f -> ((Number) f[2]).doubleValue()).sum();
         List<VentasPorCaja> r = new ArrayList<>();
         for (Object[] f : filas) {
