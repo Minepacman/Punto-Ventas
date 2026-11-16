@@ -177,8 +177,19 @@ Ver §6.
 - `service/ClimaService.java`: `HttpClient` perezoso.
 - `util/apariencia/HojaApariencia.java`, `AplicadorApariencia.java`: vidrio ligero (`vidrioLigero`, `manchasPng`).
 - `css/app.css`: radios literales en lugar de `-pos-radius`.
-- Pruebas: `config/RepositoriosPerezososTest` (nueva), `HojaAparienciaTest` (vidrio ligero).
+- Pruebas: `config/RepositoriosPerezososTest` (nueva), `HojaAparienciaTest` (vidrio ligero). Suite tras unir con
+  `pos-basico` (versión 1.0.6): `test` 1 243 pruebas (17 omitidas) y `testPostgres` 25, todas verdes.
 - No se tocaron: `ocr/`, `ticketsproveedor/`, `LeerTicketDialogo`, pragmas de SQLite, índices, opciones de la JVM.
+- Al unir con `pos-basico` (trabajo de «optimización extrema»): `SeccionSurtido` ya armaba las tablas hasta que la
+  pestaña Reabastecimiento se ve (`Tarjetas.cuandoSeVea`); se conservan las dos cosas (armar al verse **y** solo 3
+  grupos abiertos), porque al abrir la pestaña se volvían a armar todos los grupos abiertos (~17 000 nodos). Los radios
+  de `app.css` quedaron como los dejó ese trabajo (mismo arreglo). El **Modo ligero** de esa rama (automático solo con
+  dibujo por software) apaga el vidrio por completo; el vidrio ligero de aquí aplica cuando el Modo ligero está
+  apagado y el equipo es modesto (≤ 2 núcleos o < 4 GB), o si alguien lo apaga a mano en una PC sin aceleración: se
+  conserva el aspecto con un costo de dibujo cercano a no tener vidrio.
+- Precargar ventanas en RAM (pregunta del dueño): no se hizo. Lo único «en segundo plano» nuevo es crear los
+  repositorios mientras se escribe la contraseña: solo CPU (sin disco), prioridad mínima, una vez por arranque y nunca
+  durante una venta. Las pestañas siguen cargándose al abrirlas (56–215 ms la primera vez aquí).
 
 ## 6. Uso simulado de 30 minutos
 
