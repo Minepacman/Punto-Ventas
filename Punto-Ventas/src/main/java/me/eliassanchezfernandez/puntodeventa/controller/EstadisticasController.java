@@ -18,6 +18,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
@@ -87,10 +89,12 @@ import java.util.function.Function;
  * Controlador de Estadísticas (CRT-10). Todo sale de los agregados que
  * mantiene AgregadosService (más "hoy" en vivo); aquí solo se presenta.
  *
- * Arriba va la vista simple «Hoy» ({@link SeccionHoy}: venta y tickets de hoy
+ * Cada sección vive en su propia pestaña («ventanita»), siempre abierta. La
+ * primera es la vista simple «Hoy» ({@link SeccionHoy}: venta y tickets de hoy
  * contra ayer, la semana pasada y hace un año), que se recarga al entrar a la
- * pestaña y cada minuto mientras está visible. Debajo, «Más detalles»: el
- * periodo y todas las gráficas, tablas y secciones en TitledPanes cerrados.
+ * pestaña, al volver a ella y cada minuto mientras está visible. El periodo de
+ * arriba aplica a las demás pestañas y se oculta mientras se ve «Hoy». Todo
+ * se lee en segundo plano: el hilo de JavaFX solo pinta.
  *
  * main.fxml incluye esta vista para todos, pero MainController solo muestra
  * la pestaña a quien tiene VER_HISTORIAL; sin ese permiso no se consulta nada
@@ -100,7 +104,7 @@ import java.util.function.Function;
  *
  * Secciones registrables: además de lo que está en el FXML, {@link #secciones()}
  * da de alta tarjetas que implementan {@link SeccionEstadisticas}; cada una se
- * coloca en el contenedor de su bloque, se carga en segundo plano y tiene su
+ * coloca en el contenedor de su pestaña, se carga en segundo plano y tiene su
  * botón «?» (texto en {@link AyudaEstadisticas}). El tutorial de la primera
  * vez se muestra una sola vez por usuario (TutorialesService).
  */
@@ -137,7 +141,12 @@ public class EstadisticasController implements Initializable {
     @FXML private Button btnRecalcular;
     @FXML private Button btnAyuda;
 
-    // Contenedores de las secciones registradas (uno por bloque)
+    // Pestañas (una «ventanita» por sección; la primera es «Hoy»)
+    @FXML private TabPane tabsEstadisticas;
+    @FXML private Tab     tabHoy;
+    @FXML private HBox    boxPeriodo;
+
+    // Contenedores de las secciones registradas (uno por pestaña)
     @FXML private VBox boxHoy;
     @FXML private VBox boxSeccionesProductos;
     @FXML private VBox boxSeccionesReabastecimiento;
@@ -228,7 +237,7 @@ public class EstadisticasController implements Initializable {
     private Timeline enVivo;
 
     /**
-     * Último periodo elegido en «Más detalles», por usuario, mientras el programa está abierto.
+     * Último periodo elegido para las pestañas de detalle, por usuario, mientras el programa está abierto.
      * De fábrica abre en «Hoy» (la vista que más se usa); al volver a entrar a la pestaña o
      * al iniciar sesión otra vez se conserva el que se eligió la última vez.
      */
@@ -245,6 +254,7 @@ public class EstadisticasController implements Initializable {
         gridCalor.getChildren().clear();
         registrarSecciones();
         restaurarPeriodo();
+        configurarPestanas();
 
         if (sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
             recargar();
@@ -256,6 +266,27 @@ public class EstadisticasController implements Initializable {
             btnRecalcular.setDisable(true);
             for (SeccionEstadisticas<?> s : secciones) s.pintarError("requiere el permiso «Ver historial de ventas».");
         }
+    }
+
+    // ── Pestañas ──────────────────────────────────────────────────────────
+
+    /**
+     * El periodo no aplica a «Hoy»: se oculta mientras esa pestaña está elegida.
+     * Al volver a «Hoy» se relee solo esa sección (en segundo plano) para que
+     * las cifras estén al minuto.
+     */
+    private void configurarPestanas() {
+        mostrarPeriodoSegun(tabsEstadisticas.getSelectionModel().getSelectedItem());
+        tabsEstadisticas.getSelectionModel().selectedItemProperty().addListener((obs, vieja, nueva) -> {
+            mostrarPeriodoSegun(nueva);
+            if (nueva == tabHoy && vieja != null && seccionHoy != null) recargarSeccion(seccionHoy);
+        });
+    }
+
+    private void mostrarPeriodoSegun(Tab tab) {
+        boolean conPeriodo = tab != tabHoy;
+        boxPeriodo.setVisible(conPeriodo);
+        boxPeriodo.setManaged(conPeriodo);
     }
 
     // ── Vista Hoy en vivo ─────────────────────────────────────────────────

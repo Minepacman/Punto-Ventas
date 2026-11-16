@@ -20,7 +20,7 @@ import javafx.scene.Node;
  */
 public interface SeccionEstadisticas<D> {
 
-    /** En qué bloque de la pantalla se coloca la tarjeta (HOY es la vista simple de arriba; el resto, «Más detalles») */
+    /** En qué pestaña se coloca la tarjeta (HOY es la primera, la vista simple) */
     enum Ubicacion { HOY, PRODUCTOS, REABASTECIMIENTO, RECOMENDACIONES, CLIMA }
 
     /** Lo que una sección puede pedirle a la pantalla */

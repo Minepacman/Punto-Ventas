@@ -5,8 +5,14 @@ import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TitledPane;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
 import javafx.stage.Stage;
@@ -18,6 +24,7 @@ import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
+import me.eliassanchezfernandez.puntodeventa.service.AgregadosService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.junit.jupiter.api.Test;
@@ -43,9 +50,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Captura de la pestaña Estadísticas (vista «Hoy» arriba y «Más detalles»
- * cerrado) con ventas de muestra sobre la BD desechable de pruebas. Solo corre
- * a petición, porque necesita una pantalla:
+ * Capturas de la pestaña Estadísticas, una por cada pestaña interna («Hoy»,
+ * Resumen, Horarios pico…), al tamaño del área de contenido con la ventana
+ * maximizada en 1280×800 y en 1024×768, con ventas de muestra sobre la BD
+ * desechable de pruebas. Anota en {@code medidas.txt} el desplazamiento de
+ * cada vista y falla si alguna se desplaza a lo ancho. Solo corre a petición,
+ * porque necesita una pantalla:
  * <pre>APP_CAPTURAS=true APP_CAPTURAS_DIR=/ruta ./gradlew test --tests '*CapturasEstadisticasTest'</pre>
  * Sin APP_CAPTURAS la prueba se omite. Las ventas sembradas se borran al final.
  */
@@ -58,6 +68,7 @@ class CapturasEstadisticasTest {
     @Autowired private CajeroRepository cajeroRepo;
     @Autowired private ProductoRepository productoRepo;
     @Autowired private VentaRepository ventaRepo;
+    @Autowired private AgregadosService agregadosService;
 
     @Test
     void generaCapturaDeEstadisticas() throws Exception {
@@ -77,6 +88,18 @@ class CapturasEstadisticasTest {
         p.setTipoVenta(Producto.TipoVenta.UNIDAD);
         p.setUsaInventario(false);
         p = productoRepo.save(p);
+        List<Producto> otros = new ArrayList<>();
+        String[][] catalogo = {{"Sabritas 45 g", "18"}, {"Leche Lala 1 L", "29"}, {"Pan Bimbo grande", "52"}, {"Huevo kg", "48"}};
+        for (String[] c : catalogo) {
+            Producto o = new Producto();
+            o.setCodigoBarras("CAP-" + System.nanoTime());
+            o.setDescripcion(c[0]);
+            o.setPrecioCosto(Double.parseDouble(c[1]) * 0.7);
+            o.setPrecioVenta(Double.parseDouble(c[1]));
+            o.setTipoVenta(Producto.TipoVenta.UNIDAD);
+            o.setUsaInventario(false);
+            otros.add(productoRepo.save(o));
+        }
 
         List<Venta> sembradas = new ArrayList<>();
         try {
@@ -90,17 +113,31 @@ class CapturasEstadisticasTest {
             for (int i = 0; i < 12; i++) sembradas.add(venta(p, hoy.minusDays(7).atTime(ahora.minusMinutes(3 + i * 11L)), 2));
             // Hace un año: la tienda ya existía, pero una sola venta
             sembradas.add(venta(p, hoy.minusYears(1).atTime(ahora.minusMinutes(30)), 1));
+            // Cinco semanas de ventas variadas para las gráficas, el ranking y el mapa de calor
+            for (int d = 1; d <= 35; d++) {
+                for (int k = 0; k < 3 + d % 4; k++) {
+                    Producto o = otros.get((d + k) % otros.size());
+                    sembradas.add(venta(o, hoy.minusDays(d).atTime(8 + (k * 3 + d) % 13, (k * 7) % 60), 1 + k % 2));
+                }
+            }
 
+            agregadosService.recalcularManual();
             arrancarJavaFx();
             enFx(() -> Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()));
-            capturar("/fxml/estadisticas.fxml", 1008, 640, dir.resolve("estadisticas-hoy.png"));
+            // Área de contenido de la pestaña con la ventana maximizada (barra de tareas, título, pestañas y barra de estado fuera)
+            capturar("/fxml/estadisticas.fxml", 1280, 662, dir, "1280x800");
+            capturar("/fxml/estadisticas.fxml", 1024, 630, dir, "1024x768");
+            Files.writeString(dir.resolve("medidas.txt"), medidas.toString());
+            System.out.println(medidas);
         } finally {
             ventaRepo.deleteAll(sembradas);
             productoRepo.delete(p);
+            productoRepo.deleteAll(otros);
+            agregadosService.recalcularManual();
             sesionService.cerrarSesion();
         }
-        assertThat(dir.resolve("estadisticas-hoy.png")).exists();
-        System.out.println("Captura en " + dir.resolve("estadisticas-hoy.png").toAbsolutePath());
+        assertThat(medidas.toString()).doesNotContain("SCROLL-H").doesNotContain("RECORTE-H");
+        System.out.println("Capturas en " + dir.toAbsolutePath());
     }
 
     private Venta venta(Producto p, LocalDateTime fecha, double cantidad) {
@@ -117,7 +154,8 @@ class CapturasEstadisticasTest {
         return ventaRepo.save(v);
     }
 
-    private void capturar(String fxml, double ancho, double alto, Path destino) throws Exception {
+    /** Cada vista: se espera a que pinten los hilos de carga y se toma la foto */
+    private void capturar(String fxml, double ancho, double alto, Path dir, String prefijo) throws Exception {
         AtomicReference<Throwable> error = new AtomicReference<>();
         CountDownLatch listo = new CountDownLatch(1);
         Platform.runLater(() -> {
@@ -130,27 +168,107 @@ class CapturasEstadisticasTest {
                 Stage stage = new Stage();
                 stage.setScene(escena);
                 stage.show();
-                // Las consultas corren en hilos aparte: un respiro para que pinten
-                PauseTransition espera = new PauseTransition(Duration.millis(3000));
-                espera.setOnFinished(e -> {
-                    try {
-                        WritableImage img = escena.snapshot(null);
-                        guardarPng(img, destino.toFile());
-                    } catch (Exception ex) {
-                        error.set(ex);
-                    } finally {
-                        stage.close();
-                        listo.countDown();
+                List<Runnable> pasos = new ArrayList<>();
+                TabPane pestanas = buscar(raiz, TabPane.class);
+                if (pestanas != null) {
+                    // Una foto por pestaña (cada sección en su propia ventanita)
+                    for (int i = 0; i < pestanas.getTabs().size(); i++) {
+                        final int n = i;
+                        Tab tab = pestanas.getTabs().get(i);
+                        pasos.add(() -> pestanas.getSelectionModel().select(n));
+                        pasos.add(() -> foto(escena, dir.resolve(String.format("%s-%02d-%s.png", prefijo, n, nombreArchivo(tab.getText())))));
                     }
+                } else {
+                    pasos.add(() -> foto(escena, dir.resolve(prefijo + "-00-inicio.png")));
+                    // Diseño con secciones plegadas: se abren todas para ver el largo
+                    pasos.add(() -> todos(raiz, TitledPane.class).forEach(tp -> tp.setExpanded(true)));
+                    pasos.add(() -> foto(escena, dir.resolve(prefijo + "-01-todo-abierto.png")));
+                }
+                pasos.add(() -> {
+                    stage.close();
+                    listo.countDown();
                 });
-                espera.play();
+                // Las consultas corren en hilos aparte: un respiro para que pinten
+                encadenar(pasos, 0, 2500, error, listo);
             } catch (Throwable t) {
                 error.set(t);
                 listo.countDown();
             }
         });
-        assertThat(listo.await(40, TimeUnit.SECONDS)).as("captura de " + fxml).isTrue();
+        assertThat(listo.await(90, TimeUnit.SECONDS)).as("captura de " + fxml).isTrue();
         if (error.get() != null) throw new AssertionError("No se pudo capturar " + fxml, error.get());
+    }
+
+    private void encadenar(List<Runnable> pasos, int i, long esperaMs, AtomicReference<Throwable> error, CountDownLatch listo) {
+        if (i >= pasos.size()) return;
+        PauseTransition espera = new PauseTransition(Duration.millis(esperaMs));
+        espera.setOnFinished(e -> {
+            try {
+                pasos.get(i).run();
+                encadenar(pasos, i + 1, 900, error, listo);
+            } catch (Throwable t) {
+                error.set(t);
+                listo.countDown();
+            }
+        });
+        espera.play();
+    }
+
+    private void foto(Scene escena, Path destino) {
+        try {
+            guardarPng(escena.snapshot(null), destino.toFile());
+            medir(destino.getFileName().toString(), escena);
+        } catch (Exception ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
+    private final StringBuilder medidas = new StringBuilder();
+
+    /** Anota si hay desplazamiento horizontal (no debe) y cuánto vertical queda */
+    private void medir(String nombre, Scene escena) {
+        StringBuilder linea = new StringBuilder(String.format("%-48s %4.0f×%-4.0f", nombre, escena.getWidth(), escena.getHeight()));
+        double minAncho = escena.getRoot().minWidth(-1);
+        if (minAncho > escena.getWidth() + 0.5) linea.append(String.format("  RECORTE-H raíz min %.0f", minAncho));
+        for (ScrollPane sp : todos(escena.getRoot(), ScrollPane.class)) {
+            if (!visible(sp) || sp.getContent() == null) continue;
+            var vista = sp.getViewportBounds();
+            var cont = sp.getContent().getLayoutBounds();
+            linea.append(String.format("  scroll: %.0f×%.0f en %.0f×%.0f", cont.getWidth(), cont.getHeight(), vista.getWidth(), vista.getHeight()));
+            if (cont.getWidth() > vista.getWidth() + 1) linea.append(" SCROLL-H");
+        }
+        medidas.append(linea).append('\n');
+    }
+
+    private static boolean visible(Node n) {
+        for (Node x = n; x != null; x = x.getParent()) if (!x.isVisible()) return false;
+        return true;
+    }
+
+    private static String nombreArchivo(String texto) {
+        String s = java.text.Normalizer.normalize(texto == null ? "" : texto, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
+        return s.replaceAll("(^-|-$)", "");
+    }
+
+    private static <T> T buscar(Node raiz, Class<T> tipo) {
+        List<T> l = todos(raiz, tipo);
+        return l.isEmpty() ? null : l.get(0);
+    }
+
+    private static <T> List<T> todos(Node raiz, Class<T> tipo) {
+        List<T> salida = new ArrayList<>();
+        juntar(raiz, tipo, salida);
+        return salida;
+    }
+
+    private static <T> void juntar(Node n, Class<T> tipo, List<T> salida) {
+        if (tipo.isInstance(n)) salida.add(tipo.cast(n));
+        if (n instanceof TableView<?>) return;
+        if (n instanceof Parent p) for (Node h : p.getChildrenUnmodifiable()) juntar(h, tipo, salida);
+        if (n instanceof ScrollPane sp && sp.getContent() != null && !sp.getChildrenUnmodifiable().contains(sp.getContent())) juntar(sp.getContent(), tipo, salida);
+        if (n instanceof TabPane tp) for (Tab t : tp.getTabs()) if (t.getContent() != null && t.getContent().getParent() == null) juntar(t.getContent(), tipo, salida);
+        if (n instanceof TitledPane tp && tp.getContent() != null && tp.getContent().getParent() == null) juntar(tp.getContent(), tipo, salida);
     }
 
     /** Sin javafx.swing en el proyecto: se copian los píxeles a mano */

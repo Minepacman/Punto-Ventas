@@ -923,12 +923,6 @@ TilePane > .button:armed,
     -fx-border-color: -pos-border;
 }
 
-/* Secciones cerradas de «Más detalles» en Estadísticas: título del tamaño de una tarjeta */
-.titled-pane.seccion-detalle > .title {
-    -fx-font-size: 14px;
-    -fx-padding: 8 12 8 12;
-}
-
 .progress-indicator {
     -fx-progress-color: -pos-accent;
 }

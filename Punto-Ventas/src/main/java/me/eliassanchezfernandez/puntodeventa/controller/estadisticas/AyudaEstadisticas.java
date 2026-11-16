@@ -158,10 +158,10 @@ public final class AyudaEstadisticas {
                   + " con ventas); confianza de las recomendaciones: " + madurez.porcentajeConfianza() + " %.";
         p.add(new Pagina("Bienvenido a Estadísticas",
                 "Esta pestaña te muestra cómo va la tienda y te ayuda a decidir qué surtir, cuándo y a quién pedírselo.\n\n"
-                + "Lo primero que ves es «Hoy»: la venta y los tickets del día comparados con ayer, con el mismo día "
-                + "de la semana pasada y con hoy hace un año. Con eso basta para el día a día. Todo lo demás (gráficas, "
-                + "horarios, productos, reabastecimiento, recomendaciones y clima) está debajo, en «Más detalles», "
-                + "cerrado: abre solo la sección que quieras ver.\n\n"
+                + "Cada sección tiene su propia pestaña. La primera, «Hoy», muestra la venta y los tickets del día "
+                + "comparados con ayer, con el mismo día de la semana pasada y con hoy hace un año. Con eso basta para "
+                + "el día a día. Las demás pestañas (Resumen, Horarios pico, Cajeros y horas, Productos más vendidos, "
+                + "Reabastecimiento, Recomendaciones y Clima) tienen las gráficas y reportes: entra a la que quieras ver.\n\n"
                 + "IMPORTANTE: las recomendaciones mejoran con el tiempo. El programa se va «entrenando» con tus ventas: "
                 + "las primeras semanas pueden no ser realistas. Con alrededor de un mes de ventas ("
                 + EstadisticasService.DIAS_CONFIABLES + " días) ya son confiables.\n\n" + estado + "\n\n"
@@ -175,12 +175,12 @@ public final class AyudaEstadisticas {
                 + "no hubo ventas o la tienda aún no vendía.\n\n"
                 + "Las cifras se actualizan solas cada minuto mientras tienes la pestaña abierta. Las ventas canceladas "
                 + "no cuentan, igual que en el corte."));
-        p.add(new Pagina("Más detalles: resumen del periodo",
-                "Debajo de «Hoy» eliges un periodo (Hoy, Semana, Mes, Año o personalizado) que aplica a todas las "
-                + "secciones de «Más detalles». En «Resumen del periodo»: venta total, tickets, ticket promedio y piezas, "
+        p.add(new Pagina("Periodo y resumen",
+                "Fuera de «Hoy», arriba de las pestañas eliges un periodo (Hoy, Semana, Mes, Año o personalizado) que "
+                + "aplica a todas ellas. En «Resumen»: venta total, tickets, ticket promedio y piezas, "
                 + "los comparativos contra el mismo tramo del periodo anterior (la semana, el mes y el año «a la fecha») "
                 + "y las gráficas de ventas por día y por día de la semana.\n\n"
-                + "Ahí también está el aviso de cuántos días de ventas hay y el botón «Recalcular»."));
+                + "Arriba de las pestañas está el aviso de cuántos días de ventas hay y el botón «Recalcular»."));
         p.add(new Pagina("Horarios pico",
                 "Las ventas se reparten en franjas (mañana, mediodía, tarde, noche) y en un mapa de calor de día de la "
                 + "semana × franja: más intenso = más ventas.\n\n"
