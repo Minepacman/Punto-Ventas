@@ -45,6 +45,7 @@
                         <BotonOpcion icono="numeros" titulo="Folios"              descripcion="Numeración de los tickets"                     onAction="#onFolios"/>
                         <BotonOpcion icono="efectivo" titulo="Moneda"             descripcion="Símbolo y código ($ MXN)"                      onAction="#onMoneda"/>
                         <BotonOpcion icono="regla"   titulo="Unidades de medida"  descripcion="Pieza, kilo, litro, paquete"                  onAction="#onUnidades"/>
+                        <BotonOpcion icono="energia" titulo="Abrir al encender"   descripcion="Iniciar con la computadora"                   onAction="#onAbrirAlEncender"/>
                     </FlowPane>
                 </VBox>
 
@@ -60,6 +61,7 @@
                         <BotonOpcion icono="celular"  titulo="Acceso móvil"          descripcion="Usar el programa en el celular"            onAction="#onAccesoMovil"/>
                         <BotonOpcion icono="climaSol" titulo="Ubicación y clima"     descripcion="Tu ciudad, para sugerir mejor"         onAction="#onClima"/>
                         <BotonOpcion icono="etiqueta" titulo="Códigos de barras"     descripcion="Datos de productos en línea"             onAction="#onCatalogoCodigos"/>
+                        <BotonOpcion icono="documento" titulo="Lector de tickets"    descripcion="Leer tickets de proveedor con foto"      onAction="#onLectorTickets"/>
                         <BotonOpcion icono="recibo"   titulo="Facturación"           descripcion="Factura electrónica (CFDI)"              onAction="#onFacturacion"/>
                         <BotonOpcion icono="paquete"  titulo="Artículos precargados" descripcion="Productos de ejemplo"           onAction="#onArticulosPrec"/>
                     </FlowPane>

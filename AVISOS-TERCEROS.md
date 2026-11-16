@@ -62,5 +62,16 @@ le envía dato alguno de la tienda; cada uno ve únicamente la dirección IP pú
 igual que cualquier sitio web. Lo que se guarda en el programa es la ciudad y las coordenadas que el
 administrador confirma.
 
+Lector de tickets de proveedor (OCR). El instalador de macOS incluye Tesseract OCR
+(<https://github.com/tesseract-ocr/tesseract>, Apache-2.0) con sus datos de idioma `spa` y `eng` de
+tessdata_fast (Apache-2.0), Leptonica (licencia tipo BSD-2) y las bibliotecas de imagen y compresión que
+usan (libpng, libjpeg-turbo, libtiff, libwebp, OpenJPEG, giflib, libarchive, xz, zstd, lz4, libb2; licencias
+permisivas tipo BSD/MIT/zlib); su texto de licencia va junto al programa (`ocr/tesseract`). En equipos aptos y
+solo si la selección lo pide, el programa descarga una vez ONNX Runtime para Java
+(<https://github.com/microsoft/onnxruntime>, MIT) y los modelos PP-OCRv6 de PaddleOCR
+(<https://github.com/PaddlePaddle/PaddleOCR>, Apache-2.0) en la versión ONNX publicada por RapidOCR
+(<https://github.com/RapidAI/RapidOCR>, Apache-2.0); cada archivo se verifica con su SHA-256. Las fotos de
+los tickets se leen en la computadora de la tienda y no se envían a nadie.
+
 Si falta alguna biblioteca o algún aviso en esta lista, repórtalo en
 <https://github.com/Minepacman/Punto-Ventas/issues>.
