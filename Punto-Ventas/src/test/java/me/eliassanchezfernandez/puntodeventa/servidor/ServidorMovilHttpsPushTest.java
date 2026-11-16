@@ -364,7 +364,7 @@ class ServidorMovilHttpsPushTest {
         assertThat(carga.get("aud").asText()).isEqualTo("https://fcm.googleapis.com");
         assertThat(carga.get("exp").asLong()).isGreaterThan(System.currentTimeMillis() / 1000).isLessThanOrEqualTo(System.currentTimeMillis() / 1000 + 86400);
         JsonNode mensaje = JSON.readTree(ProgramadorAvisosPushTest.descifrar(ll.cuerpo()));
-        assertThat(mensaje.get("titulo").asText()).contains("notificaciones activas");
+        assertThat(mensaje.get("titulo").asText()).contains("avisos activos");
         assertThat(mensaje.get("cuerpo").asText()).contains("Tienda de pruebas");
         assertThat(mensaje.get("url").asText()).isEqualTo("/#/config");
         JsonNode estado = JSON.readTree(enviar("POST", "/api/push/estado", cuerpoEp, u.token()).body());

@@ -109,7 +109,15 @@ public class SesionMovilService {
      */
     public Optional<SesionValida> validar(String token) {
         if (token == null || token.isEmpty() || token.length() > 128) return Optional.empty();
-        String tokenHash = hash(token);
+        return validarPorHash(hash(token));
+    }
+
+    /**
+     * Igual que validar(token), pero con el SHA-256 del token (lo que guarda el traspaso de sesión
+     * a la página segura, que nunca conserva el token en claro).
+     */
+    public Optional<SesionValida> validarPorHash(String tokenHash) {
+        if (tokenHash == null || tokenHash.length() != 64) return Optional.empty();
         LocalDateTime ahora = ahora();
         Lectura l = lectura.execute(st -> leer(tokenHash, ahora));
         if (l == null) return Optional.empty();

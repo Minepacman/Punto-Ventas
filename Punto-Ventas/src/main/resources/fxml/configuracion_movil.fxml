@@ -11,8 +11,8 @@
 
     Orden pensado para quien abre la tienda: 1) el código QR grande con la dirección,
     2) el interruptor "Permitir acceso desde teléfonos" (se aplica al momento),
-    3) "Notificaciones en el teléfono": QR a la guía /certificado y huella de la CA local,
-    4) los teléfonos conectados (con "Cerrar"), 5) Opciones avanzadas (nombre .local,
+    3) "Avisos en el teléfono": QR que abre el asistente «Recibir avisos en este teléfono» (#/avisos) y la
+    huella de la CA local, 4) los teléfonos conectados (con su estado de avisos, "Enviar prueba" y "Cerrar"), 5) Opciones avanzadas (nombre .local,
     puerto fijo, puerto HTTPS, regenerar certificado, teléfonos con notificaciones, direcciones).
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
@@ -55,16 +55,16 @@
 
                     <Separator orientation="VERTICAL"/>
 
-                    <!-- 3. Notificaciones en el teléfono (HTTPS con certificado propio) -->
+                    <!-- 3. Avisos en el teléfono: el QR abre el asistente paso a paso de la página móvil -->
                     <VBox spacing="10" prefWidth="420" minWidth="0" HBox.hgrow="ALWAYS">
-                        <Label text="Notificaciones en el teléfono" styleClass="form-section-title"/>
-                        <Label text="Para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen al teléfono aunque la página esté cerrada, cada teléfono instala UNA vez el certificado de esta computadora y abre la página segura. Escanea este código con el teléfono para ver la guía paso a paso (Android o iPhone)."
+                        <Label text="Activar avisos en un teléfono" styleClass="form-section-title"/>
+                        <Label text="Escanea este código con el teléfono: abre un asistente que te lleva paso a paso (iPhone o Android) para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen aunque la página esté cerrada. Se hace una sola vez por teléfono."
                                wrapText="true" styleClass="hint"/>
                         <HBox spacing="14" alignment="TOP_LEFT">
                             <VBox fx:id="cajaQrCertificado" spacing="6" alignment="CENTER"/>
                             <VBox spacing="8" HBox.hgrow="ALWAYS" minWidth="0">
                                 <Label fx:id="lblHttpsEstado" text="" wrapText="true" styleClass="hint"/>
-                                <Label text="La computadora necesita internet para enviar las notificaciones; el iPhone (iOS 16.4 o más reciente) necesita además la página en la pantalla de inicio. Por la dirección normal (sin candado) todo sigue funcionando, solo sin notificaciones."
+                                <Label text="Esta computadora necesita internet para enviar los avisos. Sin activarlos, el teléfono sigue viendo todo lo demás."
                                        wrapText="true" styleClass="hint"/>
                             </VBox>
                         </HBox>
@@ -85,14 +85,15 @@
                     <Button text="Actualizar" onAction="#onActualizar"/>
                     <Button text="Cerrar todas las sesiones" onAction="#onCerrarTodas" styleClass="button-danger"/>
                 </HBox>
-                <TableView fx:id="tablaSesiones" prefHeight="104">
+                <TableView fx:id="tablaSesiones" prefHeight="120">
                     <columns>
-                        <TableColumn fx:id="colUsuario" text="Usuario" prefWidth="160"/>
-                        <TableColumn fx:id="colCreada"  text="Entró" prefWidth="120"/>
-                        <TableColumn fx:id="colUso"     text="Último uso" prefWidth="120"/>
-                        <TableColumn fx:id="colExpira"  text="Vence" prefWidth="150"/>
-                        <TableColumn fx:id="colIp"      text="Teléfono (IP)" prefWidth="120"/>
-                        <TableColumn fx:id="colAccion"  text="" prefWidth="90"/>
+                        <TableColumn fx:id="colUsuario" text="Usuario" prefWidth="150"/>
+                        <TableColumn fx:id="colAvisos"  text="Avisos" prefWidth="230"/>
+                        <TableColumn fx:id="colUso"     text="Último uso" prefWidth="110"/>
+                        <TableColumn fx:id="colCreada"  text="Entró" prefWidth="110"/>
+                        <TableColumn fx:id="colExpira"  text="Vence" prefWidth="130"/>
+                        <TableColumn fx:id="colIp"      text="Teléfono (IP)" prefWidth="100"/>
+                        <TableColumn fx:id="colAccion"  text="" prefWidth="80"/>
                     </columns>
                 </TableView>
 

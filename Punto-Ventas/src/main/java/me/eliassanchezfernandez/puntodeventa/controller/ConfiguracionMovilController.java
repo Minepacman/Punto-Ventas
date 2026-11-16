@@ -116,6 +116,7 @@ public class ConfiguracionMovilController implements Initializable {
     @FXML private TableColumn<SesionInfo, String> colUso;
     @FXML private TableColumn<SesionInfo, String> colIp;
     @FXML private TableColumn<SesionInfo, SesionInfo> colAccion;
+    @FXML private TableColumn<SesionInfo, SesionInfo> colAvisos;
 
     @Autowired private AccesoMovilService accesoMovilService;
 
@@ -136,6 +137,24 @@ public class ConfiguracionMovilController implements Initializable {
                 if (empty || item == null) { setGraphic(null); return; }
                 cerrar.setOnAction(e -> onCerrarSesion(item));
                 setGraphic(cerrar);
+            }
+        });
+        colAvisos.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
+        colAvisos.setCellFactory(col -> new TableCell<>() {
+            private final Label estado = new Label();
+            private final Button prueba = new Button("Enviar prueba");
+            private final HBox caja = new HBox(8, estado, prueba);
+            { caja.setAlignment(Pos.CENTER_LEFT); prueba.getStyleClass().add("small"); }
+            @Override protected void updateItem(SesionInfo item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setGraphic(null); return; }
+                estado.setText(AccesoMovilService.estadoAvisos(item.avisos()));
+                estado.getStyleClass().removeAll("text-success", "hint");
+                estado.getStyleClass().add(item.avisos() != null && item.avisos().isActiva() ? "text-success" : "hint");
+                prueba.setVisible(item.avisos() != null);
+                prueba.setManaged(item.avisos() != null);
+                prueba.setOnAction(e -> onEnviarPrueba(item, prueba));
+                setGraphic(caja);
             }
         });
         tablaSesiones.setPlaceholder(new Label("No hay sesiones móviles abiertas."));
@@ -273,6 +292,38 @@ public class ConfiguracionMovilController implements Initializable {
         refrescar();
     }
 
+    /** Aviso de prueba a ese teléfono; sale a internet, así que corre fuera del hilo de la pantalla */
+    private void onEnviarPrueba(SesionInfo info, Button boton) {
+        if (info.avisos() == null) return;
+        Long id = info.avisos().getId();
+        boton.setDisable(true);
+        boton.setText("Enviando…");
+        Thread t = new Thread(() -> {
+            String titulo = "Aviso de prueba";
+            String mensaje;
+            Alert.AlertType tipo;
+            try {
+                var r = accesoMovilService.enviarPrueba(id);
+                tipo = r.ok() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
+                mensaje = r.ok() ? "Enviado al teléfono de " + info.usuario() + ". Debe aparecer en unos segundos."
+                        : "No se pudo enviar: " + r.detalle() + "\n\nRevisa que esta computadora tenga internet.";
+            } catch (RuntimeException e) {
+                tipo = Alert.AlertType.ERROR;
+                mensaje = e.getMessage();
+            }
+            Alert.AlertType tipoFinal = tipo;
+            String mensajeFinal = mensaje;
+            javafx.application.Platform.runLater(() -> {
+                boton.setDisable(false);
+                boton.setText("Enviar prueba");
+                Ventanas.alerta(tipoFinal, titulo, mensajeFinal);
+                if (raiz.getScene() != null) refrescar();
+            });
+        }, "aviso-prueba-telefono");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private static String estadoPush(me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush s) {
         if (!s.isActiva()) return "En pausa (lo apagó el usuario)";
         if (s.getUltimoError() != null && (s.getUltimoOk() == null || s.getUltimoError().isAfter(s.getUltimoOk()))) {
@@ -378,19 +429,17 @@ public class ConfiguracionMovilController implements Initializable {
             lblHuellaCompleta.setText("No se pudo leer el certificado: " + e.getMessage());
         }
         if (!activo) {
-            lblHttpsEstado.setText("Enciende «Permitir acceso desde teléfonos» para ver el código de la guía.");
+            lblHttpsEstado.setText("Enciende «Permitir acceso desde teléfonos» para ver el código.");
             cajaQrCertificado.getChildren().add(hintCentrado("Acceso apagado", QR_CERTIFICADO_PX));
             return;
         }
         boolean https = accesoMovilService.httpsActivo();
-        List<String> seguras = accesoMovilService.urlsHttps();
         lblHttpsEstado.setText(https
-                ? "Conexión segura encendida (puerto " + accesoMovilService.puertoHttps() + ")."
-                        + (seguras.isEmpty() ? "" : " Dirección segura: " + seguras.get(0))
-                : "La conexión segura no pudo abrirse (puerto ocupado). Revisa el puerto HTTPS en Opciones avanzadas.");
+                ? "Listo para activar avisos (conexión segura en el puerto " + accesoMovilService.puertoHttps() + ")."
+                : "Los avisos no están disponibles: la conexión segura no pudo abrirse (puerto ocupado). Revisa el puerto HTTPS en Opciones avanzadas.");
         lblHttpsEstado.getStyleClass().removeAll("text-success", "hint");
         lblHttpsEstado.getStyleClass().add(https ? "text-success" : "hint");
-        List<String> urls = accesoMovilService.urlsCertificado(puertoHttp);
+        List<String> urls = accesoMovilService.urlsAvisos(puertoHttp);
         if (urls.isEmpty()) {
             cajaQrCertificado.getChildren().add(hintCentrado("Sin red local", QR_CERTIFICADO_PX));
             return;
