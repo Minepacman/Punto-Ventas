@@ -9,6 +9,7 @@ import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoComun;
 import me.eliassanchezfernandez.puntodeventa.model.Promocion;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
 import me.eliassanchezfernandez.puntodeventa.repository.CajeroRepository;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Lógica de negocio de ventas.
@@ -57,6 +59,7 @@ public class VentaService {
     @Autowired private TicketPendienteRepository ticketPendienteRepo;
     @Autowired private PromocionService          promocionService;
     @Autowired private ProductoService           productoService;
+    @Autowired private ProductoComunService      productoComunService;
     @Autowired private ConfiguracionService      configuracionService;
     @Autowired private SesionService             sesionService;
     @Autowired private AuditoriaService          auditoriaService;
@@ -65,13 +68,20 @@ public class VentaService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.FacturaRepository facturaRepo;
+    /** Fiado (cuentas de clientes). @Lazy: CuentaClienteService → MovimientoCajaService → CajaService → VentaService */
+    @Autowired @org.springframework.context.annotation.Lazy private CuentaClienteService cuentaClienteService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.DevolucionRepository devolucionRepo;
+    /** Vales de compra de la tienda (forma de pago VALE_COMPRA). @Lazy por simetría con el fiado */
+    @Autowired @org.springframework.context.annotation.Lazy private ValeService valeService;
 
     // ── Búsqueda de productos ─────────────────────────────────────────────
 
     /** Producto ACTIVO por código exacto (los descontinuados no se venden) */
     public Optional<Producto> buscarPorCodigo(String codigo) {
         if (codigo == null || codigo.isBlank()) return Optional.empty();
-        return productoRepo.findByCodigoBarras(codigo.trim()).filter(Producto::isActivo);
+        // El producto del sistema "Producto común" no se vende por código: solo con Ctrl/Cmd+P (nombre y precio)
+        return productoRepo.findByCodigoBarras(codigo.trim()).filter(Producto::isActivo)
+                .filter(p -> !ProductoComun.es(p));
     }
 
     public List<Producto> buscarPorNombre(String texto) {
@@ -93,6 +103,9 @@ public class VentaService {
      *        o ya obtuvo autorización; cobrar() lo vuelve a verificar.
      */
     public DetalleVenta crearDetalle(Producto producto, double cantidad, boolean permitirSinStock) {
+        if (ProductoComun.es(producto)) {
+            throw new NegocioException("Un producto común se agrega desde Ventas con Ctrl/Cmd+P, con su nombre y precio.");
+        }
         validarCantidad(producto, cantidad);
         if (!producto.isActivo()) {
             throw new NegocioException("\"" + producto.getDescripcion() + "\" está desactivado y no se puede vender.");
@@ -101,6 +114,37 @@ public class VentaService {
 
         DetalleVenta d = new DetalleVenta();
         d.setProducto(producto);
+        d.setCantidad(cantidad);
+        recalcularPrecio(d);
+        return d;
+    }
+
+    /**
+     * Renglón de "producto común" ({@link ProductoComun}): un artículo que no está
+     * en el catálogo, con el nombre, el precio unitario y la cantidad que teclea el
+     * cajero. Nunca toca inventario, no entra a promociones ni a mayoreo (sí admite
+     * descuento manual) y su costo se estima en el 80 % de lo cobrado para que el
+     * corte registre el 20 % de ganancia. Lo puede agregar cualquier cajero que venda.
+     * @param nombre   vacío = {@link ProductoComun#NOMBRE_POR_DEFECTO}
+     * @param precio   precio unitario, mayor que cero
+     * @param cantidad mayor que cero; admite decimales (kilos)
+     */
+    @Transactional
+    public DetalleVenta crearDetalleProductoComun(String nombre, double precio, double cantidad) {
+        if (!Double.isFinite(precio) || precio <= 0) {
+            throw new NegocioException("Escribe el precio del producto (mayor que cero).");
+        }
+        if (precio > 1_000_000) {
+            throw new NegocioException("El precio es demasiado grande.");
+        }
+        Producto comun = productoComunService.obtenerOCrear();
+        validarCantidad(comun, cantidad);
+
+        DetalleVenta d = new DetalleVenta();
+        d.setProducto(comun);
+        d.setDescripcion(ProductoComun.nombreNormalizado(nombre));
+        d.setPrecioVenta(redondear(precio));
+        d.setPrecioLista(redondear(precio));
         d.setCantidad(cantidad);
         recalcularPrecio(d);
         return d;
@@ -132,6 +176,10 @@ public class VentaService {
      */
     public void recalcularPrecio(DetalleVenta d, Map<Long, Double> piezasUsadasEnTicket) {
         Producto p = d.getProducto();
+        if (ProductoComun.es(p)) {
+            recalcularProductoComun(d);
+            return;
+        }
         double lista = p.getPrecioVenta();
         d.setPrecioLista(lista);
         d.setCostoUnitario(p.getPrecioCosto());
@@ -187,6 +235,41 @@ public class VentaService {
         }
     }
 
+    /**
+     * Renglón de producto común: el precio base es el que tecleó el cajero (precioLista
+     * del renglón), sin promoción ni mayoreo; solo puede llevar descuento manual. El
+     * costo se estima al final sobre lo que de verdad se cobra (ProductoComun).
+     */
+    private void recalcularProductoComun(DetalleVenta d) {
+        double precio = d.getPrecioLista() != null && d.getPrecioLista() > 0 ? d.getPrecioLista() : d.getPrecioVenta();
+        if (!Double.isFinite(precio) || precio <= 0) {
+            throw new NegocioException("El renglón \"" + d.getDescripcionMostrada() + "\" no tiene precio.");
+        }
+        if (d.getDescripcion() == null || d.getDescripcion().isBlank()) d.setDescripcion(ProductoComun.NOMBRE_POR_DEFECTO);
+        d.setPrecioLista(precio);
+        d.setPrecioVenta(precio);
+        d.setMayoreo(false);
+        d.setPromocionId(null);
+        d.setPromocionNombre(null);
+        d.setPiezasPromocion(null);
+        d.setDescuento(0);
+        d.setTipoDescuento(DetalleVenta.TipoDescuento.NINGUNO);
+
+        if (d.tieneDescuentoManual()) {
+            double bruto = precio * d.getCantidad();
+            boolean porImporte = d.getDescuentoManualPct() == null || d.getDescuentoManualPct() <= 0;
+            double importe = d.getDescuentoManualImporte() != null ? d.getDescuentoManualImporte() : 0;
+            if (porImporte && importe >= bruto - 0.001) {
+                d.limpiarDescuentoManual();     // ya no cabe: se quita, como en los demás renglones
+            } else {
+                double descuento = !porImporte ? bruto * Math.min(100, d.getDescuentoManualPct()) / 100.0 : importe;
+                d.setDescuento(redondear(Math.max(0, descuento)));
+                d.setTipoDescuento(DetalleVenta.TipoDescuento.MANUAL);
+            }
+        }
+        d.setCostoUnitario(ProductoComun.costoUnitarioEstimado(d.getImporte(), d.getCantidad()));
+    }
+
     /** Compatibilidad: antes solo recalculaba la promoción */
     public void aplicarPromocion(DetalleVenta d) {
         recalcularPrecio(d);
@@ -195,6 +278,9 @@ public class VentaService {
     /** Activa/desactiva mayoreo en el renglón (APLICAR_MAYOREO). Quita el descuento manual. */
     public void aplicarMayoreo(DetalleVenta d, boolean activar, Collection<Autorizacion> autorizaciones) {
         if (activar) {
+            if (d.esProductoComun()) {
+                throw new NegocioException("Un producto común no tiene precio de mayoreo: cambia el precio o aplica un descuento.");
+            }
             sesionService.verificarPermiso(Permiso.APLICAR_MAYOREO, autorizaciones);
             if (d.getProducto().getPrecioMayoreo() <= 0) {
                 throw new NegocioException("\"" + d.getProducto().getDescripcion()
@@ -222,7 +308,8 @@ public class VentaService {
             if (importe != null && !Double.isFinite(importe)) {
                 throw new NegocioException("El importe de descuento no es válido.");
             }
-            if (importe != null && importe > d.getProducto().getPrecioVenta() * d.getCantidad() + 0.001) {
+            double precioBase = d.esProductoComun() ? d.getPrecioListaODefault() : d.getProducto().getPrecioVenta();
+            if (importe != null && importe > precioBase * d.getCantidad() + 0.001) {
                 throw new NegocioException("El descuento no puede ser mayor al importe del renglón.");
             }
         }
@@ -245,6 +332,7 @@ public class VentaService {
         if (cantidad > 100000) {
             throw new NegocioException("La cantidad es demasiado grande.");
         }
+        if (ProductoComun.es(producto)) return;   // admite decimales (kilos) aunque la tienda no venda a granel
         if (producto.permiteDecimales() && !configuracionService.isPermitirGranel()) {
             throw new NegocioException("La venta a granel está deshabilitada en Configuración: \""
                     + producto.getDescripcion() + "\" no se puede vender.");
@@ -316,14 +404,17 @@ public class VentaService {
             throw new NegocioException("Hay un respaldo pendiente de restaurar: cierra y vuelve a abrir el programa "
                     + "antes de seguir vendiendo (lo que se cobre ahora no quedaría en la base restaurada).");
         }
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
         Cajero cajeroSesion = sesionService.requerirSesion();
         Configuracion config = configuracionService.obtener();
         Set<String> autorizadores = new LinkedHashSet<>();
 
         // 1) Releer cada producto y recalcular precio + descuento desde la BD
         //    (los límites de cada promoción se comparten entre los renglones del ticket)
+        //    cantidadPorProducto va ORDENADO por id de producto: es el orden en que se bloquean las filas
+        //    al descontar (3b); ver cantidadesPorProducto.
         Map<Long, Producto> productosPorId      = new LinkedHashMap<>();
-        Map<Long, Double>   cantidadPorProducto = new LinkedHashMap<>();
+        Map<Long, Double>   cantidadPorProducto = new TreeMap<>();
         Map<Long, Double>   piezasPromoUsadas   = new java.util.HashMap<>();
         for (DetalleVenta d : detalles) {
             Long id = d.getProducto().getId();
@@ -374,6 +465,18 @@ public class VentaService {
         double total = calcularTotal(detalles);
         List<PagoVenta> pagosValidos = validarPagos(pagos, total, config);
         double totalPagado = redondear(pagosValidos.stream().mapToDouble(PagoVenta::getMonto).sum());
+        // 3a) Fiado: quien cobra puede vender a cuenta y el cliente existe y está activo (antes de tocar
+        //     inventario); el límite se revisa al cargar, en la base (paso 4b)
+        PagoVenta pagoACuenta = pagosValidos.stream()
+                .filter(p -> p.getFormaPago() == Venta.FormaPago.CREDITO).findFirst().orElse(null);
+        if (pagoACuenta != null) cuentaClienteService.validarParaCargo(pagoACuenta.getClienteId(), autorizaciones);
+        // 3a') Vales de la tienda: existen, no vencieron y les alcanza (antes de tocar inventario); el saldo
+        //      se descuenta con un UPDATE condicionado al guardar (paso 4c)
+        for (PagoVenta p : pagosValidos) {
+            if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) {
+                p.setValeCodigo(valeService.validarParaCobro(p.getValeCodigo(), p.getMonto()));
+            }
+        }
         Venta.FormaPago formaPrincipal = pagosValidos.stream()
                 .max(java.util.Comparator.comparingDouble(PagoVenta::getMonto))
                 .map(PagoVenta::getFormaPago).orElse(Venta.FormaPago.EFECTIVO);
@@ -382,6 +485,9 @@ public class VentaService {
         //    condicionado: con varias cajas vendiendo el mismo producto a la vez, ninguna puede
         //    llevarse piezas que otra ya vendió. Sin existencia solo con permiso/autorización; si
         //    falta el permiso, la excepción revierte la transacción completa (nada queda descontado).
+        //    Los productos se recorren en orden de id (cantidadPorProducto es un TreeMap): dos cajas que
+        //    venden los mismos productos en distinto orden bloquearían las filas en cruz y PostgreSQL
+        //    abortaría una por interbloqueo; con un orden único, la segunda solo espera a la primera.
         boolean ventaSinStock = false;
         Map<Long, double[]> existencias = new LinkedHashMap<>();   // id → {antes, después}
         for (Map.Entry<Long, Double> e : cantidadPorProducto.entrySet()) {
@@ -425,9 +531,20 @@ public class VentaService {
         venta.setTotal(total);
         venta.setPagoCon(totalPagado);
         venta.setCambio(redondear(totalPagado - total));
+        // IVA renglón por renglón (TipoIva del producto; "usar el de la tienda" = la tasa configurada):
+        // cada renglón guarda su tasa y su IVA y la venta suma las bases y los impuestos ya redondeados,
+        // así subtotal + iva = total exacto y el ticket, el corte y la factura cuadran (util/CalculoIva).
+        // La tasa de la tienda se guarda en la venta como respaldo para renglones viejos sin tasa.
         venta.setTasaIva(config.getTasaIva());
-        venta.setSubtotal(redondear(config.subtotalDe(total)));
-        venta.setIva(redondear(total - venta.getSubtotal()));
+        double subtotal = 0, ivaTotal = 0;
+        for (DetalleVenta d : detalles) {
+            me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Desglose g =
+                    me.eliassanchezfernandez.puntodeventa.util.CalculoIva.aplicar(d, config.getTasaIva());
+            subtotal += g.base();
+            ivaTotal += g.iva();
+        }
+        venta.setSubtotal(redondear(subtotal));
+        venta.setIva(redondear(ivaTotal));
         venta.setPlazoCancelacionHoras(config.getPlazoCancelacionHoras());
         venta.setCajero(cajeroRepo.findById(cajeroSesion.getId()).orElse(null));
         venta.setCajeroNombre(cajeroSesion.getNombreCompleto());
@@ -444,6 +561,23 @@ public class VentaService {
         }
         Venta guardada = ventaRepo.save(venta);
         guardada.setFolio(config.folioDe(guardada.getId()));
+
+        // 4b) Fiado: cargo a la cuenta del cliente con el límite revisado EN la base (varias cajas)
+        if (pagoACuenta != null) {
+            CuentaClienteService.Cargo cargo = cuentaClienteService.cargarVenta(pagoACuenta.getClienteId(),
+                    pagoACuenta.getMonto(), guardada.getId(), guardada.getFolio(), autorizaciones);
+            guardada.setClienteId(cargo.clienteId());
+            guardada.setClienteNombre(cargo.clienteNombre());
+            guardada.setSaldoCliente(cargo.saldoDespues());
+            if (cargo.autorizoExceso() != null && autorizadores.add(cargo.autorizoExceso())) {
+                guardada.setAutorizadaPorNombre(String.join(", ", autorizadores));
+            }
+        }
+
+        // 4c) Vales de la tienda: el saldo baja EN la base solo si alcanza (dos cajas con el mismo vale)
+        for (PagoVenta p : guardada.getPagos()) {
+            if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) valeService.usarEnVenta(guardada, p);
+        }
 
         // 5) Bitácora del inventario ya descontado
         for (Map.Entry<Long, double[]> e : existencias.entrySet()) {
@@ -480,6 +614,7 @@ public class VentaService {
     static DetalleVenta copiarDetalle(DetalleVenta d) {
         DetalleVenta c = new DetalleVenta();
         c.setProducto(d.getProducto());
+        c.setDescripcion(d.getDescripcion());
         c.setCantidad(d.getCantidad());
         c.setMayoreo(d.isMayoreo() ? Boolean.TRUE : null);
         c.setDescuentoManualPct(d.getDescuentoManualPct());
@@ -492,7 +627,7 @@ public class VentaService {
         return c;
     }
 
-    /** Pagos: montos válidos, formas habilitadas (sin crédito), suma ≥ total y no-efectivo ≤ total */
+    /** Pagos: montos válidos, formas habilitadas (el fiado, con cliente), suma ≥ total y no-efectivo ≤ total */
     private List<PagoVenta> validarPagos(List<PagoVenta> pagos, double total, Configuracion config) {
         if (pagos == null || pagos.isEmpty()) {
             throw new NegocioException("Indica cómo pagó el cliente.");
@@ -505,10 +640,23 @@ public class VentaService {
                 throw new NegocioException("El monto pagado no es válido.");
             }
             if (p.getMonto() <= 0) continue;
-            if (p.getFormaPago() == Venta.FormaPago.CREDITO) {
-                throw new NegocioException("La venta a crédito no está disponible hasta contar con el módulo de clientes.");
-            }
-            if (!config.permiteFormaPago(p.getFormaPago())) {
+            if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) {
+                // Vale de la tienda: no depende de Configuración; cada vale una sola vez por venta
+                String codigo = ValeService.normalizar(p.getValeCodigo());
+                if (codigo.isEmpty()) throw new NegocioException("Escanea o escribe el código del vale de la tienda.");
+                if (validos.stream().anyMatch(v -> v.getFormaPago() == Venta.FormaPago.VALE_COMPRA
+                        && codigo.equals(ValeService.normalizar(v.getValeCodigo())))) {
+                    throw new NegocioException("El mismo vale se puso dos veces en el pago.");
+                }
+            } else if (p.getFormaPago() == Venta.FormaPago.CREDITO) {
+                // Fiado: no depende de las formas de pago de Configuración; se anota a un solo cliente
+                if (p.getClienteId() == null) {
+                    throw new NegocioException("Elige a qué cliente se le anota la cuenta (fiado).");
+                }
+                if (validos.stream().anyMatch(v -> v.getFormaPago() == Venta.FormaPago.CREDITO)) {
+                    throw new NegocioException("Una venta solo se puede anotar a la cuenta de un cliente.");
+                }
+            } else if (!config.permiteFormaPago(p.getFormaPago())) {
                 throw new NegocioException("La forma de pago \"" + p.getFormaPago().getEtiqueta()
                         + "\" no está habilitada en Configuración.");
             }
@@ -539,6 +687,8 @@ public class VentaService {
      */
     private PagoVenta copiarPago(PagoVenta p) {
         PagoVenta nuevo = new PagoVenta(p.getFormaPago(), redondear(p.getMonto()));
+        if (p.getFormaPago() == Venta.FormaPago.CREDITO) nuevo.setClienteId(p.getClienteId());
+        if (p.getFormaPago() == Venta.FormaPago.VALE_COMPRA) nuevo.setValeCodigo(ValeService.normalizar(p.getValeCodigo()));
         if (p.getFormaPago() != Venta.FormaPago.TARJETA) return nuevo;
         boolean capturado = DatosTarjeta.hayAlgo(p.getTerminalNombre(), p.getTarjetaUltimos4(), p.getAutorizacion());
         var dispositivos = dispositivosService.obtener();
@@ -600,13 +750,30 @@ public class VentaService {
                     "La venta #%d ya no se puede cancelar: el plazo de %d horas venció el %s.",
                     v.getId(), v.getPlazoCancelacionHorasOPorDefecto(), limite.format(FMT)));
         }
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
+        if (v.getFechaUltimaDevolucion() != null) throw new NegocioException(mensajeConDevoluciones(v));
 
-        // Regresar mercancía
-        Map<Long, Double> porProducto = new LinkedHashMap<>();
-        for (DetalleVenta d : v.getDetalles()) {
-            porProducto.merge(d.getProducto().getId(), d.getCantidad(), Double::sum);
+        // 1) La marca de cancelación, PRIMERO y condicionada a que la venta siga activa EN la base. Con
+        //    varias cajas, dos pueden haber leído la venta "no cancelada" y cancelarla a la vez: solo una
+        //    afecta la fila; la otra recibe 0 y termina aquí, sin devolver mercancía ni cupo por segunda
+        //    vez (en PostgreSQL además espera en este UPDATE a que la primera termine). Si algo falla
+        //    después, la transacción revierte también esta marca.
+        Autorizacion aut = sesionService.autorizacionUsada(Permiso.CANCELAR_VENTA, autorizaciones);
+        int marcadas = ventaRepo.marcarCancelada(v.getId(), LocalDateTime.now(), motivo.trim(),
+                quien.getId(), quien.getNombreCompleto(),
+                aut != null ? aut.administrador().getId() : null, aut != null ? aut.nombreAdministrador() : null);
+        if (marcadas == 0) {
+            throw new NegocioException("Esta venta ya fue cancelada en otra caja (venta #" + v.getId()
+                    + "): la mercancía ya regresó al inventario y no se hizo nada más.");
         }
-        for (Map.Entry<Long, Double> e : porProducto.entrySet()) {
+        em.refresh(v);   // la fila ya cambió en la base; la copia en memoria se vuelve a leer
+        // Con artículos ya devueltos (DevolucionService) cancelar regresaría mercancía y dinero dos veces: se
+        // devuelve el resto. La devolución bloquea esta misma fila, así que aquí se ve aunque otra caja acabe de hacerla.
+        if (v.getFechaUltimaDevolucion() != null) throw new NegocioException(mensajeConDevoluciones(v));
+
+        // 2) Regresar mercancía: productos en orden de id, el mismo orden en que cobrar() los descuenta
+        //    (ver cantidadesPorProducto), para que dos cajas nunca se bloqueen en cruz.
+        for (Map.Entry<Long, Double> e : cantidadesPorProducto(v.getDetalles()).entrySet()) {
             Producto p = productoRepo.findById(e.getKey()).orElse(null);
             if (p == null || !p.isUsaInventario()) continue;
             productoRepo.sumar(p.getId(), e.getValue());   // atómico: no pisa ventas de otras cajas
@@ -614,29 +781,44 @@ public class VentaService {
             productoService.registrarMovimiento(p, MovimientoInventario.Tipo.CANCELACION, e.getValue(),
                     redondearCantidad(despues - e.getValue()), despues, "Cancelación venta #" + v.getId(), null, null, v.getId());
         }
-        // Devolver cupo de promociones "hasta agotar"
+        // 3) Devolver cupo de promociones "hasta agotar"
         for (DetalleVenta d : v.getDetalles()) {
             if (d.getPromocionId() != null && d.getPiezasPromocion() != null) {
                 promocionService.registrarUso(d.getPromocionId(), -d.getPiezasPromocion());
             }
         }
 
-        Autorizacion aut = sesionService.autorizacionUsada(Permiso.CANCELAR_VENTA, autorizaciones);
-        v.setCancelada(true);
-        v.setFechaCancelacion(LocalDateTime.now());
-        v.setMotivoCancelacion(motivo.trim());
-        v.setCanceladaPorId(quien.getId());
-        v.setCanceladaPorNombre(quien.getNombreCompleto());
-        if (aut != null) {
-            v.setCancelacionAutorizadaPorId(aut.administrador().getId());
-            v.setCancelacionAutorizadaPor(aut.nombreAdministrador());
-        }
-        Venta guardada = ventaRepo.save(v);
+        // 4) Fiado: lo que se anotó a la cuenta del cliente se le quita
+        double revertido = cuentaClienteService.revertirPorCancelacion(v.getId(), v.getFolio(), motivo.trim());
+        // 5) Vales de la tienda: lo que se pagó con un vale regresa al vale
+        valeService.revertirPorCancelacion(v.getId(), v.getFolioMostrado());
 
         auditoriaService.registrar(quien, "VENTA_CANCELADA",
-                "Venta #" + v.getId() + " — " + motivo.trim(), aut);
+                "Venta #" + v.getId() + " — " + motivo.trim()
+                        + (revertido > 0 ? " (se quitaron " + Moneda.formato(revertido) + " de la cuenta de "
+                                + (v.getClienteNombre() != null ? v.getClienteNombre() : "el cliente") + ")" : ""), aut);
         if (aut != null) aut.consumir();
-        return guardada;
+        return v;
+    }
+
+    private static String mensajeConDevoluciones(Venta v) {
+        return "La venta #" + v.getId() + " ya tiene artículos devueltos: en lugar de cancelarla, "
+                + "devuelve lo que falta con «Devolver artículos…».";
+    }
+
+    /**
+     * Piezas por producto de unos renglones (sumando los repetidos), en ORDEN DE BLOQUEO: id de
+     * producto ascendente. Cobrar, cancelar y recibir órdenes tocan las filas de productos en este
+     * mismo orden; si dos transacciones bloquearan los mismos productos en órdenes distintos, con
+     * PostgreSQL una esperaría a la otra en cruz (interbloqueo) y el servidor abortaría una.
+     */
+    static Map<Long, Double> cantidadesPorProducto(Collection<DetalleVenta> detalles) {
+        Map<Long, Double> porProducto = new TreeMap<>();
+        for (DetalleVenta d : detalles) {
+            if (d.getProducto() == null || d.getProducto().getId() == null) continue;
+            porProducto.merge(d.getProducto().getId(), d.getCantidad(), Double::sum);
+        }
+        return porProducto;
     }
 
     // ── Historial ─────────────────────────────────────────────────────────
@@ -667,12 +849,17 @@ public class VentaService {
 
     // ── Corte del día ─────────────────────────────────────────────────────
 
-    /** Total vendido hoy en ESTA caja sin contar canceladas */
+    /**
+     * Total vendido hoy en ESTA caja sin contar canceladas, menos lo reembolsado hoy en esta caja
+     * por devoluciones (regla de caja, como las «ventas netas» del corte).
+     */
+    @Transactional(readOnly = true)
     public double totalVentasHoy() {
         LocalDateTime inicio = LocalDate.now().atStartOfDay();
         LocalDateTime fin    = inicio.plusDays(1);
         Double total = ventaRepo.sumTotalEntre(inicio, fin, identidadCaja.numero());
-        return total != null ? total : 0.0;
+        Object[] devs = devolucionRepo.resumenEntre(inicio, fin, identidadCaja.numero()).get(0);
+        return redondear((total != null ? total : 0.0) - ((Number) devs[1]).doubleValue());
     }
 
     /**
@@ -708,6 +895,7 @@ public class VentaService {
         ResumenCorte r = resumenCompletoEntre(inicio, fin, caja);
         if (!sesionService.tienePermiso(Permiso.VER_GANANCIAS)) {
             r.ganancia = 0;
+            r.gananciaProductosComunes = 0;
             r.gananciaVisible = false;
         }
         return r;
@@ -757,9 +945,61 @@ public class VentaService {
         r.subtotal      = ((Number) activas[2]).doubleValue();
         r.iva           = ((Number) activas[3]).doubleValue();
 
+        // IVA por tasa (16 %, 0 %, exento) sumado en SQL sobre los renglones; los renglones anteriores
+        // al IVA por producto entran con la tasa de su venta (util/CalculoIva). NETO: se le restan las
+        // devoluciones hechas en el periodo (día de la devolución, como el efectivo del corte); lo
+        // devuelto de cada tasa queda en devolucionesPorTasaIva para la nota "(incluye −$X …)".
+        Map<String, double[]> tasas = new LinkedHashMap<>();   // clave → {tasa, exento, importe, iva, importeDev, ivaDev}
+        for (Object[] f : ventaRepo.ivaPorTasa(inicio, fin, caja)) {
+            double[] t = grupoTasa(tasas, f);
+            t[2] += ((Number) f[2]).doubleValue();
+            t[3] += ((Number) f[3]).doubleValue();
+        }
+        for (Object[] f : devolucionRepo.ivaPorTasaEntre(inicio, fin, caja)) {
+            double[] t = grupoTasa(tasas, f);
+            t[4] += ((Number) f[2]).doubleValue();
+            t[5] += ((Number) f[3]).doubleValue();
+        }
+        for (double[] t : tasas.values()) {
+            double importe = redondear(t[2] - t[4]), ivaGrupo = redondear(t[3] - t[5]);
+            double importeDev = redondear(t[4]), ivaDev = redondear(t[5]);
+            boolean exento = t[1] > 0;
+            if (Math.abs(importe) >= 0.005 || Math.abs(ivaGrupo) >= 0.005 || importeDev >= 0.005) {
+                // base = importe − IVA (la consulta suma importes con IVA incluido)
+                r.porTasaIva.add(new me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo(
+                        t[0], exento, redondear(importe - ivaGrupo), ivaGrupo));
+            }
+            if (importeDev >= 0.005) {
+                r.devolucionesPorTasaIva.add(new me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo(
+                        t[0], exento, redondear(importeDev - ivaDev), ivaDev));
+            }
+        }
+        me.eliassanchezfernandez.puntodeventa.util.CalculoIva.ordenar(r.porTasaIva);
+        me.eliassanchezfernandez.puntodeventa.util.CalculoIva.ordenar(r.devolucionesPorTasaIva);
+
         Object[] canceladas = ventaRepo.resumenCanceladas(inicio, fin, caja).get(0);
         r.numCanceladas   = ((Number) canceladas[0]).intValue();
         r.totalCanceladas = ((Number) canceladas[1]).doubleValue();
+
+        // Devoluciones de artículos hechas en el periodo en esta caja (DevolucionService): restan en las ventas
+        // netas y en la ganancia (lo reembolsado menos el costo de lo que regresó al anaquel; lo de merma se pierde).
+        // El efectivo reembolsado ya resta en el esperado como salida de caja «Devolución al cliente».
+        Object[] devs = devolucionRepo.resumenEntre(inicio, fin, caja).get(0);
+        r.numDevoluciones   = ((Number) devs[0]).intValue();
+        r.totalDevoluciones = redondear(((Number) devs[1]).doubleValue());
+        r.ivaDevoluciones   = redondear(((Number) devs[2]).doubleValue());
+        r.devolucionesACuenta = redondear(((Number) devs[3]).doubleValue());
+        r.devolucionesEnVale  = redondear(((Number) devs[4]).doubleValue());
+        double[] emitidos = valeService.emitidosEntre(inicio, fin, caja);
+        r.numValesEmitidos = (int) emitidos[0];
+        r.valesEmitidos    = emitidos[1];
+        if (r.numDevoluciones > 0) {
+            Double costo = devolucionRepo.costoRecuperadoEntre(inicio, fin, caja);
+            r.ganancia -= r.totalDevoluciones - (costo != null ? costo : 0.0);
+            // Subtotal e IVA del corte, netos: lo que se queda la tienda y el IVA que realmente cobró
+            r.subtotal -= r.totalDevoluciones - r.ivaDevoluciones;
+            r.iva      -= r.ivaDevoluciones;
+        }
 
         // El cambio sale del efectivo; las ventas anteriores al pago dividido van todas a su forma de pago
         for (Object[] f : ventaRepo.pagosPorForma(inicio, fin, Venta.FormaPago.EFECTIVO, caja)) {
@@ -783,6 +1023,46 @@ public class VentaService {
             r.porDepartamento.merge(nombre, importe, Double::sum);
             r.ganancia += importe - ((Number) f[2]).doubleValue();
         }
+        // Productos comunes (fuera del catálogo, Ctrl+P): no tienen departamento, así que van en "Sin
+        // departamento"; se sacan a su propio renglón y se informa su ganancia estimada (ProductoComun)
+        Object[] comunes = ventaRepo.importeProductoComun(inicio, fin, caja, ProductoComun.CODIGO).get(0);
+        double comunesVendidos = redondear(((Number) comunes[0]).doubleValue());
+        r.gananciaProductosComunes = redondear(comunesVendidos - ((Number) comunes[1]).doubleValue());
+
+        // Devoluciones del periodo por departamento (día de la devolución): restan del departamento del
+        // producto devuelto y quedan aparte para la nota "(incluye −$X de devoluciones)"
+        if (r.numDevoluciones > 0) {
+            for (Object[] f : devolucionRepo.importesPorDepartamentoEntre(inicio, fin, caja)) {
+                String nombre = f[0] != null ? (String) f[0] : "Sin departamento";
+                r.devolucionesPorDepartamento.merge(nombre, ((Number) f[1]).doubleValue(), Double::sum);
+            }
+        }
+        double comunesDevueltos = 0;
+        if (r.numDevoluciones > 0) {
+            Double dev = devolucionRepo.importeProductoComunEntre(inicio, fin, caja, ProductoComun.CODIGO);
+            comunesDevueltos = redondear(dev != null ? dev : 0.0);
+        }
+        // Productos comunes: no tienen departamento ("Sin departamento"), se sacan a su propio renglón
+        if (comunesVendidos > 0.004 || comunesDevueltos > 0.004) {
+            moverAComunes(r.porDepartamento, comunesVendidos);
+            moverAComunes(r.devolucionesPorDepartamento, comunesDevueltos);
+        }
+        // Netos: venta del periodo menos lo devuelto en el periodo; un departamento sin ventas pero con
+        // devoluciones aparece en negativo. Se ordenan de nuevo de mayor a menor.
+        Map<String, Double> netos = new LinkedHashMap<>(r.porDepartamento);
+        r.devolucionesPorDepartamento.replaceAll((k, v) -> redondear(v));
+        r.devolucionesPorDepartamento.values().removeIf(v -> v < 0.005);
+        r.devolucionesPorDepartamento.forEach((k, v) -> netos.merge(k, -v, Double::sum));
+        r.porDepartamento.clear();
+        netos.entrySet().stream()
+                .map(e -> Map.entry(e.getKey(), redondear(e.getValue())))
+                .filter(e -> Math.abs(e.getValue()) >= 0.005 || r.devolucionesPorDepartamento.containsKey(e.getKey()))
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .forEach(e -> r.porDepartamento.put(e.getKey(), e.getValue()));
+        // Productos comunes y su ganancia estimada, netos de lo devuelto (como la ganancia del corte,
+        // que resta todo lo reembolsado de lo que no regresa al anaquel)
+        r.productosComunes = redondear(comunesVendidos - comunesDevueltos);
+        r.gananciaProductosComunes = redondear(r.gananciaProductosComunes - comunesDevueltos);
         r.ventasTotales   = redondear(r.ventasTotales);
         r.subtotal        = redondear(r.subtotal);
         r.iva             = redondear(r.iva);
@@ -791,6 +1071,7 @@ public class VentaService {
         r.credito         = redondear(r.credito);
         r.transferencia   = redondear(r.transferencia);
         r.vales           = redondear(r.vales);
+        r.valesTienda     = redondear(r.valesTienda);
         r.ganancia        = redondear(r.ganancia);
         r.totalCanceladas = redondear(r.totalCanceladas);
         r.productosBajos.addAll(productoService.productosConStockBajo());
@@ -803,6 +1084,26 @@ public class VentaService {
         return r;
     }
 
+    /** Grupo de tasa de IVA {tasa, exento(1/0), importe, iva, importeDev, ivaDev} para la fila [tasa, exento, …] */
+    private static double[] grupoTasa(Map<String, double[]> tasas, Object[] f) {
+        double tasa = ((Number) f[0]).doubleValue();
+        boolean exento = Boolean.TRUE.equals(f[1]);
+        String clave = Math.round(tasa * 10000) + (exento ? "E" : "");
+        return tasas.computeIfAbsent(clave, k -> new double[] { tasa, exento ? 1 : 0, 0, 0, 0, 0 });
+    }
+
+    /** Pasa {@code monto} de "Sin departamento" al renglón de productos comunes (no tienen departamento) */
+    private static void moverAComunes(Map<String, Double> porDepartamento, double monto) {
+        if (monto <= 0.004) return;
+        Double sinDepto = porDepartamento.get("Sin departamento");
+        if (sinDepto != null) {
+            double resto = redondear(sinDepto - monto);
+            if (resto > 0.004) porDepartamento.put("Sin departamento", resto);
+            else porDepartamento.remove("Sin departamento");
+        }
+        porDepartamento.put(ResumenCorte.DEPARTAMENTO_PRODUCTOS_COMUNES, monto);
+    }
+
     private static void sumarPago(ResumenCorte r, Venta.FormaPago forma, double monto) {
         if (forma == null) forma = Venta.FormaPago.EFECTIVO;
         switch (forma) {
@@ -811,6 +1112,7 @@ public class VentaService {
             case CREDITO  -> r.credito  += monto;
             case TRANSFERENCIA -> r.transferencia += monto;
             case VALES    -> r.vales    += monto;
+            case VALE_COMPRA -> r.valesTienda += monto;
         }
     }
 
@@ -821,21 +1123,87 @@ public class VentaService {
         /** Periodo [inicio, fin) que se sumó */
         public LocalDateTime inicio;
         public LocalDateTime fin;
+        /** Ventas cobradas en el periodo (BRUTAS: las devoluciones van aparte, ver {@link #getVentasNetas}) */
         public double ventasTotales;
+        /**
+         * Subtotal e IVA NETOS: lo de las ventas del periodo menos lo de las devoluciones hechas en
+         * el periodo (así subtotal + IVA = ventas netas). Lo devuelto: {@link #ivaDevoluciones}.
+         */
         public double subtotal;
         public double iva;
+        /**
+         * Desglose del IVA por tasa (gravado 16 %, tasa 0 %, exento): base (sin IVA) e impuesto de cada
+         * grupo, NETOS de las devoluciones del periodo. Con una sola tasa el corte no lo muestra (ya
+         * está en {@link #iva}).
+         */
+        public final List<me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo> porTasaIva = new ArrayList<>();
+        /** Lo devuelto en el periodo por tasa (base e IVA, en positivo): la nota "(incluye −$X …)" */
+        public final List<me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo> devolucionesPorTasaIva = new ArrayList<>();
         public double efectivo;
         public double tarjeta;
         public double credito;
         public double transferencia;
         public double vales;
         public double ganancia;
+        /**
+         * Importe vendido en "productos comunes" (artículos fuera del catálogo tecleados con Ctrl+P) y la
+         * parte de {@link #ganancia} que viene de ellos: es una estimación del 20 % (ProductoComun), no un
+         * costo real, y la pantalla lo aclara.
+         */
+        public double productosComunes;
+        public double gananciaProductosComunes;
         public int    numVentas;
         public int    numCanceladas;
         public double totalCanceladas;
+        /** Devoluciones de artículos hechas en el periodo (no cambian {@link #ventasTotales}; ver {@link #getVentasNetas}) */
+        public int    numDevoluciones;
+        public double totalDevoluciones;
+        /** IVA incluido en lo reembolsado */
+        public double ivaDevoluciones;
+        /**
+         * Parte de {@link #totalDevoluciones} que se descontó de cuentas de clientes (ventas a cuenta) en
+         * lugar de darse en efectivo: no sale del cajón (el efectivo reembolsado ya está en las salidas)
+         */
+        public double devolucionesACuenta;
+        /** Parte de {@link #totalDevoluciones} que se entregó como vale de compra (no salió del cajón) */
+        public double devolucionesEnVale;
+        /** Vales de compra entregados en el periodo (no sale efectivo) */
+        public int    numValesEmitidos;
+        public double valesEmitidos;
+        /** Cobrado con vales de la tienda (VALE_COMPRA): no es dinero que entre al cajón */
+        public double valesTienda;
+
+        /** Ventas del periodo menos lo reembolsado por devoluciones de artículos */
+        public double getVentasNetas() { return redondear(ventasTotales - totalDevoluciones); }
         /** false cuando quien consulta no tiene VER_GANANCIAS (ganancia = 0) */
         public boolean gananciaVisible = true;
+        /** Nombre con el que los productos comunes aparecen en {@link #porDepartamento} */
+        public static final String DEPARTAMENTO_PRODUCTOS_COMUNES = "Productos comunes (sin catálogo)";
+        /** Ventas por departamento NETAS de las devoluciones del periodo (de mayor a menor; puede haber negativos) */
         public final Map<String, Double> porDepartamento = new LinkedHashMap<>();
+        /** Lo devuelto en el periodo por departamento (en positivo), para la nota "(incluye −$X de devoluciones)" */
+        public final Map<String, Double> devolucionesPorDepartamento = new LinkedHashMap<>();
+
+        /** Lo devuelto de un grupo de {@link #porTasaIva} (base + IVA, con IVA incluido); 0 si nada */
+        public double devueltoDeTasa(me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo g) {
+            for (me.eliassanchezfernandez.puntodeventa.util.CalculoIva.Grupo d : devolucionesPorTasaIva) {
+                if (d.exento() == g.exento() && Math.abs(d.tasa() - g.tasa()) < 0.00005) return redondear(d.base() + d.iva());
+            }
+            return 0;
+        }
+
+        /** "  (incluye −$X de devoluciones)" si se devolvió algo; "" si no (pantalla de Corte) */
+        public static String notaDevoluciones(double devuelto) {
+            return devuelto >= 0.005
+                    ? "  (incluye −" + me.eliassanchezfernandez.puntodeventa.util.Moneda.formato(devuelto) + " de devoluciones)"
+                    : "";
+        }
+
+        /** Lo devuelto de un departamento de {@link #porDepartamento}; 0 si nada */
+        public double devueltoDeDepartamento(String nombre) {
+            return devolucionesPorDepartamento.getOrDefault(nombre, 0.0);
+        }
+
         public final List<Producto> productosBajos = new ArrayList<>();
         /** Cobros con tarjeta del día por terminal (los capturados a mano en Ventas) */
         public final List<TarjetaTerminal> tarjetaPorTerminal = new ArrayList<>();

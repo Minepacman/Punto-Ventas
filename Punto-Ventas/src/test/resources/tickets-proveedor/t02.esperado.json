@@ -1,0 +1,77 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Gamesa",
+      "folio": "858146336010",
+      "fecha": null,
+      "lineas": [
+        {
+          "codigoProveedor": "300062064",
+          "descripcion": "EMPERADOR SENZO DTS RG3 117GRX48X1",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 48,
+          "precioUnitario": 17.26,
+          "descuento": null,
+          "importe": 34.52
+        },
+        {
+          "codigoProveedor": "300062346",
+          "descripcion": "GIRO DTS NI RF 114GRX44X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 44,
+          "precioUnitario": 17.26,
+          "descuento": null,
+          "importe": 17.26
+        },
+        {
+          "codigoProveedor": "300058269",
+          "descripcion": "CHOKIS CLASICA FU NF 76GRX45X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 45,
+          "precioUnitario": 17.26,
+          "descuento": null,
+          "importe": 17.26
+        },
+        {
+          "codigoProveedor": "300060502",
+          "descripcion": "MARIAS AZU RG2 144GRX22X1",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": 22,
+          "precioUnitario": 14.68,
+          "descuento": null,
+          "importe": 44.04
+        },
+        {
+          "codigoProveedor": "300062421",
+          "descripcion": "RICANELAS DTS 113GRX34X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 34,
+          "precioUnitario": 15.69,
+          "descuento": null,
+          "importe": 15.69
+        },
+        {
+          "codigoProveedor": "300061649",
+          "descripcion": "MARIAS DORADAS 199GRX15X1",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 15,
+          "precioUnitario": 25.11,
+          "descuento": null,
+          "importe": 50.22
+        }
+      ],
+      "subtotal": 178.99,
+      "descuento": 0.0,
+      "impuestos": 14.32,
+      "cargos": null,
+      "total": 193.31,
+      "notas": "Encabezado fuera de la foto; precios sin IEPS (8 %)."
+    }
+  ]
+}

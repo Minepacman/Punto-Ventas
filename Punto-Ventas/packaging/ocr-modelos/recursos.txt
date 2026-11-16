@@ -1,0 +1,9 @@
+# Archivos de PaddleOCR que el programa baja bajo demanda (ocr/RecursosPpOcr). Una línea por archivo:
+#   <sha256> <bytes> <nombre> <url de la fuente original>
+# .github/workflows/ocr-modelos.yml los baja de la fuente original, revisa tamaño y SHA-256 y los sube a la release
+# "ocr-modelos-1" de este repositorio (el espejo que el programa prueba primero). EspejoOcrModelosTest exige que
+# esta lista y RecursosPpOcr digan lo mismo. Si cambia un modelo: cambiar los dos y usar una etiqueta NUEVA
+# (ocr-modelos-2) para no reemplazar archivos que las versiones ya instaladas esperan con su suma vieja.
+854b4fae9b5202371eb8cd978d2e872eafb75664ef2db2f3c91f2b095b518b62 50942631 onnxruntime-1.31.1.jar https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime/1.31.1/onnxruntime-1.31.1.jar
+090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f 9929594 PP-OCRv6_det_small.onnx https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx
+6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884 21234383 PP-OCRv6_rec_small.onnx https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_small.onnx

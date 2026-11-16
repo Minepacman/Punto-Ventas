@@ -528,7 +528,7 @@ public class ProductoImagenService {
      * Orientación EXIF (1..8) de un JPEG, o 1 si no es JPEG o no la trae. Lee solo el segmento
      * APP1 "Exif": cabecera TIFF (orden de bytes), IFD0 y la etiqueta 0x0112. Cualquier rareza = 1.
      */
-    static int orientacionExif(byte[] b) {
+    public static int orientacionExif(byte[] b) {
         try {
             if (b.length < 4 || (b[0] & 0xFF) != 0xFF || (b[1] & 0xFF) != 0xD8) return 1;
             int pos = 2;

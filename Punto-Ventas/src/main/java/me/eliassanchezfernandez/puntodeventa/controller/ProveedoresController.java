@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -49,6 +50,7 @@ public class ProveedoresController implements Initializable {
     @FXML private TableColumn<Proveedor, String> colContacto;
     @FXML private TableColumn<Proveedor, String> colTelefono;
     @FXML private TableColumn<Proveedor, String> colVisita;
+    @FXML private TableColumn<Proveedor, String> colPreventa;
     @FXML private TableColumn<Proveedor, String> colEstado;
     @FXML private Label lblTitulo;
     @FXML private TextField txtNombre;
@@ -56,6 +58,7 @@ public class ProveedoresController implements Initializable {
     @FXML private TextField txtTelefono;
     @FXML private TextField txtContacto;
     @FXML private CheckBox chkLun, chkMar, chkMie, chkJue, chkVie, chkSab, chkDom;
+    @FXML private CheckBox chkPreLun, chkPreMar, chkPreMie, chkPreJue, chkPreVie, chkPreSab, chkPreDom;
     @FXML private TextArea txtNotas;
     @FXML private Button btnGuardar;
     @FXML private Button btnActivo;
@@ -65,16 +68,22 @@ public class ProveedoresController implements Initializable {
 
     private final ObservableList<Proveedor> lista = FXCollections.observableArrayList();
     private Map<DayOfWeek, CheckBox> checks;
+    private Map<DayOfWeek, CheckBox> checksPreventa;
     private Proveedor seleccionado;
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Encabezados completos aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tabla);
         checks = Map.of(DayOfWeek.MONDAY, chkLun, DayOfWeek.TUESDAY, chkMar, DayOfWeek.WEDNESDAY, chkMie,
                 DayOfWeek.THURSDAY, chkJue, DayOfWeek.FRIDAY, chkVie, DayOfWeek.SATURDAY, chkSab, DayOfWeek.SUNDAY, chkDom);
+        checksPreventa = Map.of(DayOfWeek.MONDAY, chkPreLun, DayOfWeek.TUESDAY, chkPreMar, DayOfWeek.WEDNESDAY, chkPreMie,
+                DayOfWeek.THURSDAY, chkPreJue, DayOfWeek.FRIDAY, chkPreVie, DayOfWeek.SATURDAY, chkPreSab, DayOfWeek.SUNDAY, chkPreDom);
         colNombre.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getNombre()));
         colContacto.setCellValueFactory(c -> new SimpleStringProperty(nz(c.getValue().getContacto())));
         colTelefono.setCellValueFactory(c -> new SimpleStringProperty(nz(c.getValue().getTelefono())));
         colVisita.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().etiquetaDias()));
+        colPreventa.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().etiquetaPreventa()));
         colEstado.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().isActivo() ? "Activo" : "Desactivado"));
         tabla.setItems(lista);
         tabla.setPlaceholder(new Label("Aún no hay proveedores. Captura el primero a la derecha."));
@@ -126,6 +135,7 @@ public class ProveedoresController implements Initializable {
         txtContacto.clear();
         txtNotas.clear();
         checks.values().forEach(c -> c.setSelected(false));
+        checksPreventa.values().forEach(c -> c.setSelected(false));
         btnActivo.setVisible(false);
         btnActivo.setManaged(false);
     }
@@ -140,6 +150,8 @@ public class ProveedoresController implements Initializable {
         txtNotas.setText(nz(p.getNotas()));
         Set<DayOfWeek> dias = p.getDias();
         checks.forEach((d, c) -> c.setSelected(dias.contains(d)));
+        Set<DayOfWeek> preventa = p.getPreventa();
+        checksPreventa.forEach((d, c) -> c.setSelected(preventa.contains(d)));
         btnActivo.setVisible(true);
         btnActivo.setManaged(true);
         btnActivo.setText(p.isActivo() ? "Desactivar" : "Reactivar");
@@ -148,9 +160,12 @@ public class ProveedoresController implements Initializable {
     @FXML private void onGuardar() {
         Set<DayOfWeek> dias = EnumSet.noneOf(DayOfWeek.class);
         checks.forEach((d, c) -> { if (c.isSelected()) dias.add(d); });
+        Set<DayOfWeek> preventa = EnumSet.noneOf(DayOfWeek.class);
+        checksPreventa.forEach((d, c) -> { if (c.isSelected()) preventa.add(d); });
         try {
             Proveedor g = proveedorService.guardar(seleccionado != null ? seleccionado.getId() : null,
-                    txtNombre.getText(), txtRfc.getText(), txtTelefono.getText(), txtContacto.getText(), dias, txtNotas.getText());
+                    txtNombre.getText(), txtRfc.getText(), txtTelefono.getText(), txtContacto.getText(), dias, preventa,
+                    txtNotas.getText());
             seleccionado = g;
             recargar();
             Ventanas.alerta(Alert.AlertType.INFORMATION, "Proveedores", "\"" + g.getNombre() + "\" se guardó.");

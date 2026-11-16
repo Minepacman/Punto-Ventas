@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -93,6 +94,8 @@ public class UsuariosController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Encabezados completos aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaUsuarios);
         colUsuario.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getUsuario()));
         colNombre.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getNombreCompleto()));
         colRol.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getRol().getEtiqueta()));
@@ -114,12 +117,28 @@ public class UsuariosController implements Initializable {
             }
         });
 
-        // Un CheckBox por permiso
+        // Un CheckBox por permiso, en dos columnas: el formulario cabe en 1024×768 casi sin desplazar
+        javafx.scene.layout.GridPane rejilla = new javafx.scene.layout.GridPane();
+        rejilla.setHgap(12);
+        rejilla.setVgap(6);
+        for (int c = 0; c < 2; c++) {
+            javafx.scene.layout.ColumnConstraints col = new javafx.scene.layout.ColumnConstraints();
+            col.setPercentWidth(50);
+            col.setFillWidth(true);
+            rejilla.getColumnConstraints().add(col);
+        }
+        int i = 0;
         for (Permiso p : Permiso.values()) {
             CheckBox chk = new CheckBox(p.getDescripcion());
+            chk.setWrapText(true);
+            chk.setMaxWidth(Double.MAX_VALUE);
             checksPermiso.put(p, chk);
-            vboxPermisos.getChildren().add(chk);
+            // Permisos de funciones ocultas (FuncionesOcultas): la casilla existe y guarda su valor, pero no se muestra
+            if (!me.eliassanchezfernandez.puntodeventa.util.FuncionesOcultas.permisoVisible(p)) continue;
+            rejilla.add(chk, i % 2, i / 2);
+            i++;
         }
+        vboxPermisos.getChildren().add(rejilla);
 
         tablaUsuarios.getSelectionModel().selectedItemProperty().addListener((o, a, sel) -> {
             if (sel != null) cargarEnFormulario(sel);

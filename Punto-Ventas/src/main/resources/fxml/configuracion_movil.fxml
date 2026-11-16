@@ -1,12 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
+<?import atlantafx.base.controls.ToggleSwitch?>
 
 <!--
     configuracion_movil.fxml  –  Acceso móvil (servidor web local para teléfonos)
     Controlador: ConfiguracionMovilController.java
+
+    Orden pensado para quien abre la tienda: 1) el código QR grande con la dirección,
+    2) el interruptor "Permitir acceso desde teléfonos" (se aplica al momento),
+    3) "Avisos en el teléfono": QR que abre el asistente «Recibir avisos en este teléfono» (#/avisos) y la
+    huella de la CA local, 4) los teléfonos conectados (con su estado de avisos, "Enviar prueba" y "Cerrar"), 5) Opciones avanzadas (nombre .local,
+    puerto fijo, puerto HTTPS, regenerar certificado, teléfonos con notificaciones, direcciones).
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionMovilController"
@@ -14,86 +22,160 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox styleClass="form-panel" spacing="14">
-                <padding><Insets topRightBottomLeft="24"/></padding>
+            <VBox styleClass="form-panel" spacing="10">
+                <padding><Insets top="14" right="22" bottom="10" left="22"/></padding>
 
-                <Label text="Acceso móvil" styleClass="form-section-title"/>
-                <Separator/>
-
-                <VBox spacing="2">
-                    <CheckBox fx:id="chkActivo" text="Activar el acceso desde teléfonos"/>
-                    <Label text="Con esto encendido, los teléfonos conectados a la misma red Wi-Fi pueden abrir la página y entrar con su usuario y contraseña. Apagado por defecto; el cambio se aplica de inmediato."
-                           wrapText="true" styleClass="hint"/>
-                </VBox>
-
-                <Label text="Aviso de seguridad: la conexión es HTTP simple, sin cifrar. Usa el acceso móvil solo en la red Wi-Fi privada de la tienda (nunca en una red de clientes o pública): la contraseña viaja sin protección dentro de esa red. Solo se aceptan conexiones de la red local."
-                       wrapText="true" styleClass="field-error-label"/>
-
-                <HBox spacing="10" alignment="CENTER_LEFT">
-                    <Button text="Aplicar" onAction="#onAplicar" styleClass="button-primary" prefHeight="34"/>
-                    <Label fx:id="lblEstado"/>
-                </HBox>
-                <Label text="El puerto se elige solo: se usa el último que funcionó y, si está ocupado, otro libre."
-                       wrapText="true" styleClass="hint"/>
-
-                <HBox fx:id="cajaCambio" spacing="10" alignment="CENTER_LEFT" visible="false" managed="false">
-                    <Label fx:id="lblCambio" wrapText="true" styleClass="field-error-label" HBox.hgrow="ALWAYS"/>
+                <!-- Aviso: la dirección cambió y los QR impresos ya no sirven -->
+                <HBox fx:id="cajaCambio" styleClass="callout, callout-warning" spacing="10" alignment="CENTER_LEFT" visible="false" managed="false">
+                    <Label fx:id="lblCambio" wrapText="true" HBox.hgrow="ALWAYS"/>
                     <Button text="Entendido" onAction="#onEntendidoCambio"/>
                 </HBox>
 
-                <Label text="Nombre fácil de recordar (opcional)" styleClass="form-section-title"/>
-                <HBox spacing="8" alignment="CENTER_LEFT">
-                    <TextField fx:id="txtNombre" promptText="mitienda" prefWidth="200"/>
-                    <Label text=".local"/>
-                    <Button text="Sugerir" onAction="#onSugerirNombre"/>
-                </HBox>
-                <Label text="Solo letras minúsculas sin acento, números y guiones (1 a 40 caracteres). Los teléfonos podrán abrir http://nombre.local:puerto/ además de la dirección con números."
-                       wrapText="true" styleClass="hint"/>
-                <Label text="Compatibilidad: iPhone, iPad y Mac lo reconocen siempre; Windows 10 y 11 también; Linux necesita avahi (la mayoría de los escritorios lo incluye). En Android depende de la versión: en Android 12 o más reciente con Chrome suele funcionar, en versiones anteriores puede no abrir. Por eso el código QR usa la dirección con números, que funciona en todos."
-                       wrapText="true" styleClass="hint"/>
-                <CheckBox fx:id="chkQrLocal" text="Usar el nombre en el código QR (algunos Android no lo abrirán)"/>
-                <Label fx:id="lblNombreEstado" wrapText="true" styleClass="hint"/>
+                <!-- 1 y 2 a la izquierda (QR + interruptor), 3 a la derecha: cabe en 1024×768 -->
+                <HBox spacing="22">
+                    <VBox spacing="10" prefWidth="440" minWidth="0" HBox.hgrow="ALWAYS">
+                        <!-- 1. Código QR -->
+                        <Label text="Código QR para entrar desde el teléfono" styleClass="form-section-title"/>
+                        <VBox fx:id="cajaQr" spacing="8" alignment="CENTER"/>
 
-                <TitledPane text="Opciones avanzadas" expanded="false" animated="false">
-                    <VBox spacing="8">
+                        <!-- 2. Interruptor -->
+                        <HBox styleClass="fila-interruptor">
+                            <ToggleSwitch fx:id="swActivo"/>
+                            <VBox spacing="1" HBox.hgrow="ALWAYS">
+                                <Label text="Permitir acceso desde teléfonos" styleClass="interruptor-titulo"/>
+                                <Label fx:id="lblEstado" text="Apagado" wrapText="true" styleClass="hint"/>
+                            </VBox>
+                        </HBox>
+                        <Label text="Los teléfonos conectados al mismo Wi-Fi abren la página y entran con su usuario y contraseña. El cambio se aplica al momento."
+                               wrapText="true" styleClass="hint"/>
+                        <HBox styleClass="callout, callout-warning" alignment="CENTER_LEFT">
+                            <Label text="Úsalo solo en el Wi-Fi privado de la tienda (con contraseña), nunca en la red de los clientes ni en una pública: la conexión no va cifrada. Solo se aceptan teléfonos de la red local."
+                                   wrapText="true" HBox.hgrow="ALWAYS"/>
+                        </HBox>
+                    </VBox>
+
+                    <Separator orientation="VERTICAL"/>
+
+                    <!-- 3. Avisos en el teléfono: el QR abre el asistente paso a paso de la página móvil -->
+                    <VBox spacing="10" prefWidth="420" minWidth="0" HBox.hgrow="ALWAYS">
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <Label text="Activar avisos en un teléfono" styleClass="form-section-title"/>
+                            <EtiquetaBeta funcion="AVISOS_TELEFONO"/>
+                        </HBox>
+                        <Label text="Escanea este código con el teléfono: abre un asistente que te lleva paso a paso (iPhone o Android) para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen aunque la página esté cerrada. Se hace una sola vez por teléfono."
+                               wrapText="true" styleClass="hint"/>
+                        <HBox spacing="14" alignment="TOP_LEFT">
+                            <VBox fx:id="cajaQrCertificado" spacing="6" alignment="CENTER"/>
+                            <VBox spacing="8" HBox.hgrow="ALWAYS" minWidth="0">
+                                <Label fx:id="lblHttpsEstado" text="" wrapText="true" styleClass="hint"/>
+                                <Label text="Esta computadora necesita internet para enviar los avisos. Sin activarlos, el teléfono sigue viendo todo lo demás."
+                                       wrapText="true" styleClass="hint"/>
+                            </VBox>
+                        </HBox>
+                        <Label text="Clave del certificado (debe coincidir con la que muestra el teléfono):" styleClass="field-label" wrapText="true"/>
+                        <HBox spacing="12" alignment="CENTER_LEFT">
+                            <Label fx:id="lblHuella" text="" styleClass="huella-certificado" minWidth="-Infinity"/>
+                            <Label fx:id="lblHuellaCompleta" text="" wrapText="true" styleClass="hint" HBox.hgrow="ALWAYS" minWidth="0"/>
+                        </HBox>
+                    </VBox>
+                </HBox>
+
+                <Separator/>
+
+                <!-- 4. Teléfonos conectados -->
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="Teléfonos conectados" styleClass="form-section-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="Actualizar" onAction="#onActualizar"/>
+                    <Button text="Cerrar todas las sesiones" onAction="#onCerrarTodas" styleClass="button-danger"/>
+                </HBox>
+                <TableView fx:id="tablaSesiones" prefHeight="120">
+                    <columns>
+                        <TableColumn fx:id="colUsuario" text="Usuario" prefWidth="150"/>
+                        <TableColumn fx:id="colAvisos"  text="Avisos" prefWidth="230"/>
+                        <TableColumn fx:id="colUso"     text="Último uso" prefWidth="110"/>
+                        <TableColumn fx:id="colCreada"  text="Entró" prefWidth="110"/>
+                        <TableColumn fx:id="colExpira"  text="Vence" prefWidth="130"/>
+                        <TableColumn fx:id="colIp"      text="Teléfono (IP)" prefWidth="100"/>
+                        <TableColumn fx:id="colAccion"  text="" prefWidth="80"/>
+                    </columns>
+                </TableView>
+
+                <!-- 5. Opciones avanzadas -->
+                <TitledPane text="Opciones avanzadas" expanded="false" animated="false" styleClass="opciones-avanzadas">
+                    <VBox spacing="10">
                         <padding><Insets topRightBottomLeft="10"/></padding>
+
+                        <Label text="Nombre fácil de recordar (opcional)" styleClass="field-label"/>
+                        <HBox spacing="8" alignment="CENTER_LEFT">
+                            <TextField fx:id="txtNombre" promptText="mitienda" prefWidth="200"/>
+                            <Label text=".local"/>
+                            <Button text="Sugerir" onAction="#onSugerirNombre"/>
+                        </HBox>
+                        <Label text="Solo letras minúsculas sin acento, números y guiones (1 a 40 caracteres). Los teléfonos podrán abrir http://nombre.local:puerto/ además de la dirección con números. iPhone, Mac y Windows 10/11 lo reconocen; en Android depende de la versión, por eso el QR usa la dirección con números."
+                               wrapText="true" styleClass="hint"/>
+                        <CheckBox fx:id="chkQrLocal" text="Usar el nombre en el código QR (algunos Android no lo abrirán)"/>
+                        <Label fx:id="lblNombreEstado" wrapText="true" styleClass="hint"/>
+
+                        <Separator/>
+
+                        <Label text="Puerto" styleClass="field-label"/>
                         <CheckBox fx:id="chkPuertoManual" text="Usar un puerto fijo en lugar del automático"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Puerto:"/>
                             <TextField fx:id="txtPuerto" prefWidth="90"/>
                         </HBox>
-                        <Label text="Solo para casos especiales (por ejemplo, una regla del firewall para un puerto concreto). Si ese puerto está ocupado el acceso móvil no encenderá. Pulsa Aplicar para guardar."
+                        <Label text="Normalmente no hace falta: el puerto se elige solo (el último que funcionó y, si está ocupado, otro libre). Solo para casos especiales, como una regla del firewall. Si el puerto fijo está ocupado el acceso no encenderá."
                                wrapText="true" styleClass="hint"/>
+
+                        <Separator/>
+
+                        <Label text="Conexión segura (HTTPS) y certificado" styleClass="field-label"/>
+                        <CheckBox fx:id="chkHttpsManual" text="Usar un puerto fijo para la conexión segura (normalmente es el puerto + 1)"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Puerto HTTPS:"/>
+                            <TextField fx:id="txtPuertoHttps" prefWidth="90"/>
+                        </HBox>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Button text="Regenerar certificado" onAction="#onRegenerarCertificado"/>
+                            <Label text="Solo si sospechas que la clave privada se copió o la computadora cambió de dueño. Todos los teléfonos tendrán que instalar el certificado nuevo."
+                                   wrapText="true" styleClass="hint" HBox.hgrow="ALWAYS"/>
+                        </HBox>
+
+                        <Separator/>
+
+                        <Label text="Teléfonos con notificaciones" styleClass="field-label"/>
+                        <TableView fx:id="tablaPush" prefHeight="120">
+                            <columns>
+                                <TableColumn fx:id="colPushUsuario" text="Usuario" prefWidth="180"/>
+                                <TableColumn fx:id="colPushDispositivo" text="Teléfono" prefWidth="100"/>
+                                <TableColumn fx:id="colPushEntrega" text="Última entrega" prefWidth="130"/>
+                                <TableColumn fx:id="colPushEstado" text="Estado" prefWidth="180"/>
+                                <TableColumn fx:id="colPushAccion" text="" prefWidth="90"/>
+                            </columns>
+                        </TableView>
+
+                        <Separator/>
+
+                        <Label text="Todas las direcciones de esta computadora" styleClass="field-label"/>
+                        <VBox fx:id="cajaUrls" spacing="6"/>
+
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Button text="Aplicar opciones avanzadas" onAction="#onAplicar" styleClass="button-primary"/>
+                        </HBox>
                     </VBox>
                 </TitledPane>
 
-                <Label text="Dirección para abrir en el teléfono" styleClass="form-section-title"/>
-                <VBox fx:id="cajaUrls" spacing="6"/>
-
-                <Label text="Código QR" styleClass="form-section-title"/>
-                <VBox fx:id="cajaQr" spacing="8" alignment="TOP_LEFT"/>
-
-                <Separator/>
-                <Label text="Sesiones móviles abiertas" styleClass="form-section-title"/>
-                <TableView fx:id="tablaSesiones" prefHeight="220">
-                    <columns>
-                        <TableColumn fx:id="colUsuario" text="Usuario" prefWidth="170"/>
-                        <TableColumn fx:id="colCreada"  text="Iniciada" prefWidth="120"/>
-                        <TableColumn fx:id="colExpira"  text="Vence" prefWidth="130"/>
-                        <TableColumn fx:id="colUso"     text="Último uso" prefWidth="120"/>
-                        <TableColumn fx:id="colIp"      text="IP" prefWidth="110"/>
-                        <TableColumn fx:id="colAccion"  text="" prefWidth="80"/>
-                    </columns>
-                </TableView>
-
-                <HBox spacing="12">
-                    <Button text="Actualizar" onAction="#onActualizar" prefHeight="38"/>
-                    <Button text="Cerrar todas" onAction="#onCerrarTodas" styleClass="button-danger" prefHeight="38"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Cerrar ventana" onAction="#onCerrar" prefHeight="38"/>
-                </HBox>
             </VBox>
         </ScrollPane>
     </center>
+
+    <!-- Siempre a la vista, aunque se abran las opciones avanzadas -->
+    <bottom>
+        <HBox spacing="12" alignment="CENTER_RIGHT">
+            <padding><Insets top="8" right="22" bottom="12" left="22"/></padding>
+            <Button text="Cerrar ventana" onAction="#onCerrar" prefHeight="36"/>
+        </HBox>
+    </bottom>
 
 </BorderPane>

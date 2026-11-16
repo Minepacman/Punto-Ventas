@@ -15,26 +15,28 @@
             stylesheets="@../css/app.css">
 
     <top>
-        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
-                    style="-fx-background-color: transparent; -fx-padding: 0;">
-        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
-            <padding><Insets topRightBottomLeft="10"/></padding>
+        <!-- Dos renglones: periodo arriba, acciones abajo; cada uno pasa a otro renglón si no cabe -->
+        <VBox styleClass="section-toolbar" spacing="8">
+        <padding><Insets topRightBottomLeft="10"/></padding>
+        <FlowPane styleClass="barra-acciones">
             <Label text="Desde:"/>
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
             <Label text="Hasta:"/>
             <DatePicker fx:id="dpHasta" prefWidth="140"/>
             <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
-            <Separator orientation="VERTICAL"/>
+        </FlowPane>
+        <FlowPane styleClass="barra-acciones">
             <Button text="PDF / XML / correo" onAction="#onAcciones"><graphic><Icono nombre="documento"/></graphic></Button>
             <Button text="Factura global…" onAction="#onGlobal"><graphic><Icono nombre="mundo"/></graphic></Button>
             <Button text="Cancelar factura" onAction="#onCancelarFactura" styleClass="button-danger"><graphic><Icono nombre="prohibido"/></graphic></Button>
             <Button text="Resolver pendiente" onAction="#onResolverPendiente"/>
             <Button text="Clientes fiscales" onAction="#onClientes"><graphic><Icono nombre="usuarios"/></graphic></Button>
             <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
-            <Region HBox.hgrow="ALWAYS"/>
-            <Button text="Cerrar" onAction="#onCerrar"/>
-        </HBox>
-        </ScrollPane>
+            <Separator orientation="VERTICAL"/>
+            <Button text="Cerrar" onAction="#onCerrar"><graphic><Icono nombre="cerrar"/></graphic>
+                <tooltip><Tooltip text="Cerrar esta ventana (Esc)"/></tooltip></Button>
+        </FlowPane>
+        </VBox>
     </top>
 
     <center>

@@ -31,6 +31,21 @@ public final class AyudaEstadisticas {
     }
 
     static {
+        tema("hoy", "Hoy: venta y tickets del día",
+                "Lo primero que ves es cómo va el día: la venta de hoy en dinero y el número de tickets (ventas "
+                + "cobradas). Debajo de cada cifra hay tres comparaciones llanas:\n\n"
+                + "• vs. ayer\n"
+                + "• vs. el mismo día de la semana pasada (un sábado se compara con el sábado anterior, porque cada día "
+                + "de la semana vende distinto)\n"
+                + "• vs. hoy hace un año (la misma fecha del año pasado)\n\n"
+                + "La flecha verde significa que hoy vas arriba; la roja, abajo. Para que la comparación sea justa, de "
+                + "cada día de referencia solo se cuenta lo vendido hasta la misma hora de ahora (si son las 3 de la "
+                + "tarde, ayer hasta las 3 de la tarde). Si de un día viejo ya no quedan los tickets, se compara con el "
+                + "día completo y se indica.\n\n"
+                + "«Sin datos» aparece cuando ese día no hubo ventas o la tienda aún no vendía (por ejemplo, «hace un "
+                + "año» en una tienda que lleva meses). Las ventas canceladas no cuentan. Las cifras se actualizan solas "
+                + "cada minuto mientras tienes la pestaña abierta.");
+
         tema("nivel", "Nivel y madurez de los datos",
                 "Cuenta los días desde la primera venta registrada y en cuántos de ellos hubo ventas.\n\n"
                 + "• Entrenamiento (menos de " + EstadisticasService.DIAS_ENTRENAMIENTO + " días): el modelo apenas aprende; "
@@ -143,18 +158,29 @@ public final class AyudaEstadisticas {
                   + " con ventas); confianza de las recomendaciones: " + madurez.porcentajeConfianza() + " %.";
         p.add(new Pagina("Bienvenido a Estadísticas",
                 "Esta pestaña te muestra cómo va la tienda y te ayuda a decidir qué surtir, cuándo y a quién pedírselo.\n\n"
-                + "IMPORTANTE: esta pestaña mejora con el tiempo. El modelo se va «entrenando» con tus ventas: las "
-                + "primeras semanas los datos y las recomendaciones pueden no ser realistas. Con alrededor de un mes de "
-                + "ventas (" + EstadisticasService.DIAS_CONFIABLES + " días) ya da estadísticas más realistas y "
-                + "recomendaciones confiables.\n\n" + estado + "\n\n"
-                + "Arriba siempre verás el indicador «Nivel de datos» con cuántos días de ventas hay. Puedes pasar las "
-                + "páginas con Enter o las flechas ← →, y cerrar con Esc."));
-        p.add(new Pagina("Resumen",
-                "Venta total, tickets, ticket promedio y piezas del periodo que elijas arriba (Hoy, Semana, Mes, Año o "
-                + "personalizado). El periodo aplica a todas las pestañas.\n\n"
-                + "Los comparativos te dicen si vas mejor o peor que el mismo tramo del periodo anterior (hoy contra "
-                + "el mismo día de la semana pasada; la semana, el mes y el año «a la fecha»). Las gráficas muestran "
-                + "las ventas por día y por día de la semana."));
+                + "Cada sección tiene su propia pestaña. La primera, «Hoy», muestra la venta y los tickets del día "
+                + "comparados con ayer, con el mismo día de la semana pasada y con hoy hace un año. Con eso basta para "
+                + "el día a día. Las demás pestañas (Resumen, Horarios pico, Cajeros y horas, Productos más vendidos, "
+                + "Reabastecimiento, Recomendaciones y Clima) tienen las gráficas y reportes: entra a la que quieras ver.\n\n"
+                + "IMPORTANTE: las recomendaciones mejoran con el tiempo. El programa se va «entrenando» con tus ventas: "
+                + "las primeras semanas pueden no ser realistas. Con alrededor de un mes de ventas ("
+                + EstadisticasService.DIAS_CONFIABLES + " días) ya son confiables.\n\n" + estado + "\n\n"
+                + "Puedes pasar las páginas con Enter o las flechas ← →, y cerrar con Esc."));
+        p.add(new Pagina("Hoy",
+                "Dos tarjetas grandes: la venta de hoy en dinero y el número de tickets. Debajo de cada una, tres "
+                + "renglones: vs. ayer, vs. el mismo día de la semana pasada y vs. hoy hace un año. Flecha verde = hoy "
+                + "vas arriba; roja = abajo.\n\n"
+                + "Para que sea parejo, de cada día de referencia solo se cuenta lo vendido hasta la misma hora de "
+                + "ahora (si son las 3 de la tarde, ayer hasta las 3 de la tarde). «Sin datos» aparece cuando ese día "
+                + "no hubo ventas o la tienda aún no vendía.\n\n"
+                + "Las cifras se actualizan solas cada minuto mientras tienes la pestaña abierta. Las ventas canceladas "
+                + "no cuentan, igual que en el corte."));
+        p.add(new Pagina("Periodo y resumen",
+                "Fuera de «Hoy», arriba de las pestañas eliges un periodo (Hoy, Semana, Mes, Año o personalizado) que "
+                + "aplica a todas ellas. En «Resumen»: venta total, tickets, ticket promedio y piezas, "
+                + "los comparativos contra el mismo tramo del periodo anterior (la semana, el mes y el año «a la fecha») "
+                + "y las gráficas de ventas por día y por día de la semana.\n\n"
+                + "Arriba de las pestañas está el aviso de cuántos días de ventas hay y el botón «Recalcular»."));
         p.add(new Pagina("Horarios pico",
                 "Las ventas se reparten en franjas (mañana, mediodía, tarde, noche) y en un mapa de calor de día de la "
                 + "semana × franja: más intenso = más ventas.\n\n"
@@ -180,8 +206,8 @@ public final class AyudaEstadisticas {
                 + "con lluvia, calor o frío. Solo se envían las coordenadas del negocio; ningún dato de ventas sale del equipo."));
         p.add(new Pagina("Cajeros, exportar y ayuda",
                 "«Cajeros y horas» muestra el total y el ticket promedio por cajero y por hora (y por caja si hay varias).\n\n"
-                + "Cada tarjeta tiene un botón «?» que explica esa métrica, y el botón «? Ayuda» de arriba vuelve a abrir "
-                + "este tutorial cuando quieras. «Recalcular» rehace los agregados desde la primera venta (útil después "
+                + "Cada sección tiene un botón «?» que explica esa métrica, y el botón «? Ayuda» de arriba vuelve a abrir "
+                + "este tutorial cuando quieras. «Recalcular» rehace los resúmenes desde la primera venta (útil después "
                 + "de restaurar un respaldo).\n\n"
                 + "Esta pestaña se irá enriqueciendo con nuevas secciones; cuando aparezcan, su «?» te dirá qué muestran."));
         return p;

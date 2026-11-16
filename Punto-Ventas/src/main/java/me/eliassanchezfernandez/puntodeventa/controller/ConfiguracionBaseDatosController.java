@@ -18,6 +18,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -416,11 +417,16 @@ public class ConfiguracionBaseDatosController implements Initializable {
                     ? String.format("%.1f MB", info.bytes() / (1024.0 * 1024.0))
                     : String.format("%.1f KB", info.bytes() / 1024.0));
             gridRegistros.getChildren().clear();
-            int fila = 0;
+            // Dos conteos por renglón: la ventana cabe en 1024×768 sin desplazarse
+            int i = 0;
             for (var e : info.registros().entrySet()) {
-                gridRegistros.add(new Label(e.getKey() + ":"), 0, fila);
-                gridRegistros.add(new Label(String.valueOf(e.getValue())), 1, fila);
-                fila++;
+                Label nombre = new Label(e.getKey() + ":");
+                Label valor = new Label(String.valueOf(e.getValue()));
+                nombre.setMinWidth(Region.USE_PREF_SIZE);   // nunca «Movimientos de inv…»: la rejilla pasa a otro renglón
+                valor.setMinWidth(Region.USE_PREF_SIZE);
+                gridRegistros.add(nombre, (i % 2) * 2, i / 2);
+                gridRegistros.add(valor, (i % 2) * 2 + 1, i / 2);
+                i++;
             }
             boolean pendiente = baseDatosService.hayRestauracionPendiente();
             lblPendiente.setVisible(pendiente);

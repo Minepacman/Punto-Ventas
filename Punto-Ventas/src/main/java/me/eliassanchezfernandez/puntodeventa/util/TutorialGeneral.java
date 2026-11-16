@@ -44,23 +44,30 @@ public final class TutorialGeneral {
                 "La pantalla de todos los días. Teclea o escanea el código, ajusta cantidades, aplica mayoreo o "
                 + "descuentos (si tienes permiso) y cobra en efectivo, tarjeta, transferencia o pago dividido. "
                 + "Puedes dejar un ticket en espera para atender a otro cliente, y abajo aparecen sugerencias "
-                + "de productos que suelen comprarse juntos.",
-                List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
+                + "de productos que suelen comprarse juntos. Si te piden algo que no está en el catálogo, "
+                + "«Producto común» lo cobra con solo teclear el nombre y el precio.",
+                List.of(Atajo.IR_VENTAS, Atajo.BUSCAR_PRODUCTO, Atajo.PRODUCTO_COMUN, Atajo.CANTIDAD, Atajo.PONER_EN_ESPERA,
                         Atajo.RECUPERAR_ESPERA, Atajo.COBRAR)));
+        p.add(new Paso("tabPromociones", "Promociones",
+                "Las ofertas de la tienda: 2x1 o 3x2, porcentaje de descuento o precio especial, para un producto "
+                + "o un departamento completo, por fechas, días de la semana, horario o hasta agotar. Se aplican "
+                + "solas al vender y el ticket muestra el nombre de la promoción.",
+                List.of(Atajo.IR_PROMOCIONES)));
         p.add(new Paso("tabProductos", "Productos",
                 "Tu catálogo: códigos de barras, descripción, precio de costo y de venta, departamento, "
-                + "unidad, venta a granel y precio de mayoreo. También las promociones (NxM, por departamento, "
-                + "por horario o hasta agotar) y los departamentos.",
+                + "unidad, venta a granel y precio de mayoreo. Aquí también están los departamentos.",
                 List.of(Atajo.IR_PRODUCTOS)));
         p.add(new Paso("tabInventario", "Inventario",
                 "Existencias y movimientos: entradas de mercancía, ajustes, productos bajos de stock, "
                 + "proveedores y órdenes de compra. Cada venta descuenta existencias automáticamente.",
                 List.of(Atajo.IR_INVENTARIO)));
-        p.add(new Paso("tabEstadisticas", "Estadísticas",
-                "Qué se vende, cuánto y a qué horas: ventas por día, por cajero y por hora, productos más "
-                + "vendidos, canasta de compra y recomendaciones. Incluye el clima, si lo activas. "
-                + "Al abrirla por primera vez tiene su propio recorrido.",
-                List.of(Atajo.IR_ESTADISTICAS)));
+        if (FuncionesOcultas.FIADO_HABILITADO) {
+            p.add(new Paso("tabClientes", "Clientes (fiado)",
+                    "La libreta del fiado: cuánto debe cada cliente, su límite y su estado de cuenta. Para fiar, "
+                    + "al cobrar escribe el monto en «A cuenta (fiado)» y elige al cliente con F6 (o dalo de alta ahí "
+                    + "mismo). Aquí registras los abonos: en efectivo entran al cajón y cuentan en el corte.",
+                    List.of(Atajo.IR_CLIENTES)));
+        }
         p.add(new Paso("tabCorte", "Corte",
                 "El corte de esta caja por turno: lo que debe haber en el cajón desde el corte anterior "
                 + "(fondo o lo que dejó el turno pasado, más ventas en efectivo, más entradas, menos salidas), "
@@ -68,10 +75,16 @@ public final class TutorialGeneral {
                 + "salidas de efectivo (cambio, retiros, pagos a proveedores) y ves el reporte del día completo "
                 + "y el historial de cortes. Todo se imprime o exporta.",
                 List.of(Atajo.MOVIMIENTO_EFECTIVO)));
+        p.add(new Paso("tabEstadisticas", "Estadísticas",
+                "Qué se vende, cuánto y a qué horas: ventas por día, por cajero y por hora, productos más "
+                + "vendidos, canasta de compra y recomendaciones. Incluye el clima, si lo activas. "
+                + "Al abrirla por primera vez tiene su propio recorrido.",
+                List.of(Atajo.IR_ESTADISTICAS)));
         p.add(new Paso("tabConfig", "Configuración",
-                "Todo lo demás: usuarios y permisos, datos del negocio y logotipo, ticket e impresora, "
-                + "formas de pago, moneda, folios, respaldos, báscula, cajón, acceso desde el celular, "
-                + "ubicación y clima, y facturación electrónica.",
+                "La última pestaña, para el administrador: usuarios y permisos, datos del negocio y logotipo, "
+                + "ticket e impresora, formas de pago, moneda, folios, respaldos, báscula, cajón, acceso desde el "
+                + "celular, ubicación y clima, y facturación electrónica. Está ordenada por temas y cada botón dice "
+                + "para qué sirve; lo técnico queda en «Opciones avanzadas».",
                 List.of()));
         p.add(new Paso(null, "Barra superior y bloqueo",
                 "Arriba ves la hora, la caja y el usuario en sesión. «Bloquear» regresa al inicio de sesión "

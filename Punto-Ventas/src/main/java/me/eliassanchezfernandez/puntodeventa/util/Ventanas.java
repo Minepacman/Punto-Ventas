@@ -27,6 +27,9 @@ import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import org.springframework.context.ApplicationContext;
 
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.RecuerdoApariencia;
+
 import java.io.IOException;
 import java.net.URL;
 import java.util.Optional;
@@ -96,6 +99,7 @@ public final class Ventanas {
      * ajustar cada vez que cambia de paso o muestra un aviso.
      */
     public static void mostrarLogin(Stage stage, ApplicationContext ctx) throws IOException {
+        aplicarApariencia(ctx, false);
         Parent root = cargar(ctx, "/fxml/login.fxml");
 
         stage.setFullScreen(false);
@@ -152,6 +156,7 @@ public final class Ventanas {
     /** Ventana principal (pestañas) a pantalla completa */
     public static void mostrarPrincipal(Stage stage, ApplicationContext ctx, String titulo)
             throws IOException {
+        aplicarApariencia(ctx, true);
         Parent root = cargar(ctx, "/fxml/main.fxml");
 
         stage.setScene(new Scene(root));
@@ -164,6 +169,8 @@ public final class Ventanas {
         stage.setMinHeight(Math.min(ALTO_MINIMO, area.getHeight()));
         stage.setMaximized(true);
         stage.show();
+        // Mide los primeros cuadros (casi sin costo): si el equipo es lento se ofrece el modo ligero
+        MedidorFluidez.medir(stage.getScene());
     }
 
     /**
@@ -270,7 +277,7 @@ public final class Ventanas {
     static final double FRACCION_MAXIMA_ALTO = 0.92;
 
     /** Recorta el tamaño pedido para que quepa en el área visible; nunca lo agranda */
-    static double[] ajustarAPantalla(double ancho, double alto, Rectangle2D visible) {
+    public static double[] ajustarAPantalla(double ancho, double alto, Rectangle2D visible) {
         return new double[] {
                 Math.min(ancho, Math.floor(visible.getWidth() * FRACCION_MAXIMA_ANCHO)),
                 Math.min(alto, Math.floor(visible.getHeight() * FRACCION_MAXIMA_ALTO)) };
@@ -389,6 +396,22 @@ public final class Ventanas {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    /**
+     * Apariencia (Configuración → Apariencia) antes de abrir el login (la de la tienda) o la ventana
+     * principal (la del usuario, si tiene una "solo para mí"). La de la tienda se recuerda en la carpeta
+     * de datos para que la ventana de arranque ya salga con esos colores la próxima vez.
+     */
+    private static void aplicarApariencia(ApplicationContext ctx, boolean delUsuario) {
+        try {
+            var servicio = ctx.getBean(me.eliassanchezfernandez.puntodeventa.service.AparienciaService.class);
+            var tienda = servicio.deTienda();
+            AplicadorApariencia.aplicar(delUsuario ? servicio.vigente() : tienda);
+            RecuerdoApariencia.guardar(tienda);
+        } catch (RuntimeException e) {
+            System.err.println("No se pudo aplicar la apariencia: " + e.getMessage());
+        }
+    }
 
     /** Aplica app.css a una escena creada a mano (ventanas sin FXML, como el tutorial y la donación) */
     public static void aplicarCss(Scene scene) {

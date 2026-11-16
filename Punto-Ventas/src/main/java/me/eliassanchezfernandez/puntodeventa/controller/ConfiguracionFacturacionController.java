@@ -15,6 +15,7 @@ import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.Entrada;
@@ -198,22 +199,38 @@ public class ConfiguracionFacturacionController implements Initializable {
 
     private void cargarDepartamentos() {
         gridDepartamentos.getChildren().clear();
+        // Dos departamentos por renglón (nombre, clave, Buscar… | nombre, clave, Buscar…): la ventana
+        // cabe en 1024×768 con menos desplazamiento
+        ColumnConstraints separacion = new ColumnConstraints(130);
+        separacion.setMinWidth(90);
+        ColumnConstraints primera = new ColumnConstraints(130);
+        primera.setMinWidth(90);
         gridDepartamentos.getColumnConstraints().setAll(
-                new ColumnConstraints(160), columna(Priority.ALWAYS), new ColumnConstraints());
+                primera, columna(Priority.ALWAYS), new ColumnConstraints(),
+                separacion, columna(Priority.ALWAYS), new ColumnConstraints());
         clavePorDepartamento.clear();
-        int fila = 0;
+        int i = 0;
         for (Departamento d : productoService.listarDepartamentos()) {
             TextField txt = new TextField(d.getClaveProdServ() != null ? d.getClaveProdServ() : "");
             txt.setPromptText(CatalogoSat.PROD_SERV_ABARROTES + " (genérica)");
             Button buscar = new Button("Buscar…");
+            buscar.setMinWidth(Region.USE_PREF_SIZE);
             buscar.setOnAction(e -> CatalogoSatDialogo.elegirProdServ(txt.getText()).ifPresent(en -> txt.setText(en.clave())));
-            gridDepartamentos.addRow(fila++, new Label(d.getNombre()), txt, buscar);
+            Label nombre = new Label(d.getNombre());
+            nombre.setTooltip(new javafx.scene.control.Tooltip(d.getNombre()));
+            nombre.setWrapText(true);   // con letra grande, dos renglones en vez de «Frutas y verdu…»
+            int col = (i % 2) * 3;
+            gridDepartamentos.add(nombre, col, i / 2);
+            gridDepartamentos.add(txt, col + 1, i / 2);
+            gridDepartamentos.add(buscar, col + 2, i / 2);
+            if (i % 2 == 1) GridPane.setMargin(nombre, new javafx.geometry.Insets(0, 0, 0, 14));
             clavePorDepartamento.put(d.getId(), txt);
+            i++;
         }
-        if (fila == 0) {
+        if (i == 0) {
             Label vacio = new Label("Aún no hay departamentos. Créalos en Productos → Departamentos.");
             vacio.getStyleClass().add("hint");
-            gridDepartamentos.add(vacio, 0, 0, 3, 1);
+            gridDepartamentos.add(vacio, 0, 0, 6, 1);
             btnGuardarClaves.setDisable(true);
         }
     }

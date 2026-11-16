@@ -36,6 +36,14 @@ public class DetalleVenta {
     @JoinColumn(name = "producto_id")
     private Producto producto;
 
+    /**
+     * Nombre tecleado por el cajero cuando el renglón es un "producto común"
+     * ({@link ProductoComun}): el producto apunta al del sistema y aquí queda lo
+     * que se vendió de verdad. Null en los renglones de productos del catálogo.
+     */
+    @Column(name = "descripcion", length = ProductoComun.MAX_LARGO_NOMBRE)
+    private String descripcion;
+
     /** Precio unitario cobrado como base (lista o mayoreo) */
     @Column(name = "precio_venta")
     private double precioVenta;
@@ -88,6 +96,49 @@ public class DetalleVenta {
     @Column(name = "autorizado_por_usuario", length = 60)
     private String autorizadoPorUsuario;
 
+    // ── IVA del renglón (snapshot al cobrar; util/CalculoIva) ────────────
+    // Null en los renglones anteriores a este campo: entonces aplica la tasa de la venta.
+
+    /** Tasa aplicada al renglón como fracción (0.16, 0.0) */
+    @Column(name = "tasa_iva")
+    private Double tasaIva;
+
+    /** true si el producto era exento (tasa 0 pero en la factura va como TipoFactor Exento) */
+    @Column(name = "iva_exento")
+    private Boolean ivaExento;
+
+    /** IVA del renglón ya desglosado del importe (importe − base), a centavos */
+    @Column(name = "iva")
+    private Double iva;
+
+    // ── Devoluciones parciales (DevolucionService) ───────────────────────
+    // Se suman con un UPDATE condicionado (nunca más que lo vendido, aunque devuelvan dos cajas a la vez).
+
+    /** Cantidad ya devuelta por el cliente; null = nada */
+    @Column(name = "cantidad_devuelta")
+    private Double cantidadDevuelta;
+
+    /** Importe ya reembolsado de este renglón (con IVA); null = nada */
+    @Column(name = "importe_devuelto")
+    private Double importeDevuelto;
+
+    public double getCantidadDevueltaOCero() {
+        return cantidadDevuelta != null ? cantidadDevuelta : 0.0;
+    }
+
+    public double getImporteDevueltoOCero() {
+        return importeDevuelto != null ? importeDevuelto : 0.0;
+    }
+
+    /** Lo que aún se puede devolver (a milésimas, granel) */
+    public double getCantidadPorDevolver() {
+        return Math.max(0, Math.round((cantidad - getCantidadDevueltaOCero()) * 1000.0) / 1000.0);
+    }
+
+    public boolean isIvaExento() {
+        return Boolean.TRUE.equals(ivaExento);
+    }
+
     // ── Lógica de dominio ────────────────────────────────────────────────
 
     /**
@@ -124,6 +175,26 @@ public class DetalleVenta {
         return producto != null ? producto.getPrecioCosto() : 0;
     }
 
+    /** ¿Es un "producto común" (artículo fuera del catálogo tecleado en Ventas)? */
+    public boolean esProductoComun() {
+        return ProductoComun.es(this);
+    }
+
+    /**
+     * Nombre para ticket, pantallas, móvil y factura: el tecleado por el cajero
+     * si es un producto común; si no, la descripción del producto del catálogo.
+     */
+    public String getDescripcionMostrada() {
+        if (descripcion != null && !descripcion.isBlank()) return descripcion;
+        return producto != null && producto.getDescripcion() != null ? producto.getDescripcion() : "(producto)";
+    }
+
+    /** Código para pantallas: el del producto, o "—" en un producto común (no tiene) */
+    public String getCodigoMostrado() {
+        if (esProductoComun() || producto == null || producto.getCodigoBarras() == null) return "—";
+        return producto.getCodigoBarras();
+    }
+
     public enum TipoDescuento {
         NINGUNO("—"), PROMOCION("Promoción"), MAYOREO("Mayoreo"), MANUAL("Manual");
 
@@ -137,6 +208,7 @@ public class DetalleVenta {
     @Override
     public String toString() {
         return "DetalleVenta{producto=" + (producto != null ? producto.getCodigoBarras() : null)
+                + (descripcion != null ? ", descripcion=" + descripcion : "")
                 + ", cantidad=" + cantidad + ", precio=" + precioVenta + ", descuento=" + descuento
                 + ", tipo=" + tipoDescuento + "}";
     }

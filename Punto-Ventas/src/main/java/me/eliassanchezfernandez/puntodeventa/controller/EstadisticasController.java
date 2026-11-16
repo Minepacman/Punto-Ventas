@@ -1,5 +1,8 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -15,6 +18,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
@@ -25,9 +30,11 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.AyudaEstadisticas;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.ContextoEstadisticas;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionEstadisticas;
+import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionHoy;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionRezagados;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.SeccionSurtido;
 import me.eliassanchezfernandez.puntodeventa.controller.estadisticas.TutorialEstadisticasDialogo;
@@ -82,6 +89,13 @@ import java.util.function.Function;
  * Controlador de Estadísticas (CRT-10). Todo sale de los agregados que
  * mantiene AgregadosService (más "hoy" en vivo); aquí solo se presenta.
  *
+ * Cada sección vive en su propia pestaña («ventanita»), siempre abierta. La
+ * primera es la vista simple «Hoy» ({@link SeccionHoy}: venta y tickets de hoy
+ * contra ayer, la semana pasada y hace un año), que se recarga al entrar a la
+ * pestaña, al volver a ella y cada minuto mientras está visible. El periodo de
+ * arriba aplica a las demás pestañas y se oculta mientras se ve «Hoy». Todo
+ * se lee en segundo plano: el hilo de JavaFX solo pinta.
+ *
  * main.fxml incluye esta vista para todos, pero MainController solo muestra
  * la pestaña a quien tiene VER_HISTORIAL; sin ese permiso no se consulta nada
  * en initialize(). No se muestran costos ni ganancias (no hace falta
@@ -99,6 +113,8 @@ import java.util.function.Function;
 public class EstadisticasController implements Initializable {
 
     private static final Locale ES_MX = new Locale("es", "MX");
+    /** Cada cuánto se refresca la vista Hoy mientras la pestaña está visible */
+    static final Duration INTERVALO_EN_VIVO = Duration.minutes(1);
     private static final DateTimeFormatter FMT_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FMT_DIA   = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter FMT_HORA  = DateTimeFormatter.ofPattern("dd/MM HH:mm");
@@ -125,7 +141,13 @@ public class EstadisticasController implements Initializable {
     @FXML private Button btnRecalcular;
     @FXML private Button btnAyuda;
 
-    // Contenedores de las secciones registradas (una por pestaña)
+    // Pestañas (una «ventanita» por sección; la primera es «Hoy»)
+    @FXML private TabPane tabsEstadisticas;
+    @FXML private Tab     tabHoy;
+    @FXML private HBox    boxPeriodo;
+
+    // Contenedores de las secciones registradas (uno por pestaña)
+    @FXML private VBox boxHoy;
     @FXML private VBox boxSeccionesProductos;
     @FXML private VBox boxSeccionesReabastecimiento;
     @FXML private VBox boxSeccionesRecomendaciones;
@@ -210,6 +232,18 @@ public class EstadisticasController implements Initializable {
     /** Madurez de la última carga (para el tutorial) */
     private MadurezDatos madurezActual;
 
+    /** La vista Hoy (se refresca sola cada minuto mientras está visible) */
+    private SeccionHoy seccionHoy;
+    private Timeline enVivo;
+
+    /**
+     * Último periodo elegido para las pestañas de detalle, por usuario, mientras el programa está abierto.
+     * De fábrica abre en «Hoy» (la vista que más se usa); al volver a entrar a la pestaña o
+     * al iniciar sesión otra vez se conserva el que se eligió la última vez.
+     */
+    private static final Map<Long, PeriodoRecordado> PERIODO_POR_USUARIO = new java.util.concurrent.ConcurrentHashMap<>();
+    private record PeriodoRecordado(String boton, LocalDate desde, LocalDate hasta) { }
+
     public record FilaProducto(int pos, String producto, String departamento, double piezas, double importe, double porcentaje) { }
     public record FilaCorrelacion(String producto, String tipo, String clave, double piezas, double indice) { }
     public record FilaClima(String condicion, int ventas, double importe) { }
@@ -219,15 +253,74 @@ public class EstadisticasController implements Initializable {
         configurarTablas();
         gridCalor.getChildren().clear();
         registrarSecciones();
+        restaurarPeriodo();
+        configurarPestanas();
 
         if (sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
             recargar();
+            iniciarActualizacionEnVivo();
         } else {
             quitarColorDeNivel();
             lblNivel.setText("—");
             lblNivelMensaje.setText("Requiere el permiso «Ver historial de ventas».");
             btnRecalcular.setDisable(true);
+            for (SeccionEstadisticas<?> s : secciones) s.pintarError("requiere el permiso «Ver historial de ventas».");
         }
+    }
+
+    // ── Pestañas ──────────────────────────────────────────────────────────
+
+    /**
+     * El periodo no aplica a «Hoy»: se oculta mientras esa pestaña está elegida.
+     * Al volver a «Hoy» se relee solo esa sección (en segundo plano) para que
+     * las cifras estén al minuto.
+     */
+    private void configurarPestanas() {
+        mostrarPeriodoSegun(tabsEstadisticas.getSelectionModel().getSelectedItem());
+        tabsEstadisticas.getSelectionModel().selectedItemProperty().addListener((obs, vieja, nueva) -> {
+            mostrarPeriodoSegun(nueva);
+            if (nueva == tabHoy && vieja != null && seccionHoy != null) recargarSeccion(seccionHoy);
+        });
+    }
+
+    private void mostrarPeriodoSegun(Tab tab) {
+        boolean conPeriodo = tab != tabHoy;
+        boxPeriodo.setVisible(conPeriodo);
+        boxPeriodo.setManaged(conPeriodo);
+    }
+
+    // ── Vista Hoy en vivo ─────────────────────────────────────────────────
+
+    /**
+     * Cada minuto vuelve a leer la vista Hoy, solo si la pestaña está a la vista
+     * (ventana mostrada y ningún ancestro oculto: el contenido de una pestaña no
+     * seleccionada está invisible). Se detiene si la vista sale de la escena.
+     */
+    private void iniciarActualizacionEnVivo() {
+        if (seccionHoy == null) return;
+        enVivo = new Timeline(new KeyFrame(INTERVALO_EN_VIVO, e -> actualizarHoySiEstaVisible()));
+        enVivo.setCycleCount(Animation.INDEFINITE);
+        enVivo.play();
+        boxHoy.sceneProperty().addListener((obs, vieja, nueva) -> {
+            if (nueva == null) enVivo.stop();
+            else if (enVivo.getStatus() != Animation.Status.RUNNING) enVivo.play();
+        });
+    }
+
+    private void actualizarHoySiEstaVisible() {
+        if (seccionHoy == null || !estaALaVista(boxHoy)) return;
+        recargarSeccion(seccionHoy);
+    }
+
+    /** ¿El nodo se ve en pantalla? Ventana mostrada y todos sus ancestros visibles. */
+    static boolean estaALaVista(Node nodo) {
+        if (nodo == null || nodo.getScene() == null) return false;
+        javafx.stage.Window w = nodo.getScene().getWindow();
+        if (w == null || !w.isShowing()) return false;
+        for (Node n = nodo; n != null; n = n.getParent()) {
+            if (!n.isVisible()) return false;
+        }
+        return true;
     }
 
     // ── Secciones registrables ────────────────────────────────────────────
@@ -237,7 +330,9 @@ public class EstadisticasController implements Initializable {
      * dar de alta su ayuda en AyudaEstadisticas con la misma clave y añadirla aquí.
      */
     private List<SeccionEstadisticas<?>> secciones() {
+        seccionHoy = new SeccionHoy(estadisticasService);
         return List.of(
+                seccionHoy,
                 new SeccionRezagados(reabastecimientoService),
                 new SeccionSurtido(reabastecimientoService, proveedorService, sesionService));
     }
@@ -250,6 +345,7 @@ public class EstadisticasController implements Initializable {
     /** Construye cada sección y la coloca en el contenedor de su pestaña */
     private void registrarSecciones() {
         Map<SeccionEstadisticas.Ubicacion, VBox> contenedores = new EnumMap<>(SeccionEstadisticas.Ubicacion.class);
+        contenedores.put(SeccionEstadisticas.Ubicacion.HOY,              boxHoy);
         contenedores.put(SeccionEstadisticas.Ubicacion.PRODUCTOS,        boxSeccionesProductos);
         contenedores.put(SeccionEstadisticas.Ubicacion.REABASTECIMIENTO, boxSeccionesReabastecimiento);
         contenedores.put(SeccionEstadisticas.Ubicacion.RECOMENDACIONES,  boxSeccionesRecomendaciones);
@@ -388,7 +484,51 @@ public class EstadisticasController implements Initializable {
             return;
         }
         personalizado = null;
+        recordarPeriodo();
         cargarPeriodo();
+    }
+
+    private Long usuarioActualId() {
+        var c = sesionService.getCajeroActual();
+        return c == null ? null : c.getId();
+    }
+
+    private void recordarPeriodo() {
+        Long id = usuarioActualId();
+        if (id == null) return;
+        Object t = grupoPeriodo.getSelectedToggle();
+        if (!(t instanceof ToggleButton tb)) return;
+        PERIODO_POR_USUARIO.put(id, new PeriodoRecordado(tb.getId(),
+                personalizado != null ? personalizado.desde() : null,
+                personalizado != null ? personalizado.hasta() : null));
+    }
+
+    /** Vuelve a poner el periodo que este usuario eligió la última vez (si no, se queda en «Hoy») */
+    private void restaurarPeriodo() {
+        Long id = usuarioActualId();
+        PeriodoRecordado r = id == null ? null : PERIODO_POR_USUARIO.get(id);
+        if (r == null) return;
+        for (ToggleButton tb : List.of(tgHoy, tgSemana, tgMes, tgAnio, tgPersonalizado)) {
+            if (tb != null && tb.getId() != null && tb.getId().equals(r.boton())) {
+                tb.setSelected(true);
+                break;
+            }
+        }
+        if (grupoPeriodo.getSelectedToggle() == tgPersonalizado && r.desde() != null && r.hasta() != null) {
+            dpDesde.setValue(r.desde());
+            dpHasta.setValue(r.hasta());
+            try {
+                personalizado = Periodo.entre(r.desde(), r.hasta());
+            } catch (NegocioException e) {
+                tgHoy.setSelected(true);
+                personalizado = null;
+            }
+            boolean personal = personalizado != null;
+            boxPersonalizado.setVisible(personal);
+            boxPersonalizado.setManaged(personal);
+        } else if (grupoPeriodo.getSelectedToggle() == tgPersonalizado) {
+            tgHoy.setSelected(true);
+        }
     }
 
     @FXML
@@ -400,6 +540,7 @@ public class EstadisticasController implements Initializable {
             return;
         }
         tgPersonalizado.setSelected(true);
+        recordarPeriodo();
         cargarPeriodo();
     }
 

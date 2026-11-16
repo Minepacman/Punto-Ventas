@@ -1,0 +1,27 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Cervezas y Refrescos de Jalapa",
+      "folio": "9515-102460",
+      "fecha": "2026-09-10",
+      "lineas": [
+        {
+          "codigoProveedor": "10001360",
+          "descripcion": "PIÑ ADA 8/2L NR",
+          "cantidad": 1.0,
+          "unidad": null,
+          "empaque": 8,
+          "precioUnitario": 238.0,
+          "descuento": 5.17,
+          "importe": 232.0
+        }
+      ],
+      "subtotal": 238.0,
+      "descuento": 5.17,
+      "impuestos": 32.83,
+      "cargos": null,
+      "total": 232.0,
+      "notas": "Descuento por renglón aplicado antes del IVA: (238/1.16 - 5.17) x 1.16 = 232."
+    }
+  ]
+}

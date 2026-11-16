@@ -1,0 +1,52 @@
+# Espejo de los archivos de PaddleOCR que el programa baja bajo demanda (ocr/RecursosPpOcr): ONNX Runtime para Java
+# (Maven Central) y los modelos PP-OCRv6 small (modelscope.cn). Los baja de esas fuentes originales, revisa tamaño y
+# SHA-256 contra Punto-Ventas/packaging/ocr-modelos/recursos.txt (las mismas sumas fijas del programa) y los sube como
+# activos de la release "ocr-modelos-1" de este repositorio, que el programa prueba ANTES que la fuente original.
+#
+# Se corre a mano, una vez (y otra si GitHub perdiera los activos), desde main:
+#     gh workflow run ocr-modelos.yml -R Minepacman/Punto-Ventas
+# o en GitHub: Actions → "Espejo de modelos OCR" → Run workflow.
+#
+# La release va marcada como PRELANZAMIENTO y no "latest": el sitio y el buscador de actualizaciones del programa
+# ignoran prelanzamientos / etiquetas que no son versiones (VersionSemantica no entiende "ocr-modelos-1"), así que nadie
+# la confunde con una versión de Caja Libre. Si cambia un modelo, NO se reemplaza aquí: etiqueta nueva (ocr-modelos-2)
+# + cambiar RecursosPpOcr y recursos.txt, porque las versiones ya instaladas esperan la suma vieja.
+# Sin entradas (workflow_dispatch sin inputs): nada externo llega a un shell.
+name: Espejo de modelos OCR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  espejo:
+    name: Publicar ocr-modelos-1
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # crear la release/etiqueta ocr-modelos-1 y subir sus activos
+    defaults:
+      run:
+        working-directory: Punto-Ventas
+    env:
+      ETIQUETA: ocr-modelos-1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Bajar de las fuentes originales y verificar
+        run: bash packaging/ocr-modelos/bajar.sh build/ocr-modelos
+      - name: Crear o actualizar la release del espejo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notas="Espejo de los archivos de PaddleOCR que Caja Libre descarga bajo demanda para el lector de tickets (no es una versión del programa). Mismos archivos y SHA-256 que las fuentes originales: ONNX Runtime 1.31.1 (MIT, Maven Central) y PP-OCRv6 small en ONNX de RapidOCR v3.10.0 (Apache-2.0, modelscope.cn). Lista y sumas: Punto-Ventas/packaging/ocr-modelos/recursos.txt."
+          if gh release view "$ETIQUETA" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$ETIQUETA" build/ocr-modelos/* --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "$ETIQUETA" build/ocr-modelos/* -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Modelos del lector de tickets (espejo)" --notes "$notas" --prerelease --latest=false
+          fi
+      - name: Comprobar el espejo publicado (lo que bajará el programa)
+        run: bash packaging/ocr-modelos/bajar.sh build/ocr-modelos-espejo "https://github.com/${GITHUB_REPOSITORY}/releases/download/${ETIQUETA}/"

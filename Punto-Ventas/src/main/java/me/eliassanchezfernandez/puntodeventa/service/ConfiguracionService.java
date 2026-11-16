@@ -114,6 +114,12 @@ public class ConfiguracionService {
         }
     }
 
+    /** Guarda la fila (quien llama ya verificó el permiso y audita; p. ej. AparienciaService) */
+    @Transactional
+    public Configuracion guardarDirecto(Configuracion c) {
+        return guardarConfig(c);
+    }
+
     private Configuracion guardarConfig(Configuracion c) {
         Configuracion g = configuracionRepo.save(c);
         invalidarCache();
@@ -165,6 +171,26 @@ public class ConfiguracionService {
 
         auditar("Negocio", antes, String.format("tienda=%s, iva=%.2f%%, plazo=%dh",
                 guardada.getNombreTienda(), guardada.getTasaIva() * 100, guardada.getPlazoCancelacionHoras()));
+        return guardada;
+    }
+
+    /**
+     * Cuántos días dura un vale de compra (devoluciones) desde que se entrega; 0 = no vence.
+     * Solo ADMIN. Aplica a los vales que se entreguen de aquí en adelante.
+     */
+    @Transactional
+    public Configuracion guardarVigenciaVales(int dias) {
+        sesionService.verificarAdmin();
+        if (dias < 0 || dias > 3650) {
+            throw new NegocioException("La vigencia de los vales debe estar entre 0 (no vencen) y 3650 días.");
+        }
+        Configuracion c = obtenerParaEditar();
+        int antes = c.getValeVigenciaDiasOCero();
+        if (antes == dias) return c;
+        c.setValeVigenciaDias(dias == 0 ? null : dias);
+        Configuracion guardada = guardarConfig(c);
+        auditar("Vales de compra", "vigencia=" + (antes == 0 ? "sin vencimiento" : antes + " días"),
+                "vigencia=" + (dias == 0 ? "sin vencimiento" : dias + " días"));
         return guardada;
     }
 
@@ -586,6 +612,19 @@ public class ConfiguracionService {
         return g;
     }
 
+    /** Puerto HTTPS fijo del acceso móvil (ADMIN, auditado); null = automático (puerto HTTP + 1) */
+    @Transactional
+    public Configuracion guardarPuertoHttpsMovil(Integer puerto) {
+        sesionService.verificarAdmin();
+        if (puerto != null) validarPuertoMovil(puerto);
+        Configuracion c = obtenerParaEditar();
+        String antes = c.getMovilPuertoHttps() == null ? "automático" : String.valueOf(c.getMovilPuertoHttps());
+        c.setMovilPuertoHttps(puerto);
+        Configuracion g = guardarConfig(c);
+        auditar("Acceso móvil (puerto HTTPS)", antes, puerto == null ? "automático" : String.valueOf(puerto));
+        return g;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     // ── Actualizaciones ───────────────────────────────────────────────────
@@ -623,12 +662,19 @@ public class ConfiguracionService {
     /** Lo anota el sistema al cargar una copia nueva del catálogo (sin permiso ni bitácora: la pone CatalogoCodigosService) */
     @Transactional
     public void guardarEstadoCatalogoCodigos(String version, String sha256, int productos, java.time.LocalDateTime cuando) {
+        guardarEstadoCatalogoCodigos(version, sha256, productos, cuando, cuando);
+    }
+
+    /** Igual, con la fecha de la última revisión en línea aparte (al cargar el catálogo incluido en el programa se conserva la que había) */
+    @Transactional
+    public void guardarEstadoCatalogoCodigos(String version, String sha256, int productos, java.time.LocalDateTime cuando,
+                                             java.time.LocalDateTime revisado) {
         Configuracion c = obtenerParaEditar();
         c.setCatalogoCodigosVersion(limpiar(version));
         c.setCatalogoCodigosSha256(limpiar(sha256));
         c.setCatalogoCodigosProductos(productos);
         c.setCatalogoCodigosDescargado(cuando);
-        c.setCatalogoCodigosRevisado(cuando);
+        c.setCatalogoCodigosRevisado(revisado);
         guardarConfig(c);
     }
 
@@ -638,6 +684,24 @@ public class ConfiguracionService {
         Configuracion c = obtenerParaEditar();
         c.setCatalogoCodigosRevisado(cuando);
         guardarConfig(c);
+    }
+
+    // ── Caducidades ───────────────────────────────────────────────────────
+
+    /** Con cuántos días de anticipación se avisa de lo que caduca (AJUSTAR_INVENTARIO, auditado) */
+    @Transactional
+    public Configuracion guardarDiasAvisoCaducidad(int dias) {
+        sesionService.verificarPermiso(me.eliassanchezfernandez.puntodeventa.model.Permiso.AJUSTAR_INVENTARIO);
+        if (dias < CaducidadService.DIAS_AVISO_MINIMO || dias > CaducidadService.DIAS_AVISO_MAXIMO) {
+            throw new NegocioException("Los días de aviso de caducidad deben estar entre "
+                    + CaducidadService.DIAS_AVISO_MINIMO + " y " + CaducidadService.DIAS_AVISO_MAXIMO + ".");
+        }
+        Configuracion c = obtenerParaEditar();
+        int antes = c.getDiasAvisoCaducidad();
+        c.setDiasAvisoCaducidad(dias);
+        Configuracion g = guardarConfig(c);
+        if (antes != dias) auditar("Caducidades", "días de aviso=" + antes, "días de aviso=" + dias);
+        return g;
     }
 
     private void auditar(String seccion, String antes, String despues) {

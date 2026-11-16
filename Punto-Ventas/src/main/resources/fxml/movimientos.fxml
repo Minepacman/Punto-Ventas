@@ -14,10 +14,8 @@
             stylesheets="@../css/app.css">
 
     <top>
-        <!-- La barra de herramientas se desplaza horizontalmente si la ventana es angosta (1024×768) -->
-        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
-                    style="-fx-background-color: transparent; -fx-padding: 0;">
-        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+        <!-- Pasa a otro renglón si no cabe (letra grande): nunca recorta con «…» (CapturasBarrasTest) -->
+        <FlowPane styleClass="section-toolbar, barra-acciones">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Label text="Desde:"/>
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
@@ -25,11 +23,11 @@
             <DatePicker fx:id="dpHasta" prefWidth="140"/>
             <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
-            <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." HBox.hgrow="ALWAYS"/>
+            <TextField fx:id="txtFiltro" promptText="Filtrar por producto..." prefWidth="220"/>
             <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
-            <Button text="Cerrar" onAction="#onCerrar"/>
-        </HBox>
-        </ScrollPane>
+            <Button text="Cerrar" onAction="#onCerrar"><graphic><Icono nombre="cerrar"/></graphic>
+                <tooltip><Tooltip text="Cerrar esta ventana (Esc)"/></tooltip></Button>
+        </FlowPane>
     </top>
 
     <center>

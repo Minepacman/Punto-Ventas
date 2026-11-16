@@ -1,0 +1,65 @@
+EMILIANO ZAPATA, VERACRUZ
+RFC:      CRJ010101AB1
+Tel:      0000000000
+Impresion:09-11-2026 14:22:11
+Vendedor: VENDEDOR EJEMPLO
+Captura:  09-11-2026 14:21:48
+Ruta:  569544
+Folio: 9544-49822
+ID:        CLI000001
+Cte:     CLIENTE EJEMPLO
+ABARROTES EJEMPLO
+EDOCRED: Contado
+FP:     Por definir
+
+PEDIDO
+Prod      Descripcion         Cant Precio   Desc
+SubTot
+=======================================================
+=======
+30180175  ACTIVIA CIRUELA      6.0  16.00   0.00
+96.00
+=======================================================
+=======
+
+TOTAL DE PRODUCTOS:    6.0
+
+SUBTOTAL :           96.00
+DESCUENTO:            0.00
+IMPUESTOS:            0.00
+       *****  TOTAL $     96.00     *****
+
+
+
+
+Cervezas y Refrescos de Jalapa
+CARRETERA FEDERAL XALAPA-VERAC
+FRACC LOS GIRASOLES, C.P. 9163
+EMILIANO ZAPATA, VERACRUZ
+RFC:      CRJ010101AB1
+Tel:      0000000000
+
+Impresion:09-11-2026 14:22:27
+Vendedor: VENDEDOR EJEMPLO
+Captura:  09-11-2026 14:22:20
+Ruta:  569544
+Folio: 9544-49823
+ID:        CLI000001
+Cte:     CLIENTE EJEMPLO
+ABARROTES EJEMPLO
+EDOCRED: Contado
+FP:     Por definir
+
+PEDIDO
+Prod      Descripcion         Cant Precio   Desc
+SubTot
+=======================================================
+=======
+25288100  AMPER MORA AZUL      1.0 196.01   0.00
+196.01
+=======================================================
+=======
+
+TOTAL DE PRODUCTOS:    1.0
+
+SUBTOTAL :          196.01

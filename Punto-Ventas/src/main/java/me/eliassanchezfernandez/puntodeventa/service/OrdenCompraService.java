@@ -70,6 +70,8 @@ public class OrdenCompraService {
     @Autowired private ProductoService productoService;
     @Autowired private SesionService sesionService;
     @Autowired private AuditoriaService auditoriaService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -185,11 +187,10 @@ public class OrdenCompraService {
             throw new NegocioException("Solo una orden en borrador se puede marcar como enviada.");
         }
         if (o.getLineas().isEmpty()) throw new NegocioException("La orden no tiene productos.");
-        o.setEstado(Estado.ENVIADA);
-        OrdenCompra g = ordenRepo.save(o);
+        cambiarEstadoOFallar(o, Estado.ENVIADA, List.of(Estado.BORRADOR));
         auditoriaService.registrar(sesionService.getCajeroActual(), "ORDEN_COMPRA_ENVIADA",
-                "Orden #" + g.getId() + " a " + g.getProveedor().getNombre(), (Cajero) null);
-        return g;
+                "Orden #" + o.getId() + " a " + o.getProveedor().getNombre(), (Cajero) null);
+        return o;
     }
 
     @Transactional
@@ -199,34 +200,61 @@ public class OrdenCompraService {
         if (o.getEstado() != Estado.BORRADOR && o.getEstado() != Estado.ENVIADA) {
             throw new NegocioException("Una orden " + o.getEstado().getEtiqueta().toLowerCase() + " ya no se puede cancelar.");
         }
-        o.setEstado(Estado.CANCELADA);
-        OrdenCompra g = ordenRepo.save(o);
+        cambiarEstadoOFallar(o, Estado.CANCELADA, List.of(Estado.BORRADOR, Estado.ENVIADA));
         auditoriaService.registrar(sesionService.getCajeroActual(), "ORDEN_COMPRA_CANCELADA",
-                "Orden #" + g.getId() + " a " + g.getProveedor().getNombre(), (Cajero) null);
-        return g;
+                "Orden #" + o.getId() + " a " + o.getProveedor().getNombre(), (Cajero) null);
+        return o;
     }
 
     /**
      * Recibe la mercancía: cada línea entra al inventario (con movimiento, costo
      * y proveedor) y la orden queda RECIBIDA, todo en una transacción. Requiere
      * AJUSTAR_INVENTARIO o la autorización de un administrador.
+     *
+     * El cambio a RECIBIDA se hace PRIMERO, con un UPDATE condicionado al estado de
+     * partida: si otra caja la recibió (o canceló) un instante antes, no afecta
+     * ninguna fila y se avisa sin tocar el inventario; así una orden nunca entra
+     * dos veces. Si una línea falla después, la transacción revierte también el
+     * cambio de estado.
      */
     @Transactional
     public OrdenCompra recibir(Long ordenId, Collection<Autorizacion> autorizaciones) {
+        return recibir(ordenId, autorizaciones, null);
+    }
+
+    /**
+     * Igual, con fechas de caducidad opcionales por línea ({@code caducidades}: id de línea → fecha;
+     * solo cuentan en productos que controlan caducidad, ver {@link CaducidadService}).
+     */
+    @Transactional
+    public OrdenCompra recibir(Long ordenId, Collection<Autorizacion> autorizaciones,
+                               java.util.Map<Long, java.time.LocalDate> caducidades) {
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
         OrdenCompra o = cargar(ordenId);
         if (o.getEstado() == Estado.RECIBIDA) throw new NegocioException("La orden #" + ordenId + " ya fue recibida.");
         if (o.getEstado() == Estado.CANCELADA) throw new NegocioException("La orden #" + ordenId + " está cancelada.");
         if (o.getLineas().isEmpty()) throw new NegocioException("La orden no tiene productos.");
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
+
+        int marcadas = ordenRepo.marcarRecibida(o.getId(), Estado.RECIBIDA, LocalDateTime.now(),
+                sesionService.getNombreCajero(), List.of(Estado.BORRADOR, Estado.ENVIADA));
+        if (marcadas == 0) {
+            em.refresh(o);
+            throw new NegocioException(o.getEstado() == Estado.RECIBIDA
+                    ? "Esta orden ya fue recibida en otra caja (orden #" + o.getId() + "): la mercancía ya entró al inventario y no se hizo nada más."
+                    : "Esta orden ya fue cancelada en otra caja (orden #" + o.getId() + "): no se recibió nada.");
+        }
+        em.refresh(o);   // estado, fecha y quién, tal como quedaron en la base
 
         // Una sola autorización cubre TODAS las líneas: cada entrada la usa sin consumirla
         // y se consume aquí al final (si se consumiera en la primera línea, la segunda fallaría).
         // El proveedor pudo desactivarse después de hacer el pedido: lo ya pedido se puede recibir.
         Autorizacion aut = sesionService.autorizacionUsada(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
-        for (OrdenCompraLinea l : o.getLineas()) {
+        for (OrdenCompraLinea l : lineasEnOrdenDeBloqueo(o.getLineas())) {
             try {
                 productoService.registrarEntradaDeOrden(l.getProducto().getId(), l.getCantidad(),
-                        o.getProveedor(), "Orden de compra #" + o.getId(), l.getCostoUnitario(), autorizaciones);
+                        o.getProveedor(), "Orden de compra #" + o.getId(), l.getCostoUnitario(), autorizaciones,
+                        caducidades == null || l.getId() == null ? null : caducidades.get(l.getId()));
             } catch (PermisoRequeridoException e) {
                 throw e;
             } catch (NegocioException e) {
@@ -235,15 +263,35 @@ public class OrdenCompraService {
                         + l.getProducto().getDescripcion() + "\" — " + e.getMessage());
             }
         }
-        o.setEstado(Estado.RECIBIDA);
-        o.setFechaRecepcion(LocalDateTime.now());
-        o.setRecibidaPor(sesionService.getNombreCajero());
-        OrdenCompra g = ordenRepo.save(o);
         auditoriaService.registrar(sesionService.getCajeroActual(), "ORDEN_COMPRA_RECIBIDA",
-                "Orden #" + g.getId() + " de " + g.getProveedor().getNombre() + ": " + g.getLineas().size()
-                        + " línea(s), " + g.getTotal() + " en compras", aut);
+                "Orden #" + o.getId() + " de " + o.getProveedor().getNombre() + ": " + o.getLineas().size()
+                        + " línea(s), " + o.getTotal() + " en compras", aut);
         if (aut != null) aut.consumir();   // la operación completa ya se hizo: autorización de un solo uso
-        return g;
+        return o;
+    }
+
+    /**
+     * Cambia el estado EN la base, condicionado a que siga en uno de {@code desde}; si otra caja lo
+     * cambió entre leer y escribir, relee y avisa con el estado real. La entidad queda al día.
+     */
+    private void cambiarEstadoOFallar(OrdenCompra o, Estado nuevo, List<Estado> desde) {
+        if (ordenRepo.cambiarEstado(o.getId(), nuevo, desde) == 0) {
+            em.refresh(o);
+            throw new NegocioException("La orden #" + o.getId() + " ya está " + o.getEstado().getEtiqueta().toLowerCase()
+                    + " (la cambió otra caja): no se hizo nada.");
+        }
+        em.refresh(o);
+    }
+
+    /**
+     * Las líneas en ORDEN DE BLOQUEO (id de producto ascendente, el mismo que usa cobrar y cancelar):
+     * la recepción suma existencia a varios productos en una transacción y, si otra caja tocara los
+     * mismos en otro orden, se bloquearían en cruz (interbloqueo en PostgreSQL).
+     */
+    static List<OrdenCompraLinea> lineasEnOrdenDeBloqueo(List<OrdenCompraLinea> lineas) {
+        List<OrdenCompraLinea> ordenadas = new ArrayList<>(lineas);
+        ordenadas.sort(java.util.Comparator.comparing(l -> l.getProducto().getId()));
+        return ordenadas;
     }
 
     // ── Exportar ──────────────────────────────────────────────────────────

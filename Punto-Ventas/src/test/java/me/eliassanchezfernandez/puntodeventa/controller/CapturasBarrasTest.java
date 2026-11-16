@@ -1,0 +1,366 @@
+package me.eliassanchezfernandez.puntodeventa.controller;
+
+import atlantafx.base.theme.NordLight;
+import javafx.animation.PauseTransition;
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.ButtonBase;
+import javafx.scene.control.Labeled;
+import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TabPane;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TitledPane;
+import javafx.scene.control.TreeTableView;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.WritableImage;
+import javafx.scene.text.Text;
+import javafx.stage.Stage;
+import javafx.util.Duration;
+import me.eliassanchezfernandez.puntodeventa.DatosDemoCapturas;
+import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.Apariencia;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Barras de botones de todas las pestañas y ventanas a 1024×768 (y 1280×800, y con la letra al
+ * 115 % y 130 %): captura cada pantalla y revisa que ningún botón muestre su texto recortado con
+ * «…». Un botón recortado es el que su skin dibuja con un texto distinto al suyo (el {@code Text}
+ * interno de {@code LabeledSkinBase} lleva la versión recortada). Solo corre a petición, porque
+ * necesita una pantalla:
+ * <pre>APP_CAPTURAS=true APP_CAPTURAS_DIR=/ruta ./gradlew test --tests '*CapturasBarrasTest'</pre>
+ * Escribe {@code recortes.txt} con TODO lo recortado (también etiquetas, solo de aviso) y falla si
+ * hay algún botón recortado.
+ */
+@SpringBootTest
+@EnabledIfEnvironmentVariable(named = "APP_CAPTURAS", matches = "true")
+class CapturasBarrasTest {
+
+    @Autowired private ApplicationContext springContext;
+    @Autowired private SesionService sesionService;
+
+    /** Contenido de una pestaña con la ventana maximizada: ancho de pantalla menos bordes, alto menos cabecera y barra de estado */
+    private static final String[] PESTANAS = {
+            "/fxml/ventas.fxml", "/fxml/promociones.fxml", "/fxml/productos.fxml", "/fxml/inventario.fxml",
+            "/fxml/clientes.fxml",   // oculta mientras FuncionesOcultas.FIADO_HABILITADO = false; se revisa igual
+            "/fxml/corte.fxml", "/fxml/estadisticas.fxml", "/fxml/configuracion.fxml",
+    };
+
+    /** Ventanas modales con el tamaño que pide su controlador (se recortan a la pantalla como en Ventanas.ajustarAPantalla) */
+    private static final Object[][] VENTANAS = {
+            {"/fxml/proveedores.fxml", 980, 620},
+            {"/fxml/ordenes_compra.fxml", 1100, 680},
+            {"/fxml/movimientos.fxml", 1050, 600},
+            {"/fxml/ventas_periodo.fxml", 1000, 640},
+            {"/fxml/facturas.fxml", 1100, 640},
+            {"/fxml/clientes_fiscales.fxml", 900, 560},
+            {"/fxml/usuarios.fxml", 1000, 690},
+            {"/fxml/bitacora.fxml", 1100, 640},
+            {"/fxml/configuracion_opciones.fxml", 540, 520},
+            {"/fxml/configuracion_negocio.fxml", 640, 660},
+            {"/fxml/configuracion_ticket.fxml", 860, 640},
+            {"/fxml/configuracion_logotipo.fxml", 440, 440},
+            {"/fxml/configuracion_unidades.fxml", 780, 530},
+            {"/fxml/configuracion_basedatos.fxml", 940, 669},
+            {"/fxml/configuracion_movil.fxml", 960, 720},
+            {"/fxml/configuracion_clima.fxml", 640, 620},
+            {"/fxml/configuracion_facturacion.fxml", 960, 720},
+            {"/fxml/configuracion_impresora.fxml", 600, 760},
+            {"/fxml/configuracion_bascula.fxml", 600, 620},
+            {"/fxml/asistente_inicial.fxml", 640, 700},
+    };
+
+    private final List<String> botonesRecortados = new ArrayList<>();
+    private final StringBuilder informe = new StringBuilder();
+
+    @Test
+    void ningunBotonRecortadoA1024() throws Exception {
+        Path base = Path.of(System.getenv().getOrDefault("APP_CAPTURAS_DIR", System.getProperty("java.io.tmpdir")), "barras");
+        // Tienda de ejemplo: las tablas con filas reales (precios, nombres) dejan ver columnas angostas
+        DatosDemoCapturas.Sembrado datos = DatosDemoCapturas.sembrar(springContext);
+        arrancarJavaFx();
+        enFx(() -> Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()));
+
+        // {pantalla ancho, alto visible (sin barra de tareas), escala de letra de Apariencia (%)}
+        Object[][] casos = {
+                {1024, 728, 100, "1024x768"},
+                {1280, 760, 100, "1280x800"},
+                {1024, 728, 115, "1024x768-letra115"},
+                {1024, 728, 130, "1024x768-letra130"},
+                {1280, 760, 130, "1280x800-letra130"},
+        };
+        try {
+            for (Object[] c : casos) {
+                int anchoPantalla = (Integer) c[0];
+                int altoVisible = (Integer) c[1];
+                int escala = (Integer) c[2];
+                enFx(() -> AplicadorApariencia.aplicar(Apariencia.porDefecto().conEscala(escala)));
+                Path dir = base.resolve((String) c[3]);
+                Files.createDirectories(dir);
+                informe.append("== ").append(c[3]).append(" ==\n");
+                boolean cuenta = true;
+                // Ventana principal maximizada (cabecera con reloj, usuario, Bloquear / Cerrar sesión / Salir)
+                capturar("/fxml/main.fxml", anchoPantalla, altoVisible - 30, dir, cuenta);
+                // Con un nombre largo la cabecera cede la fecha y angosta el nombre: Bloquear / Cerrar sesión / Salir siempre a la vista
+                String nombreAntes = sesionService.getCajeroActual().getNombreCompleto();
+                sesionService.getCajeroActual().setNombreCompleto("María Guadalupe Hernández de la Cruz");
+                try {
+                    capturar("/fxml/main.fxml", anchoPantalla, altoVisible - 30, dir, cuenta, "main-nombre-largo");
+                } finally {
+                    sesionService.getCajeroActual().setNombreCompleto(nombreAntes);
+                }
+                // La ventana principal con la pestaña F2 · Promociones abierta (se carga perezosamente como en uso real)
+                capturar("/fxml/main.fxml", anchoPantalla, altoVisible - 30, dir, cuenta, "main-promociones",
+                        raiz -> ((javafx.scene.control.TabPane) raiz.lookup(".main-tabs")).getTabs().stream()
+                                .filter(t -> "tabPromociones".equals(t.getId())).findFirst()
+                                .ifPresent(t -> t.getTabPane().getSelectionModel().select(t)));
+                for (String fxml : PESTANAS) {
+                    // Ventana maximizada: pestañas (~42 px), cabecera (~56 px) y barra de estado (~28 px)
+                    if (fxml.endsWith("/ventas.fxml")) {
+                        // Con un ticket en captura: nombres largos, granel y precios de varias cifras
+                        capturar(fxml, anchoPantalla - 16, altoVisible - 126, dir, cuenta, "ventas",
+                                (raiz, ctl) -> llenarTicket(ctl, datos));
+                    } else {
+                        capturar(fxml, anchoPantalla - 16, altoVisible - 126, dir, cuenta);
+                    }
+                }
+                for (Object[] v : VENTANAS) {
+                    double ancho = Math.min(((Number) v[1]).doubleValue(), Math.floor(anchoPantalla * 0.96));
+                    double alto = Math.min(((Number) v[2]).doubleValue(), Math.floor(altoVisible * 0.92));
+                    capturar((String) v[0], ancho, alto, dir, cuenta);
+                }
+            }
+        } finally {
+            Files.createDirectories(base);
+            Files.writeString(base.resolve("recortes.txt"), informe.toString());
+            enFx(() -> AplicadorApariencia.aplicar(Apariencia.porDefecto()));
+            sesionService.cerrarSesion();
+            Files.writeString(base.resolve("recortes.txt"), informe.toString());
+            System.out.println(informe);
+            System.out.println("Capturas en " + base.toAbsolutePath());
+        }
+        assertThat(botonesRecortados).as("botones, encabezados o cifras de tablas importantes recortados (ver recortes.txt)").isEmpty();
+    }
+
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta) throws Exception {
+        capturar(fxml, ancho, alto, dir, cuenta, fxml.substring(fxml.lastIndexOf('/') + 1).replace(".fxml", ""));
+    }
+
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta, String nombre) throws Exception {
+        capturar(fxml, ancho, alto, dir, cuenta, nombre, raiz -> { });
+    }
+
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta, String nombre,
+                          java.util.function.Consumer<Parent> preparar) throws Exception {
+        capturar(fxml, ancho, alto, dir, cuenta, nombre, (raiz, ctl) -> preparar.accept(raiz));
+    }
+
+    /** Agrega al ticket de Ventas artículos de la tienda de ejemplo (método privado del controlador) */
+    private static void llenarTicket(Object ventas, DatosDemoCapturas.Sembrado datos) {
+        try {
+            java.lang.reflect.Method agregar = ventas.getClass().getDeclaredMethod("agregarAlTicket",
+                    me.eliassanchezfernandez.puntodeventa.model.Producto.class, double.class);
+            agregar.setAccessible(true);
+            var p = datos.productos();
+            agregar.invoke(ventas, p.get("Coca-Cola 600 ml"), 12);
+            agregar.invoke(ventas, p.get("Yoghurt Lala fresa 1 kg"), 1);
+            agregar.invoke(ventas, p.get("Aguacate"), 1.255);
+            agregar.invoke(ventas, p.get("Pan Bimbo blanco grande"), 1);
+            agregar.invoke(ventas, p.get("Huevo blanco 12 pz"), 3);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void capturar(String fxml, double ancho, double alto, Path dir, boolean cuenta, String nombre,
+                          java.util.function.BiConsumer<Parent, Object> preparar) throws Exception {
+        AtomicReference<Throwable> error = new AtomicReference<>();
+        CountDownLatch listo = new CountDownLatch(1);
+        Platform.runLater(() -> {
+            try {
+                FXMLLoader loader = new FXMLLoader(CapturasBarrasTest.class.getResource(fxml));
+                loader.setControllerFactory(springContext::getBean);
+                Parent raiz = loader.load();
+                Scene escena = new Scene(raiz, ancho, alto);
+                Ventanas.aplicarCss(escena);
+                Stage stage = new Stage();
+                stage.setScene(escena);
+                stage.show();
+                preparar.accept(raiz, loader.getController());
+                PauseTransition espera = new PauseTransition(Duration.millis(700));
+                espera.setOnFinished(e -> {
+                    try {
+                        escena.getRoot().applyCss();
+                        escena.getRoot().layout();
+                        vistos.clear();   // no retener los nodos de cada pantalla (sin esto se acaba la memoria)
+                        revisar(nombre, raiz, cuenta);
+                        guardarPng(escena.snapshot(null), dir.resolve(nombre + ".png").toFile());
+                    } catch (Exception ex) {
+                        error.set(ex);
+                    } finally {
+                        stage.close();
+                        listo.countDown();
+                    }
+                });
+                espera.play();
+            } catch (Throwable t) {
+                error.set(t);
+                listo.countDown();
+            }
+        });
+        assertThat(listo.await(30, TimeUnit.SECONDS)).as("captura de " + fxml).isTrue();
+        if (error.get() != null) {
+            informe.append(String.format("  %-26s NO SE PUDO CARGAR: %s%n", nombre, error.get()));
+        }
+    }
+
+    /** Anota cada control con el texto recortado; los botones (y lo que va dentro de un botón) cuentan como fallo */
+    private final java.util.Set<Node> vistos = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
+    private void revisar(String pantalla, Node n, boolean cuenta) {
+        if (!n.isVisible() || !vistos.add(n)) return;
+        if (n instanceof TableView<?> tv) {
+            revisarTabla(pantalla, tv, cuenta);
+            return;
+        }
+        if (n instanceof ListView<?> || n instanceof TreeTableView<?>) return;
+        if (n instanceof javafx.scene.control.ToolBar tb) {
+            // La barra de JavaFX esconde en «»» lo que no cabe: también cuenta como recortado
+            for (Node item : tb.getItems()) {
+                if (item.isManaged() && item.isVisible() && item.getParent() == null && item instanceof Labeled l) {
+                    String linea = String.format("  %-26s %-14s «%s» → (en el desborde »)", pantalla,
+                            item.getClass().getSimpleName(), l.getText());
+                    informe.append(linea).append("  ← BOTÓN\n");
+                    if (cuenta) botonesRecortados.add(linea);
+                }
+            }
+        }
+        if (n instanceof Labeled l) {
+            String recortado = textoMostrado(l);
+            if (recortado != null) {
+                ButtonBase boton = n instanceof ButtonBase b ? b : botonQueContiene(n);
+                String linea = String.format("  %-26s %-14s «%s» → «%s»", pantalla,
+                        boton != null ? boton.getClass().getSimpleName() : n.getClass().getSimpleName(),
+                        l.getText(), recortado);
+                informe.append(linea).append(boton != null ? "  ← BOTÓN" : "").append('\n');
+                if (boton != null && cuenta) botonesRecortados.add(linea);
+            }
+        }
+        if (n instanceof Parent p) for (Node h : p.getChildrenUnmodifiable()) revisar(pantalla, h, cuenta);
+        if (n instanceof ScrollPane sp && sp.getContent() != null) revisar(pantalla, sp.getContent(), cuenta);
+        if (n instanceof TabPane tp) for (var t : tp.getTabs()) if (t.getContent() != null && t.isSelected()) revisar(pantalla, t.getContent(), cuenta);
+        if (n instanceof TitledPane tp && tp.getContent() != null && tp.isExpanded()) revisar(pantalla, tp.getContent(), cuenta);
+    }
+
+    /**
+     * Pantallas cuyas tablas son de uso diario (Ventas, Productos, Inventario, Historial, Corte): un
+     * encabezado o una cifra recortada en ellas cuenta como fallo. En las demás solo se anota.
+     */
+    private static final java.util.Set<String> TABLAS_IMPORTANTES = java.util.Set.of(
+            "ventas", "productos", "inventario", "ventas_periodo", "corte");
+
+    /** Encabezados de columna y celdas con el texto recortado («Existen…», «$1,2…») */
+    private void revisarTabla(String pantalla, TableView<?> tabla, boolean cuenta) {
+        boolean importante = TABLAS_IMPORTANTES.contains(pantalla);
+        java.util.Set<Object> columnasVistas = new java.util.HashSet<>();
+        for (Node h : tabla.lookupAll(".column-header")) {
+            if (!(h instanceof javafx.scene.control.skin.TableColumnHeader ch) || !h.isVisible()) continue;
+            if (ch.getTableColumn() == null || !ch.getTableColumn().isVisible()) continue;
+            for (Node l : ch.getChildrenUnmodifiable()) {
+                if (l instanceof Labeled lab) {
+                    String recortado = textoMostrado(lab);
+                    if (recortado == null) continue;
+                    String linea = String.format("  %-26s %-14s «%s» → «%s»", pantalla, "Encabezado", lab.getText(), recortado);
+                    informe.append(linea).append(importante ? "  ← TABLA" : "").append('\n');
+                    if (importante && cuenta) botonesRecortados.add(linea);
+                }
+            }
+        }
+        for (Node c : tabla.lookupAll(".table-cell")) {
+            if (!(c instanceof javafx.scene.control.TableCell<?, ?> celda) || !c.isVisible() || celda.isEmpty()) continue;
+            String recortado = textoMostrado(celda);
+            if (recortado == null) continue;
+            String titulo = celda.getTableColumn() != null ? celda.getTableColumn().getText() : "?";
+            if (!columnasVistas.add("recortada:" + titulo)) continue;   // una línea por columna
+            String linea = String.format("  %-26s %-14s columna «%s»: «%s» → «%s»", pantalla, "Celda", titulo, celda.getText(), recortado);
+            boolean cifra = celda.getStyleClass().contains("align-right")
+                    || (celda.getTableColumn() != null && celda.getTableColumn().getStyleClass().contains("align-right"));
+            informe.append(linea).append(importante && cifra ? "  ← TABLA" : "").append('\n');
+            if (importante && cifra && cuenta) botonesRecortados.add(linea);
+        }
+    }
+
+    /**
+     * Texto que el skin dibuja si es distinto (recortado) del texto del control; null si se ve completo.
+     * El texto interno es el {@code Text} con la clase «text» que {@code LabeledSkinBase} pone como hijo.
+     */
+    static String textoMostrado(Labeled l) {
+        String propio = l.getText();
+        if (propio == null || propio.isBlank()) return null;
+        if (l.isMnemonicParsing()) propio = propio.replaceFirst("_(?=.)", "");
+        for (Node h : l.getChildrenUnmodifiable()) {
+            if (h instanceof Text t && t.getStyleClass().contains("text")) {
+                String visto = t.getText();
+                if (visto == null) return null;
+                if (l.isWrapText()) visto = visto.replace("\n", " ").replaceAll("\\s+", " ").trim();
+                String esperado = l.isWrapText() ? propio.replaceAll("\\s+", " ").trim() : propio;
+                return visto.equals(esperado) ? null : visto;
+            }
+        }
+        return null;
+    }
+
+    private static ButtonBase botonQueContiene(Node n) {
+        for (Node p = n.getParent(); p != null; p = p.getParent()) if (p instanceof ButtonBase b) return b;
+        return null;
+    }
+
+    private static void guardarPng(WritableImage img, File destino) throws Exception {
+        int w = (int) img.getWidth();
+        int h = (int) img.getHeight();
+        BufferedImage bi = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        PixelReader pr = img.getPixelReader();
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) bi.setRGB(x, y, pr.getArgb(x, y));
+        ImageIO.write(bi, "png", destino);
+    }
+
+    private static void arrancarJavaFx() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        try {
+            Platform.startup(latch::countDown);
+        } catch (IllegalStateException yaCorre) {
+            latch.countDown();
+        }
+        Platform.setImplicitExit(false);
+        assertThat(latch.await(20, TimeUnit.SECONDS)).isTrue();
+    }
+
+    private static void enFx(Runnable r) throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        Platform.runLater(() -> { try { r.run(); } finally { latch.countDown(); } });
+        assertThat(latch.await(20, TimeUnit.SECONDS)).isTrue();
+    }
+}

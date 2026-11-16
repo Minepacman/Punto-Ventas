@@ -1,0 +1,25 @@
+0
+BT Last Mile
+DIRECCION EJEMPLO
+Tel:
+     Crúdito Adicion  BT04  6500
+Fecha: 15/09/2026        Hora:14:23
+Lo atiende: BT04 - VENDEDOR EJEMPLO
+Cliente: CLIENTE EJEMPLO
+Cod: CLI000001
+Dir: DIRECCION EJEMPLO
+PEROTE            CLIENTE EJEMPLO
+Tel:
+
+Cantidad Descripcion      Total
+  0.05 MlbRcp20CD        468.81
+ Costo Distribucion: 11.60
+
+               Total     480.41
+
+        Total Paquetes    0.05
+      Total cajetillas:    5
+cuatrocientos ochenta   con 41 /
+================================
+================================
+GRACIAS POR SU COMPRA !

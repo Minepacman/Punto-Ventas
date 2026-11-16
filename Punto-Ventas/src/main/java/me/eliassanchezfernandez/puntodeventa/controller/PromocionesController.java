@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -9,7 +10,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
@@ -36,7 +36,7 @@ import java.util.ResourceBundle;
 import java.util.Set;
 
 /**
- * Catálogo de promociones (ventana modal abierta desde Productos → Promociones).
+ * Catálogo de promociones: pestaña principal F2 · Promociones (antes, ventana de Productos).
  *
  * Tabla a la izquierda, formulario a la derecha. Tipos: % de descuento,
  * precio fijo y NxM (2x1, 3x2); alcance por producto o por departamento;
@@ -111,6 +111,8 @@ public class PromocionesController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Encabezados completos aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaPromociones);
         configurarColumnas();
         tablaPromociones.setItems(lista);
         tablaPromociones.setPlaceholder(new Label("No hay promociones registradas."));
@@ -144,7 +146,7 @@ public class PromocionesController implements Initializable {
 
         filtrarProductos();
         onNueva();
-        recargar();
+        recargarLista();
     }
 
     // ── Acciones ──────────────────────────────────────────────────────────
@@ -222,7 +224,7 @@ public class PromocionesController implements Initializable {
 
         try {
             Promocion guardada = promocionService.guardar(p);
-            recargar();
+            recargarLista();
             lista.stream().filter(x -> x.getId().equals(guardada.getId())).findFirst()
                     .ifPresent(x -> tablaPromociones.getSelectionModel().select(x));
             alerta(Alert.AlertType.INFORMATION, "Promoción guardada",
@@ -246,22 +248,31 @@ public class PromocionesController implements Initializable {
         }
         try {
             promocionService.eliminar(sel.getId());
-            recargar();
+            recargarLista();
             onNueva();
         } catch (NegocioException e) {
             alerta(Alert.AlertType.ERROR, "No se puede eliminar", e.getMessage());
         }
     }
 
-    @FXML
-    private void onCerrar() {
-        ((Stage) raiz.getScene().getWindow()).close();
-    }
-
     // ── Helpers privados ─────────────────────────────────────────────────
 
-    private void recargar() {
+    private void recargarLista() {
         lista.setAll(promocionService.listarTodas());
+    }
+
+    /**
+     * Al volver a la pestaña: promociones, departamentos y productos pudieron cambiar en otra
+     * pantalla (o en otra caja). Lo que se esté capturando en el formulario se conserva.
+     */
+    public void recargar() {
+        Departamento depto = comboDepartamento.getValue();
+        comboDepartamento.setItems(FXCollections.observableArrayList(productoService.listarDepartamentos()));
+        if (depto != null) comboDepartamento.getItems().stream()
+                .filter(d -> d.getId() != null && d.getId().equals(depto.getId())).findFirst()
+                .ifPresent(comboDepartamento::setValue);
+        filtrarProductos();
+        recargarLista();
     }
 
     private void filtrarProductos() {

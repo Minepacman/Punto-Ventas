@@ -1,0 +1,20 @@
+Empresa:  DISTRIBUIDOR EJEMPLO
+Plan de ruta:  JXAL0024
+Cliente:  CLIENTE EJEMPLO
+Calle:  CALLE EJEMPLO 1
+Colonia:
+Ciudad:  PEROTE
+CP:  00000
+Tipo de pago:  No tiene
+Fecha de Emisión:  12/11/2026
+Pedido
+8-ROCHER T2              $20.52 c/u     $164.16
+                         $10.4112 c/
+10-K MAXI T1                  u         $104.11
+Total a pagar
+Total ventas:                   $268.27
+Total final:                    $268.27
+********************************
+VERSIÓN GRATUITA de RAWBT.APP
+Sólo para uso personal
+********************************

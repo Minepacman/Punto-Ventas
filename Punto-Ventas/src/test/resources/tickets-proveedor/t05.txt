@@ -1,0 +1,59 @@
+Factura:MX12670_261072
+315051
+NUM REF FAC:10354011112026
+153928
+NUM FOLIO:
+RFC:XAXX010101000
+RAZON SOCIAL:CLIENTE GENER
+ICO
+FECHA:11/11/2026 15:39:28
+Cod Tienda:1
+NOM TIENDA:TIENDA EJEMPLO
+COD CLIENTE:CLI000001
+DIRECCION:DIRECCION EJEMPLO
+VENDEDOR:VENDEDOR EJEMPLO
+CODIGO DE RUTA:1072
+---------------------------
+SUB.T VENTA: $247.32
+DESCUENTO:-$0
+IVA: $0
+IEPS: $19.78
+SUBTOTAL: $267.10
+---------------------------
+TOTAL A PAGAR: $267.10
+VENTA
+PRODUCTO
+CANT IMP.  PRECI TOTAL
+---------------------------
+Takis Ranch 1p 70g PC FLOW
+2   8.0%  15.56 $31.12
+GoldenNuts Enchilado 1p 78
+1   8.0%  15.56 $15.56
+Pop Sens Queso PC 1p 45g F
+3   8.0%  14.00 $42.00
+Big Mix Fuego 80g FLOW BAR
+2   8.0%  17.11 $34.22
+Big Mix Inglesa Limon 80g
+1   8.0%  17.11 $17.11
+Valentones Fuego 1p 60g FL
+1   8.0%  14.00 $14.00
+Chips Fuego 52g 57g FLOW B
+1   8.0%  15.56 $15.56
+Takis Fuego 20pct Mas Pica
+3   8.0%  15.55 $46.65
+Takis Salsa Brava 1p 70g F
+2   8.0%  15.55 $31.10
+PIEZAS EN VENTA :16
+---------------------------
+SUB.T VENTA: $247.32
+DESCUENTO:-$0
+IVA: $0
+IEPS: $19.78
+SUBTOTAL: $267.10
+TOTAL A PAGAR : 267.10
+---------------------------
+METODO DE PAGO
+EFECTIVO
+$267.10
+Son(Doscientos sesenta y s
+iete pesos 10/100 M.N)

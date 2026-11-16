@@ -2,6 +2,7 @@ package me.eliassanchezfernandez.puntodeventa.service;
 
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoComun;
 import me.eliassanchezfernandez.puntodeventa.model.TicketPendiente;
 import me.eliassanchezfernandez.puntodeventa.repository.TicketPendienteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +59,11 @@ public class TicketPendienteService {
             l.setMayoreo(d.isMayoreo());
             l.setDescuentoManualPct(d.getDescuentoManualPct());
             l.setDescuentoManualImporte(d.getDescuentoManualImporte());
+            if (d.esProductoComun()) {
+                // Nombre y precio no están en el catálogo: se guardan con la línea
+                l.setDescripcion(d.getDescripcionMostrada());
+                l.setPrecio(d.getPrecioListaODefault());
+            }
             t.getLineas().add(l);
         }
         return t;
@@ -73,6 +79,12 @@ public class TicketPendienteService {
             d.setMayoreo(l.isMayoreo());
             d.setDescuentoManualPct(l.getDescuentoManualPct());
             d.setDescuentoManualImporte(l.getDescuentoManualImporte());
+            if (ProductoComun.es(l.getProducto())) {
+                if (l.getPrecio() == null || l.getPrecio() <= 0) return;   // línea vieja o rota: sin precio no se puede vender
+                d.setDescripcion(l.getDescripcion());
+                d.setPrecioVenta(l.getPrecio());
+                d.setPrecioLista(l.getPrecio());
+            }
             detalles.add(d);
         });
         return detalles;

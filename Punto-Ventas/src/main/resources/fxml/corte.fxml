@@ -14,7 +14,8 @@
 
     <top>
         <VBox>
-            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <!-- Pasa a otro renglón si no cabe (varias cajas, letra grande): nunca recorta con «…» -->
+            <FlowPane styleClass="section-toolbar, barra-acciones">
                 <padding><Insets topRightBottomLeft="10"/></padding>
                 <Button fx:id="btnHacerCorte" text="Hacer corte" onAction="#onHacerCorte"
                         styleClass="button-primary"><graphic><Icono nombre="tijeras"/></graphic></Button>
@@ -23,15 +24,15 @@
                 <Button text="Imprimir"     onAction="#onImprimirCorte"><graphic><Icono nombre="impresora"/></graphic></Button>
                 <Button fx:id="btnCorregirFondo" text="Corregir fondo" onAction="#onCorregirFondo"><graphic><Icono nombre="editar"/></graphic></Button>
                 <Button fx:id="btnCorteGeneral" text="Corte general (todas las cajas)" onAction="#onCorteGeneral"><graphic><Icono nombre="numeros"/></graphic></Button>
-                <Label fx:id="lblCaja" text="Caja 1" styleClass="badge"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <HBox spacing="0" alignment="CENTER_RIGHT">
-                    <ToggleButton fx:id="tglTurno" text="Turno actual" selected="true" onAction="#onCambiarModo"/>
-                    <ToggleButton fx:id="tglDia"   text="Día completo" onAction="#onCambiarModo"/>
-                </HBox>
-            </HBox>
+                <Label fx:id="lblCaja" text="Caja 1" styleClass="badge" minWidth="-Infinity"/>
+            </FlowPane>
+            <!-- Qué periodo se ve: el selector va junto a su descripción -->
             <HBox spacing="8" alignment="CENTER_LEFT">
-                <padding><Insets top="0" right="10" bottom="6" left="10"/></padding>
+                <padding><Insets top="8" right="10" bottom="6" left="10"/></padding>
+                <HBox spacing="0" alignment="CENTER_LEFT" minWidth="-Infinity">
+                    <ToggleButton fx:id="tglTurno" text="Turno actual" selected="true" onAction="#onCambiarModo" minWidth="-Infinity"/>
+                    <ToggleButton fx:id="tglDia"   text="Día completo" onAction="#onCambiarModo" minWidth="-Infinity"/>
+                </HBox>
                 <Label fx:id="lblPeriodo" text="Turno actual" styleClass="hint" wrapText="true"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="lblUltimoCorte" text="Hoy no se ha hecho ningún corte." wrapText="true" styleClass="hint"/>
@@ -90,6 +91,8 @@
                         <Label text="Neto (entradas − salidas):" GridPane.rowIndex="7" GridPane.columnIndex="0" styleClass="corte-total-label"/>
                         <Label fx:id="lblNetoMovimientos" text="\$0.00" GridPane.rowIndex="7" GridPane.columnIndex="1" styleClass="corte-total-value"/>
                     </GridPane>
+                    <!-- Abonos de clientes (fiado): solo cuando hubo en el periodo -->
+                    <Label fx:id="lblAbonosClientes" text="" styleClass="hint" wrapText="true" visible="false" managed="false"/>
                 </VBox>
 
                 <!-- Fila 1: Pagos de contado / IVA y Ventas por Departamento -->
@@ -108,8 +111,32 @@
                         <Label fx:id="lblSubtotal"        text="\$0.00" GridPane.rowIndex="4" GridPane.columnIndex="1" styleClass="corte-value"/>
                         <Label text="IVA incluido:"       GridPane.rowIndex="5" GridPane.columnIndex="0"/>
                         <Label fx:id="lblIva"             text="\$0.00" GridPane.rowIndex="5" GridPane.columnIndex="1" styleClass="corte-value"/>
-                        <Label text="Ventas canceladas:"  GridPane.rowIndex="6" GridPane.columnIndex="0"/>
-                        <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="6" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <!-- Solo cuando el periodo mezcla tasas (básicos al 0 % con artículos al 16 %) -->
+                        <Label fx:id="lblIvaPorTasaTitulo" text="Por tasa:" GridPane.rowIndex="6" GridPane.columnIndex="0"
+                               visible="false" managed="false"/>
+                        <Label fx:id="lblIvaPorTasa"      text=""       GridPane.rowIndex="6" GridPane.columnIndex="1" styleClass="hint"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label text="Ventas canceladas:"  GridPane.rowIndex="7" GridPane.columnIndex="0"/>
+                        <Label fx:id="lblCanceladas"      text="0"      GridPane.rowIndex="7" GridPane.columnIndex="1" styleClass="corte-value"/>
+                        <!-- Fiado: se vendió pero NO entró dinero al cajón (solo cuando hubo) -->
+                        <Label fx:id="lblCreditoTitulo"   text="Vendido a cuenta (fiado, no entra al cajón):" GridPane.rowIndex="8" GridPane.columnIndex="0"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label fx:id="lblCredito"         text="\$0.00" GridPane.rowIndex="8" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
+                        <!-- Devoluciones parciales de artículos (DevolucionService): restan en las ventas netas -->
+                        <Label fx:id="lblDevArticulosTitulo" text="Devoluciones de artículos:" GridPane.rowIndex="9" GridPane.columnIndex="0"
+                               visible="false" managed="false"/>
+                        <Label fx:id="lblDevArticulos"    text="" GridPane.rowIndex="9" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
+                        <!-- Vales de compra de la tienda: ni entran ni salen del cajón (solo cuando hubo) -->
+                        <Label fx:id="lblValesTiendaTitulo" text="Pagado con vales de la tienda (no entra al cajón):" GridPane.rowIndex="10" GridPane.columnIndex="0"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label fx:id="lblValesTienda"     text="\$0.00" GridPane.rowIndex="10" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
+                        <Label fx:id="lblValesEmitidosTitulo" text="Vales entregados por devoluciones (no salió del cajón):" GridPane.rowIndex="11" GridPane.columnIndex="0"
+                               wrapText="true" visible="false" managed="false"/>
+                        <Label fx:id="lblValesEmitidos"   text="" GridPane.rowIndex="11" GridPane.columnIndex="1" styleClass="corte-value"
+                               visible="false" managed="false"/>
                     </GridPane>
                 </VBox>
 
@@ -220,6 +247,7 @@
             <VBox alignment="CENTER" spacing="4">
                 <Label fx:id="lblGananciaTitulo" text="Ganancia del turno" styleClass="corte-footer-title"/>
                 <Label fx:id="lblGanancia"      text="\$0.00" styleClass="corte-footer-value"/>
+                <Label fx:id="lblGananciaComunes" text="" styleClass="hint" visible="false" managed="false"/>
             </VBox>
         </HBox>
     </bottom>

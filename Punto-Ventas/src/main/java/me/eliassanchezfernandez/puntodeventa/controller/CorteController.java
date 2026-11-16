@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -12,6 +13,7 @@ import javafx.scene.layout.GridPane;
 import me.eliassanchezfernandez.puntodeventa.model.Corte;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja;
 import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja.Categoria;
+import me.eliassanchezfernandez.puntodeventa.model.ProductoComun;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.service.CajaService;
@@ -21,6 +23,7 @@ import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.service.VentaService;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoIva;
 import me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -60,6 +63,7 @@ public class CorteController implements Initializable {
     @Autowired private ImpresionService impresionService;
     @Autowired private IdentidadCaja identidadCaja;
     @Autowired private MovimientoCajaDialogo movimientoCajaDialogo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CuentaClienteService cuentaClienteService;
 
     // Barra
     @FXML private Button btnHacerCorte;
@@ -92,6 +96,8 @@ public class CorteController implements Initializable {
     @FXML private Label lblGastos;
     @FXML private Label lblDevolucionesTitulo;
     @FXML private Label lblDevoluciones;
+    @FXML private Label lblDevArticulosTitulo;
+    @FXML private Label lblDevArticulos;
     @FXML private Label lblOtrasSalidasTitulo;
     @FXML private Label lblOtrasSalidas;
     @FXML private Label lblNetoMovimientos;
@@ -102,14 +108,25 @@ public class CorteController implements Initializable {
     @FXML private Label lblTransferencia;
     @FXML private Label lblValesTitulo;
     @FXML private Label lblVales;
+    @FXML private Label lblValesTiendaTitulo;
+    @FXML private Label lblValesTienda;
+    @FXML private Label lblValesEmitidosTitulo;
+    @FXML private Label lblValesEmitidos;
     @FXML private Label lblSubtotal;
     @FXML private Label lblIva;
+    @FXML private Label lblIvaPorTasaTitulo;
+    @FXML private Label lblIvaPorTasa;
     @FXML private Label lblCanceladas;
+    // Fiado
+    @FXML private Label lblCreditoTitulo;
+    @FXML private Label lblCredito;
+    @FXML private Label lblAbonosClientes;
     // Totales
     @FXML private Label lblVentasTotalesTitulo;
     @FXML private Label lblVentasTotales;
     @FXML private Label lblGanancia;
     @FXML private Label lblGananciaTitulo;
+    @FXML private Label lblGananciaComunes;
 
     @FXML private TableView<Map.Entry<String, Double>>           tablaDepartamentos;
     @FXML private TableColumn<Map.Entry<String, Double>, String> colDepto;
@@ -157,6 +174,8 @@ public class CorteController implements Initializable {
     @FXML private TableColumn<Producto, String> colBajoMinimo;
 
     private final ObservableList<Map.Entry<String, Double>> porDepartamento = FXCollections.observableArrayList();
+    /** Lo devuelto por departamento en el periodo mostrado (nota junto al neto) */
+    private Map<String, Double> devolucionesPorDepartamento = Map.of();
     private final ObservableList<Producto> bajos = FXCollections.observableArrayList();
     private final ObservableList<VentaService.VoucherTarjeta> vouchers = FXCollections.observableArrayList();
     private final ObservableList<MovimientoCaja> movimientos = FXCollections.observableArrayList();
@@ -167,8 +186,18 @@ public class CorteController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Ni encabezados ni cifras con «…» aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaDepartamentos);
+        ColumnasTabla.ajustar(tablaMovimientos);
+        ColumnasTabla.ajustar(tablaCortes);
+        ColumnasTabla.ajustar(tablaVouchers);
+        ColumnasTabla.ajustar(tablaBajos);
+        // El monto con su nota de devoluciones conserva su ancho; el departamento toma lo que sobra
+        ColumnasTabla.llenarCon(tablaDepartamentos, colDepto);
         colDepto.setCellValueFactory(c -> new SimpleStringProperty(c.getValue().getKey()));
-        colMonto.setCellValueFactory(c -> new SimpleStringProperty(moneda(c.getValue().getValue())));
+        // Netos de las devoluciones del periodo, con la nota de cuánto se devolvió de ese departamento
+        colMonto.setCellValueFactory(c -> new SimpleStringProperty(moneda(c.getValue().getValue())
+                + VentaService.ResumenCorte.notaDevoluciones(devolucionesPorDepartamento.getOrDefault(c.getValue().getKey(), 0.0))));
         tablaDepartamentos.setItems(porDepartamento);
         tablaDepartamentos.setPlaceholder(new Label("Sin ventas en el periodo."));
 
@@ -587,15 +616,44 @@ public class CorteController implements Initializable {
         lblTarjeta.setText(moneda(r.tarjeta));
         mostrarFila(lblTransferenciaTitulo, lblTransferencia, r.transferencia);
         mostrarFila(lblValesTitulo, lblVales, r.vales);
+        // Vales de compra de la tienda: ni entran ni salen del cajón (el efectivo esperado no los cuenta)
+        mostrarFila(lblValesTiendaTitulo, lblValesTienda, r.valesTienda);
+        mostrarFila(lblValesEmitidosTitulo, lblValesEmitidos, r.valesEmitidos);
+        if (r.numValesEmitidos > 0) lblValesEmitidos.setText(r.numValesEmitidos + " (" + moneda(r.valesEmitidos) + ")");
         lblSubtotal.setText(moneda(r.subtotal));
-        lblIva.setText(moneda(r.iva));
+        lblIva.setText(moneda(r.iva) + VentaService.ResumenCorte.notaDevoluciones(r.ivaDevoluciones));
+        // Desglose por tasa solo cuando el periodo mezcla tasas (básicos al 0 % con artículos al 16 %)
+        boolean mixto = CalculoIva.esMixto(r.porTasaIva);
+        lblIvaPorTasaTitulo.setVisible(mixto); lblIvaPorTasaTitulo.setManaged(mixto);
+        lblIvaPorTasa.setVisible(mixto);       lblIvaPorTasa.setManaged(mixto);
+        lblIvaPorTasa.setText(mixto ? textoIvaPorTasa(r) : "");
         lblCanceladas.setText(r.numCanceladas + " (" + moneda(r.totalCanceladas) + ")");
+        mostrarFila(lblCreditoTitulo, lblCredito, r.credito);
+        mostrarAbonosClientes(e);
+        boolean hayDevoluciones = r.numDevoluciones > 0;
+        lblDevArticulosTitulo.setVisible(hayDevoluciones); lblDevArticulosTitulo.setManaged(hayDevoluciones);
+        lblDevArticulos.setVisible(hayDevoluciones);       lblDevArticulos.setManaged(hayDevoluciones);
+        lblDevArticulos.setText(r.numDevoluciones + " (−" + moneda(r.totalDevoluciones) + ")"
+                + (r.devolucionesACuenta > 0.004 ? "; " + moneda(r.devolucionesACuenta) + " a cuentas de clientes, no salió del cajón" : "")
+                + (r.devolucionesEnVale > 0.004 ? "; " + moneda(r.devolucionesEnVale) + " en vales, no salió del cajón" : ""));
 
         lblVentasTotalesTitulo.setText("Ventas " + que);
         lblGananciaTitulo.setText("Ganancia " + que);
-        lblVentasTotales.setText(moneda(r.ventasTotales) + "  (" + r.numVentas + " ventas)");
+        lblVentasTotales.setText(r.numDevoluciones > 0
+                ? moneda(r.getVentasNetas()) + " netas  (" + r.numVentas + " ventas por " + moneda(r.ventasTotales)
+                  + "; devoluciones −" + moneda(r.totalDevoluciones) + ")"
+                : moneda(r.ventasTotales) + "  (" + r.numVentas + " ventas)");
         lblGanancia.setText(r.gananciaVisible ? moneda(r.ganancia) : "—");
+        // Productos comunes (Ctrl+P, fuera del catálogo): su costo no es real sino una estimación del 20 %
+        boolean hayComunes = r.gananciaVisible && r.productosComunes > 0.004;
+        lblGananciaComunes.setVisible(hayComunes);
+        lblGananciaComunes.setManaged(hayComunes);
+        if (hayComunes) {
+            lblGananciaComunes.setText(String.format("Incluye %s de productos comunes con ganancia estimada del %d %% (%s)",
+                    moneda(r.productosComunes), Math.round(ProductoComun.MARGEN_GANANCIA * 100), moneda(r.gananciaProductosComunes)));
+        }
 
+        devolucionesPorDepartamento = r.devolucionesPorDepartamento;
         porDepartamento.setAll(r.porDepartamento.entrySet());
         bajos.setAll(r.productosBajos);
         vouchers.setAll(r.vouchers);
@@ -627,6 +685,52 @@ public class CorteController implements Initializable {
             Ventanas.alerta(Alert.AlertType.WARNING, "Monto inválido", mensajeError);
             return null;
         }
+    }
+
+    /** "Gravado 16 %: $100.00 (IVA $16.00) · Tasa 0 %: $84.00 · Exento: $20.00" */
+    static String textoIvaPorTasa(java.util.List<CalculoIva.Grupo> grupos) {
+        return textoIvaPorTasa(grupos, g -> 0.0);
+    }
+
+    /** Igual, con la nota de lo devuelto en cada tasa: "Tasa 0 %: $84.00 (incluye −$28.50 de devoluciones)" */
+    static String textoIvaPorTasa(VentaService.ResumenCorte r) {
+        return textoIvaPorTasa(r.porTasaIva, r::devueltoDeTasa);
+    }
+
+    private static String textoIvaPorTasa(java.util.List<CalculoIva.Grupo> grupos,
+                                          java.util.function.ToDoubleFunction<CalculoIva.Grupo> devuelto) {
+        java.util.List<String> partes = new java.util.ArrayList<>();
+        for (CalculoIva.Grupo g : grupos) {
+            String texto;
+            if (g.gravado()) {
+                texto = "Gravado " + g.tasaIva().porcentaje() + " %: " + Moneda.formato(g.base()) + " (IVA " + Moneda.formato(g.iva()) + ")";
+            } else if (g.exento()) {
+                texto = "Exento: " + Moneda.formato(g.base());
+            } else {
+                texto = "Tasa 0 %: " + Moneda.formato(g.base());
+            }
+            partes.add(texto + VentaService.ResumenCorte.notaDevoluciones(devuelto.applyAsDouble(g)));
+        }
+        return String.join("  ·  ", partes);
+    }
+
+    /** Abonos de clientes del periodo: los de efectivo ya están en las entradas; los demás no entran al cajón */
+    private void mostrarAbonosClientes(CajaService.EstadoCaja e) {
+        String texto = "";
+        try {
+            var a = cuentaClienteService.abonosEntre(e.inicio, e.fin, e.ventas.caja);
+            if (a.total() > 0.004) {
+                texto = "Abonos de clientes (fiado): " + moneda(a.efectivo()) + " en efectivo (incluidos en las entradas)"
+                        + (a.otros() > 0.004 ? " y " + moneda(a.otros()) + " con tarjeta o transferencia (no entran al cajón)" : "")
+                        + ".";
+            }
+        } catch (RuntimeException ex) {
+            System.err.println("Corte: no se pudieron leer los abonos de clientes: " + ex.getMessage());
+        }
+        boolean ver = !texto.isEmpty();
+        lblAbonosClientes.setText(texto);
+        lblAbonosClientes.setVisible(ver);
+        lblAbonosClientes.setManaged(ver);
     }
 
     private static void mostrarFila(Label titulo, Label valor, double monto) {

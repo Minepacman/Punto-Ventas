@@ -23,8 +23,10 @@
                         onAction="#onAgregarProducto"
                         styleClass="button-success" focusTraversable="false"><graphic><Icono nombre="intro"/></graphic></Button>
                 <Button fx:id="btnBuscar"    text="Buscar  F6"   onAction="#onBuscar" focusTraversable="false"><graphic><Icono nombre="buscar"/></graphic></Button>
+                <Button fx:id="btnProductoComun" text="Sin código" onAction="#onProductoComun" focusTraversable="false"><graphic><Icono nombre="etiqueta"/></graphic></Button>
             </HBox>
-            <HBox spacing="6" alignment="CENTER_LEFT">
+            <!-- Pasa a otro renglón si no cabe (letra 115/130 %): nunca recorta con «…» -->
+            <FlowPane styleClass="barra-acciones">
                 <Button fx:id="btnCantidad"  text="Cantidad  F7"      onAction="#onCambiarCantidad" styleClass="button-sm" focusTraversable="false"/>
                 <Button fx:id="btnQuitar"    text="Quitar  Supr"   onAction="#onQuitarLinea"
                         styleClass="button-danger, button-sm" focusTraversable="false"><graphic><Icono nombre="eliminar"/></graphic></Button>
@@ -41,7 +43,7 @@
                         visible="false" managed="false" styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="efectivo"/></graphic></Button>
                 <Button fx:id="btnEfectivo"   text="Efectivo"      onAction="#onMovimientoEfectivo"
                         styleClass="button-sm" focusTraversable="false"><graphic><Icono nombre="subir"/></graphic></Button>
-            </HBox>
+            </FlowPane>
         </VBox>
     </top>
 
@@ -73,14 +75,14 @@
             <!-- CONSTRAINED: las columnas se reparten el ancho disponible (a 1024 px la tabla recibe ~700 px);
                  Descripción es la que crece. Sin esto "Importe" y "Existencia" quedaban fuera de vista. -->
             <TableView fx:id="tablaProductos" styleClass="ticket-table" VBox.vgrow="ALWAYS">
-                <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/></columnResizePolicy>
+                <!-- Sin CONSTRAINED_RESIZE_POLICY: la descripción toma el ancho sobrante (ColumnasTabla.llenarCon) y las cifras conservan el suyo -->
                 <columns>
-                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="95"  minWidth="60"/>
+                    <TableColumn fx:id="colCodigo"        text="Código"      prefWidth="80"  minWidth="60"/>
                     <TableColumn fx:id="colDescripcion"   text="Descripción" prefWidth="200" minWidth="120"/>
                     <TableColumn fx:id="colPrecio"        text="Precio"      prefWidth="75"  minWidth="60" styleClass="align-right"/>
                     <TableColumn fx:id="colCantidad"      text="Cant."       prefWidth="55"  minWidth="45" styleClass="align-right"/>
                     <TableColumn fx:id="colDescuento"     text="Descuento"   prefWidth="75"  minWidth="60" styleClass="align-right"/>
-                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="105" minWidth="70"/>
+                    <TableColumn fx:id="colTipoDescuento" text="Concepto"    prefWidth="90"  minWidth="70"/>
                     <TableColumn fx:id="colImporte"       text="Importe"     prefWidth="85"  minWidth="70" styleClass="align-right"/>
                     <TableColumn fx:id="colExistencia"    text="Existencia"  prefWidth="75"  minWidth="60" styleClass="align-right"/>
                 </columns>

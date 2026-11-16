@@ -106,6 +106,12 @@ public class Corte {
     @Column(name = "num_canceladas", nullable = false)
     private int numCanceladas;
 
+    /** Reembolsado por devoluciones de artículos en el periodo (null en cortes anteriores a las devoluciones) */
+    @Column(name = "devoluciones")
+    private Double devoluciones;
+
+    public double getDevolucionesOCero() { return devoluciones == null ? 0 : devoluciones; }
+
     @Column(nullable = false)
     private double ganancia;
 
