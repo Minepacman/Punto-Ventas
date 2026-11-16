@@ -450,4 +450,66 @@ class ServidorMovilTicketsProveedorTest {
         // Al registrar la entrada en la computadora queda REGISTRADO (aquí: se marca con un registro existente)
         assertThat(porRevisar.descartar(pid)).isTrue();
     }
+
+    // ── Proveedor nuevo desde el ticket ───────────────────────────────────
+
+    @Test
+    void daDeAltaAlProveedorDelTicketYLoEligeSinDuplicar() throws Exception {
+        String token = usuario(Permiso.AJUSTAR_INVENTARIO, Permiso.GESTIONAR_PROVEEDORES);
+        assertThat(get("/api/tickets-proveedor/estado", token).get("puedeCrearProveedores").asBoolean()).isTrue();
+        String nombre = "Lácteos Nuevos " + UUID.randomUUID().toString().substring(0, 6);
+
+        HttpResponse<String> r = json("POST", "/api/tickets-proveedor/proveedor",
+                Map.of("nombre", nombre, "rfc", "lan 010101 ab1", "telefono", "282 141 6799"), token);
+        assertThat(r.statusCode()).as(r.body()).isEqualTo(200);
+        JsonNode c = JSON.readTree(r.body());
+        assertThat(c.get("creado").asBoolean()).isTrue();
+        long id = c.get("proveedor").get("id").asLong();
+        Proveedor guardado = proveedorService.obtener(id);
+        assertThat(guardado.getRfc()).isEqualTo("LAN010101AB1");
+        assertThat(guardado.getTelefono()).isEqualTo("282 141 6799");
+
+        // Mismo nombre con otras mayúsculas y acentos, o mismo RFC: no se crea otro, se ofrece el que ya hay
+        for (Map<String, Object> cuerpo : List.of(
+                Map.<String, Object>of("nombre", nombre.toUpperCase().replace("Á", "A")),
+                Map.<String, Object>of("nombre", "Otro nombre distinto", "rfc", "LAN010101AB1"))) {
+            JsonNode d = JSON.readTree(json("POST", "/api/tickets-proveedor/proveedor", cuerpo, token).body());
+            assertThat(d.get("creado").asBoolean()).isFalse();
+            assertThat(d.get("proveedor").get("id").asLong()).isEqualTo(id);
+        }
+        assertThat(proveedorService.listarTodos().stream().filter(p -> p.getNombre().equals("Otro nombre distinto"))).isEmpty();
+
+        // Aparece en la lista del ticket y se puede elegir en la revisión
+        assertThat(get("/api/tickets-proveedor/estado", token).get("proveedores").toString()).contains(nombre);
+        JsonNode d = esperarLectura(empezarLectura(token), token, "&proveedorId=" + id);
+        assertThat(d.get("proveedorId").asLong()).isEqualTo(id);
+        assertThat(d.get("motivoProveedor").asText()).contains("elegido");
+    }
+
+    @Test
+    void elAltaDeProveedorDelTicketValidaYPideElPermiso() throws Exception {
+        String sin = usuario(Permiso.AJUSTAR_INVENTARIO);
+        assertThat(get("/api/tickets-proveedor/estado", sin).get("puedeCrearProveedores").asBoolean()).isFalse();
+        HttpResponse<String> r = json("POST", "/api/tickets-proveedor/proveedor", Map.of("nombre", "Sin Permiso SA"), sin);
+        assertThat(r.statusCode()).isEqualTo(403);
+        assertThat(proveedorService.listarTodos().stream().filter(p -> p.getNombre().equals("Sin Permiso SA"))).isEmpty();
+        assertThat(json("POST", "/api/tickets-proveedor/proveedor", Map.of("nombre", "X"), null).statusCode()).isEqualTo(401);
+
+        String con = usuario(Permiso.GESTIONAR_PROVEEDORES);
+        assertThat(json("POST", "/api/tickets-proveedor/proveedor", Map.of("nombre", "   "), con).statusCode()).isEqualTo(400);
+        assertThat(json("POST", "/api/tickets-proveedor/proveedor", Map.of("nombre", "Bueno", "rfc", "123"), con).statusCode()).isEqualTo(400);
+        assertThat(json("POST", "/api/tickets-proveedor/proveedor", Map.of("nombre", "Bueno", "telefono", "abc<script>"), con).statusCode()).isEqualTo(400);
+        assertThat(json("POST", "/api/tickets-proveedor/proveedor", Map.of("nombre", "x".repeat(200)), con).statusCode()).isEqualTo(400);
+        assertThat(json("GET", "/api/tickets-proveedor/proveedor", null, con).statusCode()).isEqualTo(405);
+    }
+
+    @Test
+    void laRevisionSugiereElRfcDelTicketCuandoElProveedorNoExiste() {
+        var t = new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketLeido();
+        t.setEncabezado(new ArrayList<>(List.of("DISTRIBUIDORA LA ESPIGA")));
+        t.setRfcs(new ArrayList<>(List.of("DES 010203 AB4")));
+        var s = me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.sugerenciaProveedorNuevo(t);
+        assertThat(s.nombre()).isEqualTo("DISTRIBUIDORA LA ESPIGA");
+        assertThat(s.rfc()).isEqualTo("DES010203AB4");
+    }
 }

@@ -892,26 +892,56 @@ public class LeerTicketDialogo {
             });
         }
 
+        /**
+         * «Nuevo…»: nombre, RFC y teléfono (lo leído del ticket ya viene escrito). Si ya existe uno con ese RFC o
+         * nombre se ofrece usar ese. Elegirlo NO vuelve a armar la revisión: lo que ya editaste en los renglones
+         * se queda (un proveedor recién creado no tiene nada aprendido, la revisión sería la misma).
+         */
         void nuevoProveedor() {
-            Dialog<String> dlg = new Dialog<>();
+            var sugerencia = TicketProveedorService.sugerenciaProveedorNuevo(revision.ticket());
+            Dialog<String[]> dlg = new Dialog<>();
             dlg.setTitle("Nuevo proveedor");
-            dlg.setHeaderText("Nombre del proveedor (como quieres verlo en tu lista)");
+            dlg.setHeaderText("Datos del proveedor (llenados con lo que se leyó del ticket)");
             dlg.initOwner(stage);
-            TextField txt = new TextField(revision.nombreSugeridoNuevo() == null ? "" : revision.nombreSugeridoNuevo());
+            TextField txt = new TextField(sugerencia.nombre() == null ? "" : sugerencia.nombre());
             txt.setPrefColumnCount(30);
-            VBox v = new VBox(8, txt);
-            v.setPadding(new Insets(10));
-            dlg.getDialogPane().setContent(v);
+            TextField txtRfc = new TextField(sugerencia.rfc() == null ? "" : sugerencia.rfc());
+            txtRfc.setPromptText("Opcional");
+            TextField txtTel = new TextField();
+            txtTel.setPromptText("Opcional");
+            GridPane g = new GridPane();
+            g.setHgap(8);
+            g.setVgap(8);
+            g.setPadding(new Insets(10));
+            g.addRow(0, new Label("Nombre:"), txt);
+            g.addRow(1, new Label("RFC:"), txtRfc);
+            g.addRow(2, new Label("Teléfono:"), txtTel);
+            dlg.getDialogPane().setContent(g);
             dlg.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-            dlg.setResultConverter(b -> b == ButtonType.OK ? txt.getText().trim() : null);
+            dlg.setResultConverter(b -> b == ButtonType.OK ? new String[] {txt.getText().trim(), txtRfc.getText().trim(), txtTel.getText().trim()} : null);
             Ventanas.estilizar(dlg);
             Platform.runLater(txt::requestFocus);
-            Optional<String> nombre = dlg.showAndWait().filter(s -> !s.isBlank());
-            if (nombre.isEmpty()) return;
+            Optional<String[]> datos = dlg.showAndWait().filter(d -> !d[0].isBlank());
+            if (datos.isEmpty()) return;
             try {
-                List<String> rfcs = revision.ticket().getRfcs();
-                Proveedor p = proveedorService.guardar(null, nombre.get(), rfcs.isEmpty() ? null : rfcs.get(0), null, null, Set.of(), null);
-                revisar(p.getId());
+                TicketProveedorService.AltaProveedor alta = servicio.altaProveedorDeTicket(datos.get()[0], datos.get()[1], datos.get()[2]);
+                Proveedor p = alta.proveedor();
+                if (!alta.creado()) {
+                    if (!p.isActivo()) {
+                        Ventanas.alerta(Alert.AlertType.WARNING, "Nuevo proveedor",
+                                "Ya existe «" + p.getNombre() + "», pero está desactivado. Reactívalo en Proveedores.");
+                        return;
+                    }
+                    Ventanas.alerta(Alert.AlertType.INFORMATION, "Nuevo proveedor",
+                            "Ya tenías a «" + p.getNombre() + "»: se eligió ese en lugar de crear otro igual.");
+                }
+                cambiandoProveedor = true;
+                try {
+                    Proveedor enLista = cmbProveedor.getItems().stream().filter(x -> x.getId().equals(p.getId())).findFirst().orElse(null);
+                    if (enLista == null) { cmbProveedor.getItems().add(p); enLista = p; }
+                    cmbProveedor.getSelectionModel().select(enLista);
+                } finally { cambiandoProveedor = false; }
+                lblMotivo.setText("Elegido por ti.");
             } catch (NegocioException e) {
                 Ventanas.alerta(Alert.AlertType.WARNING, "Nuevo proveedor", e.getMessage());
             }

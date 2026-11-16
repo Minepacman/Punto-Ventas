@@ -1009,13 +1009,15 @@ const api = {
   },
 
   /* ---------- Leer ticket de proveedor (la foto se lee en la computadora) ---------- */
-  /** {puedeLeerFotos, motivoSinLector, puedeRegistrar, puedeCrearProductos, puedeCambiarPrecios, costosVisibles, porRevisar, maxBytes, proveedores, departamentos, margenes} */
+  /** {puedeLeerFotos, motivoSinLector, puedeRegistrar, puedeCrearProveedores, puedeCrearProductos, puedeCambiarPrecios, costosVisibles, porRevisar, maxBytes, proveedores, departamentos, margenes} */
   ticketsEstado: () => peticion('GET', '/api/tickets-proveedor/estado'),
   /** Sube la foto (Blob JPEG) y empieza la lectura en segundo plano: {id} */
   ticketsLeer: (foto, senal) => peticionImagen('/api/tickets-proveedor/leer', foto, senal),
   /** Cómo va la lectura; ya leída trae la revisión del ticket n (con el proveedor elegido, si se eligió) */
   ticketsLectura: (id, ticket = 0, proveedorId = null) => peticion('GET', '/api/tickets-proveedor/lectura?id=' + encodeURIComponent(id)
     + '&ticket=' + ticket + (proveedorId ? '&proveedorId=' + proveedorId : '')),
+  /** Alta rápida del proveedor del ticket {nombre, rfc?, telefono?} → {creado, proveedor:{id,nombre,activo}} (si ya existía: creado=false) */
+  ticketsProveedorNuevo: datos => peticion('POST', '/api/tickets-proveedor/proveedor', datos),
   ticketsCancelar: id => peticion('POST', '/api/tickets-proveedor/cancelar', { id }),
   /** {id, ticket, proveedorId, folio, fecha, registrarAunqueSeRepita, renglones:[{indice, productoId|nuevo, cantidad, piezasPorUnidad, importe}]} */
   ticketsRegistrar: datos => peticion('POST', '/api/tickets-proveedor/registrar', datos),
@@ -2029,10 +2031,17 @@ async function vistaEscanear() {
     repetidoOk = false;
     const selProv = h('select', { class: 'entrada', id: 'tk-prov', 'aria-label': 'Proveedor' },
       h('option', { value: '' }, 'Elige el proveedor'),
-      est.proveedores.map(p => h('option', { value: String(p.id), selected: p.id === d.proveedorId }, p.nombre)));
-    selProv.addEventListener('change', () => recargarRevision(selProv.value ? Number(selProv.value) : null));
+      est.proveedores.map(p => h('option', { value: String(p.id), selected: p.id === d.proveedorId }, p.nombre)),
+      h('option', { value: '__nuevo' }, '+ Nuevo proveedor'));
+    selProv.dataset.previo = selProv.value;
+    selProv.addEventListener('change', () => {
+      if (selProv.value === '__nuevo') { selProv.value = selProv.dataset.previo; nuevoProveedor(selProv, notaProv); return; }
+      selProv.dataset.previo = selProv.value;
+      recargarRevision(selProv.value ? Number(selProv.value) : null);
+    });
     const motivo = d.proveedorId ? 'Reconocido ' + (d.motivoProveedor || '') : d.nombreSugeridoNuevo
-      ? 'No está en tu lista: el ticket dice «' + d.nombreSugeridoNuevo + '». Dalo de alta en Proveedores o elige uno.' : 'El ticket no trae el nombre del proveedor: elígelo.';
+      ? 'No está en tu lista: el ticket dice «' + d.nombreSugeridoNuevo + '». Elige uno o toca «+ Nuevo proveedor».' : 'El ticket no trae el nombre del proveedor: elígelo o toca «+ Nuevo proveedor».';
+    const notaProv = h('div', { class: 'nota' }, motivo);
     const folio = h('input', { class: 'entrada', id: 'tk-folio', type: 'text', maxlength: '60', autocomplete: 'off', value: d.folio || '' });
     const fecha = h('input', { class: 'entrada', id: 'tk-fecha', type: 'date', value: d.fecha || '' });
     const repetido = d.avisoRepetido ? h('label', { class: 'aviso-err', style: 'display:flex;gap:.6rem;align-items:flex-start' },
@@ -2041,7 +2050,7 @@ async function vistaEscanear() {
     const cuadre = h('div', { class: 'tk-cuadre', role: 'status' });
     const lista = h('div', { class: 'pila' });
     const cabecera = h('section', { class: 'tarjeta pila' },
-      h('div', { class: 'campo' }, h('label', { for: 'tk-prov' }, 'Proveedor'), selProv, h('div', { class: 'nota' }, motivo)),
+      h('div', { class: 'campo' }, h('label', { for: 'tk-prov' }, 'Proveedor'), selProv, notaProv),
       h('div', { class: 'rejilla' },
         h('div', { class: 'campo' }, h('label', { for: 'tk-folio' }, 'Folio'), folio),
         h('div', { class: 'campo' }, h('label', { for: 'tk-fecha' }, 'Fecha'), fecha)),
@@ -2129,6 +2138,58 @@ async function vistaEscanear() {
       lista, cuadre, pie,
       h('button', { class: 'btn btn-block', type: 'button', onclick: async () => {
         if (await confirmar('¿Descartar lo leído?', 'No se registra nada.')) inicio(); } }, 'Descartar'));
+  }
+
+  /**
+   * «+ Nuevo proveedor»: formulario corto con lo que se leyó del ticket. NO recarga la revisión (los renglones
+   * que ya editaste se quedan igual): un proveedor recién creado todavía no tiene nada aprendido, así que la
+   * revisión sería la misma. Si ya existía uno con ese RFC o nombre, ofrece usar ese.
+   */
+  function nuevoProveedor(selProv, notaProv) {
+    if (!est.puedeCrearProveedores) {
+      const q = hoja([h('h2', null, 'Proveedor nuevo'),
+        h('p', { class: 'sub' }, 'Pide a quien administra la tienda que dé de alta al proveedor. Mientras tanto puedes mandar el ticket a la computadora para revisarlo allá.'),
+        h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: () => q.cerrar() }, 'Entendido')]);
+      return;
+    }
+    const nombre = h('input', { class: 'entrada', id: 'pn-nombre', type: 'text', maxlength: '150', autocomplete: 'off', value: d.nombreSugeridoNuevo || '' });
+    const rfc = h('input', { class: 'entrada', id: 'pn-rfc', type: 'text', maxlength: '13', autocomplete: 'off', autocapitalize: 'characters', placeholder: 'Opcional', value: d.rfcSugeridoNuevo || '' });
+    const tel = h('input', { class: 'entrada', id: 'pn-tel', type: 'tel', maxlength: '30', autocomplete: 'off', placeholder: 'Opcional' });
+    const err = h('div', { class: 'oculto', role: 'alert' });
+    const usar = p => {
+      if (!p.activo) { err.className = 'aviso-err'; err.textContent = 'Ya existe «' + p.nombre + '», pero está desactivado. Reactívalo en Proveedores.'; return; }
+      if (![...selProv.options].some(o => o.value === String(p.id))) {
+        selProv.insertBefore(h('option', { value: String(p.id) }, p.nombre), selProv.querySelector('option[value="__nuevo"]'));
+        est.proveedores.push({ id: p.id, nombre: p.nombre });
+      }
+      selProv.value = String(p.id);
+      selProv.dataset.previo = selProv.value;
+      d.proveedorId = p.id;
+      notaProv.textContent = 'Elegido por ti.';
+      q.cerrar();
+    };
+    const guardar = h('button', { class: 'btn btn-primario', type: 'button', onclick: async () => {
+      err.className = 'oculto';
+      if (!nombre.value.trim()) { err.className = 'aviso-err'; err.textContent = 'Escribe el nombre del proveedor.'; nombre.focus(); return; }
+      guardar.disabled = true;
+      try {
+        const r = await api.ticketsProveedorNuevo({ nombre: nombre.value, rfc: rfc.value, telefono: tel.value });
+        if (r.creado) vibrar(30);
+        usar(r.proveedor);
+        if (!r.creado && r.proveedor.activo) avisar('Ya tenías a «' + r.proveedor.nombre + '»: se eligió ese.');
+      } catch (e) {
+        if (e.estado === 401) return;
+        err.className = 'aviso-err'; err.textContent = e.estado === 403
+          ? 'Pide a quien administra la tienda que dé de alta al proveedor.' : e.message;
+      } finally { guardar.disabled = false; }
+    } }, 'Guardar proveedor');
+    const q = hoja([h('h2', null, 'Proveedor nuevo'),
+      h('p', { class: 'sub' }, 'Se llenó con lo que se leyó del ticket: corrígelo si hace falta. Si ya lo tienes dado de alta, se usa ese.'),
+      h('div', { class: 'campo' }, h('label', { for: 'pn-nombre' }, 'Nombre'), nombre),
+      h('div', { class: 'campo' }, h('label', { for: 'pn-rfc' }, 'RFC'), rfc),
+      h('div', { class: 'campo' }, h('label', { for: 'pn-tel' }, 'Teléfono'), tel),
+      err,
+      h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => q.cerrar() }, 'Cancelar'), guardar)]);
   }
 
   function confirmar(tituloTxt, texto, si = 'Sí', no = 'Cancelar') {

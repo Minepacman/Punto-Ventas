@@ -124,6 +124,8 @@ import java.util.function.Supplier;
  *   POST /api/tickets-proveedor/cancelar {id}
  *   POST /api/tickets-proveedor/registrar {id, ticket, proveedorId, folio, fecha, registrarAunqueSeRepita, renglones}
  *                                                    (AJUSTAR_INVENTARIO) -> TicketProveedorService.aplicar; total, texto y cuadre de la lectura guardada
+ *   POST /api/tickets-proveedor/proveedor {nombre, rfc?, telefono?} (GESTIONAR_PROVEEDORES) -> {creado, proveedor:{id,nombre,activo}};
+ *        si ya hay uno con ese RFC o nombre no crea otro: {creado:false, proveedor:{…}}
  *   POST /api/tickets-proveedor/pendiente {id, proveedorId?, nota?} | imagen ?nota= -> cola «por revisar» de la computadora
  *   GET  /api/productos/buscar?q=                    (cualquier usuario) -> hasta 30 productos activos
  *   POST /api/precios/actualizar {precios:[{productoId, precioVenta}]} (EDITAR_PRODUCTOS y CAMBIAR_PRECIOS)
@@ -713,6 +715,7 @@ public class ServidorMovilService {
                 case "/api/tickets-proveedor/cancelar"  -> { exigir(metodo, "POST"); ticketsCancelar(ex); }
                 case "/api/tickets-proveedor/registrar" -> { exigir(metodo, "POST"); ticketsRegistrar(ex); }
                 case "/api/tickets-proveedor/pendiente" -> { exigir(metodo, "POST"); ticketsPendiente(ex); }
+                case "/api/tickets-proveedor/proveedor" -> { exigir(metodo, "POST"); ticketsProveedorNuevo(ex); }
                 case "/api/productos/buscar"            -> { exigir(metodo, "GET");  productosBuscar(ex); }
                 case "/api/precios/actualizar"          -> { exigir(metodo, "POST"); preciosActualizar(ex); }
                 case "/api/push/clave"      -> { exigir(metodo, "GET");  pushClave(ex); }
@@ -2116,6 +2119,7 @@ public class ServidorMovilService {
             r.put("motivoSinLector", lector ? null
                     : "Esta computadora todavía no puede leer fotos; mándala a la computadora o escribe el ticket allá.");
             r.put("puedeRegistrar", cajero.tienePermiso(Permiso.AJUSTAR_INVENTARIO));
+            r.put("puedeCrearProveedores", cajero.tienePermiso(Permiso.GESTIONAR_PROVEEDORES));
             r.put("puedeCrearProductos", cajero.tienePermiso(Permiso.EDITAR_PRODUCTOS));
             r.put("puedeCambiarPrecios", cajero.tienePermiso(Permiso.EDITAR_PRODUCTOS) && cajero.tienePermiso(Permiso.CAMBIAR_PRECIOS));
             r.put("costosVisibles", proveedorService.puedeVerCostos());
@@ -2130,6 +2134,27 @@ public class ServidorMovilService {
             Map<String, Object> margenes = new LinkedHashMap<>();
             ticketProveedorService.margenesHabituales().forEach((k, m) -> margenes.put(String.valueOf(k), m));
             r.put("margenes", margenes);
+            return r;
+        });
+    }
+
+    /** Alta rápida del proveedor de un ticket; todo se valida en {@link ProveedorService#guardar} (nada se confía al teléfono) */
+    private void ticketsProveedorNuevo(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        if (!v.get().cajero().tienePermiso(Permiso.GESTIONAR_PROVEEDORES)) { sinPermiso(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        String nombre = texto(cuerpo.get("nombre"), 150);
+        String rfc = texto(cuerpo.get("rfc"), 20);
+        String telefono = texto(cuerpo.get("telefono"), 30);
+        protegido(ex, Permiso.GESTIONAR_PROVEEDORES, cajero -> {
+            var alta = ticketProveedorService.altaProveedorDeTicket(nombre, rfc, telefono);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("creado", alta.creado());
+            Map<String, Object> p = idNombre(alta.proveedor().getId(), alta.proveedor().getNombre());
+            p.put("activo", alta.proveedor().isActivo());
+            r.put("proveedor", p);
             return r;
         });
     }
@@ -2233,6 +2258,8 @@ public class ServidorMovilService {
         r.put("proveedorNombre", rev.proveedorNombre());
         r.put("motivoProveedor", rev.motivoProveedor());
         r.put("nombreSugeridoNuevo", rev.nombreSugeridoNuevo());
+        r.put("rfcSugeridoNuevo", rev.proveedorId() != null ? null
+                : me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.sugerenciaProveedorNuevo(t).rfc());
         r.put("folio", t.getFolio());
         r.put("fecha", t.getFecha() == null ? null : t.getFecha().toString());
         r.put("total", t.getTotal());

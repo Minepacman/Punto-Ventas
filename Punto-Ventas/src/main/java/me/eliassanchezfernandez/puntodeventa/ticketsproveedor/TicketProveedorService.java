@@ -192,6 +192,41 @@ public class TicketProveedorService {
                 sugeridoNuevo, renglones, proveedorService.puedeVerCostos(), repetido);
     }
 
+    // ── Proveedor nuevo desde el ticket ───────────────────────────────────
+
+    /** Lo que el lector vio del proveedor y la tienda aún no tiene (cualquier campo puede venir vacío) */
+    public record SugerenciaProveedor(String nombre, String rfc) { }
+
+    public static SugerenciaProveedor sugerenciaProveedorNuevo(TicketLeido t) {
+        if (t == null) return new SugerenciaProveedor(null, null);
+        String rfc = t.getRfcs().isEmpty() ? null : t.getRfcs().get(0).toUpperCase().replace(" ", "");
+        return new SugerenciaProveedor(nombreSugerido(t), rfc);
+    }
+
+    /** @param creado false = ya existía (mismo RFC o mismo nombre) y no se creó otro */
+    public record AltaProveedor(Proveedor proveedor, boolean creado) { }
+
+    /**
+     * Da de alta al proveedor de un ticket (permiso GESTIONAR_PROVEEDORES, que revisa
+     * {@link ProveedorService#guardar}). Si ya hay uno con el mismo RFC o el mismo nombre (sin importar
+     * mayúsculas ni acentos) NO crea otro: lo devuelve para que se use ese. El RFC queda guardado, así que
+     * el siguiente ticket del mismo proveedor se reconoce solo.
+     */
+    @Transactional
+    public AltaProveedor altaProveedorDeTicket(String nombre, String rfc, String telefono) {
+        sesionService.verificarPermiso(me.eliassanchezfernandez.puntodeventa.model.Permiso.GESTIONAR_PROVEEDORES);
+        String rfcClave = rfc == null ? "" : rfc.toUpperCase().replace(" ", "");
+        String nombreClave = ProveedorService.clave(nombre);
+        for (Proveedor p : proveedorRepo.findAll()) {
+            boolean mismoRfc = !rfcClave.isEmpty() && p.getRfc() != null && p.getRfc().equalsIgnoreCase(rfcClave);
+            boolean mismoNombre = !nombreClave.isEmpty() && ProveedorService.clave(p.getNombre()).equals(nombreClave);
+            if (mismoRfc || mismoNombre) return new AltaProveedor(p, false);
+        }
+        Proveedor nuevo = proveedorService.guardar(null, nombre, rfc, telefono, null, java.util.Set.of(), java.util.Set.of(),
+                "Dado de alta al leer un ticket.");
+        return new AltaProveedor(nuevo, true);
+    }
+
     private RenglonRevision revisarRenglon(LineaTicket l, Map<String, ProveedorCodigo> aprendido,
                                            List<EmparejadorProductos.ProductoRef> refs, Map<Long, Producto> porId,
                                            double factor, Long deptoProveedor, Map<Long, Double> margenes,
