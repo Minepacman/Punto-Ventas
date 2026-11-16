@@ -261,6 +261,38 @@ h2.titulo { font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -0.03em; }
 .tarjeta .nota { display: inline-block; margin-top: 10px; font-size: .8rem; color: var(--muted); }
 .tarjeta.proximamente { border-style: dashed; opacity: .85; }
 .etiqueta-pronto { position: absolute; top: 14px; right: 14px; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--warning); background: var(--warning-soft); padding: 4px 8px; border-radius: 6px; }
+/* «Beta»: ya funciona pero se sigue probando con tiendas reales (la misma idea que en el programa) */
+.pastilla-beta {
+  display: inline-block; vertical-align: .14em; margin-left: 2px; padding: 2px 8px; border-radius: 99px;
+  font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.45;
+  color: var(--accent-2); background: var(--accent-soft); border: 1px solid rgba(141, 184, 236, .35); white-space: nowrap;
+}
+.pastilla-version {
+  display: inline-block; vertical-align: .14em; margin-left: 2px; padding: 2px 8px; border-radius: 99px;
+  font-size: .75rem; font-weight: 800; letter-spacing: .04em; line-height: 1.45; white-space: nowrap;
+  color: #8fe0b4; background: var(--success-soft); border: 1px solid rgba(76, 180, 126, .35);
+}
+.tarjeta.enlace-nuevo { border-color: rgba(76, 180, 126, .35); background: linear-gradient(160deg, rgba(76,180,126,.10), var(--surface) 60%); }
+.tarjeta.enlace-nuevo a { font-weight: 700; }
+
+/* Novedades de la próxima versión */
+.aviso-version {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 8px 14px; border-radius: 12px;
+  background: var(--success-soft); border: 1px solid rgba(76, 180, 126, .35); color: var(--text); font-size: .92rem; font-weight: 600;
+}
+.aviso-version:hover { text-decoration: none; border-color: rgba(76, 180, 126, .6); }
+.aviso-version .icono { color: #8fe0b4; width: 1.1em; height: 1.1em; }
+.novedades { display: grid; gap: 18px; }
+@media (min-width: 900px) { .novedades { grid-template-columns: repeat(2, 1fr); gap: 20px; } }
+.grupo-nuevo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px 24px; }
+.grupo-nuevo h3 { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; margin-bottom: 14px; }
+.grupo-nuevo h3 .icono { color: var(--accent-2); }
+.grupo-nuevo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.grupo-nuevo li { color: var(--text-2); font-size: .98rem; padding-left: 14px; border-left: 2px solid var(--border-strong); }
+.grupo-nuevo li b { color: var(--text); }
+.leyenda-beta { max-width: 760px; margin: 22px auto 0; text-align: center; color: var(--muted); font-size: .92rem; }
+.leyenda-beta .pastilla-beta { margin: 0 4px 0 0; }
+.novedades-pie { text-align: center; color: var(--muted); font-size: .92rem; margin-top: 10px; }
 
 /* Pantallas alternadas */
 .pantalla { display: grid; gap: 28px; align-items: center; padding: 36px 0; }
