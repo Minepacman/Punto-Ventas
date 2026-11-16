@@ -227,6 +227,14 @@ public class EstadisticasController implements Initializable {
     private SeccionHoy seccionHoy;
     private Timeline enVivo;
 
+    /**
+     * Último periodo elegido en «Más detalles», por usuario, mientras el programa está abierto.
+     * De fábrica abre en «Hoy» (la vista que más se usa); al volver a entrar a la pestaña o
+     * al iniciar sesión otra vez se conserva el que se eligió la última vez.
+     */
+    private static final Map<Long, PeriodoRecordado> PERIODO_POR_USUARIO = new java.util.concurrent.ConcurrentHashMap<>();
+    private record PeriodoRecordado(String boton, LocalDate desde, LocalDate hasta) { }
+
     public record FilaProducto(int pos, String producto, String departamento, double piezas, double importe, double porcentaje) { }
     public record FilaCorrelacion(String producto, String tipo, String clave, double piezas, double indice) { }
     public record FilaClima(String condicion, int ventas, double importe) { }
@@ -236,6 +244,7 @@ public class EstadisticasController implements Initializable {
         configurarTablas();
         gridCalor.getChildren().clear();
         registrarSecciones();
+        restaurarPeriodo();
 
         if (sesionService.tienePermiso(Permiso.VER_HISTORIAL)) {
             recargar();
@@ -444,7 +453,51 @@ public class EstadisticasController implements Initializable {
             return;
         }
         personalizado = null;
+        recordarPeriodo();
         cargarPeriodo();
+    }
+
+    private Long usuarioActualId() {
+        var c = sesionService.getCajeroActual();
+        return c == null ? null : c.getId();
+    }
+
+    private void recordarPeriodo() {
+        Long id = usuarioActualId();
+        if (id == null) return;
+        Object t = grupoPeriodo.getSelectedToggle();
+        if (!(t instanceof ToggleButton tb)) return;
+        PERIODO_POR_USUARIO.put(id, new PeriodoRecordado(tb.getId(),
+                personalizado != null ? personalizado.desde() : null,
+                personalizado != null ? personalizado.hasta() : null));
+    }
+
+    /** Vuelve a poner el periodo que este usuario eligió la última vez (si no, se queda en «Hoy») */
+    private void restaurarPeriodo() {
+        Long id = usuarioActualId();
+        PeriodoRecordado r = id == null ? null : PERIODO_POR_USUARIO.get(id);
+        if (r == null) return;
+        for (ToggleButton tb : List.of(tgHoy, tgSemana, tgMes, tgAnio, tgPersonalizado)) {
+            if (tb != null && tb.getId() != null && tb.getId().equals(r.boton())) {
+                tb.setSelected(true);
+                break;
+            }
+        }
+        if (grupoPeriodo.getSelectedToggle() == tgPersonalizado && r.desde() != null && r.hasta() != null) {
+            dpDesde.setValue(r.desde());
+            dpHasta.setValue(r.hasta());
+            try {
+                personalizado = Periodo.entre(r.desde(), r.hasta());
+            } catch (NegocioException e) {
+                tgHoy.setSelected(true);
+                personalizado = null;
+            }
+            boolean personal = personalizado != null;
+            boxPersonalizado.setVisible(personal);
+            boxPersonalizado.setManaged(personal);
+        } else if (grupoPeriodo.getSelectedToggle() == tgPersonalizado) {
+            tgHoy.setSelected(true);
+        }
     }
 
     @FXML
@@ -456,6 +509,7 @@ public class EstadisticasController implements Initializable {
             return;
         }
         tgPersonalizado.setSelected(true);
+        recordarPeriodo();
         cargarPeriodo();
     }
 

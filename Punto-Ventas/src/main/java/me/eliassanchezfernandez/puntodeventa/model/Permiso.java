@@ -25,6 +25,7 @@ public enum Permiso {
     DESCUENTO_MANUAL   ("Hacer descuentos manuales"),
     VENDER_SIN_STOCK   ("Vender sin existencia"),
     CANCELAR_VENTA     ("Cancelar ventas cobradas"),
+    DEVOLVER_VENTAS    ("Devolver artículos de ventas cobradas (reembolso)"),
     ABRIR_CAJON        ("Abrir el cajón de dinero sin dar motivo"),
     GESTIONAR_PROVEEDORES ("Gestionar proveedores y órdenes de compra"),
     FACTURAR           ("Emitir facturas (CFDI)"),
@@ -58,6 +59,8 @@ public enum Permiso {
      * VENDER_A_CREDITO (fiado) es del gerente; a un cajero se lo concede el administrador o
      * autoriza cada venta. AJUSTAR_CREDITO (pasar el límite de un cliente, cambiar límites,
      * ajustar saldos) solo del administrador.
+     * DEVOLVER_VENTAS (devolución parcial con reembolso) es, como cancelar, solo del administrador:
+     * a los demás se lo concede o autoriza cada devolución.
      * CAJERO: ninguno (todo lo de la lista es de administrador, USR-13).
      */
     public static Set<Permiso> porDefecto(Cajero.Rol rol) {

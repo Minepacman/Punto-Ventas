@@ -20,4 +20,7 @@ public interface AuditoriaRepository extends JpaRepository<Auditoria, Long> {
     List<Auditoria> findByAccionOrderByFechaDesc(String accion);
 
     boolean existsByUsuarioIdOrAutorizadoPorId(Long usuarioId, Long autorizadoPorId);
+
+    /** ¿Ese usuario ya tiene un renglón con esa acción? (avisos que se muestran una sola vez) */
+    boolean existsByAccionAndUsuarioId(String accion, Long usuarioId);
 }

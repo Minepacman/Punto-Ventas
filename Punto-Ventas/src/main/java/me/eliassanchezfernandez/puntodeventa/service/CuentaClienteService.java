@@ -294,9 +294,10 @@ public class CuentaClienteService {
 
     /**
      * Devolución parcial o total de una venta a cuenta: baja la deuda hasta lo que siga pendiente
-     * de esa venta. Devuelve cuánto se descontó de la cuenta; lo que falte (si el cliente ya había
-     * pagado) lo devuelve quien llama, en efectivo. Pensado para el módulo de devoluciones, dentro
-     * de su transacción y con sus permisos ya verificados.
+     * de esa venta Y hasta lo que el cliente deba hoy (una devolución no deja saldo a favor: si el
+     * cliente ya había abonado, ese dinero se le regresa en efectivo). Devuelve cuánto se descontó
+     * de la cuenta; lo que falte lo devuelve quien llama, en efectivo. Lo llama DevolucionService
+     * dentro de su transacción, con sus permisos ya verificados y la fila de la venta ya bloqueada.
      */
     @Transactional
     public double abonarPorDevolucion(Long ventaId, String folio, double monto, String concepto) {
@@ -305,7 +306,12 @@ public class CuentaClienteService {
         double aplicado = 0;
         for (Map.Entry<Long, Double> e : pendientePorCliente(ventaId).entrySet()) {
             if (restante <= 0.004) break;
-            double m = Math.min(restante, e.getValue());
+            if (e.getValue() <= 0.004) continue;
+            // Bloquea la fila del cliente (UPDATE sin cambio) antes de leer su saldo: con varias cajas, un
+            // abono simultáneo espera y el tope "lo que debe hoy" no se calcula con un saldo viejo
+            clienteRepo.mover(e.getKey(), 0.0);
+            double debeHoy = Math.max(0, saldoEnBase(e.getKey()));
+            double m = VentaService.redondear(Math.min(restante, Math.min(e.getValue(), debeHoy)));
             if (m <= 0.004) continue;
             aplicado += aplicarReverso(e.getKey(), m, ventaId, folio, Tipo.DEVOLUCION,
                     concepto != null && !concepto.isBlank() ? concepto.trim()
@@ -313,6 +319,21 @@ public class CuentaClienteService {
             restante = VentaService.redondear(restante - m);
         }
         return VentaService.redondear(aplicado);
+    }
+
+    /**
+     * Cuánto de un reembolso de esta venta iría, como máximo, a la cuenta del cliente: lo que siga
+     * cargado de la venta (cargo − cancelaciones/devoluciones ya aplicadas) sin pasar de lo que el
+     * cliente deba hoy; 0 si no fue a cuenta. Misma regla que {@link #abonarPorDevolucion}. Solo
+     * lectura y sin exigir permiso: la ventana de devoluciones lo usa para anticipar el reparto.
+     */
+    @Transactional(readOnly = true)
+    public double pendienteDeVenta(Long ventaId) {
+        double total = 0;
+        for (Map.Entry<Long, Double> e : pendientePorCliente(ventaId).entrySet()) {
+            if (e.getValue() > 0.004) total += Math.min(e.getValue(), Math.max(0, saldoEnBase(e.getKey())));
+        }
+        return VentaService.redondear(total);
     }
 
     /** Lo que sigue cargado por venta, por cliente (cargo − reversos ya hechos) */

@@ -1188,15 +1188,15 @@ TilePane > .button:armed,
     -fx-background-color:  -pos-border, -pos-surface;
     -fx-background-insets: 0, 1;
     -fx-background-radius: 10, 9;
-    -fx-padding: 10 14 12 14;
-    -fx-spacing: 8;
+    -fx-padding: 7 12 8 12;
+    -fx-spacing: 6;
 }
 
 .config-card-icon {
     -fx-text-fill: -pos-accent-text;
     -fx-background-color: -pos-accent-subtle;
-    -fx-background-radius: 8;
-    -fx-padding: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 4;
 }
 
 .config-card-title {
@@ -1215,9 +1215,9 @@ TilePane > .button:armed,
     -color-button-bg-pressed:     -pos-accent-muted;
     -color-button-border-pressed: -pos-accent;
     -fx-pref-width: 220;
-    -fx-min-height: 50;
-    -fx-pref-height: 50;
-    -fx-padding: 5 10 5 8;
+    -fx-min-height: 42;
+    -fx-pref-height: 42;
+    -fx-padding: 3 10 3 8;
     -fx-background-radius: 8, 8, 7;
 }
 

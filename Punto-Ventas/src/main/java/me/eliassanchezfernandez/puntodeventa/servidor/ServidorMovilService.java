@@ -105,6 +105,8 @@ import java.util.function.Supplier;
  *   GET  /api/avisos                                  (cualquier usuario) -> avisos del día: proveedores que entregan o pasan a
  *                                                    preventa hoy/mañana, productos que se acaban, hora pico (importes solo con
  *                                                    VER_GANANCIAS o GESTIONAR_PROVEEDORES); el servicio los guarda 5 min en memoria
+ *   GET  /api/caducidades                             (cualquier usuario) -> "Por caducar": entradas con fecha de caducidad que
+ *                                                    vencen en los próximos N días (o ya vencieron) con la cantidad estimada
  *   GET  /api/tutorial                                (cualquier usuario) -> {visto}: recorrido móvil ya visto por ESTE usuario
  *   POST /api/tutorial/visto {visto: true|false}       (cualquier usuario) -> lo marca/reinicia (columna cajeros.tutorial_movil_visto)
  *
@@ -113,7 +115,7 @@ import java.util.function.Supplier;
  *   POST /api/push/suscribir {endpoint, keys:{p256dh, auth}}  -> guarda la suscripción de ESTE teléfono para el usuario
  *   POST /api/push/desuscribir {endpoint}             -> la quita (idempotente)
  *   POST /api/push/estado {endpoint}                  -> preferencias de la suscripción, 404 si no existe
- *   POST /api/push/preferencias {endpoint, activa, proveedores, stock, horaPico, silencioDesde, silencioHasta}
+ *   POST /api/push/preferencias {endpoint, activa, proveedores, stock, horaPico, caducidad?, silencioDesde, silencioHasta}
  *   POST /api/push/prueba {endpoint}                  -> manda una notificación de prueba ahora
  *
  * HTTPS: junto al servidor HTTP se abre otro en el puerto HTTP + 1 (o el fijado en Opciones avanzadas)
@@ -190,6 +192,7 @@ public class ServidorMovilService {
     @Autowired private AnunciadorMdns       anunciador;
     @Autowired private TutorialesService    tutorialesService;
     @Autowired private AvisosService        avisosService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CaducidadService caducidadService;
     @Autowired private CertificadosLocales  certificados;
     @Autowired private NotificacionesPushService pushService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.ConsultasMovilService consultasMovil;
@@ -624,6 +627,7 @@ public class ServidorMovilService {
                 case "/api/clientes/saldos" -> { exigir(metodo, "GET");  saldosClientes(ex); }
                 case "/api/proveedores/guardar" -> { exigir(metodo, "POST"); guardarProveedor(ex); }
                 case "/api/avisos"          -> { exigir(metodo, "GET");  avisos(ex); }
+                case "/api/caducidades"     -> { exigir(metodo, "GET");  caducidades(ex); }
                 case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
                 case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
                 case "/api/push/clave"      -> { exigir(metodo, "GET");  pushClave(ex); }
@@ -1254,6 +1258,7 @@ public class ServidorMovilService {
                 m.put("total", v.getTotal());
                 m.put("formaPago", v.getFormaPago() == null ? "" : v.getFormaPago().getEtiqueta());
                 m.put("cancelada", v.isCancelada());
+                if (v.getTotalDevueltoOCero() > 0.004) m.put("devuelto", v.getTotalDevueltoOCero());   // devoluciones parciales
                 List<Map<String, Object>> lineas = new ArrayList<>();
                 for (DetalleVenta d : v.getDetalles()) {
                     if (lineas.size() >= MAX_LINEAS_POR_VENTA) break;
@@ -1266,6 +1271,7 @@ public class ServidorMovilService {
                     l.put("cantidad", d.getCantidad());
                     l.put("precio", d.getPrecioVenta());
                     l.put("importe", d.getImporte());
+                    if (d.getCantidadDevueltaOCero() > 0) l.put("devuelta", d.getCantidadDevueltaOCero());
                     if (ganancias) l.put("costo", d.getCostoUnitarioODefault());
                     lineas.add(l);
                 }
@@ -1308,6 +1314,7 @@ public class ServidorMovilService {
         m.put("departamento", p.getDepartamento() == null ? "" : p.getDepartamento().getNombre());
         m.put("precio", p.getPrecioVenta());
         if (ganancias) m.put("costo", p.getPrecioCosto());
+        m.put("caducidad", p.isControlaCaducidad());
         return m;
     }
 
@@ -1396,6 +1403,7 @@ public class ServidorMovilService {
         String motivo = texto(cuerpo.get("motivo"), 200).trim();
         String proveedor = texto(cuerpo.get("proveedor"), 150).trim();
         Double costo = cuerpo.get("costo") == null ? null : numero(cuerpo.get("costo"), "costo");
+        java.time.LocalDate caducaEl = fechaOpcional(cuerpo.get("caducidad"), "caducidad");
         if (!tipo.equals("entrada") && !tipo.equals("ajuste") && !tipo.equals("merma")) {
             throw new CuerpoInvalido(400, "Tipo inválido. Usa entrada, ajuste o merma.");
         }
@@ -1413,7 +1421,8 @@ public class ServidorMovilService {
                 case "entrada" -> {
                     despues = productoService.registrarEntrada(productoId, cantidad,
                             proveedor.isEmpty() ? "No indicado (móvil)" : proveedor,
-                            costo == null ? 0 : costo, null);
+                            costo == null ? 0 : costo, null, caducaEl,
+                            me.eliassanchezfernandez.puntodeventa.model.Caducidad.Origen.MOVIL);
                     detalle = "Entrada +" + cantidad;
                 }
                 case "merma" -> {
@@ -1583,6 +1592,31 @@ public class ServidorMovilService {
         protegido(ex, null, cajero -> mapaAvisos(avisosService.avisos()));
     }
 
+    /** "Por caducar": lo que vence en los próximos días (o ya venció) con la cantidad estimada */
+    private void caducidades(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> {
+            int dias = caducidadService.diasAviso();
+            List<Map<String, Object>> lista = new ArrayList<>();
+            for (var l : caducidadService.porCaducar(caducidadService.hoy(), dias)) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", l.caducidadId());
+                m.put("productoId", l.productoId());
+                m.put("producto", l.producto());
+                m.put("codigo", l.codigo());
+                m.put("unidad", l.unidad());
+                m.put("fecha", l.fechaCaducidad().toString());
+                m.put("estimado", l.estimado());
+                m.put("dias", l.dias());
+                m.put("caducado", l.caducado());
+                lista.add(m);
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("dias", dias);
+            r.put("lotes", lista);
+            return r;
+        });
+    }
+
     private Map<String, Object> mapaAvisos(AvisosService.Avisos a) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("hoy", a.hoy().toString());
@@ -1633,6 +1667,7 @@ public class ServidorMovilService {
         m.put("proveedores", s.isProveedores());
         m.put("stock", s.isStock());
         m.put("horaPico", s.isHoraPico());
+        m.put("caducidad", s.isCaducidad());
         m.put("silencioDesde", s.getSilencioDesde());
         m.put("silencioHasta", s.getSilencioHasta());
         m.put("creada", s.getCreada() == null ? null : s.getCreada().toInstant(ZoneOffset.UTC).toEpochMilli());
@@ -1723,10 +1758,11 @@ public class ServidorMovilService {
         boolean proveedores = bandera(cuerpo, "proveedores", actual.isProveedores());
         boolean stock = bandera(cuerpo, "stock", actual.isStock());
         boolean horaPico = bandera(cuerpo, "horaPico", actual.isHoraPico());
+        boolean caducidad = bandera(cuerpo, "caducidad", actual.isCaducidad());
         int desde = hora(cuerpo, "silencioDesde", actual.getSilencioDesde());
         int hasta = hora(cuerpo, "silencioHasta", actual.getSilencioHasta());
         protegido(ex, null, cajero -> mapaSuscripcion(
-                pushService.preferencias(cajero, endpoint, activa, proveedores, stock, horaPico, desde, hasta)));
+                pushService.preferencias(cajero, endpoint, activa, proveedores, stock, horaPico, caducidad, desde, hasta)));
     }
 
     private void pushPrueba(HttpExchange ex) throws IOException {
@@ -1869,6 +1905,19 @@ public class ServidorMovilService {
             return json().readValue(buf.toByteArray(), new TypeReference<LinkedHashMap<String, Object>>() { });
         } catch (IOException e) {
             throw new CuerpoInvalido(400, "JSON inválido.");
+        }
+    }
+
+    /** Fecha AAAA-MM-DD opcional (null o "" = sin fecha) */
+    static java.time.LocalDate fechaOpcional(Object o, String campo) {
+        if (o == null) return null;
+        if (!(o instanceof String s)) throw new CuerpoInvalido(400, "El campo " + campo + " debe ser una fecha AAAA-MM-DD.");
+        if (s.isBlank()) return null;
+        if (s.length() > 10) throw new CuerpoInvalido(400, "El campo " + campo + " debe ser una fecha AAAA-MM-DD.");
+        try {
+            return java.time.LocalDate.parse(s.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new CuerpoInvalido(400, "El campo " + campo + " debe ser una fecha AAAA-MM-DD.");
         }
     }
 

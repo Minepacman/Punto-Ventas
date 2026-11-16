@@ -65,6 +65,40 @@ class RecuperacionLigadaAlAdminTest extends BaseServicioTest {
                 .isInstanceOf(NegocioException.class).hasMessage(RecuperacionService.MENSAJE_RECHAZO);
     }
 
+    // ── Aviso de una sola vez sobre el código heredado ────────────────────
+
+    @Test
+    void elAvisoDelCodigoHeredadoSaleUnaSolaVezPorAdministradorYSoloSiNoTieneUnoPropio() throws Exception {
+        Cajero admin = iniciarComoAdmin();
+        assertThat(recuperacionService.tomarAvisoCodigoHeredado()).as("sin código heredado no hay aviso").isFalse();
+
+        sembrarCodigoHeredado();
+        assertThat(recuperacionService.tomarAvisoCodigoHeredado()).isTrue();
+        assertThat(recuperacionService.tomarAvisoCodigoHeredado()).as("la segunda vez ya no").isFalse();
+        assertThat(auditoriaRepo.existsByAccionAndUsuarioId(RecuperacionService.ACCION_AVISO_HEREDADO, admin.getId())).isTrue();
+        // El aviso no consume ni anula el código heredado
+        assertThat(recuperacionService.hayCodigoHeredado()).isTrue();
+
+        // Otro administrador también lo ve una vez
+        crearUsuario("admin3", Cajero.Rol.ADMIN, Set.of());
+        iniciarComo("admin3", CLAVE_PRUEBA);
+        assertThat(recuperacionService.tomarAvisoCodigoHeredado()).isTrue();
+
+        // Un cajero nunca lo ve
+        iniciarComoAdmin();
+        crearUsuario("caja3", Cajero.Rol.CAJERO, Set.of());
+        iniciarComo("caja3", CLAVE_PRUEBA);
+        assertThat(recuperacionService.tomarAvisoCodigoHeredado()).isFalse();
+    }
+
+    @Test
+    void conCodigoPropioNoSeAvisaDelHeredado() throws Exception {
+        iniciarComoAdmin();
+        recuperacionService.generarCodigo();      // anula el heredado si lo hubiera
+        sembrarCodigoHeredado();                  // como si quedara uno viejo
+        assertThat(recuperacionService.tomarAvisoCodigoHeredado()).isFalse();
+    }
+
     // ── Ligado al administrador ───────────────────────────────────────────
 
     @Test

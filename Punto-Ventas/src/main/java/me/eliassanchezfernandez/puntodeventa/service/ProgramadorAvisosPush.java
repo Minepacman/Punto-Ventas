@@ -32,6 +32,8 @@ import java.util.Set;
  *  - "Se está acabando": como máximo dos veces al día, en el primer tic después de las
  *    {@link #HORAS_STOCK} horas; en cada corte solo salen los productos que no se avisaron hoy.
  *  - Hora pico: en la media hora anterior a la franja.
+ *  - "Por caducar" (un solo aviso con la cuenta): una vez al día, desde el primer corte de stock
+ *    ({@link #HORA_CADUCIDAD}, las 9:00).
  *
  * Por suscripción se respetan: interruptor general, tipo de aviso, horas de silencio (21:00 a
  * 7:00 por defecto) y "nunca el mismo aviso el mismo día" (ids guardados en la suscripción).
@@ -45,6 +47,8 @@ public class ProgramadorAvisosPush {
     public static final int HORA_PROVEEDORES_MANANA = 19;
     public static final int[] HORAS_STOCK = { 9, 17 };
     public static final int MINUTOS_ANTES_PICO = 30;
+    /** Las caducidades salen con el primer corte de stock de la mañana */
+    public static final int HORA_CADUCIDAD = HORAS_STOCK[0];
 
     @Autowired private NotificacionesPushService pushService;
     @Autowired private AvisosService avisosService;
@@ -126,6 +130,7 @@ public class ProgramadorAvisosPush {
                     String corte = corteStock(ahora.getHour());
                     r.add(new Pendiente(av, corte != null, corte));
                 }
+                case CADUCIDAD -> r.add(new Pendiente(av, ahora.getHour() >= HORA_CADUCIDAD, null));
                 case HORA_PICO -> {
                     boolean due = pico != null && !ahora.isBefore(ahora.toLocalDate().atTime(pico.desde(), 0).minusMinutes(MINUTOS_ANTES_PICO))
                             && ahora.isBefore(ahora.toLocalDate().atTime(pico.desde(), 0));

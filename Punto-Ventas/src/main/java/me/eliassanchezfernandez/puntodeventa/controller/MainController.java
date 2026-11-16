@@ -101,6 +101,7 @@ public class MainController implements Initializable {
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private AcercaDeDialogo      acercaDeDialogo;
     @Autowired private ClimaService         climaService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.RecuperacionService recuperacionService;
 
     /** Versión nueva encontrada en segundo plano (la abre el enlace de la barra de estado) */
     private ActualizacionService.Actualizacion actualizacionDisponible;
@@ -306,6 +307,25 @@ public class MainController implements Initializable {
                 e.printStackTrace();
             }
         }
+        avisarCodigoHeredadoUnaVez();
+    }
+
+    /**
+     * Una sola vez por administrador: si queda el código de recuperación de la versión 1.0.3 o
+     * anterior (sin dueño), sugerirle generar el suyo. El código viejo sigue sirviendo igual.
+     */
+    private void avisarCodigoHeredadoUnaVez() {
+        try {
+            if (!recuperacionService.tomarAvisoCodigoHeredado()) return;
+        } catch (RuntimeException e) {
+            System.err.println("Aviso de código de recuperación: " + e.getMessage());
+            return;
+        }
+        Ventanas.alerta(javafx.scene.control.Alert.AlertType.INFORMATION, "Código de recuperación",
+                "Este programa tiene un código de recuperación de una versión anterior que no está ligado a "
+                + "ningún administrador. Te recomendamos generar uno propio en Configuración → Cajeros → "
+                + "«Código de recuperación…» y guardarlo en un lugar seguro: así solo sirve para tu usuario y el "
+                + "anterior deja de valer.\n\nEste aviso no se volverá a mostrar.");
     }
 
     // ── Actualizaciones y "Acerca de" ─────────────────────────────────────

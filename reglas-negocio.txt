@@ -511,6 +511,22 @@ INV-11  Quién ajusta inventario (NUEVA, abierta)
         Estado vs. lo deseado: Sin definir.
         Fuente: controller/MainController.java, controller/InventarioController.java
 
+INV-12  Caducidades (versión sencilla, NUEVA)
+        Regla: cada producto puede tener "Controlar caducidad" (Productos). Al
+        darle entrada (Inventario, orden de compra recibida o teléfono) se puede
+        anotar "Caduca el" (opcional; no se acepta una fecha que ya pasó). No es
+        inventario por lote: las ventas no saben de fechas. Lo que queda de cada
+        fecha se ESTIMA con la existencia actual, asignándola primero a lo que
+        caduca más tarde (se supone que se vende primero lo que caduca primero).
+        "Por caducar" (Inventario, y filtro en el teléfono) muestra lo que vence
+        en los próximos N días (7 por defecto, configurable con AJUSTAR_INVENTARIO)
+        o ya venció (en rojo). Acciones con AJUSTAR_INVENTARIO o autorización:
+        "Retirar" (merma con motivo "Caducado") y "Ya no queda" (deja de contar
+        sin mover el inventario). Aviso "N productos caducan esta semana" en la
+        campana del teléfono y como notificación una vez al día desde las 9:00
+        (tipo "Por caducar", apagable por teléfono; respeta horas de silencio).
+        Fuente: service/CaducidadService.java, model/Caducidad.java
+
 Preguntas para definir (Inventario):
   - INV-05: el dueño respondió "Puede, para la auditoria". ¿El motivo del ajuste
     es OBLIGATORIO u opcional? ¿Qué lista de motivos?
@@ -986,7 +1002,12 @@ CLI-03  Venta a crédito ligada a cliente, límite y abonos
         como "Abono de cliente (fiado)" y cuentan en el corte; con tarjeta o
         transferencia solo bajan la deuda. Un abono no puede pasar de la deuda.
         Cancelar una venta a cuenta quita de la cuenta lo pendiente de esa venta
-        (si ya había abonado, queda saldo a favor). Ajustes con motivo:
+        (si ya había abonado, queda saldo a favor). Devolver artículos de una
+        venta a cuenta (o con pago mixto) baja primero lo que siga pendiente de
+        esa venta en la cuenta del cliente (renglón "Devolución") y solo el resto
+        se entrega en efectivo (salida "Devolución al cliente"); el comprobante y
+        el corte dicen cuánto fue a la cuenta. Con devoluciones la venta ya no se
+        cancela (se devuelve lo que falta). Ajustes con motivo:
         AJUSTAR_CREDITO. El ticket dice "A cuenta de <cliente> · Saldo: $X".
         Corte: "Vendido a cuenta (fiado, no entra al cajón)" y los abonos del
         periodo; el efectivo esperado solo suma lo cobrado en efectivo.

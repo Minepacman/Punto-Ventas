@@ -93,6 +93,9 @@ public class ProductosController implements Initializable {
     @FXML private Button                        btnVentasPeriodo;
     @FXML private Button                        btnPromociones;
     @FXML private Button                        btnImportar;
+    @FXML private Button                        btnCambiarIva;
+    @FXML private Label                         lblSeleccion;
+    @FXML private Button                        btnAplicarIvaDepartamento;
 
     //tabla departamentos
     @FXML private TableView<Departamento>           tablaDepartamentos;
@@ -142,6 +145,8 @@ public class ProductosController implements Initializable {
     @FXML private ComboBox<me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.Entrada> comboObjetoImp;
     @FXML private Label       lblClavesDefecto;
     @FXML private CheckBox    chkUsaInventario;
+    @FXML private CheckBox    chkControlaCaducidad;
+    @FXML private Label       lblLotesCaducidad;
     @FXML private GridPane    gridInventario;
     @FXML private TextField   txtCantidadActual;
     @FXML private Label       lblAvisoStock;
@@ -151,6 +156,7 @@ public class ProductosController implements Initializable {
 
     // ── Spring ────────────────────────────────────────────────────────────
     @Autowired private ProductoService    productoService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CaducidadService caducidadService;
     @Autowired private ProductoImagenService productoImagenService;
     @Autowired private CatalogoCodigosService catalogoCodigosService;
     @Autowired private ImagenProductoCache   imagenes;
@@ -204,6 +210,11 @@ public class ProductosController implements Initializable {
 
         tablaProductos.setItems(listaProductos);
         tablaDepartamentos.setItems(listaDepartamentos);
+        // Varios a la vez (Shift o Ctrl/Cmd + clic) solo para acciones en grupo (Cambiar IVA…);
+        // Modificar, Eliminar y Activar siguen siendo de uno en uno
+        tablaProductos.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        tablaProductos.getSelectionModel().getSelectedIndices().addListener(
+                (javafx.collections.ListChangeListener<Integer>) c -> actualizarBotonesSeleccion());
         aplicarPermisos();
 
         // Aseguramos el estado inicial: tabla visible, formulario oculto
@@ -222,12 +233,68 @@ public class ProductosController implements Initializable {
         btnActivar.setDisable(!editar);
         btnDepartamentos.setDisable(!editar);
         btnImportar.setDisable(!editar);
+        actualizarBotonesSeleccion();
         btnVentasPeriodo.setDisable(!sesionService.tienePermiso(Permiso.VER_HISTORIAL));
         // Promociones se puede consultar; la ventana bloquea guardar sin permiso
         // Dar de alta proveedores desde el formulario exige GESTIONAR_PROVEEDORES (elegir uno, no)
         boolean gestionaProveedores = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
         btnNuevoProveedor.setVisible(gestionaProveedores);
         btnNuevoProveedor.setManaged(gestionaProveedores);
+    }
+
+    /**
+     * Con un producto seleccionado todo funciona como siempre; con varios solo quedan las
+     * acciones en grupo (Cambiar IVA…) y se avisa cuántos hay.
+     */
+    private void actualizarBotonesSeleccion() {
+        boolean editar = sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS);
+        int n = tablaProductos.getSelectionModel().getSelectedItems().size();
+        boolean varios = n > 1;
+        btnModificar.setDisable(!editar || varios);
+        btnEliminar.setDisable(!editar || varios);
+        btnActivar.setDisable(!editar || varios);
+        btnCambiarIva.setDisable(!editar || n == 0);
+        btnCambiarIva.setText(varios ? "Cambiar IVA a " + n + "…" : "Cambiar IVA…");
+        lblSeleccion.setText(n + " seleccionados");
+        lblSeleccion.setVisible(varios);
+        lblSeleccion.setManaged(varios);
+    }
+
+    /** Pone el mismo IVA a todos los productos seleccionados (una operación, queda en la bitácora) */
+    @FXML
+    private void onCambiarIvaSeleccionados() {
+        List<Producto> sel = new java.util.ArrayList<>(tablaProductos.getSelectionModel().getSelectedItems());
+        sel.removeIf(java.util.Objects::isNull);
+        if (sel.isEmpty()) {
+            alerta(Alert.AlertType.WARNING, "Selecciona productos",
+                    "Haz clic en los productos de la tabla. Para elegir varios, mantén Shift o Ctrl (Cmd en Mac).");
+            return;
+        }
+        // El IVA que ya comparten todos (si es el mismo) queda propuesto
+        TipoIva comun = sel.get(0).getIvaOTienda();
+        for (Producto p : sel) if (p.getIvaOTienda() != comun) { comun = TipoIva.TASA_16; break; }
+        javafx.scene.control.ChoiceDialog<TipoIva> dlg = new javafx.scene.control.ChoiceDialog<>(comun, TipoIva.values());
+        dlg.setTitle("Cambiar IVA");
+        dlg.setHeaderText(sel.size() == 1
+                ? "IVA de \"" + sel.get(0).getDescripcion() + "\""
+                : "IVA de los " + sel.size() + " productos seleccionados");
+        dlg.setContentText("Nuevo IVA:");
+        if (vistaTabla.getScene() != null) dlg.initOwner(vistaTabla.getScene().getWindow());
+        Ventanas.estilizar(dlg);
+        java.util.Optional<TipoIva> elegido = dlg.showAndWait();
+        if (elegido.isEmpty()) return;
+        try {
+            int cambiados = productoService.cambiarIva(sel.stream().map(Producto::getId).toList(), elegido.get());
+            cargarProductos();
+            onBuscar();
+            alerta(Alert.AlertType.INFORMATION, "IVA cambiado", cambiados == 0
+                    ? "Los productos ya tenían «" + elegido.get().getEtiqueta() + "». No se cambió nada."
+                    : (cambiados == 1 ? "Se cambió 1 producto" : "Se cambiaron " + cambiados + " productos")
+                            + " a «" + elegido.get().getEtiqueta() + "». Queda anotado en la bitácora."
+                            + " Los precios no cambian: el IVA ya va incluido.");
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se pudo cambiar el IVA", e.getMessage());
+        }
     }
 
     /** Recarga catálogos desde la BD (lo llama MainController al entrar a la pestaña) */
@@ -412,6 +479,45 @@ public class ProductosController implements Initializable {
         }
     }
 
+    /** Pone el IVA guardado del departamento a todos sus productos que ya existen */
+    @FXML
+    private void onAplicarIvaDepartamento() {
+        Departamento d = departamentoEnEdicion;
+        if (d == null || d.getId() == null) {
+            alerta(Alert.AlertType.WARNING, "Selecciona un departamento",
+                    "Haz clic en un departamento de la tabla.");
+            return;
+        }
+        if (!java.util.Objects.equals(comboIvaDepartamento.getValue(), d.getIvaPorDefecto())) {
+            alerta(Alert.AlertType.WARNING, "Guarda primero",
+                    "Cambiaste el IVA del departamento pero aún no lo guardas. Pulsa «Guardar Departamento» y luego vuelve a intentarlo.");
+            return;
+        }
+        TipoIva iva = TipoIva.oTienda(d.getIvaPorDefecto());
+        long cuantos = listaProductos.stream()
+                .filter(p -> p.getDepartamento() != null && d.getId().equals(p.getDepartamento().getId()))
+                .count();
+        if (cuantos == 0) {
+            alerta(Alert.AlertType.INFORMATION, "Sin productos", "«" + d.getNombre() + "» todavía no tiene productos.");
+            return;
+        }
+        if (!Ventanas.confirmar("Aplicar IVA del departamento",
+                "¿Poner «" + iva.getEtiqueta() + "» a " + (cuantos == 1 ? "el producto" : "los " + cuantos + " productos")
+                        + " de «" + d.getNombre() + "»?\nLos que ya tienen ese IVA no cambian. Los precios no cambian.")) {
+            return;
+        }
+        try {
+            int cambiados = productoService.aplicarIvaDelDepartamento(d.getId());
+            cargarProductos();
+            alerta(Alert.AlertType.INFORMATION, "IVA aplicado", cambiados == 0
+                    ? "Todos los productos de «" + d.getNombre() + "» ya tenían ese IVA."
+                    : (cambiados == 1 ? "Se cambió 1 producto." : "Se cambiaron " + cambiados + " productos.")
+                            + " Queda anotado en la bitácora.");
+        } catch (NegocioException e) {
+            alerta(Alert.AlertType.ERROR, "No se pudo aplicar el IVA", e.getMessage());
+        }
+    }
+
     @FXML
     private void onBuscarDepartamento(){
         String texto = txtBuscarDepartamento.getText().toLowerCase();
@@ -497,6 +603,8 @@ public class ProductosController implements Initializable {
 
             //cargar formulario al seleccionar
         tablaDepartamentos.getSelectionModel().selectedItemProperty().addListener((obs, old, sel) -> {
+            btnAplicarIvaDepartamento.setDisable(sel == null
+                    || !sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS));
             if (sel != null) {
                 departamentoEnEdicion = sel;
                 txtNombreDepartamento.setText(sel.getNombre());
@@ -614,6 +722,7 @@ public class ProductosController implements Initializable {
             p.setClaveUnidad(txtClaveUnidad.getText());
             p.setObjetoImp(comboObjetoImp.getValue() != null ? comboObjetoImp.getValue().clave() : null);
             p.setUsaInventario(chkUsaInventario.isSelected());
+            p.setControlaCaducidad(chkControlaCaducidad.isSelected());
             p.setCantidadActual(cantActual);
             p.setCantidadMinima(cantMinima);
             p.setActivo(productoEnEdicion != null ? productoEnEdicion.isActivo() : Boolean.TRUE);
@@ -1418,6 +1527,8 @@ public class ProductosController implements Initializable {
                 .filter(e -> e.clave().equals(p.getObjetoImp())).findFirst().orElse(null));
         chkUsaInventario.setSelected(p.isUsaInventario());
         gridInventario.setDisable(!p.isUsaInventario());
+        chkControlaCaducidad.setSelected(p.isControlaCaducidad());
+        mostrarLotesCaducidad(p);
         txtCantidadActual.setText(String.valueOf(p.getCantidadActual()));
         txtCantidadMinima.setText(String.valueOf(p.getCantidadMinima()));
 
@@ -1426,6 +1537,22 @@ public class ProductosController implements Initializable {
         txtCantidadActual.setEditable(!bloquearStock);
         lblAvisoStock.setVisible(bloquearStock);
         lblAvisoStock.setManaged(bloquearStock);
+    }
+
+    /** Fechas de caducidad estimadas de lo que hay (solo si el producto las controla) */
+    private void mostrarLotesCaducidad(Producto p) {
+        String texto = "";
+        if (p != null && p.getId() != null && p.isControlaCaducidad()) {
+            try {
+                texto = caducidadService.resumenLotes(p.getId());
+                if (!texto.isEmpty()) texto += " (aprox.; detalle en Inventario → Por caducar)";
+            } catch (RuntimeException e) {
+                texto = "";
+            }
+        }
+        lblLotesCaducidad.setText(texto);
+        lblLotesCaducidad.setVisible(!texto.isEmpty());
+        lblLotesCaducidad.setManaged(!texto.isEmpty());
     }
 
     private void limpiarFormulario() {
@@ -1453,6 +1580,8 @@ public class ProductosController implements Initializable {
         comboObjetoImp.setValue(null);
         chkUsaInventario.setSelected(true);
         gridInventario.setDisable(false);
+        chkControlaCaducidad.setSelected(false);
+        mostrarLotesCaducidad(null);
         txtCantidadActual.clear();
         txtCantidadActual.setEditable(true);
         lblAvisoStock.setVisible(false);
@@ -1485,6 +1614,7 @@ public class ProductosController implements Initializable {
         btnNuevoProveedor.setDisable(bloquear);
         comboUnidad.setDisable(bloquear);
         chkUsaInventario.setDisable(bloquear);
+        chkControlaCaducidad.setDisable(bloquear);
         gridInventario.setDisable(bloquear || !chkUsaInventario.isSelected());
         btnGuardar.setDisable(bloquear);
     }

@@ -21,8 +21,8 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox styleClass="form-panel" spacing="12">
-                <padding><Insets top="18" right="22" bottom="16" left="22"/></padding>
+            <VBox styleClass="form-panel" spacing="10">
+                <padding><Insets top="14" right="22" bottom="10" left="22"/></padding>
 
                 <!-- Aviso: la dirección cambió y los QR impresos ya no sirven -->
                 <HBox fx:id="cajaCambio" styleClass="callout, callout-warning" spacing="10" alignment="CENTER_LEFT" visible="false" managed="false">
@@ -30,50 +30,62 @@
                     <Button text="Entendido" onAction="#onEntendidoCambio"/>
                 </HBox>
 
-                <!-- 1. Código QR -->
-                <Label text="Código QR para entrar desde el teléfono" styleClass="form-section-title"/>
-                <VBox fx:id="cajaQr" spacing="8" alignment="CENTER"/>
+                <!-- 1 y 2 a la izquierda (QR + interruptor), 3 a la derecha: cabe en 1024×768 -->
+                <HBox spacing="22">
+                    <VBox spacing="10" prefWidth="440" minWidth="0" HBox.hgrow="ALWAYS">
+                        <!-- 1. Código QR -->
+                        <Label text="Código QR para entrar desde el teléfono" styleClass="form-section-title"/>
+                        <VBox fx:id="cajaQr" spacing="8" alignment="CENTER"/>
 
-                <Separator/>
-
-                <!-- 2. Interruptor -->
-                <HBox styleClass="fila-interruptor">
-                    <ToggleSwitch fx:id="swActivo"/>
-                    <VBox spacing="1" HBox.hgrow="ALWAYS">
-                        <Label text="Permitir acceso desde teléfonos" styleClass="interruptor-titulo"/>
-                        <Label fx:id="lblEstado" text="Apagado" wrapText="true" styleClass="hint"/>
-                    </VBox>
-                </HBox>
-                <Label text="Los teléfonos conectados al mismo Wi-Fi abren la página y entran con su usuario y contraseña. El cambio se aplica al momento."
-                       wrapText="true" styleClass="hint"/>
-                <HBox styleClass="callout, callout-warning" alignment="CENTER_LEFT">
-                    <Label text="Úsalo solo en el Wi-Fi privado de la tienda (con contraseña), nunca en la red de los clientes ni en una pública: la conexión no va cifrada. Solo se aceptan teléfonos de la red local."
-                           wrapText="true" HBox.hgrow="ALWAYS"/>
-                </HBox>
-
-                <Separator/>
-
-                <!-- 3. Notificaciones en el teléfono (HTTPS con certificado propio) -->
-                <Label text="Notificaciones en el teléfono" styleClass="form-section-title"/>
-                <Label text="Para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen al teléfono aunque la página esté cerrada, cada teléfono instala UNA vez el certificado de esta computadora y abre la página segura. Escanea este código con el teléfono para ver la guía paso a paso (Android o iPhone)."
-                       wrapText="true" styleClass="hint"/>
-                <HBox spacing="18" alignment="CENTER_LEFT">
-                    <VBox fx:id="cajaQrCertificado" spacing="6" alignment="CENTER"/>
-                    <VBox spacing="8" HBox.hgrow="ALWAYS">
-                        <Label text="Clave del certificado (debe coincidir con la que muestra el teléfono):" styleClass="field-label" wrapText="true"/>
-                        <Label fx:id="lblHuella" text="" styleClass="huella-certificado"/>
-                        <Label fx:id="lblHuellaCompleta" text="" wrapText="true" styleClass="hint"/>
-                        <Label fx:id="lblHttpsEstado" text="" wrapText="true" styleClass="hint"/>
-                        <Label text="La computadora necesita internet para enviar las notificaciones; el iPhone (iOS 16.4 o más reciente) necesita además la página en la pantalla de inicio. Por la dirección normal (sin candado) todo sigue funcionando, solo sin notificaciones."
+                        <!-- 2. Interruptor -->
+                        <HBox styleClass="fila-interruptor">
+                            <ToggleSwitch fx:id="swActivo"/>
+                            <VBox spacing="1" HBox.hgrow="ALWAYS">
+                                <Label text="Permitir acceso desde teléfonos" styleClass="interruptor-titulo"/>
+                                <Label fx:id="lblEstado" text="Apagado" wrapText="true" styleClass="hint"/>
+                            </VBox>
+                        </HBox>
+                        <Label text="Los teléfonos conectados al mismo Wi-Fi abren la página y entran con su usuario y contraseña. El cambio se aplica al momento."
                                wrapText="true" styleClass="hint"/>
+                        <HBox styleClass="callout, callout-warning" alignment="CENTER_LEFT">
+                            <Label text="Úsalo solo en el Wi-Fi privado de la tienda (con contraseña), nunca en la red de los clientes ni en una pública: la conexión no va cifrada. Solo se aceptan teléfonos de la red local."
+                                   wrapText="true" HBox.hgrow="ALWAYS"/>
+                        </HBox>
+                    </VBox>
+
+                    <Separator orientation="VERTICAL"/>
+
+                    <!-- 3. Notificaciones en el teléfono (HTTPS con certificado propio) -->
+                    <VBox spacing="10" prefWidth="420" minWidth="0" HBox.hgrow="ALWAYS">
+                        <Label text="Notificaciones en el teléfono" styleClass="form-section-title"/>
+                        <Label text="Para que los avisos de la campana (proveedores, productos que se acaban, hora pico) lleguen al teléfono aunque la página esté cerrada, cada teléfono instala UNA vez el certificado de esta computadora y abre la página segura. Escanea este código con el teléfono para ver la guía paso a paso (Android o iPhone)."
+                               wrapText="true" styleClass="hint"/>
+                        <HBox spacing="14" alignment="TOP_LEFT">
+                            <VBox fx:id="cajaQrCertificado" spacing="6" alignment="CENTER"/>
+                            <VBox spacing="8" HBox.hgrow="ALWAYS" minWidth="0">
+                                <Label fx:id="lblHttpsEstado" text="" wrapText="true" styleClass="hint"/>
+                                <Label text="La computadora necesita internet para enviar las notificaciones; el iPhone (iOS 16.4 o más reciente) necesita además la página en la pantalla de inicio. Por la dirección normal (sin candado) todo sigue funcionando, solo sin notificaciones."
+                                       wrapText="true" styleClass="hint"/>
+                            </VBox>
+                        </HBox>
+                        <Label text="Clave del certificado (debe coincidir con la que muestra el teléfono):" styleClass="field-label" wrapText="true"/>
+                        <HBox spacing="12" alignment="CENTER_LEFT">
+                            <Label fx:id="lblHuella" text="" styleClass="huella-certificado" minWidth="-Infinity"/>
+                            <Label fx:id="lblHuellaCompleta" text="" wrapText="true" styleClass="hint" HBox.hgrow="ALWAYS" minWidth="0"/>
+                        </HBox>
                     </VBox>
                 </HBox>
 
                 <Separator/>
 
                 <!-- 4. Teléfonos conectados -->
-                <Label text="Teléfonos conectados" styleClass="form-section-title"/>
-                <TableView fx:id="tablaSesiones" prefHeight="150">
+                <HBox spacing="10" alignment="CENTER_LEFT">
+                    <Label text="Teléfonos conectados" styleClass="form-section-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button text="Actualizar" onAction="#onActualizar"/>
+                    <Button text="Cerrar todas las sesiones" onAction="#onCerrarTodas" styleClass="button-danger"/>
+                </HBox>
+                <TableView fx:id="tablaSesiones" prefHeight="104">
                     <columns>
                         <TableColumn fx:id="colUsuario" text="Usuario" prefWidth="160"/>
                         <TableColumn fx:id="colCreada"  text="Entró" prefWidth="120"/>
@@ -83,10 +95,6 @@
                         <TableColumn fx:id="colAccion"  text="" prefWidth="90"/>
                     </columns>
                 </TableView>
-                <HBox spacing="10">
-                    <Button text="Actualizar" onAction="#onActualizar"/>
-                    <Button text="Cerrar todas las sesiones" onAction="#onCerrarTodas" styleClass="button-danger"/>
-                </HBox>
 
                 <!-- 5. Opciones avanzadas -->
                 <TitledPane text="Opciones avanzadas" expanded="false" animated="false" styleClass="opciones-avanzadas">
@@ -153,12 +161,16 @@
                     </VBox>
                 </TitledPane>
 
-                <HBox spacing="12">
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Cerrar ventana" onAction="#onCerrar" prefHeight="36"/>
-                </HBox>
             </VBox>
         </ScrollPane>
     </center>
+
+    <!-- Siempre a la vista, aunque se abran las opciones avanzadas -->
+    <bottom>
+        <HBox spacing="12" alignment="CENTER_RIGHT">
+            <padding><Insets top="8" right="22" bottom="12" left="22"/></padding>
+            <Button text="Cerrar ventana" onAction="#onCerrar" prefHeight="36"/>
+        </HBox>
+    </bottom>
 
 </BorderPane>

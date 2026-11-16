@@ -1,8 +1,8 @@
 plugins {
     id 'java'
     id 'application'
-    id 'org.springframework.boot'       version '3.2.5'
-    id 'io.spring.dependency-management' version '1.1.6'
+    id 'org.springframework.boot'       version '3.5.16'
+    id 'io.spring.dependency-management' version '1.1.7'
     id 'org.openjfx.javafxplugin'       version '0.1.0' apply false
 }
 
@@ -29,12 +29,12 @@ repositories {
 
 // Java 17 + JavaFX 17: la línea 17 es la última con soporte de Windows 10/11 de 32 bits en JavaFX.
 // OJO: OpenJFX publicó el artefacto win-x86 SOLO hasta 17.0.2 y en 17.0.6-17.0.8; de 17.0.9 en
-// adelante no existe. El plugin de JavaFX 0.1.0 no conoce la plataforma win-x86, así que para el
+// adelante no existe (revisado en Maven Central hasta 17.0.21). El plugin de JavaFX 0.1.0 no conoce la plataforma win-x86, así que para el
 // instalador de 32 bits se declaran los jars a mano:
 //   gradlew.bat jpackageTask -x test -PjavafxVersion=17.0.8 -PjavafxPlatform=win-x86 -PjdkJpackage=C:\ruta\jdk-17-x86
 // (Gradle corre con un JDK de 64 bits; el JDK 17 de 32 bits solo lo usa jpackage para el runtime). Con
 // -PjavafxPlatform=win-x86 jpackageTask además usa packaging/windows-x86/main.wxs (MSI marcado x86; ver ahí).
-def javafxVersion = project.findProperty('javafxVersion') ?: '17.0.10'
+def javafxVersion = project.findProperty('javafxVersion') ?: '17.0.21'
 def javafxPlataforma = project.findProperty('javafxPlatform')
 if (javafxPlataforma) {
     dependencies {
@@ -78,9 +78,11 @@ dependencies {
     implementation 'org.springframework.security:spring-security-crypto'
 
     // Database dependencies: SQLite (una sola caja) y PostgreSQL (varias cajas contra un servidor en la red local)
-    // implementation (no runtimeOnly): config/ConexionSqlite extiende la conexión del driver
-    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
-    implementation 'org.hibernate.orm:hibernate-community-dialects:6.4.4.Final'
+    // implementation (no runtimeOnly): config/ConexionSqlite extiende la conexión del driver (JDBC4Connection);
+    // al subir sqlite-jdbc correr AjustesPoolPorDialectoTest. Versión fija más nueva que la del BOM (3.49.1.0).
+    implementation 'org.xerial:sqlite-jdbc:3.54.1.0'
+    // Dialecto SQLite de Hibernate: sin versión, el BOM de Spring Boot la alinea con hibernate-core
+    implementation 'org.hibernate.orm:hibernate-community-dialects'
     runtimeOnly 'org.postgresql:postgresql'
 
     // mDNS (Bonjour/Zeroconf): nombre local "mitienda.local" para el acceso móvil. Apache-2.0, Java puro
@@ -124,8 +126,7 @@ dependencies {
     // descarga un binario de PostgreSQL para el sistema actual la primera vez; no instala nada en el equipo.
     testImplementation 'io.zonky.test:embedded-postgres:2.2.2'
     testRuntimeOnly 'io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8:14.22.0'
-    // zonky usa commons-compress 1.28, que necesita commons-lang3 >= 3.17; el BOM de Spring Boot fija 3.13 (solo pruebas)
-    testImplementation 'org.apache.commons:commons-lang3:3.17.0'
+    // (zonky usa commons-compress 1.28, que necesita commons-lang3 >= 3.17: el BOM de Spring Boot 3.5 ya trae 3.17)
 }
 
 // El código fuente y las pruebas están en UTF-8 (acentos, ñ, emojis). Sin esto, compilar en Windows

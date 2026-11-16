@@ -107,6 +107,16 @@ public class Venta {
     @Column(name = "cancelacion_autorizada_por", length = 100)
     private String cancelacionAutorizadaPor;
 
+    // ── Devoluciones parciales (DevolucionService) ───────────────────────
+
+    /** Suma reembolsada por devoluciones de artículos; null = ninguna */
+    @Column(name = "total_devuelto")
+    private Double totalDevuelto;
+
+    /** Última devolución de artículos (los agregados de Estadísticas recalculan el día de la venta) */
+    @Column(name = "fecha_ultima_devolucion")
+    private LocalDateTime fechaUltimaDevolucion;
+
     /** Plazo de cancelación vigente cuando se hizo la venta (VEN-19) */
     @Column(name = "plazo_cancelacion_horas")
     private Integer plazoCancelacionHoras;
@@ -160,6 +170,26 @@ public class Venta {
 
     public boolean estaActiva() {
         return !isCancelada();
+    }
+
+    public double getTotalDevueltoOCero() {
+        return totalDevuelto != null ? totalDevuelto : 0.0;
+    }
+
+    /** ¿Se devolvió algún artículo de esta venta? */
+    public boolean tieneDevoluciones() {
+        return getTotalDevueltoOCero() > 0.004
+                || detalles.stream().anyMatch(d -> d.getCantidadDevueltaOCero() > 0.0000001);
+    }
+
+    /** ¿Ya se devolvió todo lo vendido? */
+    public boolean estaDevueltaPorCompleto() {
+        return !detalles.isEmpty() && detalles.stream().allMatch(d -> d.getCantidadPorDevolver() <= 0.0000001);
+    }
+
+    /** Total menos lo reembolsado por devoluciones */
+    public double getTotalNeto() {
+        return Math.round((total - getTotalDevueltoOCero()) * 100.0) / 100.0;
     }
 
     public int getPlazoCancelacionHorasOPorDefecto() {

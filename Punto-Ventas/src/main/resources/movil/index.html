@@ -504,6 +504,7 @@ const ICONOS = {
   mas:        ['M5 12h14', 'M12 5v14'],
   campana:    ['M10.268 21a2 2 0 0 0 3.464 0', 'M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326'],
   reloj:      ['M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0', 'M12 6v6l4 2'],
+  calendario: ['M8 2v4', 'M16 2v4', 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'M3 10h18'],
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
@@ -694,10 +695,10 @@ const api = {
       + '&pagina=' + pagina);
     const r = d.ventas.map(v => ({
       id: v.id, folio: v.folio || String(v.id), fecha: new Date(v.fecha), cajero: v.cajero, pago: v.formaPago,
-      cancelada: v.cancelada, total: v.total,
+      cancelada: v.cancelada, total: v.total, devuelto: v.devuelto || 0,
       // `importe` ya trae descuento/promoción/mayoreo aplicados (cantidad × precio no cuadraría con el total)
       lineas: v.lineas.map(l => ({ nombre: l.descripcion, unidad: l.unidad || 'pza', cantidad: l.cantidad, precio: l.precio,
-        importe: l.importe != null ? l.importe : l.cantidad * l.precio })),
+        importe: l.importe != null ? l.importe : l.cantidad * l.precio, devuelta: l.devuelta || 0 })),
     }));
     r.truncado = d.truncado; r.totalReal = d.total;
     r.hayMas = !!d.hayMas;
@@ -710,7 +711,7 @@ const api = {
     const r = d.productos.map(p => ({
       id: p.id, codigo: p.codigo || '', nombre: p.descripcion, depto: p.departamento || '',
       precio: p.precio, costo: p.costo, stock: p.existencia, minimo: p.minimo, unidad: p.unidad,
-      imagen: !!p.imagen,
+      imagen: !!p.imagen, caducidad: !!p.caducidad,
     }));
     r.truncado = d.truncado; r.totalReal = d.total;
     return r;
@@ -744,6 +745,9 @@ const api = {
   /** Crea (sin id) o edita (con id) un proveedor: {id?, nombre, telefono, contacto, diasEntrega:[1..7], diasPreventa:[1..7], notas} */
   guardarProveedor: datos => peticion('POST', '/api/proveedores/guardar', datos),
 
+  /** "Por caducar": {dias, lotes:[{id, productoId, producto, codigo, unidad, fecha:'AAAA-MM-DD', estimado, dias, caducado}]} */
+  caducidades: () => peticion('GET', '/api/caducidades'),
+
   /** Avisos del día (campana): {hoy, total, avisos:[{id, tipo, tipoEtiqueta, prioridad, icono, titulo, detalle, accion}]}. El servidor los guarda 5 min. */
   avisos: () => peticion('GET', '/api/avisos'),
 
@@ -752,17 +756,18 @@ const api = {
   pushSuscribir: datos => peticion('POST', '/api/push/suscribir', datos),              // {endpoint, keys:{p256dh, auth}} -> { ok, suscripcion }
   pushDesuscribir: endpoint => peticion('POST', '/api/push/desuscribir', { endpoint }),
   pushEstado: endpoint => peticion('POST', '/api/push/estado', { endpoint }),          // -> preferencias; 404 si el servidor no la conoce
-  pushPreferencias: datos => peticion('POST', '/api/push/preferencias', datos),        // {endpoint, activa, proveedores, stock, horaPico, silencioDesde, silencioHasta}
+  pushPreferencias: datos => peticion('POST', '/api/push/preferencias', datos),        // {endpoint, activa, proveedores, stock, horaPico, caducidad, silencioDesde, silencioHasta}
   pushPrueba: endpoint => peticion('POST', '/api/push/prueba', { endpoint }),          // -> { ok, detalle }
 
   /** tipo: 'ENTRADA' (+), 'SALIDA' (-, merma) o 'CONTEO' (fija la existencia exacta) */
-  async ajustarStock({ id, tipo, cantidad, motivo, proveedor }) {
+  async ajustarStock({ id, tipo, cantidad, motivo, proveedor, caducidad }) {
     const t = tipo === 'ENTRADA' ? 'entrada' : tipo === 'SALIDA' ? 'merma' : 'ajuste';
     const generico = ['ENTRADA', 'SALIDA', 'CONTEO'].includes(motivo);
     const texto = motivo && !generico ? motivo
       : t === 'entrada' ? 'Entrada registrada desde el móvil'
       : t === 'merma' ? 'Merma registrada desde el móvil' : 'Conteo físico desde el móvil';
-    const d = await peticion('POST', '/api/inventario/ajuste', { productoId: id, tipo: t, cantidad, motivo: texto, proveedor });
+    const d = await peticion('POST', '/api/inventario/ajuste', { productoId: id, tipo: t, cantidad, motivo: texto, proveedor,
+      caducidad: t === 'entrada' && caducidad ? caducidad : undefined });
     return { id: d.producto.id, stock: d.producto.existencia };
   },
 
@@ -1118,7 +1123,8 @@ async function vistaHistorial() {
 
   const filaVenta = v => h('button', { class: 'fila', type: 'button', onclick: () => detalleVenta(v) },
     h('div', { class: 'cuerpo' },
-      h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada') : null),
+      h('div', { class: 't' }, 'Folio ' + v.folio, v.cancelada ? h('span', { class: 'insignia mal', style: 'margin-left:.5rem' }, 'Cancelada')
+        : (v.devuelto > 0 ? h('span', { class: 'insignia', style: 'margin-left:.5rem' }, 'Con devolución') : null)),
       h('div', { class: 'd' }, fechaHora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero)),
     h('div', { class: 'der' }, dinero(v.total)));
 
@@ -1175,9 +1181,11 @@ function detalleVenta(v) {
     h('h2', null, 'Venta ' + v.folio),
     h('p', { class: 'sub' }, fechaLarga(v.fecha) + ' ' + hora(v.fecha) + ' · ' + v.pago + ' · ' + v.cajero + (v.cancelada ? ' · CANCELADA' : '')),
     h('div', null, v.lineas.map(l => h('div', { class: 'linea' },
-      h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio))),
+      h('div', { class: 'n' }, h('div', null, l.nombre), h('div', { class: 's' }, num(l.cantidad) + ' ' + l.unidad + ' × ' + dinero(l.precio)
+        + (l.devuelta > 0 ? ' · devuelto: ' + num(l.devuelta) : ''))),
       h('div', null, dinero(l.importe != null ? l.importe : l.cantidad * l.precio))))),
     h('div', { class: 'total-fila' }, h('span', null, 'Total'), h('span', null, dinero(v.total))),
+    v.devuelto > 0 ? h('p', { class: 'sub' }, 'Devoluciones: −' + dinero(v.devuelto) + ' · neto ' + dinero(v.total - v.devuelto)) : null,
     h('button', { class: 'btn btn-block', type: 'button', onclick: () => h2.cerrar() }, 'Cerrar'),
   ]);
 }
@@ -1201,11 +1209,11 @@ function miniaturaProducto(id) {
   if (observadorMiniaturas) observadorMiniaturas.observe(img); else cargarMiniatura(img);
   return img;
 }
-/** opciones: {filtro: 'todos'|'bajo'|'agotado', buscar: texto} (las manda un aviso de la campana) */
+/** opciones: {filtro: 'todos'|'bajo'|'agotado'|'caducar', buscar: texto} (las manda un aviso de la campana) */
 async function vistaInventario(opciones = {}) {
   let texto = typeof opciones.buscar === 'string' ? opciones.buscar.slice(0, 60) : '';
   let productos = await api.inventario(texto.trim());
-  let filtro = ['todos', 'bajo', 'agotado'].includes(opciones.filtro) ? opciones.filtro : 'todos', pendiente = null, secuencia = 0;
+  let filtro = ['todos', 'bajo', 'agotado', 'caducar'].includes(opciones.filtro) ? opciones.filtro : 'todos', pendiente = null, secuencia = 0;
   const lista = h('div', { class: 'lista-rej' });
   const busca = h('input', { class: 'entrada', type: 'search', inputmode: 'search', enterkeyhint: 'search', placeholder: 'Buscar producto o código', 'aria-label': 'Buscar producto', autocomplete: 'off', value: texto });
   const chips = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Filtrar' });
@@ -1213,9 +1221,10 @@ async function vistaInventario(opciones = {}) {
 
   function pintar() {
     vaciar(chips);
-    for (const [k, t] of [['todos', 'Todos'], ['bajo', 'Stock bajo'], ['agotado', 'Agotados']]) {
+    for (const [k, t] of [['todos', 'Todos'], ['bajo', 'Stock bajo'], ['agotado', 'Agotados'], ['caducar', 'Por caducar']]) {
       chips.append(h('button', { type: 'button', 'aria-pressed': String(filtro === k), onclick: () => { filtro = k; pintar(); } }, t));
     }
+    if (filtro === 'caducar') { pintarCaducidades(); return; }
     const vis = productos.filter(p =>
       filtro === 'todos' || (filtro === 'agotado' ? p.stock <= 0 : p.stock <= p.minimo));
     vaciar(lista);
@@ -1228,13 +1237,39 @@ async function vistaInventario(opciones = {}) {
         h('div', { class: 'der' }, num(p.stock) + ' ' + p.unidad, h('div', null, h('span', { class: 'insignia ' + clase }, et)))));
     }
   }
+  /** Lo que caduca pronto (o ya caducó): la cantidad es un estimado que calcula la computadora */
+  async function pintarCaducidades() {
+    const mia = ++secuencia;
+    lista.replaceChildren(cargando());
+    try {
+      const d = await api.caducidades();
+      if (mia !== secuencia || filtro !== 'caducar') return;
+      const t = texto.trim().toLowerCase();
+      const vis = d.lotes.filter(l => !t || l.producto.toLowerCase().includes(t) || (l.codigo || '').includes(t));
+      vaciar(lista);
+      lista.append(h('p', { class: 'sub' }, 'Caduca en los próximos ' + d.dias + ' días o ya caducó. La cantidad es aproximada.'));
+      if (!vis.length) { lista.append(h('div', { class: 'vacio' }, 'Nada por caducar.')); return; }
+      for (const l of vis) {
+        const cuando = l.dias < 0 ? (l.dias === -1 ? 'Caducó ayer' : 'Caducó hace ' + (-l.dias) + ' días')
+          : l.dias === 0 ? 'Caduca hoy' : l.dias === 1 ? 'Caduca mañana' : 'Caduca en ' + l.dias + ' días';
+        const f = fechaIso(l.fecha);
+        lista.append(h('div', { class: 'fila' },
+          h('div', { class: 'cuerpo' }, h('div', { class: 't' }, l.producto),
+            h('div', { class: 'd' }, 'Caduca el ' + f.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }))),
+          h('div', { class: 'der' }, '~' + num(l.estimado) + ' ' + l.unidad,
+            h('div', null, h('span', { class: 'insignia ' + (l.caducado ? 'mal' : 'aviso') }, cuando)))));
+      }
+    } catch (e) { if (mia === secuencia && e.estado !== 401) lista.replaceChildren(errorConReintento(e, pintarCaducidades)); }
+  }
   async function buscar() {   // la búsqueda la hace el servidor (hasta 200 productos por consulta)
     const mia = ++secuencia;
     lista.replaceChildren(cargando());
     try {
       const nuevos = await api.inventario(texto.trim());
       if (mia !== secuencia) return;   // llegó una búsqueda más reciente
-      productos = nuevos; pintar();
+      productos = nuevos;
+      if (filtro === 'caducar') { pintarCaducidades(); return; }
+      pintar();
       if (productos.truncado) lista.append(h('p', { class: 'sub', style: 'text-align:center;margin-top:.8rem' },
         'Hay ' + productos.totalReal + ' productos; se muestran los primeros ' + productos.length + '. Escribe más letras para acotar.'));
     } catch (e) { if (mia === secuencia && e.estado !== 401) lista.replaceChildren(errorConReintento(e, buscar)); }
@@ -1267,22 +1302,26 @@ function hojaAjuste(producto, alGuardar) {
   const seg = h('div', { class: 'segmentos', role: 'group', 'aria-label': 'Tipo de ajuste' });
   const cant = h('input', { class: 'entrada', id: 'cant', type: 'text', inputmode: 'decimal', autocomplete: 'off', placeholder: '0' });
   const etCant = h('label', { for: 'cant' });
+  // Fecha de caducidad (opcional): solo en entradas de productos que la controlan
+  const cad = h('input', { class: 'entrada', id: 'caduca', type: 'date', min: new Date().toISOString().slice(0, 10) });
+  const campoCad = producto.caducidad ? h('div', { class: 'campo' }, h('label', { for: 'caduca' }, 'Caduca el (opcional)'), cad) : null;
   const err = h('div', { class: 'oculto', role: 'alert' });
   const guardar = h('button', { class: 'btn btn-primario', type: 'button' }, 'Guardar ajuste');
   const pintarSeg = () => {
     vaciar(seg);
     for (const [k, t] of tipos) seg.append(h('button', { type: 'button', 'aria-pressed': String(tipo === k), onclick: () => { tipo = k; pintarSeg(); } }, t));
     etCant.textContent = tipo === 'CONTEO' ? 'Existencia contada (' + producto.unidad + ')' : 'Cantidad (' + producto.unidad + ')';
+    if (campoCad) campoCad.classList.toggle('oculto', tipo !== 'ENTRADA');
   };
   pintarSeg();
-  const v = hoja([...info, seg, h('div', { class: 'campo' }, etCant, cant), err,
+  const v = hoja([...info, seg, h('div', { class: 'campo' }, etCant, cant), campoCad, err,
     h('div', { class: 'acciones dos' }, h('button', { class: 'btn', type: 'button', onclick: () => v.cerrar() }, 'Cancelar'), guardar)]);
   guardar.addEventListener('click', async () => {
     const n = parseFloat(cant.value.replace(',', '.'));
     if (!isFinite(n) || n < 0 || cant.value.trim() === '') { err.className = 'aviso-err'; err.textContent = 'Captura una cantidad válida.'; return; }
     guardar.disabled = true; guardar.textContent = 'Guardando…';
     try {
-      const nuevo = await api.ajustarStock({ id: producto.id, tipo, cantidad: n, motivo: tipo });
+      const nuevo = await api.ajustarStock({ id: producto.id, tipo, cantidad: n, motivo: tipo, caducidad: campoCad ? cad.value : '' });
       producto.stock = nuevo.stock;
       v.cerrar(); vibrar(30); avisar('Inventario actualizado: ' + num(nuevo.stock) + ' ' + producto.unidad);
       alGuardar();
@@ -1422,7 +1461,7 @@ async function vistaProveedores(opciones = {}) {
     else if (proxPre) { proximo = proxPre; tipo = 'preventa'; }
     const dias = 'Entrega: ' + p.etiquetaEntrega + (p.diasPreventa.length ? ' · Preventa: ' + p.etiquetaPreventa : '');
     const nota = !agenda.costosVisibles ? null
-      : h('div', { class: 'd' }, 'Nota media: ' + (p.notaMedia ? dinero(p.notaMedia.promedio) + ' · ' + p.notaMedia.notas + ' nota(s)' : 'sin datos aún'));
+      : h('div', { class: 'd' }, 'Promedio que le compras por visita: ' + (p.notaMedia ? dinero(p.notaMedia.promedio) + ' (' + p.notaMedia.notas + (p.notaMedia.notas === 1 ? ' visita)' : ' visitas)') : 'sin datos aún'));
     return h('button', { class: 'fila', type: 'button', onclick: () => detalleProveedor(p) },
       h('div', { class: 'cuerpo' }, h('div', { class: 't' }, p.nombre), h('div', { class: 'd' }, dias), nota),
       h('div', { class: 'der' }, proximo
@@ -1438,7 +1477,7 @@ async function vistaProveedores(opciones = {}) {
       puedeEditar() ? h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: () => formularioProveedor(null) }, icono('mas', { tamano: 20 }), 'Nuevo proveedor') : null,
       tarjetaSemana(),
       h('section', null, h('div', { class: 'seccion-t' }, 'Proveedores (' + agenda.proveedores.length + ')'), lista),
-      agenda.costosVisibles ? h('p', { class: 'nota' }, 'Nota media: lo que se le compra en promedio en cada visita, según las entradas de mercancía con costo de los últimos ' + agenda.ventanaDias + ' días.') : null]);
+      agenda.costosVisibles ? h('p', { class: 'nota' }, 'Promedio que le compras por visita (la «Nota media» del proveedor): suma la mercancía con costo que le recibes cada día que viene y saca el promedio de esos días, con las entradas de los últimos ' + agenda.ventanaDias + ' días.') : null]);
   }
 
   async function recargar() {
@@ -1451,10 +1490,10 @@ async function vistaProveedores(opciones = {}) {
     const prox = (et, iso, aplica) => h('div', { class: 'prox' }, h('span', { class: 'q' }, et),
       h('span', null, !aplica ? 'No manda preventa' : iso ? mayuscula(cuando(iso, agenda.hoy, true)) : 'Sin días fijos'));
     const nota = !agenda.costosVisibles ? null : h('div', { class: 'kpi' },
-      h('div', { class: 'e' }, 'Nota media (gasto por visita)'),
+      h('div', { class: 'e' }, 'Promedio que le compras por visita'),
       h('div', { class: 'v' }, p.notaMedia ? dinero(p.notaMedia.promedio) : 'Sin datos aún'),
       h('div', { class: 'sub' }, p.notaMedia
-        ? 'Promedio de ' + p.notaMedia.notas + ' nota(s) en ' + agenda.ventanaDias + ' días · última el ' + fechaLarga(fechaIso(p.notaMedia.ultima))
+        ? 'Promedio de ' + p.notaMedia.notas + (p.notaMedia.notas === 1 ? ' visita' : ' visitas') + ' con compra en ' + agenda.ventanaDias + ' días · última el ' + fechaLarga(fechaIso(p.notaMedia.ultima))
         : 'Se calcula con las entradas de mercancía que tengan costo.'));
     const d = hoja([
       h('h2', null, p.nombre),
@@ -1685,8 +1724,8 @@ async function vistaConfig() {
 const avisos = {
   datos: null, ultimaCarga: 0, cargando: null, globo: null, botonEl: null, hojaAbierta: null, temporizador: null,
   CADA_MS: 10 * 60 * 1000,
-  ORDEN_TIPOS: ['PROVEEDOR', 'STOCK', 'HORA_PICO'],
-  ICONO_TIPO: { PROVEEDOR: 'camion', STOCK: 'paquete', HORA_PICO: 'reloj' },
+  ORDEN_TIPOS: ['PROVEEDOR', 'STOCK', 'CADUCIDAD', 'HORA_PICO'],
+  ICONO_TIPO: { PROVEEDOR: 'camion', STOCK: 'paquete', CADUCIDAD: 'calendario', HORA_PICO: 'reloj' },
 
   claveLocal: () => 'pv.avisos.' + (E.sesion ? E.sesion.usuario : ''),
 
@@ -2016,7 +2055,7 @@ const notificaciones = {
           const endpoint = notificaciones.suscripcion.endpoint;
           const guardar = async cambios => {
             const datos = Object.assign({ endpoint, activa: pr.activa, proveedores: pr.proveedores, stock: pr.stock, horaPico: pr.horaPico,
-              silencioDesde: pr.silencioDesde, silencioHasta: pr.silencioHasta }, cambios);
+              caducidad: pr.caducidad !== false, silencioDesde: pr.silencioDesde, silencioHasta: pr.silencioHasta }, cambios);
             const nuevo = await api.pushPreferencias(datos);
             Object.assign(pr, nuevo); notificaciones.prefs = pr;
           };
@@ -2049,6 +2088,7 @@ const notificaciones = {
               interruptor(pr.activa, async v => { try { await guardar({ activa: v }); } catch (e) { mostrarError(e.message); throw e; } }, 'Recibir notificaciones')),
             filaTipo('proveedores', 'Proveedores', 'Quién entrega o pasa a preventa hoy (8:00) y mañana (19:00).'),
             filaTipo('stock', 'Se está acabando', 'Productos con poca existencia, dos veces al día (9:00 y 17:00).'),
+            filaTipo('caducidad', 'Por caducar', 'Productos que caducan pronto o ya caducaron, una vez al día (9:00).'),
             filaTipo('horaPico', 'Hora pico', 'Media hora antes de la franja con más venta del día.'),
             h('div', { class: 'fila-conf', style: 'display:grid;gap:.5rem' },
               h('div', null, h('div', { class: 't' }, 'Horas de silencio'), h('div', { class: 'd' }, 'No se manda nada entre estas horas (por defecto de 21:00 a 7:00). Pon la misma hora en ambas para no silenciar.')),
@@ -2095,7 +2135,7 @@ const tutorial = {
       estadisticas: 'Ventas de hoy, de la semana o del mes, con la comparación contra el periodo anterior, los productos más vendidos y las franjas del día con más movimiento.'
         + (verGanancia ? ' Como puedes ver costos, también aparece la ganancia estimada.' : ''),
       historial: 'Busca los tickets por rango de fechas (hasta 93 días) con atajos para hoy, ayer, los últimos 7 días o este mes. Toca una venta para ver sus productos, la forma de pago y quién la cobró.',
-      inventario: 'Busca productos por nombre o código y filtra los de stock bajo o agotados. Toca un producto para ver su existencia, precio y foto.'
+      inventario: 'Busca productos por nombre o código y filtra los de stock bajo, agotados o por caducar. Toca un producto para ver su existencia, precio y foto.'
         + (sec.inventarioAjustar ? ' Tienes permiso para registrar entradas, mermas y conteos: cada ajuste queda en la bitácora con tu usuario.'
                                  : ' Tu usuario solo consulta; los ajustes de inventario se hacen desde el programa de escritorio.'),
       proveedores: 'Agenda de proveedores: el calendario de la semana muestra qué día llega cada entrega y qué día pasa el preventa (el vendedor que toma el pedido), con el día de hoy resaltado. Toca un proveedor para ver su teléfono y sus próximas visitas.'

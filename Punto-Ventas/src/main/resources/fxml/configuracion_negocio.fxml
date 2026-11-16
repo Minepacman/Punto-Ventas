@@ -15,8 +15,8 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox styleClass="form-panel" spacing="14">
-                <padding><Insets topRightBottomLeft="24"/></padding>
+            <VBox styleClass="form-panel" spacing="10">
+                <padding><Insets top="18" right="22" bottom="16" left="22"/></padding>
 
                 <Label text="Datos del negocio" styleClass="form-section-title"/>
                 <Separator/>
@@ -51,7 +51,7 @@
                            wrapText="true" styleClass="hint"/>
                 </VBox>
 
-                <Region minHeight="8"/>
+                <Region minHeight="4"/>
 
                 <HBox spacing="12">
                     <Button text="Guardar" onAction="#onGuardar" styleClass="button-success"
