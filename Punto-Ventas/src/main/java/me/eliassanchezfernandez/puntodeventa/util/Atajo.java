@@ -28,7 +28,7 @@ public enum Atajo {
 
     // ── Globales (ventana principal) ────────────────────────────────────
     IR_VENTAS      (Ambito.GLOBAL, Tecla.de(KeyCode.F1), Tecla.atajo(KeyCode.DIGIT1), "Ir a Ventas", null),
-    // F2 / Ctrl+2 quedan libres para "Ir a Clientes" cuando exista ese módulo
+    IR_CLIENTES    (Ambito.GLOBAL, Tecla.de(KeyCode.F2), Tecla.atajo(KeyCode.DIGIT2), "Ir a Clientes (fiado, abonos)", null),
     IR_PRODUCTOS   (Ambito.GLOBAL, Tecla.de(KeyCode.F3), Tecla.atajo(KeyCode.DIGIT3), "Ir a Productos", null),
     IR_INVENTARIO  (Ambito.GLOBAL, Tecla.de(KeyCode.F4), Tecla.atajo(KeyCode.DIGIT4), "Ir a Inventario", null),
     IR_ESTADISTICAS(Ambito.GLOBAL, Tecla.de(KeyCode.F5), Tecla.atajo(KeyCode.DIGIT5), "Ir a Estadísticas", Permiso.VER_HISTORIAL),
@@ -37,6 +37,8 @@ public enum Atajo {
 
     // ── Ventas ──────────────────────────────────────────────────────────
     BUSCAR_PRODUCTO (Ambito.VENTAS, Tecla.de(KeyCode.F6), Tecla.atajo(KeyCode.B), "Buscar producto por nombre o código", null),
+    PRODUCTO_COMUN  (Ambito.VENTAS, Tecla.atajo(KeyCode.P), null, "Producto común: vender algo que no está en el catálogo (nombre, precio y cantidad)", null,
+                     "No toca el inventario; en el corte se estima 20 % de ganancia sobre lo cobrado"),
     CANTIDAD        (Ambito.VENTAS, Tecla.de(KeyCode.F7), null, "Cambiar la cantidad del renglón seleccionado", null,
                      "También: Enter o doble clic sobre el renglón"),
     DESCUENTO_MANUAL(Ambito.VENTAS, Tecla.de(KeyCode.F8), Tecla.atajo(KeyCode.D), "Descuento manual al renglón", Permiso.DESCUENTO_MANUAL),
@@ -48,7 +50,8 @@ public enum Atajo {
     REIMPRIMIR_ULTIMO(Ambito.VENTAS, Tecla.atajo(KeyCode.I), null, "Reimprimir el último ticket cobrado en esta caja", Permiso.VER_HISTORIAL),
     FACTURAR_ULTIMA (Ambito.VENTAS, Tecla.atajo(KeyCode.F), null, "Facturar la venta recién cobrada", null,
                      "Mientras se muestra el aviso \"Venta cobrada\" y la facturación está configurada"),
-    ABRIR_CAJON     (Ambito.VENTAS, Tecla.atajo(KeyCode.J), null, "Abrir el cajón de dinero (solo con impresora térmica)", Permiso.ABRIR_CAJON),
+    ABRIR_CAJON     (Ambito.VENTAS, Tecla.atajo(KeyCode.J), null, "Abrir el cajón de dinero (solo con impresora térmica)", Permiso.ABRIR_CAJON,
+                     "Sin el permiso se pide el motivo y si entra o sale dinero; cada apertura queda en la bitácora"),
     MOVIMIENTO_EFECTIVO(Ambito.VENTAS, Tecla.atajo(KeyCode.E), null, "Entrada o salida de efectivo (meter cambio, retirar, pagar a un proveedor)", Permiso.MOVIMIENTOS_CAJA,
                      "Queda en el corte de caja; se puede imprimir un comprobante"),
     LEER_PESO       (Ambito.VENTAS, Tecla.atajoMayus(KeyCode.P), null, "Leer el peso de la báscula en el renglón a granel", null),

@@ -14,8 +14,16 @@
             <Label text="Caja Libre" styleClass="brand-label"/>
             <Region HBox.hgrow="ALWAYS"/>
 
-            <VBox alignment="CENTER_RIGHT" styleClass="reloj-box">
-                <Label fx:id="labelHora" text="--:--" styleClass="reloj-hora"/>
+            <VBox fx:id="relojBox" alignment="CENTER_RIGHT" styleClass="reloj-box">
+                <!-- El clima va en el renglón de la hora: la fecha es más ancha, así que casi nunca ensancha la cabecera -->
+                <HBox fx:id="filaReloj" alignment="CENTER_RIGHT" spacing="10">
+                    <!-- Clima de la hora ("24 °C · Soleado"), del último registro de ClimaService; oculto si el clima
+                         está apagado, sin ubicación o si no cabe en el ancho actual (MainController.acomodarClima).
+                         El ADMIN lo pulsa para abrir Configuración → Ubicación y clima. -->
+                    <Label fx:id="labelClima" text="" styleClass="clima-barra" visible="false" managed="false"
+                           onMouseClicked="#onClima"><graphic><Icono nombre="nube" tamano="16"/></graphic></Label>
+                    <Label fx:id="labelHora" text="--:--" styleClass="reloj-hora"/>
+                </HBox>
                 <Label fx:id="labelFecha" text="—" styleClass="reloj-fecha"/>
             </VBox>
 
@@ -25,7 +33,7 @@
 
             <Separator orientation="VERTICAL"/>
 
-            <Label fx:id="labelUsuario" text="Usuario: —"/>
+            <Label fx:id="labelUsuario" text="Usuario: —" maxWidth="230" minWidth="80" textOverrun="ELLIPSIS"/>
 
             <Separator orientation="VERTICAL"/>
 
@@ -54,8 +62,8 @@
                             fx:id="ventasView"/>
             </Tab>
 
-            <!-- La pestaña "Clientes" (F2) se mostrará cuando exista el módulo: clientes.fxml y
-                 ClientesController se conservan; F2 queda sin asignar. -->
+            <!-- F2 – Clientes (fiado y abonos) -->
+            <Tab fx:id="tabClientes" text="F2 · Clientes"><graphic><Icono nombre="usuarios"/></graphic></Tab>
 
             <!-- F3 – Productos -->
             <Tab fx:id="tabProductos" text="F3 · Productos"><graphic><Icono nombre="etiqueta"/></graphic></Tab>
@@ -63,14 +71,15 @@
             <!-- F4 – Inventario -->
             <Tab fx:id="tabInventario" text="F4 · Inventario"><graphic><Icono nombre="paquete"/></graphic></Tab>
 
-            <!-- Configuración (solo ADMIN; MainController la quita para cajeros) -->
-            <Tab fx:id="tabConfig" text="Configuración"><graphic><Icono nombre="ajustes"/></graphic></Tab>
-
             <!-- Corte (solo ADMIN) -->
             <Tab fx:id="tabCorte" text="Corte"><graphic><Icono nombre="tijeras"/></graphic></Tab>
 
             <!-- Estadísticas (solo quien tiene VER_HISTORIAL; MainController la quita para los demás) -->
             <Tab fx:id="tabEstadisticas" text="Estadísticas"><graphic><Icono nombre="grafica"/></graphic></Tab>
+
+            <!-- Configuración: la ÚLTIMA pestaña (solo ADMIN/GERENTE; MainController la quita para cajeros).
+                 No tiene tecla rápida (F1–F5 son las pestañas de trabajo), así que moverla no cambia ningún atajo. -->
+            <Tab fx:id="tabConfig" text="Configuración"><graphic><Icono nombre="ajustes"/></graphic></Tab>
 
         </TabPane>
     </center>

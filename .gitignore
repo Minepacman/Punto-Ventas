@@ -17,6 +17,12 @@ reglas-seguridad.txt
 
 # Datos locales de la aplicación (logotipo) y copias de seguridad de la BD
 /Punto-Ventas/datos/
+# Claves privadas del acceso móvil (CA local, certificado HTTPS, VAPID): junto a la BD, nunca en el repo
+/Punto-Ventas/claves-privadas/
+*.crt
+movil-ca.*
+movil-servidor.*
+push-vapid.*
 /Punto-Ventas/datos.db.restaurar
 /Punto-Ventas/datos.db.antes-de-restaurar-*
 

@@ -13,11 +13,14 @@ import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
 import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
 import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
+import me.eliassanchezfernandez.puntodeventa.service.CaducidadService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.ProductoService;
 import me.eliassanchezfernandez.puntodeventa.service.ProveedorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -58,13 +61,17 @@ public class InventarioController implements Initializable {
     @FXML private ComboBox<Proveedor> cmbProveedor;
     @FXML private Label     lblSinProveedores;
     @FXML private Label     lblVisitanHoy;
-    @FXML private Button    btnProveedores;
-    @FXML private Button    btnOrdenes;
+    @FXML private MenuButton mnuProveedores;
+    @FXML private Button    btnLeerTicket;
     @FXML private TextField txtCosto;
     @FXML private VBox      vboxAjuste;
     @FXML private ComboBox<String> comboMotivo;
     @FXML private Button    btnAplicar;
     @FXML private ToggleButton btnSoloBajos;
+    @FXML private Button    btnPorCaducar;
+    @FXML private Label     lblLotes;
+    @FXML private VBox      vboxCaducidad;
+    @FXML private DatePicker dpCaducidad;
 
     // ── FXML – tabla ─────────────────────────────────────────────────────
     @FXML private TableView<Producto>           tablaInventario;
@@ -80,6 +87,9 @@ public class InventarioController implements Initializable {
     @Autowired private SesionService       sesionService;
     @Autowired private AutorizacionService autorizacionService;
     @Autowired private ApplicationContext  springContext;
+    @Autowired private CaducidadService    caducidadService;
+    @Autowired private CaducidadDialogos   caducidadDialogos;
+    @Autowired private LeerTicketDialogo   leerTicketDialogo;
 
     private final ObservableList<Producto> lista = FXCollections.observableArrayList();
     private Producto productoSeleccionado = null;
@@ -87,6 +97,7 @@ public class InventarioController implements Initializable {
 
     @Override public void initialize(URL url, ResourceBundle rb) {
         configurarColumnas();
+        EtiquetaBeta.marcar(btnLeerTicket, FuncionBeta.LECTOR_TICKETS);
         tablaInventario.setItems(lista);
         tablaInventario.setPlaceholder(new Label("No hay productos con inventario."));
         comboMotivo.setItems(FXCollections.observableArrayList(
@@ -99,10 +110,9 @@ public class InventarioController implements Initializable {
         });
 
         boolean gestiona = sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES);
-        for (Button b : List.of(btnProveedores, btnOrdenes)) {
-            b.setVisible(gestiona);
-            b.setManaged(gestiona);
-        }
+        mnuProveedores.setVisible(gestiona);
+        mnuProveedores.setManaged(gestiona);
+        CaducidadDialogos.configurar(dpCaducidad);
         aplicarModo(Modo.ENTRADA);
         recargar();
     }
@@ -114,6 +124,8 @@ public class InventarioController implements Initializable {
         lista.setAll(soloBajos
                 ? productoService.productosConStockBajo()
                 : productoService.productosConInventario());
+
+        actualizarBotonPorCaducar();
 
         // Mantener el producto del formulario con datos frescos
         if (productoSeleccionado != null) {
@@ -135,10 +147,14 @@ public class InventarioController implements Initializable {
             lblSinProveedores.setManaged(activos.isEmpty());
 
             List<Proveedor> hoy = proveedorService.queVisitanHoy();
-            lblVisitanHoy.setText(hoy.isEmpty() ? "Hoy no visita ningún proveedor."
-                    : "Proveedores que visitan hoy: " + hoy.stream()
+            java.time.DayOfWeek diaHoy = java.time.LocalDate.now().getDayOfWeek();
+            String preventa = activos.stream().filter(p -> p.preventaEn(diaHoy)).map(Proveedor::getNombre)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            String entregas = hoy.isEmpty() ? "Hoy no entrega ningún proveedor."
+                    : "Proveedores que entregan hoy: " + hoy.stream()
                         .map(p -> p.getNombre() + (p.getContacto() != null ? " (" + p.getContacto() + ")" : ""))
-                        .collect(java.util.stream.Collectors.joining(", ")));
+                        .collect(java.util.stream.Collectors.joining(", "));
+            lblVisitanHoy.setText(entregas + (preventa.isEmpty() ? "" : " · Pasa el preventa de: " + preventa));
         } catch (RuntimeException e) {
             lblVisitanHoy.setText("");
         }
@@ -149,6 +165,22 @@ public class InventarioController implements Initializable {
     /** Exporta la tabla de inventario visible a CSV, Excel o PDF */
     @FXML void onExportar() {
         me.eliassanchezfernandez.puntodeventa.util.ExportadorTablas.exportar(tablaInventario, "inventario", "Inventario");
+    }
+
+    /** "Por caducar (3)": cuántos productos caducan pronto; un fallo aquí no estorba al inventario */
+    private void actualizarBotonPorCaducar() {
+        try {
+            long n = caducidadService.porCaducar().stream().map(CaducidadService.PorCaducar::productoId).distinct().count();
+            btnPorCaducar.setText(n == 0 ? "Por caducar" : "Por caducar (" + n + ")");
+        } catch (RuntimeException e) {
+            btnPorCaducar.setText("Por caducar");
+        }
+    }
+
+    /** Lo que vence pronto, con la cantidad estimada y las acciones Retirar / Ya no queda */
+    @FXML void onPorCaducar() {
+        caducidadDialogos.mostrarPorCaducar(tablaInventario.getScene().getWindow());
+        recargar();
     }
 
     @FXML void onProveedores() {
@@ -170,6 +202,16 @@ public class InventarioController implements Initializable {
         }
     }
 
+    /** Leer el ticket del proveedor (foto o texto) y darle entrada a todo de una vez */
+    @FXML void onLeerTicket() {
+        try {
+            if (leerTicketDialogo.mostrar(tablaInventario.getScene().getWindow())) recargar();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Leer ticket", "No se pudo abrir la ventana: " + e.getMessage());
+        }
+    }
+
     @FXML void onAgregar() {
         aplicarModo(Modo.ENTRADA);
         txtCodigo.requestFocus();
@@ -187,7 +229,7 @@ public class InventarioController implements Initializable {
     @FXML void onReporteInventario() {
         alerta(Alert.AlertType.INFORMATION, "Reporte de inventario",
                 "La generación de reportes en PDF no está disponible en esta versión. "
-                + "Usa \"Productos Bajos\" para ver los faltantes.");
+                + "Usa \"Productos bajos\" para ver los faltantes.");
     }
 
     /** Bitácora de movimientos de inventario (INV-07) */
@@ -248,7 +290,18 @@ public class InventarioController implements Initializable {
         // Validar la captura ANTES de pedir cualquier autorización
         double costo = 0;
         String motivo = null;
+        java.time.LocalDate caducaEl = null;
         if (modo == Modo.ENTRADA) {
+            if (productoSeleccionado.isControlaCaducidad()) {
+                try {
+                    caducaEl = CaducidadDialogos.fechaDe(dpCaducidad);
+                    CaducidadService.validarFecha(caducaEl, caducidadService.hoy());
+                } catch (NegocioException e) {
+                    alerta(Alert.AlertType.WARNING, "Fecha de caducidad", e.getMessage());
+                    dpCaducidad.requestFocus();
+                    return;
+                }
+            }
             if (cmbProveedor.getValue() == null) {
                 alerta(Alert.AlertType.WARNING, "Proveedor requerido", cmbProveedor.getItems().isEmpty()
                         ? "Aún no hay proveedores. Da de alta uno en el botón Proveedores."
@@ -291,7 +344,7 @@ public class InventarioController implements Initializable {
             Producto actualizado;
             if (modo == Modo.ENTRADA) {
                 actualizado = productoService.registrarEntradaDeProveedor(productoSeleccionado.getId(), cantidad,
-                        cmbProveedor.getValue().getId(), null, costo, auts);
+                        cmbProveedor.getValue().getId(), null, costo, auts, caducaEl);
             } else {
                 actualizado = productoService.ajustarStock(productoSeleccionado.getId(), cantidad, motivo, auts);
             }
@@ -300,6 +353,8 @@ public class InventarioController implements Initializable {
             txtCantidad.clear();
             cmbProveedor.setValue(null);
             txtCosto.clear();
+            dpCaducidad.setValue(null);
+            dpCaducidad.getEditor().clear();
             comboMotivo.setValue(null);          // el motivo no se arrastra al siguiente ajuste
             comboMotivo.getEditor().clear();
             recargar();
@@ -350,6 +405,27 @@ public class InventarioController implements Initializable {
         if (txtCosto.getText().isBlank() && p.getPrecioCosto() > 0) {
             txtCosto.setPromptText(String.format("%.2f", p.getPrecioCosto()));
         }
+        mostrarCaducidad(p);
+    }
+
+    /** Fecha "Caduca el" y las fechas estimadas de lo que hay, solo en productos que controlan caducidad */
+    private void mostrarCaducidad(Producto p) {
+        boolean controla = p != null && p.isControlaCaducidad();
+        vboxCaducidad.setVisible(controla);
+        vboxCaducidad.setManaged(controla);
+        String resumen = "";
+        if (controla) {
+            try {
+                resumen = caducidadService.resumenLotes(p.getId());
+                if (resumen.isEmpty()) resumen = "Sin fechas de caducidad anotadas.";
+                else resumen += " (aprox.)";
+            } catch (RuntimeException e) {
+                resumen = "";
+            }
+        }
+        lblLotes.setText(resumen);
+        lblLotes.setVisible(!resumen.isEmpty());
+        lblLotes.setManaged(!resumen.isEmpty());
     }
 
     private void limpiarFormulario() {
@@ -359,6 +435,7 @@ public class InventarioController implements Initializable {
         mostrarImagen(null);
         labelDescripcion.setText("—");
         labelCantidadActual.setText("0.00");
+        mostrarCaducidad(null);
     }
 
     /** Foto del producto seleccionado (asíncrona; el marco se oculta si no tiene) */

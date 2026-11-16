@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2A4566">
+<meta name="color-scheme" content="light dark">
+<title>Caja Libre · notificaciones en el teléfono</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icono-32.png">
+<!--
+  Página PÚBLICA (sin sesión) que sirve el programa de escritorio en HTTP: guía para instalar el
+  certificado de la computadora de la tienda en el teléfono y poder abrir la página segura (HTTPS),
+  requisito para recibir notificaciones. ServidorMovilService sustituye al servirla los marcadores
+  NEGOCIO, HUELLA_CORTA, HUELLA, URL_HTTPS y HTTPS_ACTIVO (entre llaves dobles); el script detecta
+  Android o iPhone y muestra solo sus pasos (sin JavaScript se ven los dos).
+-->
+<style>
+:root { --bg:#F3F5F8; --surface:#FFFFFF; --border:#D3D9E0; --text:#1E2631; --muted:#5A6472; --accent:#2F6CAD; --accent-subtle:#EAF1F9;
+  --on-accent:#fff; --warning-subtle:#FCF5E9; --warning-text:#8A5A14; --success-subtle:#EDF6F1; --success-text:#276A49; }
+@media (prefers-color-scheme: dark) { :root { --bg:#11161D; --surface:#1A212B; --border:#334050; --text:#E8EDF3; --muted:#A5B0BD; --accent:#5B9BDB;
+  --accent-subtle:#1F3248; --on-accent:#0E1620; --warning-subtle:#382E1C; --warning-text:#E8BC78; --success-subtle:#1F3329; --success-text:#75CBA2; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+main { max-width: 560px; margin: 0 auto; padding: 1.25rem 1rem calc(2rem + env(safe-area-inset-bottom)); display: grid; gap: 1rem; }
+h1 { font-size: 1.4rem; margin: 0; }
+h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+p { margin: 0; }
+.cab { display: flex; align-items: center; gap: .75rem; }
+.cab img { width: 44px; height: 44px; border-radius: 12px; }
+.sub { color: var(--muted); font-size: .95rem; }
+.tarjeta { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1rem; }
+.btn { display: flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 1.25rem; border-radius: 14px; font-weight: 600;
+  text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--surface); }
+.btn-primario { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+ol { margin: .5rem 0 0; padding-left: 1.3rem; display: grid; gap: .5rem; }
+li { overflow-wrap: anywhere; }
+.ruta { font-weight: 600; }
+.huella { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.35rem; font-weight: 700; letter-spacing: .06em; text-align: center;
+  background: var(--accent-subtle); border-radius: 12px; padding: .75rem; margin-top: .5rem; }
+.huella-larga { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875rem; color: var(--muted); overflow-wrap: anywhere; margin-top: .5rem; }
+.aviso { background: var(--warning-subtle); color: var(--warning-text); border-radius: 12px; padding: .75rem 1rem; font-size: .92rem; }
+.ok { background: var(--success-subtle); color: var(--success-text); border-radius: 12px; padding: .75rem 1rem; font-weight: 600; }
+.oculto { display: none; }
+.segmentos { display: flex; gap: 4px; background: var(--border); border-radius: 14px; padding: 4px; }
+.segmentos button { flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: none; font: inherit; font-weight: 650; color: var(--muted); cursor: pointer; }
+.segmentos button[aria-pressed="true"] { background: var(--surface); color: var(--text); }
+.pasos { display: grid; gap: .75rem; }
+</style>
+</head>
+<body>
+<main>
+  <header class="cab">
+    <img src="/icono-256.png" alt="" width="44" height="44">
+    <div>
+      <h1>Notificaciones en el teléfono</h1>
+      <p class="sub">Caja Libre · {{NEGOCIO}}</p>
+    </div>
+  </header>
+
+  <section class="tarjeta">
+    <p>Para que el teléfono reciba avisos (proveedores, productos que se acaban, hora pico) aunque la página esté cerrada,
+      hay que abrirla por una <strong>conexión segura</strong>. Como la computadora de la tienda no está en internet, el teléfono tiene que
+      conocer su certificado. <strong>Se instala una sola vez.</strong></p>
+  </section>
+
+  <section class="tarjeta" id="comparar">
+    <h2>1. Comprueba que es el certificado correcto</h2>
+    <p class="sub">En la computadora, en Configuración → Acceso móvil → Notificaciones en el teléfono, aparece esta misma clave. Si no coincide, no lo instales.</p>
+    <div class="huella" aria-label="Huella del certificado">{{HUELLA_CORTA}}</div>
+    <p class="huella-larga">SHA-256 completa: {{HUELLA}}</p>
+  </section>
+
+  <section class="tarjeta">
+    <h2>2. Instala el certificado</h2>
+    <div class="segmentos" role="group" aria-label="Tipo de teléfono" id="selector">
+      <button type="button" data-tipo="android" aria-pressed="false">Android</button>
+      <button type="button" data-tipo="iphone" aria-pressed="false">iPhone / iPad</button>
+    </div>
+
+    <div class="pasos" id="android" style="margin-top:1rem">
+      <a class="btn btn-primario" href="/certificado/caja-libre.crt" download="caja-libre.crt">Descargar certificado (Android)</a>
+      <ol>
+        <li>Toca <span class="ruta">Descargar certificado</span>. Si el teléfono pregunta, conserva el archivo <span class="ruta">caja-libre.crt</span>.</li>
+        <li>Abre <span class="ruta">Ajustes</span> → <span class="ruta">Seguridad y privacidad</span> (o <span class="ruta">Seguridad</span>) →
+          <span class="ruta">Más ajustes de seguridad</span> → <span class="ruta">Cifrado y credenciales</span>.</li>
+        <li>Toca <span class="ruta">Instalar un certificado</span> → <span class="ruta">Certificado de CA</span>. Acepta el aviso
+          <em>«Es posible que se supervise tu red»</em>: solo significa que confiarás en la computadora de la tienda.</li>
+        <li>Elige el archivo <span class="ruta">caja-libre.crt</span> de la carpeta Descargas. Listo.</li>
+        <li>Si no encuentras la opción, en Ajustes busca la palabra <span class="ruta">certificado</span>; en algunos teléfonos está en
+          <span class="ruta">Ajustes</span> → <span class="ruta">Contraseñas y seguridad</span> → <span class="ruta">Privacidad</span>.</li>
+      </ol>
+    </div>
+
+    <div class="pasos" id="iphone" style="margin-top:1rem">
+      <a class="btn btn-primario" href="/certificado/caja-libre.mobileconfig">Descargar perfil (iPhone / iPad)</a>
+      <ol>
+        <li>Toca <span class="ruta">Descargar perfil</span> y acepta <em>«Permitir»</em> cuando Safari pregunte si descargar un perfil de configuración.</li>
+        <li>Abre <span class="ruta">Ajustes</span>; arriba aparece <span class="ruta">Perfil descargado</span>. Tócalo y pulsa <span class="ruta">Instalar</span>
+          (pide el código del teléfono).</li>
+        <li>Dirá <em>«No verificado»</em>: es normal, porque el certificado lo hizo la computadora de la tienda y no una empresa. Instálalo igual.</li>
+        <li>Después, en <span class="ruta">Ajustes</span> → <span class="ruta">General</span> → <span class="ruta">Información</span> →
+          <span class="ruta">Ajustes de confianza de certificados</span>, activa el interruptor de <span class="ruta">Caja Libre</span>.</li>
+        <li>Para recibir notificaciones el iPhone necesita la página en la pantalla de inicio (iOS 16.4 o más reciente): abre la dirección segura
+          en Safari, toca el botón <span class="ruta">Compartir</span> y luego <span class="ruta">Agregar a pantalla de inicio</span>. Abre siempre la página desde ese icono.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>3. Abre la página segura</h2>
+    <div data-https="{{HTTPS_ACTIVO}}" id="https">
+      <p class="sub">Después de instalar el certificado, entra por esta dirección (puedes guardarla en marcadores o en la pantalla de inicio):</p>
+      <p style="margin-top:.6rem"><a class="btn" id="enlace-https" href="{{URL_HTTPS}}">{{URL_HTTPS}}</a></p>
+      <p class="sub" style="margin-top:.6rem">Ahí, en <span class="ruta">Ajustes</span> → <span class="ruta">Notificaciones</span>, toca <span class="ruta">Permitir notificaciones</span>.</p>
+    </div>
+    <p class="aviso oculto" id="sin-https">La conexión segura no está disponible en este momento en la computadora. Pide al administrador que revise
+      Configuración → Acceso móvil (Opciones avanzadas).</p>
+  </section>
+
+  <p class="aviso">Instala el certificado solo en el Wi-Fi del negocio y solo si la clave de arriba coincide con la de la computadora. El certificado únicamente sirve para
+    la dirección de la computadora de la tienda; no afecta al resto de las páginas que visitas.</p>
+</main>
+<script>
+'use strict';
+(() => {
+  const ua = navigator.userAgent || '';
+  const esIphone = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const esAndroid = /Android/i.test(ua);
+  const botones = document.querySelectorAll('#selector button');
+  function mostrar(tipo) {
+    document.getElementById('android').classList.toggle('oculto', tipo !== 'android');
+    document.getElementById('iphone').classList.toggle('oculto', tipo !== 'iphone');
+    botones.forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-tipo') === tipo)));
+  }
+  botones.forEach(b => b.addEventListener('click', () => mostrar(b.getAttribute('data-tipo'))));
+  mostrar(esIphone ? 'iphone' : esAndroid ? 'android' : 'android');
+  const https = document.getElementById('https');
+  if (https.getAttribute('data-https') !== 'si') {
+    https.classList.add('oculto');
+    document.getElementById('sin-https').classList.remove('oculto');
+  }
+})();
+</script>
+</body>
+</html>

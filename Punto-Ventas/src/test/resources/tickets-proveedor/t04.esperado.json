@@ -1,0 +1,167 @@
+{
+  "tickets": [
+    {
+      "proveedor": null,
+      "folio": null,
+      "fecha": null,
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "GIRASOL",
+          "cantidad": 5,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 5.5,
+          "descuento": null,
+          "importe": 27.5
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "GIRASOL E",
+          "cantidad": 5,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 5.5,
+          "descuento": null,
+          "importe": 27.5
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "JAPONES",
+          "cantidad": 6,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 5.5,
+          "descuento": null,
+          "importe": 33.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "MANGO",
+          "cantidad": 4,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 32.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "GOMA",
+          "cantidad": 4,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 32.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "PANDITA",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 24.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "HUEVITO",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 24.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "AROS",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 24.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "DIENTES",
+          "cantidad": 4,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 32.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "PINGUINOS",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 24.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "SEMILLAS",
+          "cantidad": 5,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 40.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "TIBURON",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 8,
+          "descuento": null,
+          "importe": 16.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "PISTACHE",
+          "cantidad": 6,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 13,
+          "descuento": null,
+          "importe": 78.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "TUBO",
+          "cantidad": 5,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 23,
+          "descuento": null,
+          "importe": 115.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "MINI TUBO AJO",
+          "cantidad": 5,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 14,
+          "descuento": null,
+          "importe": 70.0
+        }
+      ],
+      "subtotal": null,
+      "descuento": null,
+      "impuestos": null,
+      "cargos": null,
+      "total": 599.0,
+      "notas": "Formulario llenado a mano: el OCR no lee letra manuscrita; texto capturado a mano."
+    }
+  ]
+}

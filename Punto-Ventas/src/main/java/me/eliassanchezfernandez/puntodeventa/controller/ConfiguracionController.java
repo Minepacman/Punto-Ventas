@@ -12,6 +12,9 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -28,6 +31,8 @@ import me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -66,8 +71,16 @@ public class ConfiguracionController implements Initializable {
     @Autowired private AcercaDeDialogo acercaDeDialogo;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.ActualizacionService actualizacionService;
     @Autowired private CatalogoCodigosService catalogoCodigosService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ocr.LectorTicketsService lectorTicketsService;
+
+    @Autowired private AparienciaDialogo aparienciaDialogo;
 
     @Override public void initialize(URL url, ResourceBundle rb) { }
+
+    /** Tema, color, iconos, letra y vidrio (toda la tienda: admin; "solo para mí": cualquier usuario) */
+    @FXML void onApariencia() {
+        aparienciaDialogo.abrir(raiz.getScene().getWindow());
+    }
 
     /** Administración de usuarios (ADMIN completo; GERENTE solo consulta y desactiva) */
     @FXML void onCajeros() {
@@ -76,22 +89,24 @@ public class ConfiguracionController implements Initializable {
                     "Solo un administrador o gerente puede administrar los usuarios.");
             return;
         }
-        abrir("/fxml/usuarios.fxml", "Usuarios del sistema", 1000, 640);
+        abrir("/fxml/usuarios.fxml", "Usuarios del sistema", 1000, 690);
     }
 
     // ── Pantallas con FXML (solo ADMIN) ───────────────────────────────────
 
+    /** Bitácora de acciones sensibles: aperturas del cajón, efectivo, cancelaciones, usuarios... */
+    @FXML void onBitacora()   { abrirAdmin("/fxml/bitacora.fxml", "Bitácora", 1100, 640); }
     @FXML void onOpciones()   { abrirAdmin("/fxml/configuracion_opciones.fxml", "Opciones habilitadas", 540, 520); }
     /** Datos del negocio, IVA y plazo de cancelación */
-    @FXML void onImpuestos()  { abrirAdmin("/fxml/configuracion_negocio.fxml", "Configuración del negocio", 560, 460); }
+    @FXML void onImpuestos()  { abrirAdmin("/fxml/configuracion_negocio.fxml", "Configuración del negocio", 640, 660); }
     @FXML void onTicket()     { abrirAdmin("/fxml/configuracion_ticket.fxml", "Ticket", 860, 640); }
     @FXML void onLogotipo()   { abrirAdmin("/fxml/configuracion_logotipo.fxml", "Logotipo", 440, 440); }
-    @FXML void onUnidades()   { abrirAdmin("/fxml/configuracion_unidades.fxml", "Unidades de medida", 780, 500); }
-    @FXML void onBaseDatos()  { abrirAdmin("/fxml/configuracion_basedatos.fxml", "Base de datos", 560, 640); }
-    /** Coordenadas del negocio y clima (Estadísticas y sugerencias) */
-    /** Servidor web local para teléfonos y sus sesiones */
-    @FXML void onAccesoMovil() { abrirAdmin("/fxml/configuracion_movil.fxml", "Acceso móvil", 820, 680); }
-    @FXML void onClima()      { abrirAdmin("/fxml/configuracion_clima.fxml", "Ubicación del negocio y clima", 560, 620); }
+    @FXML void onUnidades()   { abrirAdmin("/fxml/configuracion_unidades.fxml", "Unidades de medida", 780, 530); }
+    @FXML void onBaseDatos()  { abrirAdmin("/fxml/configuracion_basedatos.fxml", "Base de datos", 940, 669); }
+    /** Servidor web local para teléfonos y sus sesiones (QR primero, interruptor, teléfonos, avanzadas) */
+    @FXML void onAccesoMovil() { abrirAdmin("/fxml/configuracion_movil.fxml", "Acceso móvil", 960, 720); }
+    /** Ubicación del negocio (detectar / buscar ciudad) y clima (Estadísticas y sugerencias) */
+    @FXML void onClima()      { abrirAdmin("/fxml/configuracion_clima.fxml", "Ubicación del negocio y clima", 640, 620); }
 
     private void abrirAdmin(String fxml, String titulo, double ancho, double alto) {
         if (!sesionService.esAdmin()) {
@@ -298,15 +313,15 @@ public class ConfiguracionController implements Initializable {
      */
     @FXML void onCatalogoCodigos() {
         CatalogoCodigosService.Estado e = catalogoCodigosService.estado();
-        CheckBox enLinea = new CheckBox("Buscar datos de productos en internet");
+        CheckBox enLinea = new CheckBox("Buscar datos del producto por código de barras (internet)");
         enLinea.setSelected(e.enLinea());
         enLinea.setWrapText(true);
         enLinea.setDisable(!sesionService.esAdmin());
-        Label nota = new Label("Al dar de alta un producto por su código de barras, se proponen descripción, departamento e imagen "
-                + "a partir de un catálogo libre de productos que se venden en México (unos 25 000). El catálogo completo se "
-                + "descarga una vez por semana en segundo plano, unos minutos después de entrar; si un código no está en la copia "
-                + "local se consulta en internet y la foto se baja de Open Food Facts. Apagado, solo se usa la copia ya descargada "
-                + "y no se baja ninguna imagen. Nunca se envía nada de la tienda: solo se pide el código.");
+        Label nota = new Label("Al dar de alta un producto por su código de barras, el programa propone descripción, departamento "
+                + "y foto a partir de un catálogo libre de productos que se venden en México (unos 25 000, ya incluido en el "
+                + "programa). Encendido, una vez por semana se baja la versión más nueva y, si un código no está, se consulta en "
+                + "internet (catálogo y Open Food Facts); la foto también se baja de Open Food Facts. Apagado, solo se usa el "
+                + "catálogo incluido y no se baja ninguna foto. Nunca se envía nada de la tienda: solo se pide el código.");
         nota.setWrapText(true);
         nota.setPrefWidth(460);
         nota.getStyleClass().add("hint");
@@ -394,12 +409,103 @@ public class ConfiguracionController implements Initializable {
     }
 
     /** Emisor, credenciales del PAC y claves SAT por defecto (solo ADMIN) */
-    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml", "Facturación electrónica (CFDI 4.0)", 760, 720); }
+    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml",
+            EtiquetaBeta.tituloVentana("Facturación electrónica (CFDI 4.0)", FuncionBeta.FACTURACION_CFDI), 960, 720); }
 
     // ── Dispositivos (solo ADMIN; cada servicio lo vuelve a verificar y audita) ──
 
     @FXML void onImpresora() { abrirAdmin("/fxml/configuracion_impresora.fxml", "Impresora de tickets", 600, 760); }
-    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", "Báscula", 600, 780); }
+    @FXML void onBascula()   { abrirAdmin("/fxml/configuracion_bascula.fxml", EtiquetaBeta.tituloVentana("Báscula", FuncionBeta.BASCULA), 600, 620); }
+    /**
+     * Abrir Caja Libre al encender la computadora (por computadora; ver util/InicioAutomatico).
+     * Viene encendido de fábrica en el programa instalado. reg.exe en Windows: fuera del hilo de JavaFX.
+     */
+    @FXML void onAbrirAlEncender() {
+        if (!soloAdmin()) return;
+        var lanzador = me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.lanzador();
+        var carpeta = me.eliassanchezfernandez.puntodeventa.util.RutasApp.carpetaAplicacion();
+        CheckBox activo = new CheckBox("Abrir " + me.eliassanchezfernandez.puntodeventa.util.Marca.NOMBRE
+                + " al encender esta computadora");
+        activo.setSelected(me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.decidido(carpeta).orElse(true));
+        activo.setDisable(lanzador.isEmpty());
+        Label nota = new Label(lanzador.isEmpty()
+                ? "Solo disponible en el programa instalado (no al correrlo desde el código)."
+                : "Al prender la computadora e iniciar sesión, el programa se abre solo y queda listo para cobrar. "
+                + "Viene encendido de fábrica; se decide en cada computadora.");
+        nota.setWrapText(true);
+        nota.setPrefWidth(420);
+        nota.getStyleClass().add("hint");
+        dialogoGuardar("Abrir al encender", "Iniciar con la computadora", new VBox(10, activo, nota), FuncionBeta.ABRIR_AL_ENCENDER, () -> {
+            if (lanzador.isEmpty()) return;
+            boolean encendido = activo.isSelected();
+            me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.guardarDecision(carpeta, encendido);
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                String error = me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.aplicar(encendido, lanzador.get(),
+                        me.eliassanchezfernandez.puntodeventa.util.InicioAutomatico.Entorno.actual());
+                if (error != null) javafx.application.Platform.runLater(() -> alerta(Alert.AlertType.WARNING, "Abrir al encender", error));
+            });
+        });
+    }
+
+    /**
+     * Lector de tickets de proveedor (OCR): Automático / Rápido / Preciso, con una línea que dice qué
+     * motor se usa en esta computadora y por qué. Es por computadora (ocr.properties), no de la BD.
+     * Buscar Tesseract corre procesos: se hace fuera del hilo de JavaFX.
+     */
+    @FXML void onLectorTickets() {
+        if (!soloAdmin()) return;
+        var preferencias = me.eliassanchezfernandez.puntodeventa.ocr.SeleccionMotorOcr.Preferencia.values();
+        ToggleGroup grupo = new ToggleGroup();
+        VBox opciones = new VBox(8);
+        String[] ayudas = {
+                "Elige solo según la computadora: memoria, procesador y una prueba rápida.",
+                "Tesseract: funciona en cualquier computadora, incluso de 32 bits o con poca memoria.",
+                "PaddleOCR: lee mejor las fotos difíciles, pero pide más memoria y una computadora de 64 bits."};
+        for (int i = 0; i < preferencias.length; i++) {
+            RadioButton rb = new RadioButton(preferencias[i].etiqueta());
+            rb.setUserData(preferencias[i]);
+            rb.setToggleGroup(grupo);
+            Label ayuda = new Label(ayudas[i]);
+            ayuda.getStyleClass().add("hint");
+            ayuda.setWrapText(true);
+            ayuda.setPadding(new Insets(0, 0, 0, 24));
+            opciones.getChildren().add(new VBox(2, rb, ayuda));
+        }
+        var actual = lectorTicketsService.preferencia();
+        grupo.getToggles().stream().filter(t -> t.getUserData() == actual).findFirst().ifPresent(grupo::selectToggle);
+        Label motivo = new Label("Revisando esta computadora…");
+        motivo.setWrapText(true);
+        motivo.setPrefWidth(460);
+        motivo.getStyleClass().add("subtitle");
+        Label nota = new Label("Sirve para capturar la mercancía con una foto del ticket del proveedor desde el celular. "
+                + "La foto se lee en esta computadora y no se envía a nadie. PaddleOCR se descarga una sola vez "
+                + "(unos 80 MB) solo si esta computadora puede usarlo.");
+        nota.setWrapText(true);
+        nota.setPrefWidth(460);
+        nota.getStyleClass().add("hint");
+        java.util.Map<Object, String> motivos = new java.util.concurrent.ConcurrentHashMap<>();
+        Runnable mostrar = () -> {
+            Toggle t = grupo.getSelectedToggle();
+            String m = t == null ? null : motivos.get(t.getUserData());
+            motivo.setText(m == null ? "Revisando esta computadora…" : m);
+        };
+        grupo.selectedToggleProperty().addListener((o, a, b) -> mostrar.run());
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            for (var p : preferencias) {
+                var d = lectorTicketsService.decision(p);
+                String estado = lectorTicketsService.estadoPreparacion();
+                motivos.put(p, "Se usará: " + d.motor().etiqueta() + ". " + d.motivo() + (estado.isBlank() ? "" : "\n" + estado));
+            }
+            javafx.application.Platform.runLater(mostrar);
+        });
+        VBox contenido = new VBox(12, opciones, motivo, nota);
+        dialogoGuardar("Lector de tickets", "Cómo se leen las fotos de tickets de proveedor", contenido, FuncionBeta.LECTOR_TICKETS, () -> {
+            Toggle t = grupo.getSelectedToggle();
+            if (t != null) lectorTicketsService.guardarPreferencia(
+                    (me.eliassanchezfernandez.puntodeventa.ocr.SeleccionMotorOcr.Preferencia) t.getUserData());
+        });
+    }
+
     @FXML void onLector()    { if (soloAdmin()) dispositivosDialogos.lector(raiz.getScene().getWindow()); }
     @FXML void onCajon()     { if (soloAdmin()) dispositivosDialogos.cajon(raiz.getScene().getWindow()); }
     @FXML void onTerminalBancaria() { if (soloAdmin()) dispositivosDialogos.terminalBancaria(raiz.getScene().getWindow()); }
@@ -415,12 +521,18 @@ public class ConfiguracionController implements Initializable {
 
     /** Diálogo con Guardar / Cancelar; si el servicio rechaza los datos, el error sale en el mismo diálogo */
     private void dialogoGuardar(String titulo, String encabezado, Node contenido, Runnable guardar) {
+        dialogoGuardar(titulo, encabezado, contenido, null, guardar);
+    }
+
+    /** Igual, con la pastilla «Beta» en el encabezado si la función sigue en beta */
+    private void dialogoGuardar(String titulo, String encabezado, Node contenido, FuncionBeta beta, Runnable guardar) {
         Label error = new Label();
         error.setWrapText(true);
         error.getStyleClass().add("field-error-label");
         error.setVisible(false);
         error.setManaged(false);
         Dialog<ButtonType> dlg = dialogo(titulo, encabezado, new VBox(10, contenido, error));
+        EtiquetaBeta.marcar(dlg, beta);
         ButtonType guardarBtn = new ButtonType("Guardar", ButtonBar.ButtonData.OK_DONE);
         dlg.getDialogPane().getButtonTypes().addAll(guardarBtn, ButtonType.CANCEL);
         Button boton = (Button) dlg.getDialogPane().lookupButton(guardarBtn);

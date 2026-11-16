@@ -12,12 +12,7 @@ import me.eliassanchezfernandez.puntodeventa.model.ProductoClima;
 import me.eliassanchezfernandez.puntodeventa.model.ProductoDiario;
 import me.eliassanchezfernandez.puntodeventa.model.ResumenDiario;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
-import me.eliassanchezfernandez.puntodeventa.repository.ClimaRegistroRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ConfiguracionRepository;
-import me.eliassanchezfernandez.puntodeventa.repository.ParProductosRepository;
-import me.eliassanchezfernandez.puntodeventa.repository.ProductoClimaRepository;
-import me.eliassanchezfernandez.puntodeventa.repository.ProductoDiarioRepository;
-import me.eliassanchezfernandez.puntodeventa.repository.ResumenDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +49,9 @@ import java.util.TreeSet;
  *    ({@link #calcularDia}).
  *  - pares_productos y producto_clima: sobre la ventana móvil de las últimas
  *    {@link #VENTANA_DIAS} días; se rehacen completos en cada corrida (son
- *    pocos datos y así reflejan las cancelaciones sin lógica extra).
+ *    pocos datos y así reflejan las cancelaciones y devoluciones sin lógica
+ *    extra). Lo devuelto se resta del renglón ({@link #cantidadNeta}) y un
+ *    renglón devuelto completo no cuenta.
  *
  * Corre todas las noches a las 03:00, al arrancar si está desactualizado y
  * con el botón "Recalcular" de Estadísticas. Las ventas canceladas nunca
@@ -79,11 +76,6 @@ public class AgregadosService {
 
     @Autowired private VentaRepository          ventaRepo;
     @Autowired private AgregadosLote            lote;
-    @Autowired private ResumenDiarioRepository  resumenRepo;
-    @Autowired private ProductoDiarioRepository productoDiarioRepo;
-    @Autowired private ParProductosRepository   paresRepo;
-    @Autowired private ProductoClimaRepository  productoClimaRepo;
-    @Autowired private ClimaRegistroRepository  climaRepo;
     @Autowired private ConfiguracionRepository  configuracionRepo;
     @Autowired private SesionService            sesionService;
     @Autowired private ConfiguracionService     configuracionService;
@@ -164,14 +156,16 @@ public class AgregadosService {
 
     /**
      * Rehace TODOS los agregados desde la primera venta. NO es una sola
-     * transacción: va de mes en mes (una transacción por mes, vía
+     * transacción: va de mes en mes (cada mes se calcula en una transacción de
+     * solo lectura y se guarda en otra corta de escritura, vía
      * {@link AgregadosLote}) para no retener el candado de escritura de SQLite
      * ni acumular años de ventas en memoria. Si se interrumpe a la mitad, la
      * marca de "actualizado" queda vacía y el siguiente arranque lo repite.
      */
     public Resultado recalcularTodo() {
         synchronized (candado) {
-            lote.borrarTodo();                    // también vacía la marca de actualización
+            Cronometro crono = new Cronometro();
+            crono.escribiendo(lote::borrarTodo);  // también vacía la marca de actualización
             LocalDate hoy = LocalDate.now(reloj);
             Optional<Venta> primera = ventaRepo.findFirstByOrderByFechaAsc();
             int dias = 0;
@@ -180,14 +174,15 @@ public class AgregadosService {
                 while (!d.isAfter(hoy)) {
                     LocalDate fin = d.plusMonths(1).withDayOfMonth(1).minusDays(1);
                     if (fin.isAfter(hoy)) fin = hoy;
-                    dias += lote.reemplazarRango(d, fin);
+                    dias += reemplazarRango(d, fin, crono);
                     d = fin.plusDays(1);
                 }
             }
-            Resultado ventana = self.recalcularVentana();
+            Resultado ventana = recalcularVentana(crono);
             marcarActualizado();
             Resultado r = new Resultado(dias, ventana.pares(), ventana.paresClima());
-            System.out.println("ℹ️  Estadísticas: agregados recalculados por completo (" + r + ")");
+            ultimosTiempos = crono.tiempos();
+            System.out.println("ℹ️  Estadísticas: agregados recalculados por completo (" + r + "; " + ultimosTiempos + ")");
             return r;
         }
     }
@@ -207,19 +202,36 @@ public class AgregadosService {
             Set<LocalDate> fechas = new TreeSet<>();
             for (LocalDateTime f : ventaRepo.findFechasAfectadasDesde(desde)) fechas.add(f.toLocalDate());
 
+            Cronometro crono = new Cronometro();
             int dias = 0;
             List<LocalDate> pendientes = new ArrayList<>();
             for (LocalDate f : fechas) {
                 pendientes.add(f);
-                if (pendientes.size() == LOTE_DIAS) { dias += lote.reemplazarFechas(pendientes); pendientes.clear(); }
+                if (pendientes.size() == LOTE_DIAS) { dias += reemplazarFechas(pendientes, crono); pendientes.clear(); }
             }
-            if (!pendientes.isEmpty()) dias += lote.reemplazarFechas(pendientes);
-            Resultado ventana = self.recalcularVentana();
+            if (!pendientes.isEmpty()) dias += reemplazarFechas(pendientes, crono);
+            Resultado ventana = recalcularVentana(crono);
             marcarActualizado();
             Resultado r = new Resultado(dias, ventana.pares(), ventana.paresClima());
-            System.out.println("ℹ️  Estadísticas: agregados actualizados (" + r + ")");
+            ultimosTiempos = crono.tiempos();
+            System.out.println("ℹ️  Estadísticas: agregados actualizados (" + r + "; " + ultimosTiempos + ")");
             return r;
         }
+    }
+
+    /** Un mes: se calcula leyendo (sin candado de escritura) y se guarda en una transacción corta */
+    private int reemplazarRango(LocalDate desde, LocalDate hasta, Cronometro crono) {
+        List<LocalDate> fechas = new ArrayList<>();
+        for (LocalDate d = desde; !d.isAfter(hasta); d = d.plusDays(1)) fechas.add(d);
+        Map<LocalDate, DiaCalculado> dias = crono.leyendo(() -> lote.calcularDias(desde, hasta));
+        return crono.escribiendo(() -> lote.reemplazarDias(fechas, dias.values()));
+    }
+
+    /** Fechas sueltas (actualización incremental): igual, cálculo sin candado y escritura corta */
+    private int reemplazarFechas(List<LocalDate> fechas, Cronometro crono) {
+        List<LocalDate> copia = new ArrayList<>(fechas);
+        Map<LocalDate, DiaCalculado> dias = crono.leyendo(() -> lote.calcularFechas(copia));
+        return crono.escribiendo(() -> lote.reemplazarDias(copia, dias.values()));
     }
 
     // ── Cálculo por día (también lo usa Estadísticas para "hoy" en vivo) ─
@@ -238,24 +250,69 @@ public class AgregadosService {
 
     // ── Ventana móvil: canasta y clima ───────────────────────────────────
 
-    /** Rehace pares_productos y producto_clima con las ventas de la ventana */
-    @Transactional
+    /**
+     * Rehace pares_productos y producto_clima con las ventas de la ventana. NO es una
+     * transacción: las ventas se leen y agrupan en una transacción de solo lectura
+     * (sin el candado de escritura de SQLite) y lo calculado se guarda en dos
+     * transacciones cortas. Antes todo iba en una sola transacción de escritura y la
+     * caja no podía cobrar mientras se recorrían las cuatro semanas de tickets.
+     */
     public Resultado recalcularVentana() {
+        Cronometro crono = new Cronometro();
+        Resultado r = recalcularVentana(crono);
+        ultimosTiempos = crono.tiempos();
+        return r;
+    }
+
+    private Resultado recalcularVentana(Cronometro crono) {
         LocalDate hoy = LocalDate.now(reloj);
         LocalDateTime inicio = hoy.minusDays(VENTANA_DIAS - 1).atStartOfDay();
         LocalDateTime fin = hoy.plusDays(1).atStartOfDay();
-        List<Venta> ventas = ventaRepo.findActivasConDetallesEntre(inicio, fin);
+        AgregadosLote.Ventana ventana = crono.leyendo(() -> lote.calcularVentana(inicio, fin));
+        crono.escribiendo(() -> lote.reemplazarPares(ventana.pares()));
+        crono.escribiendo(() -> lote.reemplazarProductoClima(ventana.clima()));
+        return new Resultado(0, ventana.pares().size(), ventana.clima().size());
+    }
 
-        paresRepo.deleteAllInBatch();
-        List<ParProductos> pares = calcularPares(ventas);
-        paresRepo.saveAll(pares);
+    /** Cuánto duró la última corrida: cálculo sin candado y escritura con candado (para el registro y las pruebas) */
+    public Tiempos ultimosTiempos() {
+        return ultimosTiempos;
+    }
 
-        productoClimaRepo.deleteAllInBatch();
-        List<ClimaRegistro> clima = climaRepo
-                .findByFechaHoraGreaterThanEqualAndFechaHoraLessThanOrderByFechaHoraAsc(inicio, fin);
-        List<ProductoClima> porClima = calcularProductoClima(ventas, clima);
-        productoClimaRepo.saveAll(porClima);
-        return new Resultado(0, pares.size(), porClima.size());
+    private volatile Tiempos ultimosTiempos = new Tiempos(0, 0);
+
+    /**
+     * Milisegundos de la corrida leyendo y agrupando ventas ({@code msCalculo}, sin candado de
+     * escritura) y milisegundos en transacciones de escritura ({@code msEscritura}: borrar e
+     * insertar los agregados, incluida la espera si otra transacción tenía el candado).
+     */
+    public record Tiempos(long msCalculo, long msEscritura) {
+        @Override public String toString() {
+            return "cálculo sin candado " + msCalculo + " ms, escritura con candado " + msEscritura + " ms";
+        }
+    }
+
+    /** Acumula el tiempo de cada fase de una corrida */
+    private static final class Cronometro {
+        private long nsCalculo, nsEscritura;
+
+        <T> T leyendo(java.util.function.Supplier<T> fase) {
+            long t = System.nanoTime();
+            try { return fase.get(); } finally { nsCalculo += System.nanoTime() - t; }
+        }
+
+        <T> T escribiendo(java.util.function.Supplier<T> fase) {
+            long t = System.nanoTime();
+            try { return fase.get(); } finally { nsEscritura += System.nanoTime() - t; }
+        }
+
+        void escribiendo(Runnable fase) {
+            escribiendo(() -> { fase.run(); return null; });
+        }
+
+        Tiempos tiempos() {
+            return new Tiempos(nsCalculo / 1_000_000, nsEscritura / 1_000_000);
+        }
     }
 
     /**
@@ -274,7 +331,10 @@ public class AgregadosService {
             if (v.isCancelada()) continue;
             TreeMap<Long, Producto> enTicket = new TreeMap<>();
             for (DetalleVenta d : v.getDetalles()) {
-                if (d.getProducto() != null && d.getProducto().getId() != null) {
+                // El "producto común" (artículos sueltos fuera del catálogo) no forma pares: no es un producto real.
+                // Un renglón devuelto por completo tampoco: el cliente al final no se lo llevó.
+                if (d.getProducto() != null && d.getProducto().getId() != null && !d.esProductoComun()
+                        && cantidadNeta(d) > 0) {
                     enTicket.put(d.getProducto().getId(), d.getProducto());
                 }
             }
@@ -350,13 +410,15 @@ public class AgregadosService {
                                 ProductoClima.Tipo.BANDA + "|" + c.getBanda() };
             for (DetalleVenta d : v.getDetalles()) {
                 Producto p = d.getProducto();
-                if (p == null || p.getId() == null) continue;
+                if (p == null || p.getId() == null || d.esProductoComun()) continue;   // el común no "depende" del clima
+                double piezas = cantidadNeta(d);          // lo devuelto no se vendió
+                if (piezas <= 0) continue;
                 productos.put(p.getId(), p);
-                piezasProducto.merge(p.getId(), d.getCantidad(), Double::sum);
-                piezasTotal += d.getCantidad();
+                piezasProducto.merge(p.getId(), piezas, Double::sum);
+                piezasTotal += piezas;
                 for (String clave : claves) {
-                    piezasPorClave.computeIfAbsent(clave, k -> new HashMap<>()).merge(p.getId(), d.getCantidad(), Double::sum);
-                    totalPorClave.merge(clave, d.getCantidad(), Double::sum);
+                    piezasPorClave.computeIfAbsent(clave, k -> new HashMap<>()).merge(p.getId(), piezas, Double::sum);
+                    totalPorClave.merge(clave, piezas, Double::sum);
                 }
             }
         }
@@ -383,6 +445,20 @@ public class AgregadosService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    /**
+     * Piezas que el cliente se quedó de un renglón: vendidas menos devueltas (a milésimas,
+     * nunca negativo). Regla de los análisis de ventas (agregados diarios, canasta, clima):
+     * la devolución resta en el día de la VENTA, como si esas piezas no se hubieran vendido.
+     */
+    public static double cantidadNeta(DetalleVenta d) {
+        return Math.max(0, ResumenDiario.VentaRedondeo.milesimas(d.getCantidad() - d.getCantidadDevueltaOCero()));
+    }
+
+    /** Importe que el cliente pagó y no le fue reembolsado (a centavos, nunca negativo); misma regla */
+    public static double importeNeto(DetalleVenta d) {
+        return Math.max(0, ResumenDiario.VentaRedondeo.centavos(d.getImporte() - d.getImporteDevueltoOCero()));
+    }
 
     private void marcarActualizado() {
         Configuracion c = configuracion();

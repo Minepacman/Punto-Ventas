@@ -19,7 +19,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
-import me.eliassanchezfernandez.puntodeventa.PuntoDeVentaApp;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat;
 import me.eliassanchezfernandez.puntodeventa.facturacion.CatalogoSat.Entrada;
 import me.eliassanchezfernandez.puntodeventa.facturacion.ConstructorCfdi;
@@ -37,7 +36,10 @@ import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionFiscalService;
 import me.eliassanchezfernandez.puntodeventa.service.FacturacionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.AbrirArchivo;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -98,6 +100,7 @@ public class FacturacionDialogos {
         dlg.setTitle("Facturar venta " + venta.getFolioMostrado());
         dlg.setHeaderText("Factura de la venta " + venta.getFolioMostrado() + " por " + Moneda.formato(venta.getTotal())
                 + (fiscalService.obtener().isPacSandbox() ? "\nMODO PRUEBAS: la factura no tendrá validez fiscal." : ""));
+        EtiquetaBeta.marcar(dlg, FuncionBeta.FACTURACION_CFDI);
         if (owner != null) dlg.initOwner(owner);
 
         ComboBox<ClienteFiscal> cmbCliente = new ComboBox<>(FXCollections.observableArrayList(clienteFiscalService.listar()));
@@ -228,6 +231,7 @@ public class FacturacionDialogos {
         dlg.setTitle("Factura global (público en general)");
         dlg.setHeaderText("Una factura con las ventas del periodo que NO se facturaron a un cliente"
                 + (fiscalService.obtener().isPacSandbox() ? "\nMODO PRUEBAS: la factura no tendrá validez fiscal." : ""));
+        EtiquetaBeta.marcar(dlg, FuncionBeta.FACTURACION_CFDI);
         if (owner != null) dlg.initOwner(owner);
 
         ComboBox<Entrada> cmbPeriodicidad = new ComboBox<>(FXCollections.observableArrayList(CatalogoSat.PERIODICIDADES));
@@ -460,7 +464,8 @@ public class FacturacionDialogos {
         estado.setText("Abriendo el PDF…");
         enSegundoPlano(() -> facturacionService.archivo(f.getId(), Formato.PDF), ruta -> {
             estado.setText("PDF: " + ruta);
-            abrirArchivo(ruta);
+            Window w = estado.getScene() != null ? estado.getScene().getWindow() : null;
+            abrirArchivo(ruta, facturacionService.almacen().raiz(), () -> guardarArchivo(w, f, Formato.PDF, estado));
         }, msg -> estado.setText(msg));
     }
 
@@ -600,11 +605,22 @@ public class FacturacionDialogos {
         t.start();
     }
 
-    static void abrirArchivo(Path ruta) {
-        try {
-            PuntoDeVentaApp.abrirEnlace(ruta.toUri().toString());
-        } catch (RuntimeException e) {
-            Ventanas.alerta(Alert.AlertType.INFORMATION, "PDF", "El archivo está en: " + ruta);
-        }
+    /**
+     * Abre el PDF/XML con el programa del sistema ({@link AbrirArchivo}: solo archivos de la carpeta de facturas).
+     * Si no se puede (sin visor, sistema desconocido, ruta fuera de la carpeta), muestra dónde está el archivo
+     * y ofrece «Guardar como…» para copiarlo a otra carpeta.
+     */
+    static void abrirArchivo(Path ruta, Path carpetaFacturas, Runnable guardarComo) {
+        if (AbrirArchivo.abrir(ruta, List.of(carpetaFacturas))) return;
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle("Abrir archivo");
+        a.setHeaderText("No se pudo abrir el archivo con el programa del sistema.");
+        a.setContentText("Está guardado en:\n" + ruta
+                + (guardarComo != null ? "\n\nCon «Guardar como…» puedes copiarlo a otra carpeta (por ejemplo, el Escritorio)." : ""));
+        ButtonType guardar = new ButtonType("Guardar como…", ButtonBar.ButtonData.OK_DONE);
+        if (guardarComo != null) a.getButtonTypes().setAll(guardar, ButtonType.CLOSE);
+        else a.getButtonTypes().setAll(ButtonType.CLOSE);
+        Ventanas.estilizar(a);
+        if (a.showAndWait().filter(b -> b == guardar).isPresent() && guardarComo != null) guardarComo.run();
     }
 }

@@ -94,5 +94,12 @@ public class TicketPendiente {
 
         @Column(name = "descuento_manual_importe")
         private Double descuentoManualImporte;
+
+        /** Solo en un "producto común" (ProductoComun): nombre y precio tecleados, que no están en el catálogo */
+        @Column(name = "descripcion", length = ProductoComun.MAX_LARGO_NOMBRE)
+        private String descripcion;
+
+        @Column(name = "precio")
+        private Double precio;
     }
 }

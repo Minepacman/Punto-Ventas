@@ -1,0 +1,49 @@
+                  Gomez Palacio
+71-229-3940
+Cedis# 4229 Promotor# 369100
+Ruta Preventa #4004
+Ruta Entrega #4004
+
+Fecha de Pedido: 11/09/2026
+Promotor: VENDEDOR EJEMPLO
+Cliente: 0000000
+Folio: #4229-2794109
+
+Fecha impresion: 11/09/2026 13:07:08
+* * * * P A G O   C O N T A D O * * * *
+* * * * * * O R I G I N A L * * * * *
+CLIENTE EJEMPLO
+DIRECCION EJEMPLO
+
+Dias de Visita  V
+Pedido para el Dia
+11/09/2026
+
+DESCRIPCION
+NO. CLAVE   CANT     PRECIO      IMPORTE
+UHT Lala 100 Vainilla 330ml Pet
+1   021442    1      23.70        23.70
+UHT Lala 100 Fresa 330ml Pet
+2   021441    1      23.70        23.70
+UHT Cafe con Lala Latte Desl 330ml Tpr
+is
+3   020422    1      22.40        22.40
+Nutriyoghurt Beb NuezCereal 450 gr CN
+4   025927    2      16.00        32.00
+Nutriyoghurt Beb FresaCereal 450 gr CN
+5   025928    2      16.00        32.00
+Yog Lala Beb Fresa-Mora 220 gr
+6   023429    3      14.40        43.20
+Yog Lala Beb Mango 220 gr
+7   023427    3      14.40        43.20
+Yog Lala Beb Pina-Coco 220 gr
+8   023445    3      14.40        43.20
+Subtotal                       $263.40
+Descuento                        $0.00
+IVA                              $0.00
+TOTAL A PAGAR                  $263.40
+
+DESCUENTOS
+Cupones               0          $0.00
+Descuentos            0          $0.00
+Cupones Especiales    0          $0.00

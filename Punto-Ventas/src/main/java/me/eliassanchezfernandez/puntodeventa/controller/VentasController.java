@@ -54,6 +54,8 @@ import me.eliassanchezfernandez.puntodeventa.util.LectorEnModales;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
 import me.eliassanchezfernandez.puntodeventa.util.PantallaConexion;
 import me.eliassanchezfernandez.puntodeventa.util.RafagaLector;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Scope;
@@ -119,6 +121,7 @@ public class VentasController implements Initializable {
     @FXML private Button     btnTodoTransferencia;
     @FXML private Button     btnTodoVales;
     @FXML private Button     btnBuscar;
+    @FXML private Button     btnProductoComun;
     @FXML private Button     btnCantidad;
     @FXML private Button     btnQuitar;
     @FXML private Button     btnDescuento;
@@ -174,6 +177,14 @@ public class VentasController implements Initializable {
     @Autowired private ImagenProductoCache    imagenes;
     @Autowired private FacturacionDialogos    facturacionDialogos;
     @Autowired private MovimientoCajaDialogo  movimientoCajaDialogo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.CuentaClienteService cuentaClienteService;
+
+    /** Cliente al que se anota la parte "A cuenta (fiado)" del ticket en cobro (null = sin fiado) */
+    private CobroDialogo.ClienteFiado clienteFiado;
+    /** Vales de compra de la tienda (forma «Vale de la tienda» en la ventana de cobro) */
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.ValeService valeService;
+    /** Código del vale elegido en la ventana de cobro (solo para el cobro en curso) */
+    private String valeCobro;
 
     private static final java.time.format.DateTimeFormatter FMT_HORA = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
 
@@ -216,6 +227,7 @@ public class VentasController implements Initializable {
     // ── Inicialización ────────────────────────────────────────────────────
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        EtiquetaBeta.marcar(btnFacturarVenta, FuncionBeta.FACTURACION_CFDI);
         camposPago.put(Venta.FormaPago.EFECTIVO, txtEfectivo);
         camposPago.put(Venta.FormaPago.TARJETA, txtTarjeta);
         camposPago.put(Venta.FormaPago.TRANSFERENCIA, txtTransferencia);
@@ -257,6 +269,7 @@ public class VentasController implements Initializable {
         etiquetar(btnEnEspera,   "En espera",      Atajo.PONER_EN_ESPERA, mac);
         etiquetar(btnCobrar,     "Cobrar",        Atajo.COBRAR, mac);
         // Combinaciones con Ctrl/Cmd: la tecla va solo en el tooltip (caben en 1024 px)
+        soloTooltip(btnProductoComun, Atajo.PRODUCTO_COMUN, mac);
         soloTooltip(btnLeerPeso,   Atajo.LEER_PESO, mac);
         soloTooltip(btnReimprimir, Atajo.REIMPRIMIR_ULTIMO, mac);
         soloTooltip(btnAbrirCajon, Atajo.ABRIR_CAJON, mac);
@@ -271,8 +284,11 @@ public class VentasController implements Initializable {
     }
 
     private static void soloTooltip(Button b, Atajo a, boolean mac) {
-        b.setTooltip(new Tooltip(a.getDescripcion() + "  —  " + a.etiquetaTeclas(mac)
-                + (a.getPermiso() != null ? "\nRequiere: " + a.getPermiso().getDescripcion() + " (o autorización)" : "")));
+        // Sin ABRIR_CAJON no se pide autorización sino el motivo (lo explica la nota del atajo)
+        String requiere = a.getPermiso() == null ? ""
+                : "\nRequiere: " + a.getPermiso().getDescripcion() + (a == Atajo.ABRIR_CAJON ? "" : " (o autorización)");
+        b.setTooltip(new Tooltip(a.getDescripcion() + "  —  " + a.etiquetaTeclas(mac) + requiere
+                + (a.getNota() != null ? "\n" + a.getNota() : "")));
     }
 
     /**
@@ -416,6 +432,7 @@ public class VentasController implements Initializable {
     public void ejecutarAtajo(Atajo atajo) {
         switch (atajo) {
             case BUSCAR_PRODUCTO   -> onBuscar();
+            case PRODUCTO_COMUN    -> onProductoComun();
             case CANTIDAD          -> onCambiarCantidad();
             case DESCUENTO_MANUAL  -> onDescuentoManual();
             case MAYOREO           -> onMayoreo();
@@ -475,16 +492,51 @@ public class VentasController implements Initializable {
         String codigo = captura.get().codigo();
         Optional<Producto> encontrado = ventaService.buscarPorCodigo(codigo);
         if (encontrado.isEmpty()) {
-            alerta(Alert.AlertType.WARNING, "Producto no encontrado",
-                    "No existe un producto activo con el código \"" + codigo + "\".\n" +
-                    "Usa Buscar (F6) para localizarlo por nombre.");
-            txtCodigo.selectAll();
+            avisarNoEncontrado(codigo);
             return;
         }
 
         agregarAlTicket(encontrado.get(), captura.get().cantidad());
         txtCodigo.clear();
         txtCodigo.requestFocus();
+    }
+
+    /** Lo pone MainController: abre Productos → Nuevo con el código (y sus datos del catálogo) */
+    private java.util.function.Consumer<String> alDarDeAlta;
+
+    public void setAlDarDeAlta(java.util.function.Consumer<String> alDarDeAlta) {
+        this.alDarDeAlta = alDarDeAlta;
+    }
+
+    /**
+     * Código que no existe: con permiso de editar productos se ofrece «Dar de alta» (no es el
+     * botón por omisión: el Enter de un lector no debe sacar al cajero de Ventas).
+     */
+    private void avisarNoEncontrado(String codigo) {
+        String texto = "No existe un producto activo con el código \"" + codigo + "\".\n"
+                + "Usa Buscar (F6) para localizarlo por nombre.";
+        boolean puedeAlta = alDarDeAlta != null && sesionService.tienePermiso(Permiso.EDITAR_PRODUCTOS)
+                && !codigo.isBlank();
+        if (!puedeAlta) {
+            alerta(Alert.AlertType.WARNING, "Producto no encontrado", texto);
+            txtCodigo.selectAll();
+            return;
+        }
+        ButtonType darDeAlta = new ButtonType("Dar de alta", ButtonBar.ButtonData.OTHER);
+        Alert a = new Alert(Alert.AlertType.WARNING, texto + "\n¿Es un producto nuevo? «Dar de alta» lo registra con sus datos del catálogo.",
+                darDeAlta, ButtonType.CLOSE);
+        a.setTitle("Producto no encontrado");
+        a.setHeaderText("Producto no encontrado");
+        a.initOwner(txtCodigo.getScene() == null ? null : txtCodigo.getScene().getWindow());
+        Ventanas.estilizar(a);
+        ((Button) a.getDialogPane().lookupButton(darDeAlta)).setDefaultButton(false);
+        ((Button) a.getDialogPane().lookupButton(ButtonType.CLOSE)).setDefaultButton(true);
+        if (a.showAndWait().orElse(ButtonType.CLOSE) == darDeAlta) {
+            txtCodigo.clear();
+            alDarDeAlta.accept(codigo);
+            return;
+        }
+        txtCodigo.selectAll();
     }
 
     /** Diálogo de búsqueda por nombre o código (solo productos activos) */
@@ -619,6 +671,30 @@ public class VentasController implements Initializable {
         txtCodigo.requestFocus();
     }
 
+    /**
+     * Producto común (Ctrl/Cmd+P): algo que no está en el catálogo. Pide nombre,
+     * precio y cantidad y lo agrega como un renglón más (siempre nuevo: dos
+     * "productos comunes" pueden ser cosas distintas, no se suman).
+     */
+    @FXML
+    private void onProductoComun() {
+        Optional<ProductoComunDialogo.Captura> captura = ProductoComunDialogo.mostrar(tablaProductos.getScene().getWindow());
+        if (captura.isPresent()) {
+            ocultarAvisoVentaCobrada();               // empieza el siguiente ticket
+            try {
+                DetalleVenta d = ventaService.crearDetalleProductoComun(
+                        captura.get().nombre(), captura.get().precio(), captura.get().cantidad());
+                itemsTicket.add(d);
+                tablaProductos.getSelectionModel().select(d);
+                tablaProductos.scrollTo(d);
+            } catch (NegocioException e) {
+                alerta(Alert.AlertType.ERROR, "Producto común", e.getMessage());
+            }
+            recalcularTodo();
+        }
+        txtCodigo.requestFocus();
+    }
+
     /** Alterna el renglón seleccionado entre precio de lista y precio de mayoreo (APLICAR_MAYOREO) */
     @FXML
     private void onMayoreo() {
@@ -643,8 +719,8 @@ public class VentasController implements Initializable {
 
         Dialog<double[]> dlg = new Dialog<>();
         dlg.setTitle("Descuento manual");
-        dlg.setHeaderText(d.getProducto().getDescripcion() + "  —  importe actual " + Moneda.formato(
-                d.getProducto().getPrecioVenta() * d.getCantidad()));
+        dlg.setHeaderText(d.getDescripcionMostrada() + "  —  importe actual " + Moneda.formato(
+                (d.esProductoComun() ? d.getPrecioListaODefault() : d.getProducto().getPrecioVenta()) * d.getCantidad()));
         dlg.initOwner(tablaProductos.getScene().getWindow());
         Ventanas.estilizar(dlg);
         TextField txtPct = new TextField(d.getDescuentoManualPct() != null ? formatoCantidad(d.getDescuentoManualPct()) : "");
@@ -687,11 +763,12 @@ public class VentasController implements Initializable {
         DetalleVenta d = seleccionado("Selecciona un renglón del ticket para cambiar la cantidad.");
         if (d == null) return;
 
-        boolean granel = d.getProducto().permiteDecimales();
+        boolean granel = d.esProductoComun() || d.getProducto().permiteDecimales();
         TextInputDialog dlg = new TextInputDialog(formatoCantidad(d.getCantidad()));
         dlg.setTitle("Cantidad");
-        dlg.setHeaderText(d.getProducto().getDescripcion()
-                + (granel ? "  (a granel: acepta decimales, ej. 1.250)" : "  (por pieza: número entero)"));
+        dlg.setHeaderText(d.getDescripcionMostrada()
+                + (d.esProductoComun() ? "  (producto común: acepta decimales, ej. 1.5)"
+                   : granel ? "  (a granel: acepta decimales, ej. 1.250)" : "  (por pieza: número entero)"));
         dlg.setContentText("Nueva cantidad:");
         dlg.initOwner(tablaProductos.getScene().getWindow());
         Ventanas.estilizar(dlg);
@@ -775,13 +852,18 @@ public class VentasController implements Initializable {
         } else {
             // Un pago sospechoso (cambio enorme o tecleado por el lector) pasa por la ventana de cobro,
             // que lo muestra y exige una confirmación distinta del Enter
+            CobroDialogo.Fiado fiado = new CobroDialogo.Fiado(this::elegirClienteFiado, clienteFiado);
+            CobroDialogo.ValeTienda vale = new CobroDialogo.ValeTienda(valeService::consultar);
             Optional<Map<Venta.FormaPago, Double>> elegido = CobroDialogo.mostrar(
-                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector);
+                    raiz.getScene().getWindow(), total, configuracionService.formasPagoHabilitadas(), montosPanel, porLector,
+                    fiado, vale);
             if (elegido.isEmpty()) {                  // Esc: nada cambia, el ticket sigue en captura
                 txtCodigo.requestFocus();
                 return;
             }
             montos = elegido.get();
+            clienteFiado = montos.containsKey(Venta.FormaPago.CREDITO) ? fiado.elegido() : null;
+            valeCobro = montos.containsKey(Venta.FormaPago.VALE_COMPRA) ? vale.codigo() : null;
         }
         cobrarCon(montos);
     }
@@ -804,6 +886,10 @@ public class VentasController implements Initializable {
         for (Map.Entry<Venta.FormaPago, Double> e : montos.entrySet()) {
             if (e.getKey() == Venta.FormaPago.TARJETA && tarjeta != null) {
                 pagos.add(new PagoVenta(e.getKey(), e.getValue(), tarjeta.terminal(), tarjeta.ultimos4(), tarjeta.autorizacion()));
+            } else if (e.getKey() == Venta.FormaPago.CREDITO) {
+                pagos.add(PagoVenta.aCuenta(clienteFiado != null ? clienteFiado.id() : null, e.getValue()));
+            } else if (e.getKey() == Venta.FormaPago.VALE_COMPRA) {
+                pagos.add(PagoVenta.conVale(valeCobro, e.getValue()));
             } else {
                 pagos.add(new PagoVenta(e.getKey(), e.getValue()));
             }
@@ -817,6 +903,10 @@ public class VentasController implements Initializable {
         } catch (PermisoRequeridoException e) {
             // Falta un permiso del ticket (p. ej. renglón restaurado con mayoreo o
             // existencia que otra caja se llevó): pedir autorización y reintentar con los mismos montos
+            if (e.getPermiso() == Permiso.AJUSTAR_CREDITO) {
+                // Fiado que rebasa el límite del cliente: primero se dice cuánto debe y cuánto quedaría
+                alerta(Alert.AlertType.WARNING, "Límite de crédito", e.getMessage());
+            }
             if (asegurarPermiso(e.getPermiso())) {
                 cobrarCon(montos);
                 return;
@@ -860,6 +950,21 @@ public class VentasController implements Initializable {
         txtCodigo.requestFocus();
     }
 
+    /**
+     * Buscador de clientes para el fiado (F6 en la ventana de cobro). El alta rápida exige
+     * VENDER_A_CREDITO o la autorización de un administrador, que se queda en el ticket para el cobro.
+     */
+    private Optional<CobroDialogo.ClienteFiado> elegirClienteFiado(javafx.stage.Window owner) {
+        return ClienteSelectorDialogo.mostrar(owner, cuentaClienteService, nombre -> {
+            try {
+                return cuentaClienteService.crearRapido(nombre, autorizaciones);
+            } catch (PermisoRequeridoException e) {
+                if (!asegurarPermiso(e.getPermiso())) return null;
+                return cuentaClienteService.crearRapido(nombre, autorizaciones);
+            }
+        });
+    }
+
     /** La venta no se guardó por un error inesperado: decirlo claro y dejar el ticket tal cual para reintentar */
     private void avisarVentaNoGuardada(RuntimeException e) {
         System.err.println("No se pudo guardar la venta: " + e);
@@ -890,7 +995,13 @@ public class VentasController implements Initializable {
         ultimaVentaCobrada = venta;
         lblVentaCobradaTitulo.setText("Venta " + venta.getFolioMostrado() + " cobrada");
         lblVentaCobradaDetalle.setText("Total " + Moneda.formato(venta.getTotal())
-                + "  ·  Pagó " + Moneda.formato(venta.getPagoCon()));
+                + "  ·  Pagó " + Moneda.formato(venta.getPagoCon())
+                + (venta.getClienteNombre() != null ? "  ·  A cuenta de " + venta.getClienteNombre()
+                        + (venta.getSaldoCliente() != null ? " (debe " + Moneda.formato(venta.getSaldoCliente()) + ")" : "") : "")
+                + venta.getPagos().stream().filter(p -> p.getFormaPago() == Venta.FormaPago.VALE_COMPRA && p.getValeSaldo() != null)
+                        .map(p -> "  ·  Al vale " + me.eliassanchezfernandez.puntodeventa.model.Vale.mostrar(p.getValeCodigo())
+                                + (p.getValeSaldo() > 0.004 ? " le quedan " + Moneda.formato(p.getValeSaldo()) : " ya no le queda saldo"))
+                        .collect(java.util.stream.Collectors.joining()));
         lblVentaCobradaCambio.setText(Moneda.formato(venta.getCambio()));
         boolean puedeFacturar = false;
         try {
@@ -953,9 +1064,9 @@ public class VentasController implements Initializable {
     private void onLeerPeso() {
         DetalleVenta d = seleccionado("Selecciona el renglón a granel del ticket y pulsa Leer peso.");
         if (d == null) return;
-        if (!d.getProducto().permiteDecimales()) {
+        if (!d.esProductoComun() && !d.getProducto().permiteDecimales()) {   // un producto común sí puede ir por kilo
             alerta(Alert.AlertType.INFORMATION, "Leer peso",
-                    "\"" + d.getProducto().getDescripcion() + "\" se vende por pieza. Leer peso es para productos a granel.");
+                    "\"" + d.getDescripcionMostrada() + "\" se vende por pieza. Leer peso es para productos a granel.");
             return;
         }
         btnLeerPeso.setDisable(true);
@@ -1385,9 +1496,9 @@ public class VentasController implements Initializable {
 
     private void agregarAlTicket(Producto producto, double cantidad) {
         ocultarAvisoVentaCobrada();                   // empieza el siguiente ticket
-        // ¿Ya está en el ticket? → sumar cantidad
+        // ¿Ya está en el ticket? → sumar cantidad (los productos comunes nunca se suman entre sí)
         Optional<DetalleVenta> existente = itemsTicket.stream()
-                .filter(d -> d.getProducto().getId().equals(producto.getId()))
+                .filter(d -> !d.esProductoComun() && d.getProducto().getId().equals(producto.getId()))
                 .findFirst();
 
         if (existente.isPresent()) {
@@ -1503,9 +1614,9 @@ public class VentasController implements Initializable {
 
     private void configurarColumnas() {
         colCodigo.setCellValueFactory(c ->
-                new SimpleStringProperty(c.getValue().getProducto().getCodigoBarras()));
+                new SimpleStringProperty(c.getValue().getCodigoMostrado()));
         colDescripcion.setCellValueFactory(c ->
-                new SimpleStringProperty(c.getValue().getProducto().getDescripcion()));
+                new SimpleStringProperty(c.getValue().getDescripcionMostrada()));
         colPrecio.setCellValueFactory(c ->
                 new SimpleDoubleProperty(c.getValue().getPrecioVenta()).asObject());
         colCantidad.setCellValueFactory(c ->
@@ -1672,6 +1783,8 @@ public class VentasController implements Initializable {
         itemsTicket.clear();
         autorizaciones.clear();
         tarjetaCapturada = null;
+        clienteFiado = null;
+        valeCobro = null;
         txtCodigo.clear();
         camposPago.values().forEach(TextField::clear);
         labelTotal.setText("$0.00");

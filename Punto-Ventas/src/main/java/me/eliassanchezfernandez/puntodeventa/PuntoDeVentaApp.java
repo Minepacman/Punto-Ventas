@@ -129,11 +129,15 @@ public class PuntoDeVentaApp extends Application {
         // JavaFX reporta las excepciones de sus manejadores al manejador del hilo: el mismo del resto del programa
         Thread.currentThread().setUncaughtExceptionHandler(RegistroErrores::manejar);
 
-        // Aplicar tema moderno AtlantaFX (modo oscuro estilo GitHub)
-        //Application.setUserAgentStylesheet(new CupertinoLight().getUserAgentStylesheet());
-        //Application.setUserAgentStylesheet(new PrimerDark().getUserAgentStylesheet());
-        //Application.setUserAgentStylesheet(new Dracula().getUserAgentStylesheet());
-        Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()); //agregar funcion para que el usuario pueda elegir el tema (detalles del codigo extras)
+        // Tema base de AtlantaFX (NordLight; NordDark con el tema oscuro, ver AplicadorApariencia)
+        Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet());
+        // Apariencia elegida en Configuración → Apariencia (la última que se vio; la de la base se aplica al login)
+        try {
+            me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia.aplicar(
+                    me.eliassanchezfernandez.puntodeventa.util.apariencia.RecuerdoApariencia.leer());
+        } catch (RuntimeException e) {
+            System.err.println("Apariencia: " + e.getMessage());
+        }
 
         if (primeraVez) {
             // ¿Una sola caja o varias cajas? Se guarda y se arranca con esa configuración

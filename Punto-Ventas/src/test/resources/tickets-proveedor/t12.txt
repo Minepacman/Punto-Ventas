@@ -1,0 +1,37 @@
+Razon Social:
+0000000Abarrotes Ejemplo
+Dirección:
+DIRECCION EJEMPLO
+Telefono:
+
+=====================================
+Nota de venta:VER-60809152026113707
+Fecha:15/09/2026
+=====================================
+Prod Descripcion
+ Cant.  Precio     Desc.    SubTotal
+=====================================
+5862 PED RAZAS PEQUEÑAS Purpose 12/4
+ 2      26.00      0        51.99
+5908 WKS NOVA Pouch Adult Tuna 24/85
+ 4      10.50      0        41.99
+5909 WKS NOVA Pouch Adult Salmon 24/
+ 2      10.50      0        21.00
+5918 PEDIGREE RP PURPOSE RES 24/100G
+ 6      10.50      0        62.99
+5934 Wks Tasty mix atún y salmón 24/
+ 2      10.50      0        21.00
+5935 Wks Tasty mix pavo y pollo 24/7
+ 2      10.50      0        21.00
+=====================================
+          PIEZAS :           18
+      DESCUENTOS :            0
+             IVA :        30.35
+        SUBTOTAL :       189.62
+           TOTAL :       219.97
+
+=====================================
+   TOTAL A PAGAR :       219.97
+=====================================
+     *No es comprobante fiscal*
+=====================================

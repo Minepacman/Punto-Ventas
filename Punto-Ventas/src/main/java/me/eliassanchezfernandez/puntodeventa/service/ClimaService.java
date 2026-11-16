@@ -47,7 +47,7 @@ public class ClimaService {
     public static final double FRIO_HASTA = 15.0;
     public static final double CALOR_DESDE = 25.0;
     /** Un registro más viejo que esto ya no se considera "clima actual" */
-    static final int VIGENCIA_HORAS = 3;
+    public static final int VIGENCIA_HORAS = 3;
 
     public static final String DESPEJADO = "Despejado";
     public static final String NUBLADO   = "Nublado";
@@ -77,6 +77,9 @@ public class ClimaService {
 
     /** Último problema al consultar (para mostrarlo en Configuración); null si la última consulta salió bien */
     private volatile String ultimoError;
+
+    /** Quien quiera enterarse de que hay un registro nuevo o cambió la configuración (el clima de la cabecera) */
+    private final java.util.List<Runnable> oyentes = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     // ── Mapeos (funciones puras) ─────────────────────────────────────────
 
@@ -215,7 +218,9 @@ public class ClimaService {
         if (!c.isClimaActivo()) return Optional.empty();
         try {
             Lectura l = consultar(c.getLatitud(), c.getLongitud());
-            return Optional.of(self.guardar(l, LocalDateTime.now(reloj)));
+            ClimaRegistro r = self.guardar(l, LocalDateTime.now(reloj));
+            notificarCambio();     // ya confirmado en la base: quien lo lea verá el registro nuevo
+            return Optional.of(r);
         } catch (IOException | RuntimeException e) {
             System.err.println("Clima: sin datos (" + e.getMessage() + "). La aplicación sigue sin clima.");
             return Optional.empty();
@@ -242,6 +247,11 @@ public class ClimaService {
         return climaRepo.findFirstByOrderByFechaHoraDesc().filter(r -> !r.getFechaHora().isBefore(limite));
     }
 
+    /** Último registro guardado, por viejo que sea (la cabecera lo muestra atenuado si pasó la vigencia) */
+    public Optional<ClimaRegistro> ultimo() {
+        return climaRepo.findFirstByOrderByFechaHoraDesc();
+    }
+
     /** Clima registrado para la hora dada */
     public Optional<ClimaRegistro> climaDe(LocalDateTime fechaHora) {
         return climaRepo.findByFechaHora(fechaHora.truncatedTo(ChronoUnit.HOURS));
@@ -249,6 +259,33 @@ public class ClimaService {
 
     public boolean estaActivo() {
         return configuracion().isClimaActivo();
+    }
+
+    /** Ciudad configurada (puede ser null) para el tooltip de la cabecera */
+    public String ciudad() {
+        return configuracion().getCiudad();
+    }
+
+    // ── Oyentes (sin hilo propio: se avisa en el hilo que guardó) ────────
+
+    /** Avisar cuando haya un registro nuevo o cambie la configuración del clima. Quitar con {@link #quitarOyente}. */
+    public void alCambiar(Runnable oyente) {
+        if (oyente != null) oyentes.add(oyente);
+    }
+
+    public void quitarOyente(Runnable oyente) {
+        oyentes.remove(oyente);
+    }
+
+    /** Lo llama registrarAhora tras guardar y Configuración al cambiar ubicación/clima. Un oyente que falla no afecta a los demás. */
+    public void notificarCambio() {
+        for (Runnable o : oyentes) {
+            try {
+                o.run();
+            } catch (RuntimeException e) {
+                System.err.println("Clima: un oyente falló (" + e.getMessage() + ").");
+            }
+        }
     }
 
     public Optional<String> ultimoError() {

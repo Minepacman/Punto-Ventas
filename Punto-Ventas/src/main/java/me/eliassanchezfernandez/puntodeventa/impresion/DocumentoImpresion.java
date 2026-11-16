@@ -13,8 +13,18 @@ public final class DocumentoImpresion {
 
     public enum Alineacion { IZQUIERDA, CENTRO, DERECHA }
 
-    /** Una línea con su formato. {@code texto} va SIN relleno: la alineación la aplica quien imprime. */
-    public record Linea(String texto, Alineacion alineacion, boolean negrita, boolean grande) { }
+    /**
+     * Una línea con su formato. {@code texto} va SIN relleno: la alineación la aplica quien imprime.
+     * {@code codigoBarras} (opcional) pide imprimir ese valor como código de barras CODE128 en lugar
+     * del texto; la impresora que no sabe dibujarlo imprime el texto.
+     */
+    public record Linea(String texto, Alineacion alineacion, boolean negrita, boolean grande, String codigoBarras) {
+        public Linea(String texto, Alineacion alineacion, boolean negrita, boolean grande) {
+            this(texto, alineacion, negrita, grande, null);
+        }
+
+        public boolean esCodigoBarras() { return codigoBarras != null && !codigoBarras.isEmpty(); }
+    }
 
     private final List<Linea> lineas = new ArrayList<>();
 
@@ -41,6 +51,17 @@ public final class DocumentoImpresion {
 
     public DocumentoImpresion agregar(String texto, Alineacion alineacion, boolean negrita, boolean grande) {
         lineas.add(new Linea(texto == null ? "" : texto, alineacion, negrita, grande));
+        return this;
+    }
+
+    /**
+     * Código de barras CODE128 centrado (solo letras y números ASCII). En la impresora térmica sale
+     * como barras con el texto debajo; en texto plano o impresora normal, como {@code *CODIGO*}.
+     */
+    public DocumentoImpresion codigoBarras(String valor) {
+        String v = valor == null ? "" : valor.replaceAll("[^A-Za-z0-9]", "");
+        if (v.isEmpty()) return this;
+        lineas.add(new Linea("*" + v + "*", Alineacion.CENTRO, false, false, v));
         return this;
     }
 

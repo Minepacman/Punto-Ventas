@@ -6,7 +6,6 @@ import javafx.fxml.Initializable;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
@@ -17,6 +16,7 @@ import javafx.stage.Stage;
 import me.eliassanchezfernandez.puntodeventa.model.Configuracion;
 import me.eliassanchezfernandez.puntodeventa.service.BienvenidaService;
 import me.eliassanchezfernandez.puntodeventa.service.ClimaService;
+import me.eliassanchezfernandez.puntodeventa.service.GeolocalizacionIpService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.LogotipoService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
@@ -27,10 +27,8 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.ResourceBundle;
 
 /**
@@ -39,9 +37,9 @@ import java.util.ResourceBundle;
  * MainController una sola vez por instalación (BienvenidaService decide).
  *
  * El logotipo se guarda al momento con LogotipoService (igual que en
- * Configuración → Logotipo). La ciudad se busca en línea (UbicacionService) y
- * rellena las coordenadas, que también se pueden teclear a mano; sin internet
- * se avisa y el paso se puede omitir. "Guardar y continuar" guarda el nombre
+ * Configuración → Logotipo). La ubicación se elige con {@link SelectorUbicacion}
+ * (detectar por internet, buscar la ciudad o coordenadas a mano en Opciones
+ * avanzadas); sin internet se avisa y el paso se puede omitir. "Guardar y continuar" guarda el nombre
  * (BienvenidaService) y la ubicación (ConfiguracionService, la misma vía que
  * Configuración → Ubicación y clima). "Omitir por ahora" no vuelve a preguntar.
  * Cerrar con la X deja el asistente pendiente para el siguiente inicio.
@@ -55,39 +53,26 @@ public class AsistenteInicialController implements Initializable {
     @FXML private ImageView  imgLogo;
     @FXML private Label      lblSinLogo;
     @FXML private Button     btnQuitarLogo;
-    @FXML private TextField  txtCiudad;
-    @FXML private Button     btnBuscar;
-    @FXML private ComboBox<UbicacionService.Lugar> cmbLugares;
-    @FXML private TextField  txtLatitud;
-    @FXML private TextField  txtLongitud;
+    @FXML private SelectorUbicacion selectorUbicacion;
     @FXML private CheckBox   chkClima;
-    @FXML private Label      lblEstadoUbicacion;
     @FXML private Label      lblError;
 
     @Autowired private BienvenidaService    bienvenidaService;
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private LogotipoService      logotipoService;
     @Autowired private UbicacionService     ubicacionService;
+    @Autowired private GeolocalizacionIpService geolocalizacionService;
     @Autowired private ClimaService         climaService;
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         Configuracion c = configuracionService.obtener();
         txtNombre.setText(c.getNombreTienda() != null ? c.getNombreTienda() : "");
-        txtCiudad.setText(c.getCiudad() != null ? c.getCiudad() : "");
-        txtLatitud.setText(c.getLatitud() != null ? String.valueOf(c.getLatitud()) : "");
-        txtLongitud.setText(c.getLongitud() != null ? String.valueOf(c.getLongitud()) : "");
+        selectorUbicacion.configurar(ubicacionService, geolocalizacionService);
+        selectorUbicacion.setValores(c.getCiudad(), c.getLatitud(), c.getLongitud());
+        selectorUbicacion.setOnCambio(this::ocultarError);
         chkClima.setSelected(c.isClimaActivo() || !c.tieneUbicacion());
         mostrarLogo();
-        mostrar(cmbLugares, false);
-        cmbLugares.valueProperty().addListener((obs, antes, lugar) -> {
-            if (lugar == null) return;
-            txtCiudad.setText(lugar.nombre());
-            txtLatitud.setText(String.format(java.util.Locale.ROOT, "%.4f", lugar.latitud()));
-            txtLongitud.setText(String.format(java.util.Locale.ROOT, "%.4f", lugar.longitud()));
-            lblEstadoUbicacion.setText("Ubicación: " + lugar.etiqueta());
-            ocultarError();
-        });
         Platform.runLater(() -> {
             txtNombre.requestFocus();
             txtNombre.selectAll();
@@ -132,68 +117,18 @@ public class AsistenteInicialController implements Initializable {
         btnQuitarLogo.setDisable(!hay);
     }
 
-    // ── Ubicación ────────────────────────────────────────────────────────
-
-    /** Busca la ciudad en línea (hilo aparte) y ofrece las coincidencias en el combo */
-    @FXML
-    private void onBuscarCiudad() {
-        String texto = txtCiudad.getText();
-        ocultarError();
-        try {
-            if (texto == null || texto.trim().length() < 2) throw new NegocioException("Escribe al menos dos letras de la ciudad.");
-        } catch (NegocioException e) {
-            mostrarError(e.getMessage());
-            txtCiudad.requestFocus();
-            return;
-        }
-        btnBuscar.setDisable(true);
-        lblEstadoUbicacion.setText("Buscando…");
-        Thread t = new Thread(() -> {
-            List<UbicacionService.Lugar> lugares;
-            String aviso = null;
-            try {
-                lugares = ubicacionService.buscar(texto);
-            } catch (IOException e) {
-                lugares = List.of();
-                aviso = "Sin conexión a internet. Puedes escribir la latitud y la longitud a mano, "
-                        + "o dejar la ubicación para después (Configuración → Ubicación y clima).";
-            } catch (NegocioException e) {
-                lugares = List.of();
-                aviso = e.getMessage();
-            }
-            List<UbicacionService.Lugar> encontrados = lugares;
-            String mensaje = aviso;
-            Platform.runLater(() -> {
-                btnBuscar.setDisable(false);
-                if (mensaje != null) {
-                    lblEstadoUbicacion.setText(mensaje);
-                    return;
-                }
-                cmbLugares.getItems().setAll(encontrados);
-                if (encontrados.isEmpty()) {
-                    mostrar(cmbLugares, false);
-                    lblEstadoUbicacion.setText("No se encontró esa ciudad. Prueba con otro nombre o captura las coordenadas.");
-                    return;
-                }
-                mostrar(cmbLugares, true);
-                lblEstadoUbicacion.setText(encontrados.size() == 1
-                        ? "Se encontró un lugar; revisa que sea el correcto."
-                        : "Elige tu ciudad en la lista (" + encontrados.size() + " coincidencias).");
-                cmbLugares.getSelectionModel().select(0);
-                if (encontrados.size() > 1) cmbLugares.show();
-            });
-        }, "asistente-buscar-ciudad");
-        t.setDaemon(true);
-        t.start();
-    }
-
     // ── Guardar / omitir ─────────────────────────────────────────────────
 
     @FXML
     private void onGuardar() {
         ocultarError();
-        Double[] coords = leerCoordenadas();
-        if (coords == null) return;
+        Double[] coords;
+        try {
+            coords = selectorUbicacion.coordenadas();
+        } catch (NegocioException e) {
+            mostrarError(e.getMessage());
+            return;
+        }
         try {
             bienvenidaService.completarAsistenteInicial(txtNombre.getText());
         } catch (NegocioException e) {
@@ -208,7 +143,7 @@ public class AsistenteInicialController implements Initializable {
         if (coords[0] != null) {
             try {
                 Configuracion g = configuracionService.guardarUbicacionClima(coords[0], coords[1],
-                        txtCiudad.getText(), chkClima.isSelected());
+                        selectorUbicacion.ciudad(), chkClima.isSelected());
                 climaActivo = g.isClimaActivo();
             } catch (NegocioException e) {
                 // El nombre ya quedó guardado y el asistente hecho; la ubicación se corrige aquí mismo
@@ -245,23 +180,6 @@ public class AsistenteInicialController implements Initializable {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
-
-    /** [latitud, longitud] (ambos null si están vacíos); null si hay un número inválido o falta uno */
-    private Double[] leerCoordenadas() {
-        String lat = txtLatitud.getText().trim().replace(",", ".");
-        String lon = txtLongitud.getText().trim().replace(",", ".");
-        if (lat.isEmpty() && lon.isEmpty()) return new Double[] { null, null };
-        if (lat.isEmpty() || lon.isEmpty()) {
-            mostrarError("Captura la latitud Y la longitud (o deja las dos vacías para omitir la ubicación).");
-            return null;
-        }
-        try {
-            return new Double[] { Double.parseDouble(lat), Double.parseDouble(lon) };
-        } catch (NumberFormatException e) {
-            mostrarError("Escribe la latitud y la longitud como números decimales (ej: 19.4326 y -99.1332).");
-            return null;
-        }
-    }
 
     private void mostrarError(String mensaje) {
         lblError.setText(mensaje);

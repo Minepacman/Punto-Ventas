@@ -1,0 +1,31 @@
+ervezas y Refrescos de Jalapa
+ARRETERA FEDERAL XALAPA-VERAC
+RACC LOS GIRASOLES, C.P. 9163
+MILIANO ZAPATA, VERACRUZ
+FC:      CRJ010101AB1
+el:      0000000000
+
+presion:09-10-2026 13:02:21
+endedor: VENDEDOR EJEMPLO
+aptura:  09-10-2026 13:02:00
+uta:  569515
+olio: 9515-102460
+D:        CLI000001
+te:     CLIENTE EJEMPLO
+INOS Y LICORES EJEMPLO
+DOCRED: Contado
+P:    Por definir
+
+EDIDO
+od       Descripcion          Cant Precio   Desc     SubTot
+=============================================================
+10001360  PIÑ ADA 8/2L NR       1.0 238.00   5.17    232.00
+=============================================================
+
+TOTAL DE PRODUCTOS:    1.0
+
+UBTOTAL :          238.00
+ESCUENTO:            5.17
+MPUESTOS:           32.83
+
+      *****  TOTAL $    232.00     *****

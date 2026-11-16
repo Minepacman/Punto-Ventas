@@ -205,6 +205,46 @@ class SesionMovilServiceTest extends BaseServicioTest {
         assertThat(sesionRepo.findById(e.sesion().getId()).orElseThrow().getUltimoUso()).isAfter(inicio);
     }
 
+    @Test
+    void validarSoloEscribeComoMuchoUnaVezPorMinuto() throws Exception {
+        Cajero c = usuarioListo("m5b", Cajero.Rol.CAJERO, EnumSet.noneOf(Permiso.class));
+        var e = sesionMovilService.emitir(c, false, "ip", "ua");
+        long antes = sesionMovilService.escriturasDeValidacion();
+
+        // Muchas peticiones dentro del mismo minuto: ninguna escribe
+        for (int i = 0; i < 20; i++) {
+            reloj.avanzar(Duration.ofSeconds(2));
+            assertThat(sesionMovilService.validar(e.token())).isPresent();
+        }
+        assertThat(sesionMovilService.escriturasDeValidacion()).isEqualTo(antes);
+
+        // Pasado el minuto: una sola escritura, y las siguientes del nuevo minuto ya no escriben
+        reloj.avanzar(Duration.ofSeconds(21));
+        var v = sesionMovilService.validar(e.token());
+        assertThat(v).isPresent();
+        assertThat(v.get().sesion().getUltimoUso()).isEqualTo(sesionMovilService.ahora());
+        for (int i = 0; i < 5; i++) sesionMovilService.validar(e.token());
+        assertThat(sesionMovilService.escriturasDeValidacion()).isEqualTo(antes + 1);
+
+        // Un token desconocido nunca escribe
+        sesionMovilService.validar("token-que-no-existe");
+        assertThat(sesionMovilService.escriturasDeValidacion()).isEqualTo(antes + 1);
+    }
+
+    @Test
+    void validarRevocaUnaVezLaSesionDeUnUsuarioDesactivado() throws Exception {
+        Cajero c = usuarioListo("m5c", Cajero.Rol.CAJERO, EnumSet.noneOf(Permiso.class));
+        var e = sesionMovilService.emitir(c, false, "ip", "ua");
+        c.setActivo(false);
+        cajeroRepo.save(c);
+        long antes = sesionMovilService.escriturasDeValidacion();
+
+        assertThat(sesionMovilService.validar(e.token())).isEmpty();
+        assertThat(sesionRepo.findById(e.sesion().getId()).orElseThrow().isRevocada()).isTrue();
+        assertThat(sesionMovilService.validar(e.token())).isEmpty();       // ya revocada: no vuelve a escribir
+        assertThat(sesionMovilService.escriturasDeValidacion()).isEqualTo(antes + 1);
+    }
+
     // ── Revocación ────────────────────────────────────────────────────────
 
     @Test

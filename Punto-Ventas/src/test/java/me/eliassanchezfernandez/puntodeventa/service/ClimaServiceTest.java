@@ -106,10 +106,31 @@ class ClimaServiceTest extends BaseServicioTest {
         assertThat(climaService.climaDe(ahora)).isPresent();
         assertThat(climaService.climaDe(ahora.minusHours(5))).isEmpty();
 
-        // Un registro viejo ya no es "actual"
+        // Un registro viejo ya no es "actual", pero sigue siendo el "último" (la cabecera lo muestra atenuado)
         climaRepo.deleteAll();
-        climaService.guardar(l, ahora.minusHours(ClimaService.VIGENCIA_HORAS + 1));
+        ClimaRegistro viejo = climaService.guardar(l, ahora.minusHours(ClimaService.VIGENCIA_HORAS + 1));
         assertThat(climaService.actual()).isEmpty();
+        assertThat(climaService.ultimo()).isPresent().get().extracting(ClimaRegistro::getId).isEqualTo(viejo.getId());
+    }
+
+    /** La cabecera se entera de registros nuevos sin consultar: ClimaService avisa a sus oyentes */
+    @Test
+    void losOyentesRecibenElAvisoYSePuedenQuitar() {
+        java.util.concurrent.atomic.AtomicInteger avisos = new java.util.concurrent.atomic.AtomicInteger();
+        Runnable oyente = avisos::incrementAndGet;
+        Runnable roto = () -> { throw new IllegalStateException("falla a propósito"); };
+        climaService.alCambiar(roto);        // uno que falla no impide avisar a los demás
+        climaService.alCambiar(oyente);
+        try {
+            climaService.notificarCambio();
+            assertThat(avisos.get()).isEqualTo(1);
+            climaService.quitarOyente(oyente);
+            climaService.notificarCambio();
+            assertThat(avisos.get()).isEqualTo(1);
+        } finally {
+            climaService.quitarOyente(roto);
+            climaService.quitarOyente(oyente);
+        }
     }
 
     @Test
@@ -157,5 +178,26 @@ class ClimaServiceTest extends BaseServicioTest {
         assertThatThrownBy(() -> ClimaService.uriPara(Double.NaN, 0)).isInstanceOf(IllegalArgumentException.class);
         assertThat(ClimaService.uriPara(90, -180).toString()).startsWith("https://api.open-meteo.com/");
         assertThat(climaService.ultimoError()).isPresent();
+    }
+    /** «Detectar mi ubicación»: lo que estima el servicio por IP se guarda por la misma vía que la captura manual */
+    @Test
+    void unaUbicacionDetectadaSeGuardaYSeVuelveALeer() throws Exception {
+        iniciarComoAdmin();
+        GeolocalizacionIpService.Ubicacion u = GeolocalizacionIpService.parsear("ipwho.is",
+                "{\"success\":true,\"city\":\"Toluca\",\"region\":\"México\",\"country\":\"México\",\"latitude\":19.2926,\"longitude\":-99.6569}")
+                .orElseThrow();
+
+        Configuracion g = configuracionService.guardarUbicacionClima(u.latitud(), u.longitud(), u.nombreParaGuardar(), true);
+        assertThat(g.isClimaActivo()).isTrue();
+
+        Configuracion leida = configuracionService.obtener();
+        assertThat(leida.getCiudad()).isEqualTo("Toluca");
+        assertThat(leida.getLatitud()).isCloseTo(19.2926, within(0.0001));
+        assertThat(leida.getLongitud()).isCloseTo(-99.6569, within(0.0001));
+        assertThat(leida.tieneUbicacion()).isTrue();
+
+        // Volver a guardar sin coordenadas (ubicación omitida) borra la ciudad y apaga el clima
+        configuracionService.guardarUbicacionClima(null, null, null, false);
+        assertThat(configuracionService.obtener().tieneUbicacion()).isFalse();
     }
 }

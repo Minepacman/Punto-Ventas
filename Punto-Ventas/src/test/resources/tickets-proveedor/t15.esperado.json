@@ -1,0 +1,57 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Comercializadora MB",
+      "folio": "8514",
+      "fecha": "2026-08-25",
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "PAQUETE AMPER ENERGY 473ML 24PZS",
+          "cantidad": 0.5,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 430,
+          "descuento": null,
+          "importe": 215
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "PAQUETE AMPER CALACA PONCH 473ML 24PZS",
+          "cantidad": 0.5,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 430,
+          "descuento": null,
+          "importe": 215
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "PAQUETE VOLT GUARANA 473ML 15PZS",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 15,
+          "precioUnitario": 250,
+          "descuento": null,
+          "importe": 250
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "PAQUETE CERVEZA XX LAGER 473ML 24PZS",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 24,
+          "precioUnitario": 540,
+          "descuento": null,
+          "importe": 540
+        }
+      ],
+      "subtotal": null,
+      "descuento": null,
+      "impuestos": null,
+      "cargos": null,
+      "total": 1220,
+      "notas": "Medio paquete (0.5); ajuste escrito a mano (-124 = 1096) no se lee."
+    }
+  ]
+}

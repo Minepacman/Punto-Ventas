@@ -395,3 +395,123 @@ PaddleOCR.js: https://www.npmjs.com/package/@paddleocr/paddleocr-js · Tesseract
 onnxruntime-web tamaños: https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ · ONNX Runtime Java (plataformas): https://onnxruntime.ai/docs/get-started/with-java ·
 ONNX Runtime sin 32 bits: https://onnxruntime.ai/docs/build/inferencing · Tess4J: https://tess4j.sourceforge.net/tutorial/ ·
 Shape Detection API: https://developer.chrome.com/docs/capabilities/shape-detection · Benchmarks de recibos (vendedor, con reservas): https://imagetotable.ai/references/tesseract-vs-paddleocr-receipt-benchmark
+
+## 12. Resultados con tickets reales (2026-11-15)
+
+16 fotos reales de WhatsApp (900×1600, JPEG muy comprimido) de 9 proveedores distintos: térmicas (60 y 80 mm),
+matriz de puntos con ceros con diagonal/punto (`Ø`), una hoja carta impresa, una nota a mano (no se evalúa) y
+una foto girada 90°. Luz morada del mostrador, sombras de la mano, papel ondulado y doblado, otro ticket encimado.
+**Las fotos tienen datos personales: no están en el repositorio.** La transcripción a mano (renglones de artículos
+y totales de 15 tickets, 167 importes) vive fuera del repo; el arnés la lee de una ruta.
+
+Arnés: `OcrMuestrasRealesTest` (opt-in, `APP_OCR_MUESTRAS=true`; variables en su javadoc). Medidas:
+**CER por renglón** = distancia de edición mínima de cada renglón esperado contra cualquier tramo de lo leído
+(sin mayúsculas, acentos ni espacios: el encabezado y la basura del fondo no cuentan) e **importes exactos** =
+cifras con dos decimales que aparecen idénticas (lo que más le importa al intérprete). Mac M5.
+
+### 12a. Tesseract 5.5.4 (`spa+eng`, `--psm 4`, proceso aparte) y el efecto de cada paso del preproceso
+
+| Variante | CER | Importes exactos | ms/foto (prom.; máx.) |
+|---|---|---|---|
+| Foto cruda | 35.8 % | 34.7 % | 870; 1 480 |
+| + recorte al papel + balance de blancos | 38.0 % | 37.1 % | 820; 1 520 |
+| + aplanado del fondo (sombras, dobleces) | 24.4 % | 52.1 % | 970; 2 250 |
+| + orientación 0/90 (docstrum) e inclinación | 12.7 % | 65.9 % | 1 200; 2 700 |
+| **+ ampliar a renglón de 28 px (predeterminado)** | **11.6 %** | **71.9 %** | 1 760; 4 820 |
+| ampliar a 36 px / 48 px | 12.8 % / 12.1 % | 66.5 % / 67.7 % | 1 980 / 2 540 |
+| + Sauvola en Java (en vez del umbral de Tesseract) | 16.6 % | 66.5 % | 2 550 |
+| sin recorte | 11.7 % | 68.9 % | 2 320 |
+| sin balance de blancos | 13.4 % | 64.1 % | 2 130 |
+| `--psm 6` / `--psm 3` / `--psm 11` | 14.8 / 12.1 / 12.4 % | 64.7 / 65.3 / 69.5 % | 3 360 / 2 250 / 2 780 |
+| solo `spa` | 14.5 % | 59.9 % | 1 950 |
+
+(Las filas de variantes se midieron con renglón de 36 px salvo la marcada como predeterminada.) El preproceso cuesta
+0.12–0.3 s por foto. Lo que más ayuda: aplanar el fondo y orientar/enderezar. Detalle que costó: la proyección de
+tinta **no** sirve para decidir 0° contra 90° en tickets de fuente monoespaciada (las columnas alineadas dan un perfil
+tan nítido como los renglones); se decide por la dirección a la letra vecina más cercana ("docstrum") y la
+inclinación fina sí por proyección, solo con componentes del tamaño de una letra (el fondo oscuro, las líneas `=====`
+y el QR la torcían). Si la confianza sale < 0.72 se prueba la imagen a 180°.
+
+### 12b. PaddleOCR (PP-OCRv6 small, ONNX Runtime 1.31.1), implementado en Java
+
+| Motor / preproceso | CER | Importes exactos | ms/foto 4 hilos (prom.; máx.) | 1 hilo (prom.; máx.) |
+|---|---|---|---|---|
+| RapidOCR (Python), foto cruda (la de 90° sin girar) | 7.3 % | 97.0 % | 1 360; 2 040 | 3 000; 6 780 |
+| Java, solo orientación | 7.9 % | 97.6 % | 740; 1 180 | — |
+| Java, sin balance ni aplanado, con orientación | 6.7 % | 96.4 % | 770; 1 200 | — |
+| **Java, balance + aplanado + orientación (predeterminado)** | **6.9 %** | **98.8 %** | 770; 1 250 | **1 510; 2 560** |
+| Java, preproceso completo de Tesseract | 7.8 % | 95.8 % | 1 030; 1 640 | — |
+
+Carga de los modelos: 0.7–0.8 s (una vez). Conclusión: **PaddleOCR gana con claridad** (importes 99 % contra 72 %) y
+en esta Mac tarda ~1.5 s con un solo hilo, así que se implementó detrás de la selección automática. En una PC de 2
+núcleos (×8–15) serían 12–38 s por ticket: ahí la medición automática elige Tesseract, como se aprobó.
+Después de estas medidas se restringió el decodificador CTC a caracteres latinos (el modelo es multilingüe y a veces
+sacaba `长`/`丨`) y se corrigió el diccionario (ONNX Runtime para Java corta los metadatos en el primer emoji); está
+cubierto por pruebas unitarias y por el ticket de muestra, pero no se volvió a medir con las fotos.
+
+### 12c. Integración elegida
+
+- **Tesseract como proceso aparte** (`tesseract stdin stdout … tsv`, imagen en PGM por stdin, sin shell ni temporales),
+  no Tess4J/JNA: un fallo nativo no tumba la caja, el límite de tiempo y la cancelación matan el proceso, la memoria
+  vuelve al sistema al terminar y no hay jars nativos en el classpath. Costo: ~0.1 s de arranque por lectura.
+  Búsqueda: `-Dapp.ocr.tesseract` / `CAJA_LIBRE_TESSERACT` → `<app>/ocr/tesseract/{bin,lib,tessdata}` del instalador →
+  Homebrew / `/usr/bin` / `Program Files\Tesseract-OCR` / PATH (`ocr/LocalizadorTesseract`).
+- **PaddleOCR**: `compileOnly` contra ONNX Runtime; el jar (50.9 MB, nativos de win-x64, linux-x64/aarch64 y
+  osx-aarch64; **sin Mac Intel ni 32 bits**) y los modelos (det 9.9 MB + rec 21.2 MB) se bajan una vez a
+  `<carpeta de la app>/ocr-ppocr/` con SHA-256 fijo (`ocr/RecursosPpOcr`), solo cuando la selección lo pide y solo al
+  usar el lector o cambiar la preferencia (nunca al arrancar). `ocr/CargadorPpOcr` define `ocr.ppocr.MotorPpOcr` en un
+  cargador "hijo primero" que ve el jar descargado (probado con el jar real y sin ORT en el classpath: lee el ticket
+  de muestra en 0.9 s). Si ORT no carga se anota `ppocr.onnx=false` en `ocr.properties` y se usa Tesseract sin error.
+- **Selección** (`ocr/SeleccionMotorOcr`, 14 pruebas): Rápido = Tesseract; Preciso = PaddleOCR si es de 64 bits y
+  carga (mientras baja, Tesseract); Automático = 32 bits → Tesseract; RAM < ~3 GB → Tesseract; ORT no carga →
+  Tesseract; si no, mide el ticket de muestra incluido (`/ocr/ticket-muestra.jpg`, sintético) en segundo plano:
+  ≤ 5 s → PaddleOCR. La medida se guarda con una huella (sistema, arquitectura, núcleos, GB) y se repite si cambia.
+  Preferencia y medida por computadora en `ocr.properties` (no en la BD). Configuración → Funciones → "Lector de
+  tickets" muestra qué se usa y por qué.
+- **Ejecución**: `LectorTicketsService` (una hebra de baja prioridad, `Future` cancelable, límite de 60 s; la descarga
+  y la medición van en otra hebra).
+
+### 12d. Empaquetado de Tesseract por plataforma
+
+| Plataforma | Estado | Tamaño en el instalador |
+|---|---|---|
+| macOS arm64 | **Hecho**: `empaquetarTesseract` (lo llama `jpackageTask`) copia el `tesseract` de Homebrew y sus bibliotecas que no son del sistema a `app/ocr/tesseract`, las reapunta (`install_name_tool`), las firma ad hoc y comprueba que arranque y vea `spa`. | 14.5 MB sin comprimir (ejecutable 70 KB + 15 bibliotecas 8.4 MB + `spa`/`eng` 6.1 MB); probado en un app-image de jpackage |
+| macOS x64 | Mismo código en el runner `macos-15-intel`; **falta** el paso `brew install tesseract tesseract-lang` en `release.yml`. Sin PaddleOCR (ORT 1.31 no trae osx-x64). | ≈ igual |
+| Windows x64 | **Falta**. Recomendado: compilar en CI con vcpkg `tesseract:x64-windows-static` (un `tesseract.exe` estático, sin DLLs) o extraer el instalador de UB Mannheim con 7-Zip y copiar solo `tesseract.exe` + DLLs a `build/install/…/lib/ocr/tesseract/bin` y `spa`/`eng` a `tessdata`. | ≈ 15–20 MB (estimado) |
+| Windows x86 | **Falta**, y es donde Tesseract es la única opción. UB Mannheim ya no publica 32 bits: vcpkg `x86-windows-static`. Probar en una PC de 32 bits real. | ≈ 12–15 MB (estimado) |
+| Linux | **Falta**. Lo simple: que el `.deb` dependa de `tesseract-ocr tesseract-ocr-spa` (jpackage no tiene opción: editar `DEBIAN/control` y reempaquetar) o indicar `sudo apt install tesseract-ocr tesseract-ocr-spa`; el programa ya lo busca en `/usr/bin`. | 0 (del sistema) |
+
+Sin la carpeta, el programa usa un Tesseract instalado en el sistema si lo hay; si no hay ninguno, Configuración lo
+dice ("no se encontró Tesseract"). Firma: si algún día se firma el `.app` con Developer ID, revisar que `--mac-sign`
+firme también `app/ocr/tesseract/{bin,lib}`. Licencias: Tesseract y Leptonica (Apache-2.0 / BSD-2), libpng, libjpeg,
+libtiff, libwebp, openjpeg, giflib, libarchive y compresores (licencias permisivas), PaddleOCR y modelos
+(Apache-2.0), ONNX Runtime (MIT): anotadas en `AVISOS-TERCEROS.md`; la licencia de Tesseract va en
+`ocr/tesseract/LICENSE-tesseract.txt` (faltan los textos de cada biblioteca de imagen junto al binario).
+
+### 12e. Lo que NO quedó resuelto (para la siguiente pasada)
+
+1. **Ceros de matriz de puntos** (`Ø`): Tesseract los lee `8`/`6` (`0.00 → 8.80`, `1.0 → 1.8`); PaddleOCR casi nunca.
+   Con Tesseract hace falta corrección en el intérprete (cuadre cantidad × precio = importe probando 8→0 / 6→0) o
+   un modelo entrenado para esa fuente.
+2. **Papel ondulado**: renglones que suben y bajan a lo ancho. Tesseract junta columnas de renglones vecinos y
+   PaddleOCR, al agrupar por altura, mezcla el importe de un renglón con el siguiente (los dos peores tickets: CER
+   13–17 % aun con PaddleOCR). Falta enderezado local (por franjas) o agrupar por vecindad horizontal en vez de por
+   altura global.
+3. **Renglones que se pierden con PaddleOCR**: el primer artículo de un ticket con QR arriba y dos artículos de otro no
+   salieron (la detección los unió con un vecino). Probar `box_thresh` más bajo y partir cajas demasiado altas.
+4. **Asteriscos y símbolos**: `*` sale `|`, `×`, `X` o se pierde; `$` a veces `S`. No afecta importes pero sí las
+   claves que empiezan con `*`.
+5. **Recorte al papel**: con Tesseract no mejora (11.6 % contra 11.7 % sin recorte) y podría cortar renglones si el
+   papel toca otra hoja blanca; encendido para Tesseract, apagado para PaddleOCR. Falta una máscara que blanquee el
+   fondo fuera del papel sin perder renglones que tocan la orilla.
+6. **180°** se decide por confianza (segunda lectura completa): en una PC vieja duplica el tiempo de las fotos de
+   cabeza. Mejor: el clasificador de ángulo de PaddleOCR (`cls`, 0.6 MB) o leer solo una franja.
+7. **Nota a mano**: ningún motor la lee (esperado): captura manual.
+8. **PC vieja real**: tiempos no medidos en hardware de 2 núcleos; tampoco el uso de memoria nativa de ORT
+   (~200–300 MB fuera del heap de 384 MB) en un equipo de 4 GB.
+9. **Empaquetado Windows/Linux** de Tesseract y `brew install` en el runner Intel (tabla 12d).
+10. **Espejo de descargas**: modelos en modelscope.cn y ORT en Maven Central; conviene publicarlos como activos de una
+    release de GitHub del proyecto (mismo SHA-256) y cambiar las URL de `RecursosPpOcr`.
+11. **Endpoint móvil** que llame a `LectorTicketsService.leer(foto, espera)` y el intérprete (otro agente).
+12. **Modo mixto** (Tesseract y re-lectura con PaddleOCR de renglones dudosos) no implementado: con PaddleOCR a ~1.5 s
+    en equipos aptos no hace falta y en los no aptos no hay PaddleOCR. Revaluar con medidas en PC real.

@@ -1,0 +1,50 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Cervezas y Refrescos de Jalapa",
+      "folio": "9544-49822",
+      "fecha": "2026-09-11",
+      "lineas": [
+        {
+          "codigoProveedor": "30180175",
+          "descripcion": "ACTIVIA CIRUELA",
+          "cantidad": 6.0,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 16.0,
+          "descuento": 0.0,
+          "importe": 96.0
+        }
+      ],
+      "subtotal": 96.0,
+      "descuento": 0.0,
+      "impuestos": 0.0,
+      "cargos": null,
+      "total": 96.0,
+      "notas": "Dos tickets en la misma foto; el primero sin nombre (se reconoce por el RFC)."
+    },
+    {
+      "proveedor": "Cervezas y Refrescos de Jalapa",
+      "folio": "9544-49823",
+      "fecha": "2026-09-11",
+      "lineas": [
+        {
+          "codigoProveedor": "25288100",
+          "descripcion": "AMPER MORA AZUL",
+          "cantidad": 1.0,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 196.01,
+          "descuento": 0.0,
+          "importe": 196.01
+        }
+      ],
+      "subtotal": 196.01,
+      "descuento": null,
+      "impuestos": null,
+      "cargos": null,
+      "total": null,
+      "notas": "Cortado: no se ve el total."
+    }
+  ]
+}

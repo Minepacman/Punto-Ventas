@@ -46,6 +46,12 @@ public class MigracionSqlite implements InitializingBean {
                 Pattern.compile("producto_id bigint not null", Pattern.CASE_INSENSITIVE), "producto_id bigint"));
         REEMPLAZOS.put("ventas", Map.of(
                 Pattern.compile("\\s*check \\(forma_pago in \\([^)]*\\)\\)", Pattern.CASE_INSENSITIVE), ""));
+        // Categoría "Abono de cliente (fiado)": la restricción vieja solo admitía las categorías de entonces
+        REEMPLAZOS.put("movimientos_caja", Map.of(
+                Pattern.compile("\\s*check \\(categoria in \\([^)]*\\)\\)", Pattern.CASE_INSENSITIVE), ""));
+        // Devoluciones con "Vale para otra compra": la restricción de la primera versión solo admitía EFECTIVO
+        REEMPLAZOS.put("devoluciones", Map.of(
+                Pattern.compile("\\s*check \\(forma_reembolso in \\([^)]*\\)\\)", Pattern.CASE_INSENSITIVE), ""));
         REEMPLAZOS.put("detalle_ventas", Map.of(
                 Pattern.compile("cantidad integer not null", Pattern.CASE_INSENSITIVE), "cantidad float not null"));
     }
@@ -62,6 +68,10 @@ public class MigracionSqlite implements InitializingBean {
     public static List<String> migrar(DataSource dataSource) throws SQLException {
         List<String> tablasMigradas = new java.util.ArrayList<>();
         try (Connection c = dataSource.getConnection()) {
+            if (esPostgres(c)) {
+                quitarRestriccionesPostgres(c);
+                return tablasMigradas;
+            }
             if (!esSqlite(c)) return tablasMigradas;
 
             // Antes de tocar nada: ¿hay algo que migrar? Si sí, respaldar el archivo
@@ -113,6 +123,23 @@ public class MigracionSqlite implements InitializingBean {
         System.out.println("ℹ️  Migración SQLite: respaldo creado en " + destino);
     }
 
+    /**
+     * PostgreSQL sí permite quitar una restricción sin reconstruir la tabla. Hibernate nombra las
+     * CHECK de columna como {@code <tabla>_<columna>_check}; si no existe (base nueva) no pasa nada.
+     */
+    static void quitarRestriccionesPostgres(Connection c) throws SQLException {
+        try (Statement st = c.createStatement()) {
+            st.execute("ALTER TABLE IF EXISTS movimientos_caja DROP CONSTRAINT IF EXISTS movimientos_caja_categoria_check");
+            st.execute("ALTER TABLE IF EXISTS devoluciones DROP CONSTRAINT IF EXISTS devoluciones_forma_reembolso_check");
+        }
+        if (!c.getAutoCommit()) c.commit();
+    }
+
+    private static boolean esPostgres(Connection c) throws SQLException {
+        String producto = c.getMetaData().getDatabaseProductName();
+        return producto != null && producto.toLowerCase().contains("postgres");
+    }
+
     private static boolean esSqlite(Connection c) throws SQLException {
         String producto = c.getMetaData().getDatabaseProductName();
         return producto != null && producto.toLowerCase().contains("sqlite");
@@ -137,6 +164,11 @@ public class MigracionSqlite implements InitializingBean {
         sqlNuevo = sqlNuevo.replaceFirst("(?i)CREATE TABLE\\s+\"?" + tabla + "\"?", "CREATE TABLE " + temporal);
 
         boolean autoCommit = c.getAutoCommit();
+        // Procedimiento de SQLite para cambiar una tabla: con las llaves foráneas activas, DROP TABLE de una
+        // tabla con renglones hijos (devoluciones ← devolucion_detalles) falla; se apagan mientras tanto
+        // (el PRAGMA no tiene efecto dentro de una transacción, así que va antes) y se vuelven a encender
+        boolean llaves = llavesForaneasActivas(c);
+        if (llaves) ejecutarPragma(c, "PRAGMA foreign_keys = OFF");
         c.setAutoCommit(false);
         try (Statement st = c.createStatement()) {
             st.execute("DROP TABLE IF EXISTS " + temporal);
@@ -151,6 +183,24 @@ public class MigracionSqlite implements InitializingBean {
             throw new SQLException("No se pudo migrar la tabla " + tabla + ": " + ex.getMessage(), ex);
         } finally {
             c.setAutoCommit(autoCommit);
+            if (llaves) ejecutarPragma(c, "PRAGMA foreign_keys = ON");
+        }
+    }
+
+    private static boolean llavesForaneasActivas(Connection c) throws SQLException {
+        try (Statement st = c.createStatement(); ResultSet rs = st.executeQuery("PRAGMA foreign_keys")) {
+            return rs.next() && rs.getInt(1) == 1;
+        }
+    }
+
+    private static void ejecutarPragma(Connection c, String pragma) throws SQLException {
+        boolean auto = c.getAutoCommit();
+        if (!auto) c.commit();
+        if (!auto) c.setAutoCommit(true);
+        try (Statement st = c.createStatement()) {
+            st.execute(pragma);
+        } finally {
+            if (!auto) c.setAutoCommit(false);
         }
     }
 
