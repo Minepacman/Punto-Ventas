@@ -77,6 +77,10 @@ class PaletaTest {
                             .isGreaterThanOrEqualTo(min);
                 }
                 assertThat(Rgb.BLANCO.contraste(c(t, "-pos-band-bg-flat"))).as(caso + " banda").isGreaterThanOrEqualTo(min);
+                // Bloquear / Cerrar sesión / Salir sobre la banda: relleno opaco que deja leer el texto
+                assertThat(Rgb.BLANCO.contraste(c(t, "-pos-band-button-bg"))).as(caso + " botón de la banda").isGreaterThanOrEqualTo(min);
+                assertThat(c(t, "-pos-band-danger-text").contraste(c(t, "-pos-band-button-bg"))).as(caso + " Salir")
+                        .isGreaterThanOrEqualTo(min);
             }
         }
     }

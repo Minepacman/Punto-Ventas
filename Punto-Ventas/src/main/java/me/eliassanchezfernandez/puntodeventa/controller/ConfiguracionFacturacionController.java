@@ -218,6 +218,7 @@ public class ConfiguracionFacturacionController implements Initializable {
             buscar.setOnAction(e -> CatalogoSatDialogo.elegirProdServ(txt.getText()).ifPresent(en -> txt.setText(en.clave())));
             Label nombre = new Label(d.getNombre());
             nombre.setTooltip(new javafx.scene.control.Tooltip(d.getNombre()));
+            nombre.setWrapText(true);   // con letra grande, dos renglones en vez de «Frutas y verdu…»
             int col = (i % 2) * 3;
             gridDepartamentos.add(nombre, col, i / 2);
             gridDepartamentos.add(txt, col + 1, i / 2);

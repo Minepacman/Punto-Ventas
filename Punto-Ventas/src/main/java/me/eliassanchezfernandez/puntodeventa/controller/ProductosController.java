@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -196,6 +197,10 @@ public class ProductosController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Ni encabezados ni cifras con «…» aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaProductos);
+        ColumnasTabla.ajustar(tablaDepartamentos);
+        ColumnasTabla.llenarCon(tablaProductos, colDescripcion);   // la descripción toma el ancho que sobra
 
         configurarColumnas();
         configurarColumnasDepartamentos();

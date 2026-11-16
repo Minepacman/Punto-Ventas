@@ -27,6 +27,8 @@ import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
 import me.eliassanchezfernandez.puntodeventa.service.AgregadosService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.AplicadorApariencia;
+import me.eliassanchezfernandez.puntodeventa.util.apariencia.Apariencia;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -127,6 +129,23 @@ class CapturasEstadisticasTest {
             // Área de contenido de la pestaña con la ventana maximizada (barra de tareas, título, pestañas y barra de estado fuera)
             capturar("/fxml/estadisticas.fxml", 1280, 662, dir, "1280x800");
             capturar("/fxml/estadisticas.fxml", 1024, 630, dir, "1024x768");
+            // Gráficas con datos reales en los temas oscuros y de vidrio: ejes, cifras, rejilla y barras legibles
+            Apariencia[] temas = {
+                    Apariencia.porDefecto().conTema(Apariencia.Tema.OSCURO),
+                    Apariencia.porDefecto().conTema(Apariencia.Tema.ALTO_CONTRASTE),
+                    Apariencia.porDefecto().conVidrio(true),
+                    Apariencia.porDefecto().conTema(Apariencia.Tema.OSCURO).conVidrio(true),
+            };
+            try {
+                for (Apariencia a : temas) {
+                    enFx(() -> AplicadorApariencia.aplicar(a));
+                    capturar("/fxml/estadisticas.fxml", 1280, 662, dir,
+                            "1280x800-" + a.tema().clave() + (a.vidrio() ? "-vidrio" : ""));
+                }
+            } finally {
+                enFx(() -> AplicadorApariencia.aplicar(Apariencia.porDefecto()));
+                enFx(() -> Application.setUserAgentStylesheet(new NordLight().getUserAgentStylesheet()));
+            }
             Files.writeString(dir.resolve("medidas.txt"), medidas.toString());
             System.out.println(medidas);
         } finally {
@@ -169,6 +188,13 @@ class CapturasEstadisticasTest {
                 stage.setScene(escena);
                 stage.show();
                 List<Runnable> pasos = new ArrayList<>();
+                if (prefijo.contains("-")) {
+                    // Temas: periodo «Mes» para que la línea de ventas por día tenga muchos puntos
+                    pasos.add(() -> raiz.lookupAll(".toggle-button").stream()
+                            .filter(b -> b instanceof javafx.scene.control.ButtonBase bb && "Mes".equals(bb.getText()))
+                            .map(b -> (javafx.scene.control.ButtonBase) b).findFirst()
+                            .ifPresent(javafx.scene.control.ButtonBase::fire));
+                }
                 TabPane pestanas = buscar(raiz, TabPane.class);
                 if (pestanas != null) {
                     // Una foto por pestaña (cada sección en su propia ventanita)

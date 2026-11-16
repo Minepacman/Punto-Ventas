@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleDoubleProperty;
@@ -227,6 +228,9 @@ public class VentasController implements Initializable {
     // ── Inicialización ────────────────────────────────────────────────────
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Ni encabezados ni cifras con «…» aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaProductos);
+        ColumnasTabla.llenarCon(tablaProductos, colDescripcion);   // el nombre del producto, completo
         EtiquetaBeta.marcar(btnFacturarVenta, FuncionBeta.FACTURACION_CFDI);
         camposPago.put(Venta.FormaPago.EFECTIVO, txtEfectivo);
         camposPago.put(Venta.FormaPago.TARJETA, txtTarjeta);
@@ -1627,16 +1631,7 @@ public class VentasController implements Initializable {
                 new SimpleDoubleProperty(c.getValue().getImporte()).asObject());
         colDescuento.setCellValueFactory(c ->
                 new SimpleDoubleProperty(c.getValue().getDescuento()).asObject());
-        colTipoDescuento.setCellValueFactory(c -> {
-            DetalleVenta d = c.getValue();
-            String texto = switch (d.getTipoDescuento()) {
-                case PROMOCION -> d.getPromocionNombre() != null ? d.getPromocionNombre() : "Promoción";
-                case MAYOREO   -> "Mayoreo";
-                case MANUAL    -> "Descuento manual";
-                default        -> "";
-            };
-            return new SimpleStringProperty(texto);
-        });
+        colTipoDescuento.setCellValueFactory(c -> new SimpleStringProperty(concepto(c.getValue())));
         colExistencia.setCellValueFactory(c ->
                 new SimpleDoubleProperty(c.getValue().getProducto().getCantidadActual()).asObject());
 
@@ -1687,7 +1682,21 @@ public class VentasController implements Initializable {
         return CalculoCobro.parsearMonto(txt, porDefecto);
     }
 
+    /** Concepto del descuento de un renglón ("" si no lleva) */
+    private static String concepto(DetalleVenta d) {
+        if (d.getTipoDescuento() == null) return "";
+        return switch (d.getTipoDescuento()) {
+            case PROMOCION -> d.getPromocionNombre() != null ? d.getPromocionNombre() : "Promoción";
+            case MAYOREO   -> "Mayoreo";
+            case MANUAL    -> "Descuento manual";
+            default        -> "";
+        };
+    }
+
     private void actualizarTotales() {
+        // «Concepto» solo a la vista cuando algún renglón lleva descuento: sin él, la descripción del
+        // producto gana ese ancho (con letra grande en 1024 px se leía «Coca-Cola…»)
+        colTipoDescuento.setVisible(itemsTicket.stream().anyMatch(d -> !concepto(d).isEmpty()));
         double total = ventaService.calcularTotal(itemsTicket);
         double piezas = itemsTicket.stream().mapToDouble(DetalleVenta::getCantidad).sum();
         labelTotal.setText(Moneda.formato(total));

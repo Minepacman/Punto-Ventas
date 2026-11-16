@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import me.eliassanchezfernandez.puntodeventa.util.ColumnasTabla;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -117,6 +118,9 @@ public class OrdenesCompraController implements Initializable {
 
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+        // Encabezados completos aunque la letra esté al 130 %
+        ColumnasTabla.ajustar(tablaOrdenes);
+        ColumnasTabla.ajustar(tablaLineas);
         if (!sesionService.tienePermiso(Permiso.GESTIONAR_PROVEEDORES)) {
             raiz.setDisable(true);
             lblAviso.setText("Requiere el permiso «" + Permiso.GESTIONAR_PROVEEDORES.getDescripcion() + "».");
