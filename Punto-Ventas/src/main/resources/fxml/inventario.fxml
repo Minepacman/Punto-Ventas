@@ -15,24 +15,38 @@
 
     <top>
         <VBox>
-        <HBox styleClass="section-toolbar" spacing="8">
+        <!-- Barra que pasa a otro renglón si no cabe (nunca «…»): lo de todos los días a la vista,
+             lo de vez en cuando en «Más». CapturasBarrasTest revisa que nada salga recortado a 1024 px. -->
+        <FlowPane styleClass="section-toolbar, barra-acciones">
             <padding><Insets topRightBottomLeft="10"/></padding>
             <Button text="Entrada de mercancía"   onAction="#onAgregar"
                     styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
             <Button fx:id="btnLeerTicket" text="Leer ticket" onAction="#onLeerTicket"><graphic><Icono nombre="camara"/></graphic>
                 <tooltip><Tooltip text="Leer el ticket del proveedor (foto o texto) y darle entrada a todo de una vez"/></tooltip></Button>
-            <Button text="Ajustes"                onAction="#onAjustes"><graphic><Icono nombre="bascula"/></graphic></Button>
-            <ToggleButton fx:id="btnSoloBajos" text="Productos Bajos"
-                          onAction="#onProductosBajos"><graphic><Icono nombre="alerta"/></graphic></ToggleButton>
+            <Button text="Ajustes"                onAction="#onAjustes"><graphic><Icono nombre="bascula"/></graphic>
+                <tooltip><Tooltip text="Corregir la existencia: conteo físico, merma, robo, caducidad..."/></tooltip></Button>
+            <ToggleButton fx:id="btnSoloBajos" text="Productos bajos"
+                          onAction="#onProductosBajos"><graphic><Icono nombre="alerta"/></graphic>
+                <tooltip><Tooltip text="Ver solo los productos en o por debajo del mínimo"/></tooltip></ToggleButton>
             <Button fx:id="btnPorCaducar" text="Por caducar"   onAction="#onPorCaducar"><graphic><Icono nombre="calendario"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
+            <!-- Solo con GESTIONAR_PROVEEDORES (InventarioController lo oculta a los demás) -->
+            <MenuButton fx:id="mnuProveedores" text="Proveedores"><graphic><Icono nombre="fabrica"/></graphic>
+                <tooltip><Tooltip text="Proveedores y órdenes de compra"/></tooltip>
+                <items>
+                    <MenuItem text="Proveedores y días de visita" onAction="#onProveedores"><graphic><Icono nombre="fabrica"/></graphic></MenuItem>
+                    <MenuItem text="Órdenes de compra"            onAction="#onOrdenesCompra"><graphic><Icono nombre="recibo"/></graphic></MenuItem>
+                </items>
+            </MenuButton>
             <!-- "Reporte de inventario" (PDF) se mostrará cuando exista; "Exportar…" ya saca CSV/xlsx/PDF -->
-            <Button text="Movimientos"            onAction="#onReporteMovimientos"><graphic><Icono nombre="lista"/></graphic></Button>
-            <Button text="Exportar…"              onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
-            <Separator orientation="VERTICAL"/>
-            <Button fx:id="btnProveedores" text="Proveedores"     onAction="#onProveedores"><graphic><Icono nombre="fabrica"/></graphic></Button>
-            <Button fx:id="btnOrdenes"     text="Órdenes de compra" onAction="#onOrdenesCompra"><graphic><Icono nombre="recibo"/></graphic></Button>
-        </HBox>
+            <MenuButton text="Más">
+                <tooltip><Tooltip text="Movimientos de inventario y exportar la lista"/></tooltip>
+                <items>
+                    <MenuItem text="Movimientos de inventario" onAction="#onReporteMovimientos"><graphic><Icono nombre="lista"/></graphic></MenuItem>
+                    <MenuItem text="Exportar la lista…"        onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></MenuItem>
+                </items>
+            </MenuButton>
+        </FlowPane>
         <Label fx:id="lblVisitanHoy" text="" wrapText="true" styleClass="hint">
             <padding><Insets top="6" right="12" bottom="0" left="12"/></padding>
         </Label>

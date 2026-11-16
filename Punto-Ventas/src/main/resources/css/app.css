@@ -1048,6 +1048,15 @@ TilePane > .button:armed,
     -fx-alignment: center-left;
 }
 
+/* Barra de acciones (FlowPane): si no caben los botones pasan a otro renglón en vez de
+   recortarse con «…» (1024×768 y letra grande). Va junto con .section-toolbar. */
+.barra-acciones {
+    -fx-hgap: 8;
+    -fx-vgap: 8;
+    -fx-alignment: center-left;
+    -fx-row-valignment: center;
+}
+
 .section-toolbar .form-section-title {
     -fx-font-size: 14px;
     -fx-text-fill: -pos-text-muted;
@@ -1201,6 +1210,8 @@ TilePane > .button:armed,
     -fx-text-fill: -pos-text;
 }
 
+/* Ancho y alto en em: con letra grande (Apariencia) la tarjeta crece en proporción con el
+   texto y el título no se recorta (220x42 px con la letra de fábrica de 13 px) */
 .boton-opcion {
     -color-button-bg:             -pos-surface-alt;
     -color-button-border:         -pos-border-subtle;
@@ -1210,9 +1221,9 @@ TilePane > .button:armed,
     -color-button-bg-focused:     -pos-surface-alt;
     -color-button-bg-pressed:     -pos-accent-muted;
     -color-button-border-pressed: -pos-accent;
-    -fx-pref-width: 220;
+    -fx-pref-width: 17em;
     -fx-min-height: 42;
-    -fx-pref-height: 42;
+    -fx-pref-height: 3.25em;
     -fx-padding: 3 10 3 8;
     -fx-background-radius: 8, 8, 7;
 }

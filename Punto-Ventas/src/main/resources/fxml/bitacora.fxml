@@ -16,25 +16,28 @@
             stylesheets="@../css/app.css">
 
     <top>
-        <!-- La barra se desplaza horizontalmente si la ventana es angosta (1024×768) -->
-        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
-                    style="-fx-background-color: transparent; -fx-padding: 0;">
-        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
-            <padding><Insets topRightBottomLeft="10"/></padding>
+        <!-- Dos renglones: periodo y acciones arriba, filtros abajo. Los textos nunca se recortan
+             con «…»: el primero pasa a otro renglón si no cabe y en el segundo se angosta el campo de filtro -->
+        <VBox styleClass="section-toolbar" spacing="8">
+        <padding><Insets topRightBottomLeft="10"/></padding>
+        <FlowPane styleClass="barra-acciones">
             <Label text="Desde:"/>
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
             <Label text="Hasta:"/>
             <DatePicker fx:id="dpHasta" prefWidth="140"/>
             <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
             <Separator orientation="VERTICAL"/>
-            <Label text="Acción:"/>
-            <ComboBox fx:id="cmbAccion" prefWidth="210"/>
-            <ToggleButton fx:id="tgCajon" text="Solo cajón" onAction="#onSoloCajon"><graphic><Icono nombre="efectivo"/></graphic></ToggleButton>
-            <TextField fx:id="txtFiltro" promptText="Filtrar por usuario o detalle..." HBox.hgrow="ALWAYS"/>
             <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
-            <Button text="Cerrar" onAction="#onCerrar"/>
+            <Button text="Cerrar" onAction="#onCerrar"><graphic><Icono nombre="cerrar"/></graphic>
+                <tooltip><Tooltip text="Cerrar esta ventana (Esc)"/></tooltip></Button>
+        </FlowPane>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <Label text="Acción:" minWidth="-Infinity"/>
+            <ComboBox fx:id="cmbAccion" prefWidth="210" minWidth="120"/>
+            <ToggleButton fx:id="tgCajon" text="Solo cajón" onAction="#onSoloCajon" minWidth="-Infinity"><graphic><Icono nombre="efectivo"/></graphic></ToggleButton>
+            <TextField fx:id="txtFiltro" promptText="Filtrar por usuario o detalle..." HBox.hgrow="ALWAYS"/>
         </HBox>
-        </ScrollPane>
+        </VBox>
     </top>
 
     <center>

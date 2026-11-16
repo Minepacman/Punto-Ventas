@@ -14,7 +14,8 @@
 
     <top>
         <VBox>
-            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+            <!-- Pasa a otro renglón si no cabe (varias cajas, letra grande): nunca recorta con «…» -->
+            <FlowPane styleClass="section-toolbar, barra-acciones">
                 <padding><Insets topRightBottomLeft="10"/></padding>
                 <Button fx:id="btnHacerCorte" text="Hacer corte" onAction="#onHacerCorte"
                         styleClass="button-primary"><graphic><Icono nombre="tijeras"/></graphic></Button>
@@ -23,15 +24,15 @@
                 <Button text="Imprimir"     onAction="#onImprimirCorte"><graphic><Icono nombre="impresora"/></graphic></Button>
                 <Button fx:id="btnCorregirFondo" text="Corregir fondo" onAction="#onCorregirFondo"><graphic><Icono nombre="editar"/></graphic></Button>
                 <Button fx:id="btnCorteGeneral" text="Corte general (todas las cajas)" onAction="#onCorteGeneral"><graphic><Icono nombre="numeros"/></graphic></Button>
-                <Label fx:id="lblCaja" text="Caja 1" styleClass="badge"/>
-                <Region HBox.hgrow="ALWAYS"/>
-                <HBox spacing="0" alignment="CENTER_RIGHT">
-                    <ToggleButton fx:id="tglTurno" text="Turno actual" selected="true" onAction="#onCambiarModo"/>
-                    <ToggleButton fx:id="tglDia"   text="Día completo" onAction="#onCambiarModo"/>
-                </HBox>
-            </HBox>
+                <Label fx:id="lblCaja" text="Caja 1" styleClass="badge" minWidth="-Infinity"/>
+            </FlowPane>
+            <!-- Qué periodo se ve: el selector va junto a su descripción -->
             <HBox spacing="8" alignment="CENTER_LEFT">
-                <padding><Insets top="0" right="10" bottom="6" left="10"/></padding>
+                <padding><Insets top="8" right="10" bottom="6" left="10"/></padding>
+                <HBox spacing="0" alignment="CENTER_LEFT" minWidth="-Infinity">
+                    <ToggleButton fx:id="tglTurno" text="Turno actual" selected="true" onAction="#onCambiarModo" minWidth="-Infinity"/>
+                    <ToggleButton fx:id="tglDia"   text="Día completo" onAction="#onCambiarModo" minWidth="-Infinity"/>
+                </HBox>
                 <Label fx:id="lblPeriodo" text="Turno actual" styleClass="hint" wrapText="true"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="lblUltimoCorte" text="Hoy no se ha hecho ningún corte." wrapText="true" styleClass="hint"/>

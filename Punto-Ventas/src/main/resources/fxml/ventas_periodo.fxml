@@ -15,11 +15,11 @@
             stylesheets="@../css/app.css">
 
     <top>
-        <!-- La barra de herramientas se desplaza horizontalmente si la ventana es angosta (1024×768) -->
-        <ScrollPane fitToWidth="true" fitToHeight="true" vbarPolicy="NEVER" hbarPolicy="AS_NEEDED"
-                    style="-fx-background-color: transparent; -fx-padding: 0;">
-        <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
-            <padding><Insets topRightBottomLeft="10"/></padding>
+        <!-- Dos renglones: periodo arriba, acciones abajo. Cada uno pasa a otro renglón si no cabe
+             (letra grande): nunca recorta con «…» (CapturasBarrasTest) -->
+        <VBox styleClass="section-toolbar" spacing="8">
+        <padding><Insets topRightBottomLeft="10"/></padding>
+        <FlowPane styleClass="barra-acciones">
             <Label text="Desde:"/>
             <DatePicker fx:id="dpDesde" prefWidth="140"/>
             <Label text="Hasta:"/>
@@ -29,7 +29,8 @@
             <Button text="Hoy"         onAction="#onHoy"/>
             <Button text="Esta semana" onAction="#onEstaSemana"/>
             <Button text="Este mes"    onAction="#onEsteMes"/>
-            <Separator orientation="VERTICAL"/>
+        </FlowPane>
+        <FlowPane styleClass="barra-acciones">
             <Button fx:id="btnCancelarVenta" text="Cancelar venta" onAction="#onCancelarVenta"
                     styleClass="button-danger"><graphic><Icono nombre="prohibido"/></graphic></Button>
             <Button fx:id="btnDevolver" text="Devolver artículos…" onAction="#onDevolver"><graphic><Icono nombre="izquierda"/></graphic></Button>
@@ -37,10 +38,11 @@
             <Button fx:id="btnFacturar" text="Facturar" onAction="#onFacturar"><graphic><Icono nombre="recibo"/></graphic></Button>
             <Button fx:id="btnFacturas" text="Facturas…" onAction="#onFacturas"><graphic><Icono nombre="documento"/></graphic></Button>
             <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
-            <Region HBox.hgrow="ALWAYS"/>
-            <Button text="Cerrar" onAction="#onCerrar"/>
-        </HBox>
-        </ScrollPane>
+            <Separator orientation="VERTICAL"/>
+            <Button text="Cerrar" onAction="#onCerrar"><graphic><Icono nombre="cerrar"/></graphic>
+                <tooltip><Tooltip text="Cerrar esta ventana (Esc)"/></tooltip></Button>
+        </FlowPane>
+        </VBox>
     </top>
 
     <center>

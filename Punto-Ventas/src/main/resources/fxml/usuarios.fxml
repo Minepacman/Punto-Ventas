@@ -30,10 +30,10 @@
     <bottom>
         <HBox fx:id="barraLogin" alignment="CENTER_LEFT" spacing="12" styleClass="status-bar">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-            <CheckBox fx:id="chkMostrarEnLogin" text="Mostrar la lista de usuarios en el inicio de sesión" onAction="#onMostrarEnLogin"/>
+            <CheckBox fx:id="chkMostrarEnLogin" text="Mostrar la lista de usuarios en el inicio de sesión" onAction="#onMostrarEnLogin" wrapText="true"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Label fx:id="lblCodigoEstado" text=""/>
-            <Button fx:id="btnCodigoRecuperacion" text="Código de recuperación…" onAction="#onCodigoRecuperacion"><graphic><Icono nombre="llave"/></graphic></Button>
+            <Label fx:id="lblCodigoEstado" text="" wrapText="true"/>
+            <Button fx:id="btnCodigoRecuperacion" text="Código de recuperación…" onAction="#onCodigoRecuperacion" minWidth="-Infinity"><graphic><Icono nombre="llave"/></graphic></Button>
         </HBox>
     </bottom>
 
