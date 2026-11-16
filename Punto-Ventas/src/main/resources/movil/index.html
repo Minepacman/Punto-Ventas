@@ -81,7 +81,7 @@
 html { font-size: var(--fs); }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--letra, -apple-system), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   line-height: 1.4; -webkit-text-size-adjust: 100%;
   min-height: 100vh; min-height: 100dvh;
 }
@@ -459,6 +459,44 @@ html, body { overflow-x: clip; }
   *, *::before, *::after { transition-duration: .01ms !important; scroll-behavior: auto !important; }
   *:not(.rueda), *:not(.rueda)::before, *:not(.rueda)::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+/* ===== Apariencia de la tienda (Configuración → Apariencia del escritorio; ver aplicarPreferencias) ===== */
+/* Alto contraste: bordes marcados y subrayado en enlaces */
+:root[data-tema="alto-contraste"] .btn, :root[data-tema="alto-contraste"] .campo,
+:root[data-tema="alto-contraste"] .tarjeta, :root[data-tema="alto-contraste"] .kpi,
+:root[data-tema="alto-contraste"] .fila { border: 2px solid var(--text); box-shadow: none; }
+:root[data-tema="alto-contraste"] a { text-decoration: underline; }
+:root[data-tema="alto-contraste"] :focus-visible { outline-width: 4px; }
+/* Vidrio (beta): fondo de manchas de color y paneles esmerilados (backdrop-filter) con borde de luz */
+:root[data-vidrio] body {
+  background: var(--bg);
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 55%, transparent) 0, transparent 55%),
+    radial-gradient(circle at 100% 30%, color-mix(in srgb, var(--success) 40%, transparent) 0, transparent 50%),
+    radial-gradient(circle at 30% 100%, color-mix(in srgb, var(--warning) 35%, transparent) 0, transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+}
+:root[data-vidrio] .tarjeta, :root[data-vidrio] .kpi, :root[data-vidrio] .fila,
+:root[data-vidrio] .cabecera, :root[data-vidrio] .nav, :root[data-vidrio] .login-caja {
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid color-mix(in srgb, #FFFFFF 45%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #FFFFFF 55%, transparent), var(--shadow);
+}
+:root[data-vidrio] .login-caja { padding: 1.25rem; border-radius: 24px; }
+:root[data-vidrio] .tarjeta, :root[data-vidrio] .kpi { border-radius: 20px; }
+/* Sin desenfoque (navegador viejo) o con "reducir transparencia": paneles casi opacos */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-vidrio] .tarjeta, :root[data-vidrio] .kpi, :root[data-vidrio] .fila,
+  :root[data-vidrio] .cabecera, :root[data-vidrio] .nav, :root[data-vidrio] .login-caja { background: var(--surface); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-vidrio] .tarjeta, :root[data-vidrio] .kpi, :root[data-vidrio] .fila,
+  :root[data-vidrio] .cabecera, :root[data-vidrio] .nav, :root[data-vidrio] .login-caja {
+    background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+}
 </style>
 </head>
 <body>
@@ -479,13 +517,76 @@ const almacen = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) { memoria[k] = v; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { delete memoria[k]; } },
 };
+/* Apariencia de la tienda (Configuración → Apariencia del escritorio): la sirve /api/apariencia (con sesión:
+   la "solo para mí" del usuario y el paquete de iconos) o /api/apariencia/publica (pantalla de entrada).
+   Se guarda en el teléfono para que la próxima carga ya salga con sus colores. El tema elegido aquí
+   (Ajustes → Tema) gana sobre el de la tienda. */
+const VARS_APARIENCIA = ['--bg', '--surface', '--surface-alt', '--inset', '--border', '--border-subtle', '--text', '--muted',
+  '--subtle', '--accent', '--accent-hover', '--accent-text', '--accent-subtle', '--on-accent', '--ring', '--danger',
+  '--danger-text', '--danger-subtle', '--success', '--success-text', '--success-subtle', '--warning', '--warning-text',
+  '--warning-subtle', '--banda'];
+let aparienciaActual = null;
+try { aparienciaActual = JSON.parse(almacen.get('pv.apariencia') || 'null'); } catch (e) { aparienciaActual = null; }
+const oscuroDelTelefono = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function modoEfectivo() {
+  const local = almacen.get('pv.tema');
+  if (local === 'claro' || local === 'oscuro') return local;
+  const a = aparienciaActual;
+  if (a && !a.porDefecto && (a.tema === 'claro' || a.tema === 'oscuro' || a.tema === 'alto-contraste')) return a.tema;
+  return oscuroDelTelefono && oscuroDelTelefono.matches ? 'oscuro' : 'claro';   // Automático (o de fábrica): sigue al teléfono
+}
+function cargarFuente(l) {
+  if (!l || !/^[A-Za-z ]{1,40}$/.test(l.familia) || !/^\/fuentes\/[A-Za-z-]+\.ttf$/.test(l.regular)
+      || !/^\/fuentes\/[A-Za-z-]+\.ttf$/.test(l.negrita)) return false;
+  const id = 'fuente-' + l.familia.replace(/ /g, '-');
+  if (!document.getElementById(id)) {
+    const st = document.createElement('style');
+    st.id = id;
+    st.textContent = '@font-face{font-family:"' + l.familia + '";src:url("' + l.regular + '") format("truetype");font-weight:400;font-display:swap}'
+      + '@font-face{font-family:"' + l.familia + '";src:url("' + l.negrita + '") format("truetype");font-weight:600 800;font-display:swap}';
+    document.head.append(st);
+  }
+  return true;
+}
 function aplicarPreferencias() {
   const r = document.documentElement;
-  const tema = almacen.get('pv.tema');
-  if (tema === 'claro' || tema === 'oscuro') r.setAttribute('data-tema', tema); else r.removeAttribute('data-tema');
-  if (almacen.get('pv.texto') === 'grande') r.setAttribute('data-texto', 'grande'); else r.removeAttribute('data-texto');
+  const a = aparienciaActual;
+  const modo = modoEfectivo();
+  r.setAttribute('data-tema', modo);
+  for (const v of VARS_APARIENCIA) r.style.removeProperty(v);
+  if (a && !a.porDefecto) {
+    const vars = (modo === 'alto-contraste' ? a.altoContraste : a[modo]) || {};
+    for (const [k, v] of Object.entries(vars)) if (VARS_APARIENCIA.includes(k) && /^[#(),.%\w\s-]{1,80}$/.test(v)) r.style.setProperty(k, v);
+  }
+  const base = almacen.get('pv.texto') === 'grande' ? 18 : 16;
+  const escala = a && [90, 100, 115, 130].includes(a.escala) ? a.escala : 100;
+  r.style.setProperty('--fs', (base * escala / 100) + 'px');
+  if (a && a.letra && cargarFuente(a.letra)) r.style.setProperty('--letra', '"' + a.letra.familia + '"');
+  else r.style.removeProperty('--letra');
+  if (a && a.vidrio) r.setAttribute('data-vidrio', ''); else r.removeAttribute('data-vidrio');
+  const banda = a && !a.porDefecto && a.colorBanda ? a.colorBanda[modo === 'alto-contraste' ? 'altoContraste' : modo] : null;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', banda && /^#[0-9A-Fa-f]{6}$/.test(banda) ? banda : '#2A4566');
 }
 aplicarPreferencias();
+if (oscuroDelTelefono && oscuroDelTelefono.addEventListener) oscuroDelTelefono.addEventListener('change', aplicarPreferencias);
+
+/** Pide la apariencia al servidor y la aplica; si cambió, redibuja los iconos visibles */
+async function cargarApariencia(conSesion) {
+  try {
+    const a = await peticion('GET', conSesion ? '/api/apariencia' : '/api/apariencia/publica', undefined, { conToken: conSesion });
+    if (!a || typeof a !== 'object') return;
+    if (!conSesion && aparienciaActual && aparienciaActual.iconos && aparienciaActual.paqueteIconos === a.paqueteIconos
+        && aparienciaActual.estiloIconos === a.estiloIconos) a.iconos = aparienciaActual.iconos;   // la pública no trae iconos
+    const antes = aparienciaActual ? aparienciaActual.version : null;
+    aparienciaActual = a;
+    almacen.set('pv.apariencia', JSON.stringify(a));
+    if (antes !== a.version) {
+      aplicarPreferencias();
+      document.querySelectorAll('svg[data-icono]').forEach(redibujarIcono);
+    }
+  } catch (e) { /* sin red: se queda la guardada */ }
+}
 
 /* ============================================================================
    1. UTILIDADES (h() construye DOM de forma segura: solo textContent)
@@ -566,33 +667,58 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * un icono con significado propio (role="img" + <title>), p. ej. solo en un botón.
  */
 function icono(nombre, { tamano = 24, etiqueta = null, clase = '' } = {}) {
-  const trazos = ICONOS[nombre] || [];
   const svg = document.createElementNS(SVG_NS, 'svg');
+  const t = aparienciaActual && aparienciaActual.iconosGrandes ? Math.round(tamano * 1.25) : tamano;
   svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', String(tamano));
-  svg.setAttribute('height', String(tamano));
+  svg.setAttribute('width', String(t));
+  svg.setAttribute('height', String(t));
   svg.setAttribute('fill', 'none');
   svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('class', 'ico-svg' + (clase ? ' ' + clase : ''));
   svg.setAttribute('focusable', 'false');
+  svg.setAttribute('data-icono', nombre);
   if (etiqueta) {
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', etiqueta);
-    const t = document.createElementNS(SVG_NS, 'title');
-    t.textContent = etiqueta;
-    svg.append(t);
+    const ti = document.createElementNS(SVG_NS, 'title');
+    ti.textContent = etiqueta;
+    svg.append(ti);
   } else {
     svg.setAttribute('aria-hidden', 'true');
   }
-  for (const d of trazos) {
+  redibujarIcono(svg);
+  return svg;
+}
+/** ¿El trazo encierra un área? (termina en Z o es un círculo de dos arcos): se rellena en el estilo duotono */
+const cerrada = d => /[zZ]\s*$/.test(d) || /^M[\d.\s-]+a[\d.]+ [\d.]+ 0 1 0 [\d.]+ 0a[\d.]+ [\d.]+ 0 1 0-[\d.]+ 0$/.test(d);
+/** Pone los trazos del paquete elegido (o de Lucide, el de siempre) en un <svg> creado por icono() */
+function redibujarIcono(svg) {
+  const nombre = svg.getAttribute('data-icono');
+  svg.querySelectorAll('path').forEach(p => p.remove());
+  const a = aparienciaActual;
+  const grosor = a && a.grosorIconos > 0 && a.grosorIconos <= 3 ? a.grosorIconos : 2;
+  const paquete = a && a.iconos && a.iconos.lista ? a.iconos.lista[nombre] : null;
+  const ruta = (d, { rellenar = false, parImpar = false, translucida = false, ancho = grosor } = {}) => {
     const p = document.createElementNS(SVG_NS, 'path');
     p.setAttribute('d', d);
+    if (rellenar) { p.setAttribute('fill', 'currentColor'); p.setAttribute('stroke', 'none'); }
+    else p.setAttribute('stroke-width', String(ancho));
+    if (parImpar) p.setAttribute('fill-rule', 'evenodd');
+    if (translucida) p.setAttribute('opacity', '.22');
     svg.append(p);
+  };
+  if (Array.isArray(paquete) && paquete.length) {
+    const ancho = (a.iconos.grosorBase || 2) * grosor / 2;
+    for (const r of paquete) if (r && typeof r.d === 'string') ruta(r.d, { rellenar: !!r.r, parImpar: !!r.e, translucida: !!r.o, ancho });
+    return;
   }
-  return svg;
+  const duotono = a && a.estiloIconos === 'duotono' && (!a.paqueteIconos || a.paqueteIconos === 'lucide');
+  for (const d of ICONOS[nombre] || []) {
+    if (duotono && cerrada(d)) ruta(d, { rellenar: true, translucida: true });
+    ruta(d);
+  }
 }
 /** Imagen del icono oficial de la aplicación (la sirve el servidor; es el mismo del instalador) */
 const logoApp = (clase, tamano) => h('img', { class: clase, src: '/icono-256.png', alt: '', width: tamano, height: tamano, decoding: 'async' });
@@ -912,6 +1038,7 @@ document.addEventListener('sesion-terminada', () => {
 });
 
 async function arrancar() {
+  { const sl = sesionLocal.leer(); cargarApariencia(!!(sl && sl.token)); }   // sin esperar: ya se aplicó la guardada
   // "#/avisos" (QR del escritorio) o "#traspaso=…&ir=avisos" (viene de la página normal o del icono de inicio):
   // se limpia la dirección (el código no debe quedarse a la vista ni en el historial) y se va a Ajustes.
   const especial = pasosAvisos.leerHash(location.hash);
@@ -988,6 +1115,7 @@ function pantallaLogin(mensaje) {
       const s = await api.login(u, claveUsada, false);
       clave.value = '';
       reciente(s);
+      cargarApariencia(true);   // la del usuario y su paquete de iconos
       await preguntarMantener(claveUsada);
       entrarAlSistema();
     } catch (e) {
@@ -1743,7 +1871,7 @@ async function vistaConfig() {
   const pintarTema = () => {
     vaciar(segTema);
     const actual = almacen.get('pv.tema') || 'auto';
-    for (const [k, t] of [['auto', 'Automático'], ['claro', 'Claro'], ['oscuro', 'Oscuro']]) {
+    for (const [k, t] of [['auto', 'Como la tienda'], ['claro', 'Claro'], ['oscuro', 'Oscuro']]) {
       segTema.append(h('button', { type: 'button', 'aria-pressed': String(actual === k), onclick: () => {
         if (k === 'auto') almacen.del('pv.tema'); else almacen.set('pv.tema', k);
         aplicarPreferencias(); pintarTema();

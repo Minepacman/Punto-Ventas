@@ -180,7 +180,7 @@ public class ServidorMovilService {
     private static String csp(String hashScript) {
         return "default-src 'none'; script-src " + (hashScript == null ? "'none'" : "'" + hashScript + "'")
                 + "; style-src 'unsafe-inline'; "
-                + "img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
+                + "img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
                 + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
     }
 
@@ -196,6 +196,7 @@ public class ServidorMovilService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.CuentaClienteService cuentaClienteService;
     @Autowired private AnunciadorMdns       anunciador;
     @Autowired private TutorialesService    tutorialesService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.AparienciaService aparienciaService;
     @Autowired private AvisosService        avisosService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.CaducidadService caducidadService;
     @Autowired private CertificadosLocales  certificados;
@@ -683,6 +684,8 @@ public class ServidorMovilService {
                 case "/api/avisos"          -> { exigir(metodo, "GET");  avisos(ex); }
                 case "/api/caducidades"     -> { exigir(metodo, "GET");  caducidades(ex); }
                 case "/api/tutorial"        -> { exigir(metodo, "GET");  tutorial(ex); }
+                case "/api/apariencia"      -> { exigir(metodo, "GET");  apariencia(ex); }
+                case "/api/apariencia/publica" -> { exigir(metodo, "GET"); aparienciaPublica(ex); }
                 case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
                 case "/api/push/clave"      -> { exigir(metodo, "GET");  pushClave(ex); }
                 case "/api/push/suscribir"  -> { exigir(metodo, "POST"); pushSuscribir(ex); }
@@ -693,6 +696,10 @@ public class ServidorMovilService {
                 case "/certificado"         -> paginaCertificado(ex, metodo);
                 case "/certificado/caja-libre.crt", "/certificado/caja-libre.mobileconfig" -> descargaCertificado(ex, metodo, ruta);
                 case "/favicon.ico", "/icono-32.png", "/icono-192.png", "/icono-256.png", "/icono-512.png", "/manifest.webmanifest", "/sw.js"
+                        -> estatico(ex, metodo, ruta);
+                case "/fuentes/Inter-Regular.ttf", "/fuentes/Inter-Bold.ttf",
+                     "/fuentes/AtkinsonHyperlegible-Regular.ttf", "/fuentes/AtkinsonHyperlegible-Bold.ttf",
+                     "/fuentes/Nunito-Regular.ttf", "/fuentes/Nunito-Bold.ttf"
                         -> estatico(ex, metodo, ruta);
                 default -> error(ex, 404, "NO_ENCONTRADO", "No encontrado.");
             }
@@ -823,13 +830,20 @@ public class ServidorMovilService {
      * Lista CERRADA de rutas → recurso del classpath. Nunca se toca el disco ni se
      * compone una ruta con lo que pida el cliente: una ruta fuera de la lista es 404.
      */
-    private static final Map<String, String> RECURSOS_ESTATICOS = Map.of(
-            "/favicon.ico",   "/icono/icono-32.png",      // PNG servido como favicon: todos los navegadores lo aceptan
-            "/icono-32.png",  "/icono/icono-32.png",
-            "/icono-256.png", "/icono/icono-256.png",
-            "/icono-192.png", "/icono/icono-256.png",     // Chrome exige 192 y 512 para instalar la app: se escalan del de 256
-            "/icono-512.png", "/icono/icono-256.png",
-            "/sw.js",         "/movil/sw.js");
+    private static final Map<String, String> RECURSOS_ESTATICOS = Map.ofEntries(
+            Map.entry("/favicon.ico",   "/icono/icono-32.png"),      // PNG servido como favicon: todos los navegadores lo aceptan
+            Map.entry("/icono-32.png",  "/icono/icono-32.png"),
+            Map.entry("/icono-256.png", "/icono/icono-256.png"),
+            Map.entry("/icono-192.png", "/icono/icono-256.png"),     // Chrome exige 192 y 512 para instalar la app: se escalan del de 256
+            Map.entry("/icono-512.png", "/icono/icono-256.png"),
+            Map.entry("/sw.js",         "/movil/sw.js"),
+            // Letras incluidas (Configuración → Apariencia; licencia OFL, resources/fuentes)
+            Map.entry("/fuentes/Inter-Regular.ttf", "/fuentes/Inter-Regular.ttf"),
+            Map.entry("/fuentes/Inter-Bold.ttf", "/fuentes/Inter-Bold.ttf"),
+            Map.entry("/fuentes/AtkinsonHyperlegible-Regular.ttf", "/fuentes/AtkinsonHyperlegible-Regular.ttf"),
+            Map.entry("/fuentes/AtkinsonHyperlegible-Bold.ttf", "/fuentes/AtkinsonHyperlegible-Bold.ttf"),
+            Map.entry("/fuentes/Nunito-Regular.ttf", "/fuentes/Nunito-Regular.ttf"),
+            Map.entry("/fuentes/Nunito-Bold.ttf", "/fuentes/Nunito-Bold.ttf"));
 
     /** Color de marca del icono oficial (packaging/icono/GeneradorIcono.MARINO_ARRIBA) */
     static final String COLOR_TEMA = "#2A4566";
@@ -840,8 +854,11 @@ public class ServidorMovilService {
         byte[] cuerpo;
         String tipo;
         if ("/manifest.webmanifest".equals(ruta)) {
+            // No se guarda en caché: sus colores siguen a la apariencia de la tienda
             cuerpo = json().writeValueAsBytes(manifiesto());
             tipo = "application/manifest+json";
+            String etagM = "\"" + Base64.getUrlEncoder().withoutPadding().encodeToString(sha256(cuerpo)).substring(0, 22) + "\"";
+            return new Estatico(cuerpo, tipo, etagM);
         } else {
             String recurso = RECURSOS_ESTATICOS.get(ruta);
             if (recurso == null) return null;
@@ -851,6 +868,8 @@ public class ServidorMovilService {
             }
             if ("/sw.js".equals(ruta)) {
                 tipo = "text/javascript; charset=utf-8";
+            } else if (ruta.endsWith(".ttf")) {
+                tipo = "font/ttf";
             } else {
                 tipo = "image/png";
                 if ("/icono-192.png".equals(ruta)) cuerpo = escalarPng(cuerpo, 192);
@@ -890,8 +909,9 @@ public class ServidorMovilService {
         m.put("scope", "/");
         m.put("display", "standalone");
         m.put("orientation", "any");
-        m.put("background_color", COLOR_TEMA);
-        m.put("theme_color", COLOR_TEMA);
+        String color = colorTemaTienda();
+        m.put("background_color", color);
+        m.put("theme_color", color);
         List<Map<String, Object>> iconos = new ArrayList<>();
         for (int t : new int[] { 32, 192, 256, 512 }) {
             Map<String, Object> i = new LinkedHashMap<>();
@@ -949,6 +969,29 @@ public class ServidorMovilService {
         if ("HEAD".equals(metodo)) { ex.sendResponseHeaders(200, -1); return; }
         ex.sendResponseHeaders(200, cuerpo.length);
         ex.getResponseBody().write(cuerpo);
+    }
+
+    /** Color de la barra del navegador y del icono de inicio: la banda de la apariencia de la tienda */
+    String colorTemaTienda() {
+        try {
+            var a = aparienciaService.deTienda();
+            if (a.coloresDeFabrica()) return COLOR_TEMA;
+            return me.eliassanchezfernandez.puntodeventa.util.apariencia.Paleta.colorBanda(a);
+        } catch (RuntimeException e) {
+            return COLOR_TEMA;
+        }
+    }
+
+    // ── Apariencia (Configuración → Apariencia del escritorio) ────────────
+
+    /** La de la tienda, sin sesión: la pantalla de entrada ya sale con sus colores (sin iconos) */
+    private void aparienciaPublica(HttpExchange ex) throws IOException {
+        responder(ex, 200, AparienciaWeb.datos(aparienciaService.deTienda(), false));
+    }
+
+    /** La del usuario que entró ("solo para mí" o la de la tienda), con el paquete de iconos */
+    private void apariencia(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> AparienciaWeb.datos(aparienciaService.paraUsuario(cajero), true));
     }
 
     /** Nombre del negocio configurado en el escritorio (solo se entrega a quien ya tiene sesión) */
