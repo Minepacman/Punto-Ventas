@@ -76,7 +76,7 @@ public class ConfiguracionController implements Initializable {
                     "Solo un administrador o gerente puede administrar los usuarios.");
             return;
         }
-        abrir("/fxml/usuarios.fxml", "Usuarios del sistema", 1000, 640);
+        abrir("/fxml/usuarios.fxml", "Usuarios del sistema", 1000, 690);
     }
 
     // ── Pantallas con FXML (solo ADMIN) ───────────────────────────────────
@@ -85,13 +85,13 @@ public class ConfiguracionController implements Initializable {
     @FXML void onBitacora()   { abrirAdmin("/fxml/bitacora.fxml", "Bitácora", 1100, 640); }
     @FXML void onOpciones()   { abrirAdmin("/fxml/configuracion_opciones.fxml", "Opciones habilitadas", 540, 520); }
     /** Datos del negocio, IVA y plazo de cancelación */
-    @FXML void onImpuestos()  { abrirAdmin("/fxml/configuracion_negocio.fxml", "Configuración del negocio", 560, 460); }
+    @FXML void onImpuestos()  { abrirAdmin("/fxml/configuracion_negocio.fxml", "Configuración del negocio", 640, 660); }
     @FXML void onTicket()     { abrirAdmin("/fxml/configuracion_ticket.fxml", "Ticket", 860, 640); }
     @FXML void onLogotipo()   { abrirAdmin("/fxml/configuracion_logotipo.fxml", "Logotipo", 440, 440); }
-    @FXML void onUnidades()   { abrirAdmin("/fxml/configuracion_unidades.fxml", "Unidades de medida", 780, 500); }
-    @FXML void onBaseDatos()  { abrirAdmin("/fxml/configuracion_basedatos.fxml", "Base de datos", 560, 640); }
+    @FXML void onUnidades()   { abrirAdmin("/fxml/configuracion_unidades.fxml", "Unidades de medida", 780, 530); }
+    @FXML void onBaseDatos()  { abrirAdmin("/fxml/configuracion_basedatos.fxml", "Base de datos", 940, 669); }
     /** Servidor web local para teléfonos y sus sesiones (QR primero, interruptor, teléfonos, avanzadas) */
-    @FXML void onAccesoMovil() { abrirAdmin("/fxml/configuracion_movil.fxml", "Acceso móvil", 820, 720); }
+    @FXML void onAccesoMovil() { abrirAdmin("/fxml/configuracion_movil.fxml", "Acceso móvil", 960, 720); }
     /** Ubicación del negocio (detectar / buscar ciudad) y clima (Estadísticas y sugerencias) */
     @FXML void onClima()      { abrirAdmin("/fxml/configuracion_clima.fxml", "Ubicación del negocio y clima", 640, 620); }
 
@@ -396,7 +396,7 @@ public class ConfiguracionController implements Initializable {
     }
 
     /** Emisor, credenciales del PAC y claves SAT por defecto (solo ADMIN) */
-    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml", "Facturación electrónica (CFDI 4.0)", 760, 720); }
+    @FXML void onFacturacion()    { abrirAdmin("/fxml/configuracion_facturacion.fxml", "Facturación electrónica (CFDI 4.0)", 960, 720); }
 
     // ── Dispositivos (solo ADMIN; cada servicio lo vuelve a verificar y audita) ──
 

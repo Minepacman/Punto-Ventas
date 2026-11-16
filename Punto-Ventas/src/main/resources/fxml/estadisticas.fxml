@@ -54,8 +54,8 @@
 
                     <HBox spacing="8" alignment="CENTER_LEFT">
                         <Label text="Periodo:" styleClass="text-muted"/>
-                        <ToggleButton fx:id="tgHoy"          text="Hoy"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
-                        <ToggleButton fx:id="tgSemana"       text="Semana"       toggleGroup="$grupoPeriodo" selected="true" onAction="#onPeriodo"/>
+                        <ToggleButton fx:id="tgHoy"          text="Hoy"          toggleGroup="$grupoPeriodo" selected="true" onAction="#onPeriodo"/>
+                        <ToggleButton fx:id="tgSemana"       text="Semana"       toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
                         <ToggleButton fx:id="tgMes"          text="Mes"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
                         <ToggleButton fx:id="tgAnio"         text="Año"          toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>
                         <ToggleButton fx:id="tgPersonalizado" text="Personalizado" toggleGroup="$grupoPeriodo" onAction="#onPeriodo"/>

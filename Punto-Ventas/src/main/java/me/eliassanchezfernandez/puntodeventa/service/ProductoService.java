@@ -7,6 +7,7 @@ import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
+import me.eliassanchezfernandez.puntodeventa.model.TipoIva;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.repository.DepartamentoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.DetalleVentaRepository;
@@ -231,6 +232,8 @@ public class ProductoService {
         if (producto.getActivo() == null) producto.setActivo(enBd.isActivo());
         // Quien no manda el IVA (importación, móvil) no lo borra: se conserva el que tenía
         if (producto.getIva() == null) producto.setIva(enBd.getIva());
+        TipoIva ivaAntes = enBd.getIvaOTienda();
+        boolean cambiaIva = ivaAntes != producto.getIvaOTienda();
 
         Producto guardado = productoRepo.save(producto);
 
@@ -249,7 +252,106 @@ public class ProductoService {
                     guardado.getCodigoBarras() + " " + guardado.getDescripcion() + ": proveedor "
                             + nombreProveedor(proveedorAntes) + " → " + nombreProveedor(guardado.getProveedor()), (Cajero) null);
         }
+        if (cambiaIva) {
+            auditoriaService.registrar(sesionService.getCajeroActual(), ACCION_IVA_CAMBIADO,
+                    guardado.getCodigoBarras() + " " + guardado.getDescripcion() + ": "
+                            + ivaAntes.getEtiqueta() + " → " + guardado.getIvaOTienda().getEtiqueta(), (Cajero) null);
+        }
         return guardado;
+    }
+
+    // ── IVA de varios productos a la vez ─────────────────────────────────
+
+    /** Acción de bitácora al cambiar el IVA de uno o varios productos */
+    public static final String ACCION_IVA_CAMBIADO = "PRODUCTO_IVA_CAMBIADO";
+
+    /** Productos por UPDATE (SQLite y PostgreSQL aceptan listas IN mucho más grandes; esto es holgado) */
+    private static final int LOTE_IVA = 500;
+
+    /**
+     * Pone el mismo IVA a varios productos (Productos → "Cambiar IVA a los seleccionados…").
+     * EDITAR_PRODUCTOS, una sola transacción (o se cambian todos o ninguno) y un renglón de
+     * bitácora con cuántos cambiaron y cuáles. Los que ya tenían ese IVA no se tocan.
+     * {@link TipoIva#TIENDA} se guarda tal cual ("usar el de la tienda").
+     * El UPDATE solo escribe la columna iva: no pisa existencias que otra caja esté moviendo.
+     *
+     * @return cuántos productos cambiaron de IVA
+     */
+    @Transactional
+    public int cambiarIva(java.util.Collection<Long> productoIds, TipoIva nuevo) {
+        sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
+        return cambiarIvaSinPermiso(productoIds, nuevo, null);
+    }
+
+    /**
+     * Aplica el IVA que propone el departamento a TODOS sus productos (los ya existentes; los
+     * nuevos ya lo reciben al darse de alta). Sin propuesta = "usar el de la tienda".
+     * EDITAR_PRODUCTOS, una transacción, bitácora.
+     *
+     * @return cuántos productos cambiaron de IVA
+     */
+    @Transactional
+    public int aplicarIvaDelDepartamento(Long departamentoId) {
+        sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
+        Departamento d = departamentoRepo.findById(departamentoId)
+                .orElseThrow(() -> new NegocioException("El departamento ya no existe."));
+        TipoIva iva = TipoIva.oTienda(d.getIvaPorDefecto());
+        List<Long> ids = em.createQuery(
+                        "SELECT p.id FROM Producto p WHERE p.departamento.id = :d", Long.class)
+                .setParameter("d", departamentoId)
+                .getResultList();
+        return cambiarIvaSinPermiso(ids, iva, "departamento \"" + d.getNombre() + "\"");
+    }
+
+    private int cambiarIvaSinPermiso(java.util.Collection<Long> productoIds, TipoIva nuevo, String origen) {
+        if (nuevo == null) throw new NegocioException("Elige el IVA que se pondrá a los productos.");
+        if (productoIds == null || productoIds.isEmpty()) return 0;
+        List<Long> ids = productoIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+
+        // Leer primero (id, código, descripción, IVA) para saber cuáles cambian y anotarlos en la bitácora
+        List<Object[]> filas = new java.util.ArrayList<>();
+        for (int i = 0; i < ids.size(); i += LOTE_IVA) {
+            filas.addAll(em.createQuery(
+                            "SELECT p.id, p.codigoBarras, p.descripcion, p.iva FROM Producto p WHERE p.id IN :ids",
+                            Object[].class)
+                    .setParameter("ids", ids.subList(i, Math.min(ids.size(), i + LOTE_IVA)))
+                    .getResultList());
+        }
+        List<Long> aCambiar = new java.util.ArrayList<>();
+        java.util.Map<TipoIva, Integer> antes = new java.util.EnumMap<>(TipoIva.class);
+        StringBuilder cuales = new StringBuilder();
+        for (Object[] f : filas) {
+            TipoIva actual = TipoIva.oTienda((TipoIva) f[3]);
+            if (actual == nuevo) continue;
+            aCambiar.add((Long) f[0]);
+            antes.merge(actual, 1, Integer::sum);
+            if (cuales.length() < 600) {
+                if (cuales.length() > 0) cuales.append(", ");
+                cuales.append(f[1]).append(' ').append(f[2]);
+            }
+        }
+        if (aCambiar.isEmpty()) return 0;
+
+        // Que los productos ya cargados en esta sesión no escriban después su IVA viejo
+        em.flush();
+        for (int i = 0; i < aCambiar.size(); i += LOTE_IVA) {
+            em.createQuery("UPDATE Producto p SET p.iva = :iva WHERE p.id IN :ids")
+                    .setParameter("iva", nuevo)
+                    .setParameter("ids", aCambiar.subList(i, Math.min(aCambiar.size(), i + LOTE_IVA)))
+                    .executeUpdate();
+        }
+        em.clear();
+
+        StringBuilder detalle = new StringBuilder();
+        detalle.append(aCambiar.size()).append(aCambiar.size() == 1 ? " producto" : " productos")
+               .append(" → ").append(nuevo.getEtiqueta());
+        if (origen != null) detalle.append(" (IVA del ").append(origen).append(')');
+        detalle.append(". Antes: ");
+        antes.forEach((t, n) -> detalle.append(t.getEtiqueta()).append(" ×").append(n).append("; "));
+        detalle.append(cuales);
+        if (aCambiar.size() > 1 && cuales.length() >= 600) detalle.append(", …");
+        auditoriaService.registrar(sesionService.getCajeroActual(), ACCION_IVA_CAMBIADO, detalle.toString(), (Cajero) null);
+        return aCambiar.size();
     }
 
     /**

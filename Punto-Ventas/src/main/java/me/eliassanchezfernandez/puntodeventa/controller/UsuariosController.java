@@ -114,12 +114,26 @@ public class UsuariosController implements Initializable {
             }
         });
 
-        // Un CheckBox por permiso
+        // Un CheckBox por permiso, en dos columnas: el formulario cabe en 1024×768 casi sin desplazar
+        javafx.scene.layout.GridPane rejilla = new javafx.scene.layout.GridPane();
+        rejilla.setHgap(12);
+        rejilla.setVgap(6);
+        for (int c = 0; c < 2; c++) {
+            javafx.scene.layout.ColumnConstraints col = new javafx.scene.layout.ColumnConstraints();
+            col.setPercentWidth(50);
+            col.setFillWidth(true);
+            rejilla.getColumnConstraints().add(col);
+        }
+        int i = 0;
         for (Permiso p : Permiso.values()) {
             CheckBox chk = new CheckBox(p.getDescripcion());
+            chk.setWrapText(true);
+            chk.setMaxWidth(Double.MAX_VALUE);
             checksPermiso.put(p, chk);
-            vboxPermisos.getChildren().add(chk);
+            rejilla.add(chk, i % 2, i / 2);
+            i++;
         }
+        vboxPermisos.getChildren().add(rejilla);
 
         tablaUsuarios.getSelectionModel().selectedItemProperty().addListener((o, a, sel) -> {
             if (sel != null) cargarEnFormulario(sel);

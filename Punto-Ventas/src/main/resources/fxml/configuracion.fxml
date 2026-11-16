@@ -20,8 +20,8 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox styleClass="config-page" spacing="12">
-                <padding><Insets top="14" right="18" bottom="14" left="18"/></padding>
+            <VBox styleClass="config-page" spacing="8">
+                <padding><Insets top="10" right="18" bottom="12" left="18"/></padding>
 
                 <HBox alignment="CENTER_LEFT" spacing="12">
                     <Label text="Configuración" styleClass="title"/>
@@ -31,12 +31,10 @@
 
                 <!-- ── Lo básico ─────────────────────────────────── -->
                 <VBox styleClass="config-card">
-                    <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label styleClass="config-card-icon"><graphic><Icono nombre="tienda" tamano="18"/></graphic></Label>
-                        <VBox spacing="0">
-                            <Label text="Lo básico de la tienda" styleClass="config-card-title"/>
-                            <Label text="Nombre, quién usa la caja, cómo se cobra y cómo sale el ticket." styleClass="hint"/>
-                        </VBox>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="tienda" tamano="16"/></graphic></Label>
+                        <Label text="Lo básico de la tienda" styleClass="config-card-title" minWidth="-Infinity"/>
+                        <Label text="Nombre, quién usa la caja, cómo se cobra y cómo sale el ticket." styleClass="hint" textOverrun="ELLIPSIS"/>
                     </HBox>
                     <FlowPane hgap="8" vgap="6">
                         <BotonOpcion icono="tienda"  titulo="Negocio e IVA"       descripcion="Nombre, dirección e IVA" onAction="#onImpuestos"/>
@@ -52,12 +50,10 @@
 
                 <!-- ── Funciones ─────────────────────────────────── -->
                 <VBox styleClass="config-card">
-                    <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label styleClass="config-card-icon"><graphic><Icono nombre="energia" tamano="18"/></graphic></Label>
-                        <VBox spacing="0">
-                            <Label text="Funciones" styleClass="config-card-title"/>
-                            <Label text="Enciende o apaga lo que la tienda usa: celular, clima, facturas, catálogo de productos." styleClass="hint"/>
-                        </VBox>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="energia" tamano="16"/></graphic></Label>
+                        <Label text="Funciones" styleClass="config-card-title" minWidth="-Infinity"/>
+                        <Label text="Enciende o apaga lo que la tienda usa: celular, clima, facturas, catálogo de productos." styleClass="hint" textOverrun="ELLIPSIS"/>
                     </HBox>
                     <FlowPane hgap="8" vgap="6">
                         <BotonOpcion icono="ajustes"  titulo="Opciones habilitadas"  descripcion="Qué funciones usa la caja"            onAction="#onOpciones"/>
@@ -71,12 +67,10 @@
 
                 <!-- ── Dispositivos ──────────────────────────────── -->
                 <VBox styleClass="config-card">
-                    <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label styleClass="config-card-icon"><graphic><Icono nombre="impresora" tamano="18"/></graphic></Label>
-                        <VBox spacing="0">
-                            <Label text="Dispositivos" styleClass="config-card-title"/>
-                            <Label text="Lo que está conectado a la computadora. Cada pantalla tiene un botón para probarlo." styleClass="hint"/>
-                        </VBox>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="impresora" tamano="16"/></graphic></Label>
+                        <Label text="Dispositivos" styleClass="config-card-title" minWidth="-Infinity"/>
+                        <Label text="Lo que está conectado a la computadora. Cada pantalla tiene un botón para probarlo." styleClass="hint" textOverrun="ELLIPSIS"/>
                     </HBox>
                     <FlowPane hgap="8" vgap="6">
                         <BotonOpcion icono="impresora" titulo="Impresora de tickets" descripcion="Elegir impresora y probar"        onAction="#onImpresora"/>
@@ -89,17 +83,15 @@
 
                 <!-- ── Datos y mantenimiento ─────────────────────── -->
                 <VBox styleClass="config-card">
-                    <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label styleClass="config-card-icon"><graphic><Icono nombre="guardar" tamano="18"/></graphic></Label>
-                        <VBox spacing="0">
-                            <Label text="Datos y mantenimiento" styleClass="config-card-title"/>
-                            <Label text="Respaldos, versión del programa y soporte." styleClass="hint"/>
-                        </VBox>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label styleClass="config-card-icon"><graphic><Icono nombre="guardar" tamano="16"/></graphic></Label>
+                        <Label text="Datos y mantenimiento" styleClass="config-card-title" minWidth="-Infinity"/>
+                        <Label text="Respaldos, versión del programa y soporte." styleClass="hint" textOverrun="ELLIPSIS"/>
                     </HBox>
                     <FlowPane hgap="8" vgap="6">
                         <BotonOpcion icono="guardar"    titulo="Respaldo automático" descripcion="Copias de seguridad diarias"          onAction="#onRespaldo"/>
                         <BotonOpcion icono="baseDatos"  titulo="Base de datos"       descripcion="Restaurar y varias cajas"         onAction="#onBaseDatos"/>
-                        <BotonOpcion icono="lista"      titulo="Bitácora"            descripcion="Quién hizo qué y cuándo abrió el cajón" onAction="#onBitacora"/>
+                        <BotonOpcion icono="lista"      titulo="Bitácora"            descripcion="Quién hizo qué y cuándo" onAction="#onBitacora"/>
                         <BotonOpcion icono="actualizar" titulo="Actualizaciones"     descripcion="Versión del programa"                        onAction="#onActualizaciones"/>
                         <BotonOpcion icono="corazon"    titulo="Donador y soporte"   descripcion="Apoya el proyecto, pide ayuda"              onAction="#onDonador"/>
                         <BotonOpcion icono="llave"      titulo="Licencia"            descripcion="Software libre (GPL v3)"                 onAction="#onLicencia"/>

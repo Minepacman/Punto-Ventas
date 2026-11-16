@@ -1392,7 +1392,7 @@ async function vistaProveedores(opciones = {}) {
     else if (proxPre) { proximo = proxPre; tipo = 'preventa'; }
     const dias = 'Entrega: ' + p.etiquetaEntrega + (p.diasPreventa.length ? ' · Preventa: ' + p.etiquetaPreventa : '');
     const nota = !agenda.costosVisibles ? null
-      : h('div', { class: 'd' }, 'Nota media: ' + (p.notaMedia ? dinero(p.notaMedia.promedio) + ' · ' + p.notaMedia.notas + ' nota(s)' : 'sin datos aún'));
+      : h('div', { class: 'd' }, 'Promedio que le compras por visita: ' + (p.notaMedia ? dinero(p.notaMedia.promedio) + ' (' + p.notaMedia.notas + (p.notaMedia.notas === 1 ? ' visita)' : ' visitas)') : 'sin datos aún'));
     return h('button', { class: 'fila', type: 'button', onclick: () => detalleProveedor(p) },
       h('div', { class: 'cuerpo' }, h('div', { class: 't' }, p.nombre), h('div', { class: 'd' }, dias), nota),
       h('div', { class: 'der' }, proximo
@@ -1408,7 +1408,7 @@ async function vistaProveedores(opciones = {}) {
       puedeEditar() ? h('button', { class: 'btn btn-primario btn-block', type: 'button', onclick: () => formularioProveedor(null) }, icono('mas', { tamano: 20 }), 'Nuevo proveedor') : null,
       tarjetaSemana(),
       h('section', null, h('div', { class: 'seccion-t' }, 'Proveedores (' + agenda.proveedores.length + ')'), lista),
-      agenda.costosVisibles ? h('p', { class: 'nota' }, 'Nota media: lo que se le compra en promedio en cada visita, según las entradas de mercancía con costo de los últimos ' + agenda.ventanaDias + ' días.') : null]);
+      agenda.costosVisibles ? h('p', { class: 'nota' }, 'Promedio que le compras por visita (la «Nota media» del proveedor): suma la mercancía con costo que le recibes cada día que viene y saca el promedio de esos días, con las entradas de los últimos ' + agenda.ventanaDias + ' días.') : null]);
   }
 
   async function recargar() {
@@ -1421,10 +1421,10 @@ async function vistaProveedores(opciones = {}) {
     const prox = (et, iso, aplica) => h('div', { class: 'prox' }, h('span', { class: 'q' }, et),
       h('span', null, !aplica ? 'No manda preventa' : iso ? mayuscula(cuando(iso, agenda.hoy, true)) : 'Sin días fijos'));
     const nota = !agenda.costosVisibles ? null : h('div', { class: 'kpi' },
-      h('div', { class: 'e' }, 'Nota media (gasto por visita)'),
+      h('div', { class: 'e' }, 'Promedio que le compras por visita'),
       h('div', { class: 'v' }, p.notaMedia ? dinero(p.notaMedia.promedio) : 'Sin datos aún'),
       h('div', { class: 'sub' }, p.notaMedia
-        ? 'Promedio de ' + p.notaMedia.notas + ' nota(s) en ' + agenda.ventanaDias + ' días · última el ' + fechaLarga(fechaIso(p.notaMedia.ultima))
+        ? 'Promedio de ' + p.notaMedia.notas + (p.notaMedia.notas === 1 ? ' visita' : ' visitas') + ' con compra en ' + agenda.ventanaDias + ' días · última el ' + fechaLarga(fechaIso(p.notaMedia.ultima))
         : 'Se calcula con las entradas de mercancía que tengan costo.'));
     const d = hoja([
       h('h2', null, p.nombre),
