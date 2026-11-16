@@ -1,0 +1,36 @@
+Cervezas y Refrescos de  lapa
+CARRETERA FEDERAL XALAPA-VERAC
+FRACC LOS GIRASOLES, C.P. 9163
+EMILIANO ZAPATA, VERACRUZ
+RFC:      CRJ010101AB1
+Tel:      0000000000
+
+Impresion:11-13-2026 13:30:07
+Vendedor: VENDEDOR EJEMPLO
+Captura:  11-13-2026 13:29:51
+Ruta:  569544
+Folio: 9544-54738
+ID:        CLI000001
+Cte:     CLIENTE EJEMPLO
+ABARROTES EJEMPLO
+EDOCRED: Contado
+FP:     Por definir
+
+PEDIDO
+Prod      Descripcion         Cant Precio   Desc
+SubTot
+=======================================================
+=======
+25281900  AMPER REG 12/.4      1.0 215.00   0.00
+215.00
+25284802  AMPER MANGO 12/      1.0 215.00   0.00
+215.00
+=======================================================
+=======
+
+TOTAL DE PRODUCTOS:    2.0
+
+SUBTOTAL :          430.00
+DESCUENTO:            0.00
+IMPUESTOS:           59.31
+       *****  TOTAL $    430.00     *****

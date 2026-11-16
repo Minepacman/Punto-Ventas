@@ -1,0 +1,37 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Cervezas y Refrescos de Jalapa",
+      "folio": "9544-54738",
+      "fecha": "2026-11-13",
+      "lineas": [
+        {
+          "codigoProveedor": "25281900",
+          "descripcion": "AMPER REG 12/.4",
+          "cantidad": 1.0,
+          "unidad": null,
+          "empaque": 12,
+          "precioUnitario": 215.0,
+          "descuento": 0.0,
+          "importe": 215.0
+        },
+        {
+          "codigoProveedor": "25284802",
+          "descripcion": "AMPER MANGO 12/",
+          "cantidad": 1.0,
+          "unidad": null,
+          "empaque": 12,
+          "precioUnitario": 215.0,
+          "descuento": 0.0,
+          "importe": 215.0
+        }
+      ],
+      "subtotal": 430.0,
+      "descuento": 0.0,
+      "impuestos": 59.31,
+      "cargos": null,
+      "total": 430.0,
+      "notas": "Fecha MM-DD-AAAA. Precios con impuestos incluidos."
+    }
+  ]
+}

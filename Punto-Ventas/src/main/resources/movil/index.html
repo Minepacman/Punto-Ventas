@@ -1796,8 +1796,8 @@ async function vistaConfig() {
 const avisos = {
   datos: null, ultimaCarga: 0, cargando: null, globo: null, botonEl: null, hojaAbierta: null, temporizador: null,
   CADA_MS: 10 * 60 * 1000,
-  ORDEN_TIPOS: ['PROVEEDOR', 'STOCK', 'CADUCIDAD', 'HORA_PICO'],
-  ICONO_TIPO: { PROVEEDOR: 'camion', STOCK: 'paquete', CADUCIDAD: 'calendario', HORA_PICO: 'reloj' },
+  ORDEN_TIPOS: ['PROVEEDOR', 'STOCK', 'GANANCIA', 'CADUCIDAD', 'HORA_PICO'],
+  ICONO_TIPO: { PROVEEDOR: 'camion', STOCK: 'paquete', GANANCIA: 'sube', CADUCIDAD: 'calendario', HORA_PICO: 'reloj' },
 
   claveLocal: () => 'pv.avisos.' + (E.sesion ? E.sesion.usuario : ''),
 

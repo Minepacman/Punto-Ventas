@@ -1,0 +1,87 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Gamesa",
+      "folio": null,
+      "fecha": null,
+      "lineas": [
+        {
+          "codigoProveedor": "300062064",
+          "descripcion": "EMPERADOR SENZO DTS RG3 117GRX48X1",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 48,
+          "precioUnitario": 17.26,
+          "descuento": null,
+          "importe": 34.52
+        },
+        {
+          "codigoProveedor": "300059144",
+          "descripcion": "CHOKIS RELLENA FU RG NI 90GRX42X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 42,
+          "precioUnitario": 17.26,
+          "descuento": null,
+          "importe": 17.26
+        },
+        {
+          "codigoProveedor": "300062246",
+          "descripcion": "CREMAX CHOCO FU RG3 113GRX36X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 36,
+          "precioUnitario": 17.26,
+          "descuento": null,
+          "importe": 17.26
+        },
+        {
+          "codigoProveedor": "300060502",
+          "descripcion": "MARIAS AZU RG2 144GRX22X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 22,
+          "precioUnitario": 14.68,
+          "descuento": null,
+          "importe": 14.68
+        },
+        {
+          "codigoProveedor": "300062564",
+          "descripcion": "DELICIAS DTS 153GRX18X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 18,
+          "precioUnitario": 15.69,
+          "descuento": null,
+          "importe": 15.69
+        },
+        {
+          "codigoProveedor": "300064296",
+          "descripcion": "BARRAS DE COCO FU 140GRX30X1",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": 30,
+          "precioUnitario": 15.69,
+          "descuento": null,
+          "importe": 31.38
+        },
+        {
+          "codigoProveedor": "300060885",
+          "descripcion": "CHOKIS ROLLO FU NF PRE 180.5GRX18X1",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": 18,
+          "precioUnitario": 25.11,
+          "descuento": null,
+          "importe": 25.11
+        }
+      ],
+      "subtotal": 155.9,
+      "descuento": 0.0,
+      "impuestos": 12.47,
+      "cargos": null,
+      "total": 168.37,
+      "notas": "Encabezado fuera de la foto; resumen por precios al final (se ignora)."
+    }
+  ]
+}

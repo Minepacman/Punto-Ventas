@@ -2161,3 +2161,30 @@ TilePane > .button:armed,
 
 /* Iconos Lucide (util/Icono): el color del trazo sigue al texto del control que los contiene */
 .icono { -fx-background-color: transparent; }
+
+/* Lector de tickets de proveedor (Inventario → Leer ticket) */
+.ticket-fila-amarilla {
+    -fx-background-color: -color-warning-muted;
+    -fx-background-radius: 4;
+}
+.ticket-fila-roja {
+    -fx-background-color: -color-danger-muted;
+    -fx-background-radius: 4;
+}
+.ticket-campo-revisar {
+    -fx-border-color: -color-warning-emphasis;
+    -fx-border-width: 2;
+    -fx-border-radius: 3;
+}
+.ticket-cuadra {
+    -fx-text-fill: -color-success-fg;
+    -fx-font-weight: bold;
+}
+.ticket-no-cuadra {
+    -fx-text-fill: -color-danger-fg;
+    -fx-font-weight: bold;
+}
+.ticket-secundario {
+    -fx-text-fill: -color-fg-muted;
+    -fx-font-size: 11px;
+}

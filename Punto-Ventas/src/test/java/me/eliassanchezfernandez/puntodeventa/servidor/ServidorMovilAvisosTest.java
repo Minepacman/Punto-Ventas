@@ -187,9 +187,12 @@ class ServidorMovilAvisosTest {
         JsonNode g = avisos(gestor.token());
         assertThat(g.get("costosVisibles").asBoolean()).isTrue();
         assertThat(conTitulo(g, "Hoy pasa el preventa de " + sabritas.getNombre()).get("detalle").asText()).contains("$125.00");
-        // Mismo cálculo de fondo para todos (caché): los mismos ids
-        assertThat(lista(g).stream().map(x -> x.get("id").asText()).toList())
+        // Mismo cálculo de fondo para todos (caché): los mismos ids, más los avisos de ganancia baja que solo ve
+        // quien ve costos (las papas entraron a $12.50 y se venden en $10)
+        assertThat(lista(g).stream().map(x -> x.get("id").asText()).filter(id -> !id.startsWith("ganancia-")).toList())
                 .containsExactlyElementsOf(lista(a).stream().map(x -> x.get("id").asText()).toList());
+        assertThat(lista(g).stream().map(x -> x.get("id").asText()).toList()).contains("ganancia-" + papas.getId());
+        assertThat(lista(a).stream().map(x -> x.get("id").asText()).toList()).noneMatch(id -> id.startsWith("ganancia-"));
     }
 
     @Test
