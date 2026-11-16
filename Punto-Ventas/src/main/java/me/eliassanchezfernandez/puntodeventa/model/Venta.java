@@ -107,6 +107,16 @@ public class Venta {
     @Column(name = "cancelacion_autorizada_por", length = 100)
     private String cancelacionAutorizadaPor;
 
+    // ── Devoluciones parciales (DevolucionService) ───────────────────────
+
+    /** Suma reembolsada por devoluciones de artículos; null = ninguna */
+    @Column(name = "total_devuelto")
+    private Double totalDevuelto;
+
+    /** Última devolución de artículos (los agregados de Estadísticas recalculan el día de la venta) */
+    @Column(name = "fecha_ultima_devolucion")
+    private LocalDateTime fechaUltimaDevolucion;
+
     /** Plazo de cancelación vigente cuando se hizo la venta (VEN-19) */
     @Column(name = "plazo_cancelacion_horas")
     private Integer plazoCancelacionHoras;
@@ -120,6 +130,24 @@ public class Venta {
 
     public int getCajaONumero() {
         return caja == null || caja <= 0 ? 1 : caja;
+    }
+
+    // ── Venta a cuenta (fiado) ───────────────────────────────────────────
+
+    /** Cliente al que se le cargó la parte "A cuenta" (null si no hubo fiado) */
+    @Column(name = "cliente_id")
+    private Long clienteId;
+
+    /** Nombre del cliente al momento de la venta (para el ticket y el historial) */
+    @Column(name = "cliente_nombre", length = 150)
+    private String clienteNombre;
+
+    /** Lo que el cliente quedó debiendo justo después de esta venta (se imprime en el ticket) */
+    @Column(name = "saldo_cliente")
+    private Double saldoCliente;
+
+    public boolean esACuenta() {
+        return clienteId != null;
     }
 
     // ── Renglones y pagos ────────────────────────────────────────────────
@@ -142,6 +170,26 @@ public class Venta {
 
     public boolean estaActiva() {
         return !isCancelada();
+    }
+
+    public double getTotalDevueltoOCero() {
+        return totalDevuelto != null ? totalDevuelto : 0.0;
+    }
+
+    /** ¿Se devolvió algún artículo de esta venta? */
+    public boolean tieneDevoluciones() {
+        return getTotalDevueltoOCero() > 0.004
+                || detalles.stream().anyMatch(d -> d.getCantidadDevueltaOCero() > 0.0000001);
+    }
+
+    /** ¿Ya se devolvió todo lo vendido? */
+    public boolean estaDevueltaPorCompleto() {
+        return !detalles.isEmpty() && detalles.stream().allMatch(d -> d.getCantidadPorDevolver() <= 0.0000001);
+    }
+
+    /** Total menos lo reembolsado por devoluciones */
+    public double getTotalNeto() {
+        return Math.round((total - getTotalDevueltoOCero()) * 100.0) / 100.0;
     }
 
     public int getPlazoCancelacionHorasOPorDefecto() {
@@ -175,8 +223,14 @@ public class Venta {
     }
 
     public enum FormaPago {
-        EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("Crédito"),
-        TRANSFERENCIA("Transferencia"), VALES("Vales");
+        EFECTIVO("Efectivo"), TARJETA("Tarjeta"), CREDITO("A cuenta"),
+        TRANSFERENCIA("Transferencia"), VALES("Vales"),
+        /**
+         * Vale de compra de la propia tienda (lo entregó una devolución, ValeService). No es dinero
+         * nuevo: no entra al cajón ni se habilita en Configuración; tiene su campo en la ventana de cobro.
+         * (VALES son los vales de despensa de empresas.)
+         */
+        VALE_COMPRA("Vale de la tienda");
 
         private final String etiqueta;
 

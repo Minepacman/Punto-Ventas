@@ -20,11 +20,14 @@ import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.service.ActualizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.BienvenidaService;
+import me.eliassanchezfernandez.puntodeventa.service.ClimaService;
 import me.eliassanchezfernandez.puntodeventa.service.ConfiguracionService;
 import me.eliassanchezfernandez.puntodeventa.service.DonadorService;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.util.Atajo;
+import me.eliassanchezfernandez.puntodeventa.util.ClimaBarra;
 import me.eliassanchezfernandez.puntodeventa.util.Donacion;
+import me.eliassanchezfernandez.puntodeventa.util.Icono;
 import me.eliassanchezfernandez.puntodeventa.util.PreferenciasActualizacion;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
@@ -46,7 +49,7 @@ import java.util.ResourceBundle;
  *
  * Responsabilidades:
  *  - Actualizar el reloj de la cabecera (hora y fecha)
- *  - Controlar accesos por rol/permiso (pestañas Configuración y Corte)
+ *  - Controlar accesos por rol/permiso (pestañas Configuración —la última— y Corte)
  *  - Registrar los atajos de teclado del catálogo util/Atajo (F1–F5 cambian de
  *    pestaña, F10 muestra la lista; los de Ventas se delegan a VentasController
  *    solo cuando esa pestaña está activa)
@@ -56,16 +59,21 @@ import java.util.ResourceBundle;
 @Scope("prototype")
 public class MainController implements Initializable {
 
+    @FXML private javafx.scene.control.ToolBar toolbar;
     @FXML private TabPane tabPane;
     @FXML private Tab     tabVentas;
     @FXML private Tab     tabProductos;
+    @FXML private Tab     tabClientes;
     @FXML private Tab     tabInventario;
     @FXML private Tab     tabConfig;
     @FXML private Tab     tabCorte;
     @FXML private Tab     tabEstadisticas;
     @FXML private Label   labelUsuario;
+    @FXML private javafx.scene.layout.VBox relojBox;
+    @FXML private javafx.scene.layout.HBox filaReloj;
     @FXML private Label   labelHora;
     @FXML private Label   labelFecha;
+    @FXML private Label   labelClima;
     @FXML private Label   labelVersion;
     @FXML private Label   labelCaja;
     @FXML private Label   labelAtajos;
@@ -77,9 +85,11 @@ public class MainController implements Initializable {
     // Ventas se incluye en main.fxml (fx:id del include + "Controller"); el resto se carga la primera vez que se abre su pestaña
     @FXML private VentasController     ventasViewController;
     private ProductosController  productosViewController;
+    private ClientesController   clientesViewController;
     private InventarioController inventarioViewController;
     private CorteController      corteViewController;
     private EstadisticasController estadisticasViewController;
+    private ConfiguracionController configViewController;
 
     @Autowired private SesionService      sesionService;
     @Autowired private BienvenidaService  bienvenidaService;
@@ -90,11 +100,19 @@ public class MainController implements Initializable {
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService catalogoCodigosService;
     @Autowired private ConfiguracionService configuracionService;
     @Autowired private AcercaDeDialogo      acercaDeDialogo;
+    @Autowired private ClimaService         climaService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.service.RecuperacionService recuperacionService;
 
     /** Versión nueva encontrada en segundo plano (la abre el enlace de la barra de estado) */
     private ActualizacionService.Actualizacion actualizacionDisponible;
 
     private Timeline reloj;
+    /** Relectura del clima de la cabecera cada 10 min (además del aviso de ClimaService al guardar un registro) */
+    private Timeline refrescoClima;
+    private final Runnable oyenteClima = this::refrescarClima;
+    private static final String CLASE_CLIMA_VIEJO = "clima-desactualizado";
+    /** Lo último que se pintó (null = nada que mostrar); acomodarClima decide si cabe en la cabecera */
+    private ClimaBarra.Indicador climaMostrado;
 
     private static final Locale ES_MX = new Locale("es", "MX");
     private static final DateTimeFormatter FMT_HORA =
@@ -110,6 +128,8 @@ public class MainController implements Initializable {
         labelUsuario.setText(cajero != null
                 ? "Usuario: " + cajero.getNombreCompleto() + "  (" + cajero.getRol().getEtiqueta() + ")"
                 : "Usuario: —");
+        // Nombres largos se recortan con «…» (maxWidth en main.fxml) para que «Salir» no se vaya al menú de la barra
+        labelUsuario.setTooltip(new javafx.scene.control.Tooltip(labelUsuario.getText()));
         labelVersion.setText(VersionApp.etiqueta());
         lnkActualizacion.setVisible(false);
         lnkActualizacion.setManaged(false);
@@ -128,9 +148,173 @@ public class MainController implements Initializable {
         labelAtajos.setText(resumenAtajos(mac));
         lnkAtajos.setText("Atajos " + Atajo.AYUDA_ATAJOS.etiquetaCorta(mac));
         configurarRefrescoDePestanas();
+        // Ventas: «Dar de alta» un código que no existe abre Productos → Nuevo con el código y sus datos
+        if (ventasViewController != null) ventasViewController.setAlDarDeAlta(this::darDeAltaDesdeVentas);
         configurarCierreDeVentana();
+        configurarClima();
         // Ya con la ventana en pantalla: asistente inicial → tutorial → donación (BienvenidaService decide cuáles)
         Platform.runLater(this::flujoDeBienvenida);
+    }
+
+    // ── Clima junto al reloj ──────────────────────────────────────────────
+
+    /**
+     * "24 °C · Soleado" con icono, del último registro que ClimaService guardó
+     * (nunca consulta internet aquí). Se relee cuando el servicio avisa que
+     * guardó uno nuevo o cambió la configuración, y cada 10 min por si acaso.
+     * Oculto si el clima está apagado, sin ubicación o sin registros.
+     */
+    private void configurarClima() {
+        labelClima.setVisible(false);
+        labelClima.setManaged(false);
+        if (sesionService.esAdmin()) labelClima.setCursor(javafx.scene.Cursor.HAND);
+        // Si la ventana se angosta (o el nombre del usuario es largo) el clima cede antes que cualquier botón
+        toolbar.widthProperty().addListener((o, a, b) -> acomodarClima());
+        // Al cambiar el tamaño de letra (Apariencia) cambia lo que ocupa cada elemento, no el ancho de la barra
+        labelUsuario.fontProperty().addListener((o, a, b) -> Platform.runLater(this::acomodarClima));
+        climaService.alCambiar(oyenteClima);
+        refrescoClima = new Timeline(new KeyFrame(Duration.minutes(10), e -> refrescarClima()));
+        refrescoClima.setCycleCount(Animation.INDEFINITE);
+        refrescoClima.play();
+        refrescarClima();
+    }
+
+    /** Lee la base de datos fuera del hilo de JavaFX y pinta en él. Se puede llamar desde cualquier hilo. */
+    private void refrescarClima() {
+        Thread t = new Thread(() -> {
+            ClimaBarra.Indicador indicador = null;
+            try {
+                if (climaService.estaActivo()) {
+                    String ciudad = climaService.ciudad();
+                    indicador = climaService.ultimo()
+                            .map(r -> ClimaBarra.de(r, ciudad, LocalDateTime.now()))
+                            .orElse(null);
+                }
+            } catch (RuntimeException e) {
+                System.err.println("Clima: no se pudo leer para la cabecera (" + e.getMessage() + ").");
+            }
+            final ClimaBarra.Indicador listo = indicador;
+            Platform.runLater(() -> pintarClima(listo));
+        }, "clima-cabecera");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void pintarClima(ClimaBarra.Indicador indicador) {
+        climaMostrado = indicador;
+        if (indicador == null) {
+            acomodarClima();
+            return;
+        }
+        labelClima.setText(indicador.texto());
+        if (labelClima.getGraphic() instanceof Icono icono) {
+            if (!indicador.icono().equals(icono.getNombre())) icono.setNombre(indicador.icono());
+        } else {
+            labelClima.setGraphic(new Icono(indicador.icono(), 16));
+        }
+        labelClima.setTooltip(new javafx.scene.control.Tooltip(indicador.tooltip()));
+        if (indicador.desactualizado()) {
+            if (!labelClima.getStyleClass().contains(CLASE_CLIMA_VIEJO)) labelClima.getStyleClass().add(CLASE_CLIMA_VIEJO);
+        } else {
+            labelClima.getStyleClass().remove(CLASE_CLIMA_VIEJO);
+        }
+        acomodarClima();
+    }
+
+    /**
+     * Muestra el clima solo si cabe en el ancho actual de la cabecera. Va en el
+     * renglón de la hora, que es más corto que la fecha, así que normalmente no
+     * ensancha nada; si aun así no cabe (ventana angosta, nombre de usuario muy
+     * largo) cede el clima, nunca los botones: el cálculo usa los anchos
+     * preferidos, no la posición, así mostrar u ocultar el clima no lo altera.
+     */
+    private void acomodarClima() {
+        // Con letra grande (Apariencia 115/130 %) o un nombre largo ni sin clima caben los botones y la
+        // ToolBar mandaría «Cerrar sesión» y «Salir» al desborde (»). Antes que eso cede la fecha y
+        // luego se angosta el nombre del usuario (tiene «…» y tooltip con el nombre completo).
+        labelClima.setVisible(false);
+        labelClima.setManaged(false);
+        labelFecha.setVisible(true);
+        labelFecha.setManaged(true);
+        // La ToolBar decide qué manda al desborde con el ancho PREFERIDO de cada elemento (no respeta
+        // maxWidth): el nombre se limita con prefWidth para que un nombre largo no empuje los botones.
+        labelUsuario.setPrefWidth(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
+        double usuario = Math.min(USUARIO_ANCHO_MAX, labelUsuario.prefWidth(-1));
+        labelUsuario.setPrefWidth(usuario);
+        double sobra = sobranteCabecera(toolbar);
+        if (sobra < 0) {
+            sobra += labelFecha.prefWidth(-1) - labelHora.prefWidth(-1);
+            labelFecha.setVisible(false);
+            labelFecha.setManaged(false);
+        }
+        if (sobra < 0) labelUsuario.setPrefWidth(Math.max(USUARIO_ANCHO_MIN, usuario + sobra));
+        if (!labelFecha.isManaged()) return;   // si ya no cupo la fecha, menos el clima
+        boolean cabe = climaMostrado != null
+                && climaCabe(toolbar, relojBox, filaReloj.getSpacing(), labelClima, labelHora, labelFecha);
+        labelClima.setVisible(cabe);
+        labelClima.setManaged(cabe);
+    }
+
+    /**
+     * @param reloj  el VBox del reloj (hora arriba con el clima a su izquierda, fecha abajo)
+     * @param gap    separación entre clima y hora
+     * @return true si el clima cabe con los demás elementos de la barra (o si la barra aún no tiene ancho)
+     */
+    static boolean climaCabe(javafx.scene.control.ToolBar barra, javafx.scene.layout.Region reloj, double gap,
+                             Label clima, Label hora, Label fecha) {
+        double ancho = barra.getWidth();
+        if (ancho <= 0) return true;          // todavía sin dibujar: se recalcula cuando tenga ancho
+        javafx.geometry.Insets p = barra.getPadding();
+        double ocupado = p.getLeft() + p.getRight();
+        int visibles = 0;
+        for (javafx.scene.Node item : barra.getItems()) {
+            if (!item.isManaged()) continue;
+            visibles++;
+            if (item != reloj) ocupado += item.prefWidth(-1);
+        }
+        // La ToolBar no expone su -fx-spacing: lo lleva el HBox interno de su skin (clase "container")
+        javafx.scene.Node caja = barra.lookup(".container");
+        double espacio = caja instanceof javafx.scene.layout.HBox h ? h.getSpacing() : 12;
+        ocupado += espacio * Math.max(0, visibles - 1);
+        double relojConClima = Math.max(clima.prefWidth(-1) + gap + hora.prefWidth(-1), fecha.prefWidth(-1));
+        return ocupado + relojConClima <= ancho;
+    }
+
+    private static final double USUARIO_ANCHO_MAX = 230;
+    private static final double USUARIO_ANCHO_MIN = 80;
+
+    /** Ancho que sobra (negativo: falta) en la cabecera con los anchos preferidos de lo que se ve (0 si aún no tiene ancho) */
+    static double sobranteCabecera(javafx.scene.control.ToolBar barra) {
+        double ancho = barra.getWidth();
+        if (ancho <= 0) return 0;
+        javafx.geometry.Insets p = barra.getPadding();
+        double ocupado = p.getLeft() + p.getRight();
+        int visibles = 0;
+        for (javafx.scene.Node item : barra.getItems()) {
+            if (!item.isManaged()) continue;
+            visibles++;
+            ocupado += item.prefWidth(-1);
+        }
+        javafx.scene.Node caja = barra.lookup(".container");
+        double espacio = caja instanceof javafx.scene.layout.HBox h ? h.getSpacing() : 12;
+        ocupado += espacio * Math.max(0, visibles - 1);
+        return ancho - ocupado;
+    }
+
+    /** Al salir de esta ventana (bloquear, cerrar sesión, salir) se dejan de escuchar avisos y de releer */
+    private void detenerClima() {
+        climaService.quitarOyente(oyenteClima);
+        if (refrescoClima != null) refrescoClima.stop();
+    }
+
+    /** Clic en el clima: solo el ADMIN abre Configuración → Ubicación y clima; para los demás no hace nada */
+    @FXML
+    private void onClima() {
+        if (!sesionService.esAdmin() || !tabPane.getTabs().contains(tabConfig)) return;
+        tabPane.getSelectionModel().select(tabConfig);     // la carga perezosa crea ConfiguracionController
+        if (configViewController == null) return;
+        // Un pulso después para que el contenido de la pestaña ya esté en la escena (la modal necesita su ventana)
+        Platform.runLater(() -> configViewController.onClima());
     }
 
     // ── Bienvenida: asistente inicial, tutorial y donación ───────────────
@@ -168,6 +352,25 @@ public class MainController implements Initializable {
                 e.printStackTrace();
             }
         }
+        avisarCodigoHeredadoUnaVez();
+    }
+
+    /**
+     * Una sola vez por administrador: si queda el código de recuperación de la versión 1.0.3 o
+     * anterior (sin dueño), sugerirle generar el suyo. El código viejo sigue sirviendo igual.
+     */
+    private void avisarCodigoHeredadoUnaVez() {
+        try {
+            if (!recuperacionService.tomarAvisoCodigoHeredado()) return;
+        } catch (RuntimeException e) {
+            System.err.println("Aviso de código de recuperación: " + e.getMessage());
+            return;
+        }
+        Ventanas.alerta(javafx.scene.control.Alert.AlertType.INFORMATION, "Código de recuperación",
+                "Este programa tiene un código de recuperación de una versión anterior que no está ligado a "
+                + "ningún administrador. Te recomendamos generar uno propio en Configuración → Cajeros → "
+                + "«Código de recuperación…» y guardarlo en un lugar seguro: así solo sirve para tu usuario y el "
+                + "anterior deja de valer.\n\nEste aviso no se volverá a mostrar.");
     }
 
     // ── Actualizaciones y "Acerca de" ─────────────────────────────────────
@@ -225,10 +428,11 @@ public class MainController implements Initializable {
         // fx:id → pestaña, solo las que este usuario conserva (aplicarPermisos quita las demás)
         java.util.Map<String, Tab> todas = new java.util.LinkedHashMap<>();
         todas.put("tabVentas", tabVentas);
+        todas.put("tabClientes", tabClientes);
         todas.put("tabProductos", tabProductos);
         todas.put("tabInventario", tabInventario);
-        todas.put("tabEstadisticas", tabEstadisticas);
         todas.put("tabCorte", tabCorte);
+        todas.put("tabEstadisticas", tabEstadisticas);
         todas.put("tabConfig", tabConfig);
         java.util.Map<String, Tab> visibles = new java.util.LinkedHashMap<>();
         todas.forEach((id, t) -> { if (tabPane.getTabs().contains(t)) visibles.put(id, t); });
@@ -295,6 +499,7 @@ public class MainController implements Initializable {
     private void volverAlLogin() {
         try {
             if (reloj != null) reloj.stop();
+            detenerClima();
             guardarTicketPendiente();
             Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();
@@ -311,6 +516,7 @@ public class MainController implements Initializable {
     @FXML
     private void onSalir() {
         if (Ventanas.confirmar("Salir", "¿Salir de Caja Libre?")) {
+            detenerClima();
             guardarTicketPendiente();
             Ventanas.setAccionAlCerrar(null);
             sesionService.cerrarSesion();
@@ -376,6 +582,7 @@ public class MainController implements Initializable {
     private static String nombreCorto(Atajo a) {
         return switch (a) {
             case IR_VENTAS -> "Ventas";
+            case IR_CLIENTES -> "Clientes";
             case IR_PRODUCTOS -> "Productos";
             case IR_INVENTARIO -> "Inventario";
             case IR_ESTADISTICAS -> "Estadísticas";
@@ -425,6 +632,7 @@ public class MainController implements Initializable {
     private void ejecutarGlobal(Atajo atajo) {
         switch (atajo) {
             case IR_VENTAS       -> tabPane.getSelectionModel().select(tabVentas);
+            case IR_CLIENTES     -> seleccionarSiExiste(tabClientes);
             case IR_PRODUCTOS    -> seleccionarSiExiste(tabProductos);
             case IR_INVENTARIO   -> seleccionarSiExiste(tabInventario);
             case IR_ESTADISTICAS -> seleccionarSiExiste(tabEstadisticas);
@@ -432,6 +640,12 @@ public class MainController implements Initializable {
             case BLOQUEAR        -> onBloquear();
             default -> { }
         }
+    }
+
+    private void darDeAltaDesdeVentas(String codigo) {
+        if (!tabPane.getTabs().contains(tabProductos)) return;
+        tabPane.getSelectionModel().select(tabProductos);   // construye o recarga la pantalla
+        if (productosViewController != null) productosViewController.nuevoConCodigo(codigo);
     }
 
     /** Las pestañas que el usuario no puede ver se quitaron del TabPane: el atajo no hace nada */
@@ -452,6 +666,7 @@ public class MainController implements Initializable {
             if (tab == tabVentas     && ventasViewController     != null) ventasViewController.aplicarConfiguracion();
             if (recienCargada) return;
             if (tab == tabProductos  && productosViewController  != null) productosViewController.recargar();
+            if (tab == tabClientes   && clientesViewController   != null) clientesViewController.recargar();
             if (tab == tabInventario && inventarioViewController != null) inventarioViewController.recargar();
             if (tab == tabCorte      && corteViewController      != null) corteViewController.recargar();
             if (tab == tabEstadisticas && estadisticasViewController != null) estadisticasViewController.recargar();
@@ -460,7 +675,7 @@ public class MainController implements Initializable {
 
     /** FXML de cada pestaña que se carga al abrirla por primera vez */
     private String fxmlDe(Tab tab) {
-        // Clientes (F2) se agregará aquí cuando exista el módulo: "/fxml/clientes.fxml"
+        if (tab == tabClientes)     return "/fxml/clientes.fxml";
         if (tab == tabProductos)    return "/fxml/productos.fxml";
         if (tab == tabInventario)   return "/fxml/inventario.fxml";
         if (tab == tabConfig)       return "/fxml/configuracion.fxml";
@@ -479,9 +694,11 @@ public class MainController implements Initializable {
             Parent contenido = loader.load();
             Object controlador = loader.getController();
             if (controlador instanceof ProductosController c)    productosViewController = c;
+            if (controlador instanceof ClientesController c)     clientesViewController = c;
             if (controlador instanceof InventarioController c)   inventarioViewController = c;
             if (controlador instanceof CorteController c)        corteViewController = c;
             if (controlador instanceof EstadisticasController c) estadisticasViewController = c;
+            if (controlador instanceof ConfiguracionController c) configViewController = c;
             tab.setContent(contenido);
             return true;
         } catch (IOException | RuntimeException e) {

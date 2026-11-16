@@ -1,0 +1,27 @@
+{
+  "tickets": [
+    {
+      "proveedor": "BT Last Mile",
+      "folio": "BT04 6452",
+      "fecha": "2026-09-08",
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "MlbRby20CD",
+          "cantidad": 0.05,
+          "unidad": null,
+          "empaque": 100,
+          "precioUnitario": 9376.2,
+          "descuento": null,
+          "importe": 468.81
+        }
+      ],
+      "subtotal": null,
+      "descuento": null,
+      "impuestos": null,
+      "cargos": 11.6,
+      "total": 480.41,
+      "notas": null
+    }
+  ]
+}

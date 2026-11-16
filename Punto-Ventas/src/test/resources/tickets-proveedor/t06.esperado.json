@@ -1,0 +1,47 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Distribuidora de Dulces y Chicles Ramírez",
+      "folio": "202611100104857",
+      "fecha": "2026-11-10",
+      "lineas": [
+        {
+          "codigoProveedor": null,
+          "descripcion": "ORBIT SURTID",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 89.0,
+          "descuento": null,
+          "importe": 89.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "MAZAPAN GIGA",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 109.0,
+          "descuento": null,
+          "importe": 109.0
+        },
+        {
+          "codigoProveedor": null,
+          "descripcion": "MZ CHOCO GT",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 126.0,
+          "descuento": null,
+          "importe": 126.0
+        }
+      ],
+      "subtotal": null,
+      "descuento": 0.0,
+      "impuestos": null,
+      "cargos": null,
+      "total": 324.0,
+      "notas": "Precio pegado a la descripción (GIGA109.00)."
+    }
+  ]
+}

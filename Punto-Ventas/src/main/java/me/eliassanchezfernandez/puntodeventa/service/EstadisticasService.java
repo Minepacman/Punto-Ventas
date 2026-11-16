@@ -16,6 +16,7 @@ import me.eliassanchezfernandez.puntodeventa.repository.ProductoClimaRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ProductoDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.ResumenDiarioRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.VentaRepository;
+import me.eliassanchezfernandez.puntodeventa.util.FechasComparacion;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -265,7 +266,8 @@ public class EstadisticasService {
         return totalesDe(resumenesEntre(p));
     }
 
-    private static Totales totalesDe(List<ResumenDiario> resumenes) {
+    /** Totales de una lista de resúmenes ya leída (función pura) */
+    public static Totales totalesDe(List<ResumenDiario> resumenes) {
         double total = 0, piezas = 0;
         int trans = 0;
         for (ResumenDiario r : resumenes) {
@@ -279,9 +281,14 @@ public class EstadisticasService {
     /** Total por cada día del periodo, con ceros en los días sin ventas (para la gráfica) */
     @Transactional(readOnly = true)
     public Map<LocalDate, Double> serieDiaria(Periodo p) {
+        return serieDiariaDe(p, resumenesEntre(p));
+    }
+
+    /** serieDiaria() sobre resúmenes ya leídos (función pura) */
+    public static Map<LocalDate, Double> serieDiariaDe(Periodo p, List<ResumenDiario> resumenes) {
         Map<LocalDate, Double> serie = new TreeMap<>();
         for (LocalDate d = p.desde(); !d.isAfter(p.hasta()); d = d.plusDays(1)) serie.put(d, 0.0);
-        for (ResumenDiario r : resumenesEntre(p)) serie.put(r.getFecha(), r.getTotal());
+        for (ResumenDiario r : resumenes) serie.put(r.getFecha(), r.getTotal());
         return serie;
     }
 
@@ -305,9 +312,14 @@ public class EstadisticasService {
     /** Total y tickets por franja horaria */
     @Transactional(readOnly = true)
     public Map<Franja, Totales> porFranja(Periodo p) {
+        return porFranjaDe(resumenesEntre(p));
+    }
+
+    /** porFranja() sobre resúmenes ya leídos (función pura) */
+    public static Map<Franja, Totales> porFranjaDe(List<ResumenDiario> resumenes) {
         Map<Franja, double[]> acumulado = new EnumMap<>(Franja.class);
         for (Franja f : Franja.values()) acumulado.put(f, new double[2]);
-        for (ResumenDiario d : resumenesEntre(p)) {
+        for (ResumenDiario d : resumenes) {
             for (Franja f : Franja.values()) {
                 acumulado.get(f)[0] += d.totalDe(f);
                 acumulado.get(f)[1] += d.transaccionesDe(f);
@@ -399,6 +411,105 @@ public class EstadisticasService {
         return lista;
     }
 
+    // ── Vista "Hoy": venta y tickets de hoy contra ayer, la semana pasada y hace un año ──
+
+    /** Total vendido y número de tickets (ventas activas) de un día o de parte de él */
+    public record CifrasDia(double total, int tickets) {
+        public static final CifrasDia CERO = new CifrasDia(0, 0);
+    }
+
+    /** Con qué parte del día de referencia se compara "hoy" */
+    public enum AlcanceComparacion {
+        /** Hay tickets de ese día: se compara hasta la misma hora de hoy */
+        HASTA_LA_HORA,
+        /** Solo quedó el resumen del día (sin tickets): se compara el día completo */
+        DIA_COMPLETO,
+        /** La tienda ya vendía, pero ese día no hubo ventas */
+        SIN_VENTAS,
+        /** Ese día la tienda aún no había registrado su primera venta */
+        LA_TIENDA_NO_VENDIA
+    }
+
+    /**
+     * Una fila de comparación de la vista Hoy. La variación se calcula contra
+     * las cifras de hoy que le pase la pantalla; es null cuando no hay con qué
+     * comparar (sin referencia o referencia en cero: nunca se divide entre 0).
+     */
+    public record ComparacionDia(String etiqueta, LocalDate dia, CifrasDia referencia, AlcanceComparacion alcance) {
+
+        public boolean hayReferencia() {
+            return alcance == AlcanceComparacion.HASTA_LA_HORA || alcance == AlcanceComparacion.DIA_COMPLETO;
+        }
+
+        public Double variacionTotalPct(CifrasDia hoy) {
+            if (!hayReferencia() || referencia.total() <= 0) return null;
+            return (hoy.total() - referencia.total()) / referencia.total() * 100.0;
+        }
+
+        public Double variacionTicketsPct(CifrasDia hoy) {
+            if (!hayReferencia() || referencia.tickets() <= 0) return null;
+            return (hoy.tickets() - referencia.tickets()) / (double) referencia.tickets() * 100.0;
+        }
+
+        public double diferenciaTotal(CifrasDia hoy)  { return ResumenDiario.VentaRedondeo.centavos(hoy.total() - referencia.total()); }
+        public int    diferenciaTickets(CifrasDia hoy) { return hoy.tickets() - referencia.tickets(); }
+    }
+
+    /**
+     * Lo que muestra la vista Hoy: las cifras de hoy (todo lo vendido hasta ahora)
+     * y tres comparaciones. {@code hasta} es la hora a la que se cortan los días
+     * de referencia (la hora de ahora).
+     */
+    public record ResumenHoy(LocalDate hoy, java.time.LocalTime hasta, CifrasDia cifras, List<ComparacionDia> comparaciones) { }
+
+    /** Vista Hoy con la hora actual. VER_HISTORIAL (los totales, como en el historial de ventas). */
+    @Transactional(readOnly = true)
+    public ResumenHoy resumenHoy() {
+        return resumenHoy(LocalDateTime.now(reloj));
+    }
+
+    /**
+     * Vista Hoy a una hora dada (la pantalla pasa "ahora"; las pruebas, una hora fija).
+     * Cuatro consultas de una fila cada una (hoy y los tres días de referencia) más
+     * la primera venta; nunca se cargan tickets. Las ventas canceladas no cuentan,
+     * igual que en el corte; el "producto común" es una venta como cualquier otra.
+     * Lo devuelto resta en el día de la venta (análisis de ventas, ver reglas-negocio.txt).
+     */
+    @Transactional(readOnly = true)
+    public ResumenHoy resumenHoy(LocalDateTime ahora) {
+        sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
+        LocalDate hoy = ahora.toLocalDate();
+        java.time.LocalTime hora = ahora.toLocalTime();
+        // Neto de devoluciones en el día de la venta, igual que los días de referencia y resumen_diario
+        LocalDateTime finHoy = hoy.plusDays(1).atStartOfDay();
+        Object[] f = ventaRepository.resumenActivasConCorte(hoy.atStartOfDay(), finHoy, finHoy).get(0);
+        CifrasDia deHoy = new CifrasDia(ResumenDiario.VentaRedondeo.centavos(((Number) f[1]).doubleValue()), ((Number) f[0]).intValue());
+        LocalDate primeraVenta = ventaRepository.findPrimeraActiva().map(v -> v.getFecha().toLocalDate()).orElse(null);
+        List<ComparacionDia> comparaciones = List.of(
+                compararDia(FechasComparacion.etiquetaAyer(), FechasComparacion.ayer(hoy), hora, primeraVenta),
+                compararDia(FechasComparacion.etiquetaSemanaPasada(hoy), FechasComparacion.mismoDiaSemanaPasada(hoy), hora, primeraVenta),
+                compararDia(FechasComparacion.etiquetaHaceUnAnio(), FechasComparacion.hoyHaceUnAnio(hoy), hora, primeraVenta));
+        return new ResumenHoy(hoy, hora, deHoy, comparaciones);
+    }
+
+    private ComparacionDia compararDia(String etiqueta, LocalDate dia, java.time.LocalTime hora, LocalDate primeraVenta) {
+        if (!FechasComparacion.laTiendaYaVendia(primeraVenta, dia)) {
+            return new ComparacionDia(etiqueta, dia, CifrasDia.CERO, AlcanceComparacion.LA_TIENDA_NO_VENDIA);
+        }
+        Object[] f = ventaRepository.resumenActivasConCorte(dia.atStartOfDay(), dia.plusDays(1).atStartOfDay(), dia.atTime(hora)).get(0);
+        if (((Number) f[0]).intValue() > 0) {
+            CifrasDia hastaLaHora = new CifrasDia(ResumenDiario.VentaRedondeo.centavos(((Number) f[3]).doubleValue()), ((Number) f[2]).intValue());
+            return new ComparacionDia(etiqueta, dia, hastaLaHora, AlcanceComparacion.HASTA_LA_HORA);
+        }
+        // Sin tickets de ese día en la tabla de ventas: si quedó el resumen diario, se compara el día completo
+        Optional<ResumenDiario> resumen = resumenRepo.findByFecha(dia);
+        if (resumen.isPresent() && resumen.get().getTransacciones() > 0) {
+            return new ComparacionDia(etiqueta, dia, new CifrasDia(resumen.get().getTotal(), resumen.get().getTransacciones()),
+                    AlcanceComparacion.DIA_COMPLETO);
+        }
+        return new ComparacionDia(etiqueta, dia, CifrasDia.CERO, AlcanceComparacion.SIN_VENTAS);
+    }
+
     // ── Comparaciones ────────────────────────────────────────────────────
 
     /**
@@ -408,23 +519,43 @@ public class EstadisticasService {
      */
     @Transactional(readOnly = true)
     public List<Comparacion> comparaciones() {
-        LocalDate hoy = hoy();
         List<Comparacion> r = new ArrayList<>();
-        r.add(comparar("Hoy", "vs. el mismo día de la semana pasada",
-                Periodo.dia(hoy), Periodo.dia(hoy.minusWeeks(1))));
-        r.add(comparar("Semana", "vs. el mismo tramo de la semana pasada",
-                Periodo.semana(hoy), new Periodo(hoy.with(DayOfWeek.MONDAY).minusWeeks(1), hoy.minusWeeks(1), "Semana anterior")));
-        LocalDate mesAnterior = hoy.minusMonths(1);
-        r.add(comparar("Mes", "vs. los mismos días del mes pasado",
-                Periodo.mes(hoy), new Periodo(mesAnterior.withDayOfMonth(1), mesAnterior, "Mes anterior")));
-        LocalDate anioAnterior = hoy.minusYears(1);
-        r.add(comparar("Año", "vs. los mismos días del año pasado",
-                Periodo.anio(hoy), new Periodo(anioAnterior.withDayOfYear(1), anioAnterior, "Año anterior")));
+        for (DefComparacion d : definicionesComparacion(hoy())) {
+            r.add(new Comparacion(d.etiqueta(), d.detalle(), d.actual(), d.anterior(), totales(d.actual()), totales(d.anterior())));
+        }
         return r;
     }
 
-    private Comparacion comparar(String etiqueta, String detalle, Periodo actual, Periodo anterior) {
-        return new Comparacion(etiqueta, detalle, actual, anterior, totales(actual), totales(anterior));
+    /**
+     * Una sola de las comparaciones (Hoy, Semana, Mes o Año) con los totales del periodo actual
+     * ya calculados por quien llama: solo consulta el periodo anterior. Para el móvil, que
+     * muestra una a la vez (calcular las cuatro incluye dos años completos).
+     */
+    @Transactional(readOnly = true)
+    public Optional<Comparacion> comparacion(String etiqueta, Totales actual) {
+        for (DefComparacion d : definicionesComparacion(hoy())) {
+            if (d.etiqueta().equals(etiqueta)) {
+                return Optional.of(new Comparacion(d.etiqueta(), d.detalle(), d.actual(), d.anterior(), actual, totales(d.anterior())));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Qué se compara contra qué (sin consultar nada) */
+    record DefComparacion(String etiqueta, String detalle, Periodo actual, Periodo anterior) { }
+
+    static List<DefComparacion> definicionesComparacion(LocalDate hoy) {
+        LocalDate mesAnterior = hoy.minusMonths(1);
+        LocalDate anioAnterior = hoy.minusYears(1);
+        return List.of(
+                new DefComparacion("Hoy", "vs. el mismo día de la semana pasada",
+                        Periodo.dia(hoy), Periodo.dia(hoy.minusWeeks(1))),
+                new DefComparacion("Semana", "vs. el mismo tramo de la semana pasada",
+                        Periodo.semana(hoy), new Periodo(hoy.with(DayOfWeek.MONDAY).minusWeeks(1), hoy.minusWeeks(1), "Semana anterior")),
+                new DefComparacion("Mes", "vs. los mismos días del mes pasado",
+                        Periodo.mes(hoy), new Periodo(mesAnterior.withDayOfMonth(1), mesAnterior, "Mes anterior")),
+                new DefComparacion("Año", "vs. los mismos días del año pasado",
+                        Periodo.anio(hoy), new Periodo(anioAnterior.withDayOfYear(1), anioAnterior, "Año anterior")));
     }
 
     // ── Recomendaciones y clima (lectura para la pantalla) ───────────────
@@ -469,7 +600,7 @@ public class EstadisticasService {
             String clave = c != null ? c.getCategoria() : "Sin datos de clima";
             double[] a = acumulado.computeIfAbsent(clave, k -> new double[2]);
             a[0]++;
-            a[1] += v.getTotal();
+            a[1] += v.getTotalNeto();   // lo devuelto no se vendió
         }
         List<VentasClima> r = new ArrayList<>();
         acumulado.forEach((k, a) -> r.add(new VentasClima(k, (int) a[0], ResumenDiario.VentaRedondeo.centavos(a[1]))));
@@ -495,7 +626,8 @@ public class EstadisticasService {
 
     /**
      * Total, número de ventas y ticket promedio de cada cajero del periodo, de mayor a menor.
-     * Lee directo de las ventas (incluye hoy). Las ventas canceladas no cuentan. VER_HISTORIAL.
+     * Lee directo de las ventas (incluye hoy). Las ventas canceladas no cuentan y lo devuelto
+     * resta en el día de la venta (el número de ventas no cambia). VER_HISTORIAL.
      */
     @Transactional(readOnly = true)
     public List<VentasCajero> ventasPorCajero(Periodo p) {
@@ -557,7 +689,7 @@ public class EstadisticasService {
     @Transactional(readOnly = true)
     public List<VentasPorCaja> ventasPorCaja(Periodo p) {
         sesionService.verificarPermiso(Permiso.VER_HISTORIAL);
-        List<Object[]> filas = ventaRepository.ventasPorCaja(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
+        List<Object[]> filas = ventaRepository.ventasNetasPorCaja(p.desde().atStartOfDay(), p.hasta().plusDays(1).atStartOfDay());
         double granTotal = filas.stream().mapToDouble(f -> ((Number) f[2]).doubleValue()).sum();
         List<VentasPorCaja> r = new ArrayList<>();
         for (Object[] f : filas) {

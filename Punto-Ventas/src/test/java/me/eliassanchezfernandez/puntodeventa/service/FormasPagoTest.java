@@ -60,7 +60,7 @@ class FormasPagoTest extends BaseServicioTest {
         configuracionService.guardarFormasPago(false, true, false, false);
         assertThatThrownBy(() -> ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)), Venta.FormaPago.EFECTIVO, 100))
                 .isInstanceOf(NegocioException.class).hasMessageContaining("Efectivo");
-        // Crédito sigue sin existir aunque se intente
+        // Fiado sin cliente elegido: no se cobra
         assertThatThrownBy(() -> ventaService.cobrar(List.of(ventaService.crearDetalle(p, 1)), Venta.FormaPago.CREDITO, 100))
                 .isInstanceOf(NegocioException.class);
     }

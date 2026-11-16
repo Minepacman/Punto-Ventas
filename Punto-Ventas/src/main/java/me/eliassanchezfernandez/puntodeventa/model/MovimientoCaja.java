@@ -41,16 +41,23 @@ public class MovimientoCaja {
         PAGO_PROVEEDOR (Tipo.SALIDA,  "Pago a proveedor"),
         GASTO          (Tipo.SALIDA,  "Gasto de la tienda"),
         DEVOLUCION     (Tipo.SALIDA,  "Devolución al cliente"),
-        OTRA_SALIDA    (Tipo.SALIDA,  "Otra salida de efectivo");
+        OTRA_SALIDA    (Tipo.SALIDA,  "Otra salida de efectivo"),
+        /** Abono en efectivo a la cuenta de un cliente (fiado); solo lo registra CuentaClienteService */
+        ABONO_CLIENTE  (Tipo.ENTRADA, "Abono de cliente (fiado)", false);
 
         private final Tipo tipo;
         private final String etiqueta;
-        Categoria(Tipo tipo, String etiqueta) { this.tipo = tipo; this.etiqueta = etiqueta; }
+        private final boolean manual;
+        Categoria(Tipo tipo, String etiqueta) { this(tipo, etiqueta, true); }
+        Categoria(Tipo tipo, String etiqueta, boolean manual) { this.tipo = tipo; this.etiqueta = etiqueta; this.manual = manual; }
         public Tipo getTipo() { return tipo; }
         public String getEtiqueta() { return etiqueta; }
+        /** ¿Se puede elegir en "Entrada/Salida de efectivo"? (los abonos se registran desde Clientes) */
+        public boolean isManual() { return manual; }
 
+        /** Categorías que se pueden capturar a mano para ese tipo */
         public static java.util.List<Categoria> de(Tipo tipo) {
-            return java.util.Arrays.stream(values()).filter(c -> c.tipo == tipo).toList();
+            return java.util.Arrays.stream(values()).filter(c -> c.tipo == tipo && c.manual).toList();
         }
     }
 

@@ -1,0 +1,23 @@
+Recibo de venta
+COMERCIALIZADORA MB
+COMERCIALIZADORA MB
+correo@ejemplo.com
+0000000000
+Ruta 01
+
+Cliente: CLIENTE EJEMPLO
+0000000000
+DIRECCION EJEMPLO
+
+Folio: 8514     Fecha: 2026-08-25
+Forma de Pago: EFECTIVO
+PRODUCTO                                 CANTIDAD   PRECIO   SUBTOTAL
+PAQUETE AMPER ENERGY 473ML 24PZS           0.5       430       215
+PAQUETE AMPER CALACA PONCH 473ML 24PZS     0.5       430       215
+PAQUETE VOLT GUARANA 473ML 15PZS           1         250       250
+PAQUETE CERVEZA XX LAGER 473ML 24PZS       1         540       540
+                                 TOTAL $          1,220
+                                              107.5
+                                              16.68
+                                             -124
+                                              1096

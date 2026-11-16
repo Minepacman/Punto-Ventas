@@ -22,10 +22,11 @@
         <top>
             <VBox>
 
-                <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
+                <!-- Pasa a otro renglón si no cabe (letra grande): nunca recorta con «…» -->
+                <FlowPane styleClass="section-toolbar, barra-acciones">
                     <padding><Insets topRightBottomLeft="10"/></padding>
-                    <Button fx:id="btnNuevo"      text="+ Nuevo"
-                            onAction="#onNuevo"   styleClass="button-success"/>
+                    <Button fx:id="btnNuevo"      text="Nuevo"
+                            onAction="#onNuevo"   styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
                     <Button fx:id="btnModificar"  text="Modificar"
                             onAction="#onModificar"><graphic><Icono nombre="editar"/></graphic></Button>
                     <Button fx:id="btnEliminar"   text="Eliminar"
@@ -33,13 +34,13 @@
                     <Button fx:id="btnActivar"    text="Activar / Desactivar"
                             onAction="#onCambiarActivo"><graphic><Icono nombre="energia"/></graphic></Button>
                     <Separator orientation="VERTICAL"/>
-                    <Button fx:id="btnDepartamentos" text="Departamentos"      onAction="#onDepartamentos"/>
-                    <Button fx:id="btnVentasPeriodo" text="Ventas por Período" onAction="#onVentasPeriodo"/>
+                    <Button fx:id="btnDepartamentos" text="Departamentos"      onAction="#onDepartamentos"><graphic><Icono nombre="carpeta"/></graphic></Button>
+                    <Button fx:id="btnVentasPeriodo" text="Ventas por período" onAction="#onVentasPeriodo"><graphic><Icono nombre="calendario"/></graphic></Button>
                     <Button fx:id="btnPromociones"   text="Promociones"      onAction="#onPromociones"><graphic><Icono nombre="estrella"/></graphic></Button>
                     <Button fx:id="btnImportar"      text="Importar"         onAction="#onImportar"><graphic><Icono nombre="subir"/></graphic>
                         <tooltip><Tooltip text="Migrar el catálogo desde eleventa, SICAR, Abarrotes PDV, MyBusiness, Loyverse o Excel/CSV"/></tooltip>
                     </Button>
-                </HBox>
+                </FlowPane>
 
                 <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">
                     <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
@@ -48,27 +49,35 @@
                                promptText="Buscar por código o descripción..."
                                HBox.hgrow="ALWAYS"
                                onKeyReleased="#onBuscar"/>
+                    <!-- Varios productos a la vez: Shift o Ctrl/Cmd + clic en la tabla -->
+                    <Label fx:id="lblSeleccion" styleClass="hint" visible="false" managed="false"/>
+                    <Button fx:id="btnCambiarIva" text="Cambiar IVA…" onAction="#onCambiarIvaSeleccionados">
+                        <tooltip><Tooltip text="Pone el mismo IVA a los productos seleccionados. Para elegir varios, mantén Shift o Ctrl (Cmd en Mac) al hacer clic."/></tooltip>
+                    </Button>
                 </HBox>
             </VBox>
         </top>
 
         <!-- Tabla -->
         <center>
+            <!-- tableMenuButtonVisible: el botón "+" de la cabecera permite ocultar/mostrar columnas (p. ej. Proveedor) -->
             <TableView fx:id="tablaProductos"
-                       onMouseClicked="#onTablaDobleClick">
+                       onMouseClicked="#onTablaDobleClick"
+                       tableMenuButtonVisible="true">
                 <columns>
                     <TableColumn fx:id="colImagen"       text=""             prefWidth="44" minWidth="44" maxWidth="44" resizable="false"/>
-                    <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="140"/>
-                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="260"/>
-                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="85" styleClass="align-right"/>
-                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="85" styleClass="align-right"/>
-                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="85" styleClass="align-right"/>
-                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="75" styleClass="align-right"/>
-                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="140"/>
-                    <TableColumn fx:id="colEstado"       text="Estado"       prefWidth="80"/>
+                    <TableColumn fx:id="colCodigo"       text="Código"       prefWidth="120"/>
+                    <TableColumn fx:id="colDescripcion"  text="Descripción"  prefWidth="230"/>
+                    <TableColumn fx:id="colPrecioCosto"  text="Costo"        prefWidth="80" styleClass="align-right"/>
+                    <TableColumn fx:id="colPrecioVenta"  text="Venta"        prefWidth="80" styleClass="align-right"/>
+                    <TableColumn fx:id="colPrecioMayor"  text="Mayoreo"      prefWidth="80" styleClass="align-right"/>
+                    <TableColumn fx:id="colExistencia"   text="Stock"        prefWidth="70" styleClass="align-right"/>
+                    <TableColumn fx:id="colDepartamento" text="Departamento" prefWidth="120"/>
+                    <TableColumn fx:id="colProveedor"    text="Proveedor"    prefWidth="110"/>
+                    <TableColumn fx:id="colEstado"       text="Estado"       prefWidth="70"/>
                 </columns>
                 <placeholder>
-                    <Label text="No hay productos registrados. Pulsa + Nuevo para agregar."/>
+                    <Label text="No hay productos registrados. Pulsa «Nuevo» para agregar."/>
                 </placeholder>
             </TableView>
         </center>
@@ -135,7 +144,7 @@
                         <Label text="Descripción *" styleClass="field-label"/>
                         <TextField fx:id="txtDescripcion"
                                    promptText="Nombre del producto"/>
-                        <!-- Aviso del autollenado: qué se encontró en el catálogo, qué se llenó y cómo deshacerlo -->
+                        <!-- Aviso del autollenado: «Encontramos este producto… ¿Usar estos datos?», después Deshacer -->
                         <HBox fx:id="hboxCatalogo"
                               visible="false" managed="false"
                               spacing="6" alignment="TOP_LEFT"
@@ -146,10 +155,12 @@
                                 <Label fx:id="lblCatalogoDetalle" text="" wrapText="true"/>
                                 <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Button fx:id="btnCatalogoUsar" text="Usar estos datos" onAction="#onCatalogoUsar"
+                                            styleClass="button-success" visible="false" managed="false"/>
+                                    <Button fx:id="btnCatalogoNoGracias" text="No, gracias" onAction="#onCatalogoNoGracias"
                                             visible="false" managed="false"/>
                                     <Button fx:id="btnCatalogoDeshacer" text="Deshacer" onAction="#onCatalogoDeshacer"
                                             visible="false" managed="false"/>
-                                    <Button text="Ocultar" onAction="#onCatalogoCerrar"/>
+                                    <Button fx:id="btnCatalogoOcultar" text="Ocultar" onAction="#onCatalogoCerrar"/>
                                     <Label fx:id="lblCatalogoAtribucion" text="Datos de Open Food Facts (ODbL)" styleClass="hint"/>
                                 </HBox>
                             </VBox>
@@ -253,6 +264,31 @@
                                   maxWidth="Infinity"/>
                     </VBox>
 
+                    <!-- ── IVA (el precio ya lo incluye; solo cambia cómo se desglosa) ── -->
+                    <VBox spacing="4">
+                        <Label text="IVA" styleClass="field-label"/>
+                        <ComboBox fx:id="comboIva" maxWidth="Infinity"/>
+                        <Label fx:id="lblAyudaIva"
+                               text="El precio de venta ya incluye el IVA; esto solo decide cómo se desglosa en el ticket, el corte y la factura. Básicos como tortilla, leche, huevo, frutas y verduras, carne, pan, frijol y arroz: IVA 0 %. Refrescos, botanas, cerveza, cigarros, jabón y casi todo lo demás: 16 %. Si no estás seguro, deja «Usar el de la tienda»."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
+
+                    <!-- ── PROVEEDOR HABITUAL (opcional) ───────── -->
+                    <VBox spacing="4">
+                        <Label text="Proveedor habitual" styleClass="field-label"/>
+                        <HBox spacing="6" alignment="CENTER_LEFT">
+                            <ComboBox fx:id="comboProveedor"
+                                      promptText="— Sin proveedor —"
+                                      maxWidth="Infinity" HBox.hgrow="ALWAYS"/>
+                            <!-- Solo con GESTIONAR_PROVEEDORES; da de alta un proveedor sin salir del formulario -->
+                            <Button fx:id="btnNuevoProveedor" text="+ Nuevo" onAction="#onNuevoProveedor">
+                                <tooltip><Tooltip text="Dar de alta un proveedor (nombre y teléfono) y elegirlo aquí"/></tooltip>
+                            </Button>
+                        </HBox>
+                        <Label text="Quién te surte este producto. Sirve para armar los pedidos por proveedor en Estadísticas → Reabastecimiento. Si lo dejas vacío, se toma de la primera entrada de mercancía."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
+
                     <Separator/>
 
                     <!-- ── DATOS FISCALES (CFDI 4.0; opcionales) ── -->
@@ -329,6 +365,12 @@
                            visible="false" managed="false"
                            styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic></Label>
 
+                    <!-- Caducidades (versión sencilla): fecha opcional al dar entrada y lista "Por caducar" en Inventario -->
+                    <CheckBox fx:id="chkControlaCaducidad"
+                              text="Controlar caducidad (anotar la fecha al darle entrada)"/>
+                    <Label fx:id="lblLotesCaducidad" text="" wrapText="true" styleClass="hint"
+                           visible="false" managed="false"/>
+
                     <Region minHeight="12"/>
 
                     <!-- ── BOTONES FINALES ─────────────────────── -->
@@ -392,6 +434,7 @@
                     <TableView fx:id="tablaDepartamentos">
                     <columns>
                         <TableColumn fx:id="colNombreDepartamento"       text="Nombre"       prefWidth="140"/>
+                        <TableColumn fx:id="colIvaDepartamento"          text="IVA propuesto" prefWidth="110"/>
                     </columns>
 
                     <placeholder>
@@ -437,6 +480,20 @@
                             styleClass="field-error-label"><graphic><Icono nombre="alerta"/></graphic>
                         <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
                     </Label>
+
+                    <Label text="IVA propuesto para sus productos nuevos:" styleClass="field-label">
+                        <padding><Insets top="0" right="10" bottom="0" left="10"/></padding>
+                    </Label>
+                    <VBox spacing="4">
+                        <padding><Insets top="0" right="10" bottom="10" left="10"/></padding>
+                        <ComboBox fx:id="comboIvaDepartamento" maxWidth="Infinity"/>
+                        <Label text="Al dar de alta un producto en este departamento, el IVA se llena con este valor (ej. «Frutas y verduras» → IVA 0 %). Se puede cambiar en cada producto y no toca los productos ya existentes."
+                               wrapText="true" styleClass="hint"/>
+                        <Button fx:id="btnAplicarIvaDepartamento" text="Aplicar este IVA a sus productos…"
+                                onAction="#onAplicarIvaDepartamento" disable="true">
+                            <tooltip><Tooltip text="Pone el IVA guardado de este departamento a todos sus productos que ya existen."/></tooltip>
+                        </Button>
+                    </VBox>
 
                 <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
 

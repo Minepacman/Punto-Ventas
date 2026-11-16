@@ -379,6 +379,123 @@ public class CatalogoCodigosServiceTest extends BaseServicioTest {
         assertThat(CatalogoCodigosService.analizarFragmento("{\"0744886534234\":{\"nombre\":\"\",\"marca\":\"X\"}}", "0744886534234")).isEmpty();
     }
 
+    // ── Open Food Facts, catálogo incluido y sin conexión ─────────────────
+
+    static final String OFF_COCA = "{\"code\":\"7501055300075\",\"product\":{\"brands\":\"Coca-Cola, The Coca-Cola Company\","
+            + "\"categories_tags\":[\"en:beverages\",\"en:sodas\"],\"code\":\"7501055300075\","
+            + "\"image_front_small_url\":\"https://images.openfoodfacts.org/images/products/750/105/530/0075/front_fr.25.200.jpg\","
+            + "\"product_name\":\"Coca-Cola\",\"product_name_es\":\"Coca-Cola\",\"quantity\":\"355 ml\"},"
+            + "\"status\":1,\"status_verbose\":\"product found\"}";
+
+    @Test
+    void siNoEstaEnElFragmentoSeConsultaOpenFoodFactsYSeGuarda() {
+        respuestas.put("/off/7501055300075.json", OFF_COCA.getBytes(StandardCharsets.UTF_8));
+        CatalogoCodigosService.Consulta c = servicio.consultar("7501055300075");
+        assertThat(c.resultado()).isEqualTo(CatalogoCodigosService.Resultado.ENCONTRADO);
+        assertThat(c.ficha().origen()).isEqualTo(CatalogoCodigosService.Origen.OPEN_FOOD_FACTS);
+        CatalogoCodigo d = c.ficha().datos();
+        assertThat(d.getNombre()).isEqualTo("Coca-Cola");
+        assertThat(d.getMarca()).as("solo la primera marca").isEqualTo("Coca-Cola");
+        assertThat(d.getCantidad()).isEqualTo(355.0);
+        assertThat(d.getUnidad()).isEqualTo("ml");
+        assertThat(d.getCategoria()).isEqualTo("Bebidas");
+        assertThat(d.tieneImagen()).isTrue();
+        assertThat(peticiones("/api/075.json")).as("primero el fragmento").isEqualTo(1);
+        assertThat(repo.findById("7501055300075")).as("se guarda en la copia local").isPresent();
+        assertThat(servicio.consultar("7501055300075").ficha().origen()).isEqualTo(CatalogoCodigosService.Origen.LOCAL);
+        assertThat(peticiones("/off/7501055300075.json")).isEqualTo(1);
+    }
+
+    @Test
+    void openFoodFactsSeConsultaTambienComoUpcDeDoceDigitos() {
+        // 0074488653522 no está en el fragmento 522 (404) ni en OFF con 13 dígitos; sí con 12
+        String off = OFF_COCA.replace("7501055300075", "074488653522").replace("Coca-Cola\",\"quantity", "Raíz\",\"quantity");
+        respuestas.put("/off/074488653522.json", off.getBytes(StandardCharsets.UTF_8));
+        CatalogoCodigosService.Consulta c = servicio.consultar("074488653522");
+        assertThat(c.resultado()).isEqualTo(CatalogoCodigosService.Resultado.ENCONTRADO);
+        assertThat(c.ficha().datos().getCodigo()).as("se guarda normalizado a 13").isEqualTo("0074488653522");
+        assertThat(peticiones("/off/0074488653522.json")).isEqualTo(1);
+        assertThat(peticiones("/off/074488653522.json")).isEqualTo(1);
+    }
+
+    @Test
+    void sinInternetSeDiceSinConexionYNoSeRecuerdaComoNoEncontrado() {
+        detener();
+        CatalogoCodigosService.Consulta c = servicio.consultar("0744886534234");
+        assertThat(c.resultado()).isEqualTo(CatalogoCodigosService.Resultado.SIN_CONEXION);
+        assertThat(c.ficha()).isNull();
+        assertThat(servicio.consultar("PRE-1").resultado()).isEqualTo(CatalogoCodigosService.Resultado.NO_ES_CODIGO);
+    }
+
+    @Test
+    void noEncontradoEnNingunaParte() {
+        CatalogoCodigosService.Consulta c = servicio.consultar("7501055300075");   // fragmento {} y OFF 404
+        assertThat(c.resultado()).isEqualTo(CatalogoCodigosService.Resultado.NO_ENCONTRADO);
+        assertThat(peticiones("/off/7501055300075.json")).isEqualTo(1);
+    }
+
+    @Test
+    void cadaPeticionDeConsultaEsperaATresSegundosComoMaximo() {
+        assertThat(CatalogoCodigosService.TIEMPO_CONSULTA).isLessThanOrEqualTo(java.time.Duration.ofSeconds(3));
+    }
+
+    @Test
+    void elCatalogoIncluidoRespondeSinInternetYSeCargaALaTablaUnaVez() {
+        servicio.incluidoParaPruebas(CSV_V1, "2026-11-12");
+        detener();
+        CatalogoCodigosService.Consulta c = servicio.consultar("7501055305339");
+        assertThat(c.resultado()).isEqualTo(CatalogoCodigosService.Resultado.ENCONTRADO);
+        assertThat(c.ficha().origen()).isEqualTo(CatalogoCodigosService.Origen.INCLUIDO);
+        assertThat(c.ficha().datos().getNombre()).isEqualTo("Coca Cola Light 600");
+        assertThat(peticiones.keySet()).as("sin salir a internet").isEmpty();
+
+        assertThat(servicio.cargarIncluidoSiFalta()).isTrue();
+        assertThat(repo.count()).isEqualTo(2);
+        CatalogoCodigosService.Estado e = servicio.estado();
+        assertThat(e.version()).isEqualTo("2026-11-12");
+        assertThat(e.revisado()).as("la revisión en línea no se da por hecha").isNull();
+        assertThat(servicio.tocaRevisar()).isTrue();
+        assertThat(servicio.cargarIncluidoSiFalta()).as("ya está cargado").isFalse();
+        assertThat(servicio.consultar("7501055300075").ficha().origen()).isEqualTo(CatalogoCodigosService.Origen.LOCAL);
+    }
+
+    @Test
+    void conElIncluidoCargadoLaRevisionEnLineaNoVuelveABajarElMismoCsv() {
+        servicio.incluidoParaPruebas(CSV_V1, "2026-11-12");
+        assertThat(servicio.cargarIncluidoSiFalta()).isTrue();
+        assertThat(servicio.actualizar().estado()).isEqualTo(CatalogoCodigosService.EstadoActualizacion.YA_AL_DIA);
+        assertThat(peticiones("/catalogo-mx.csv")).isZero();
+    }
+
+    @Test
+    void unIncluidoMasViejoQueLaCopiaDescargadaNoLaReemplaza() {
+        servicio.actualizar();                                   // V1 del 2026-11-12
+        servicio.incluidoParaPruebas(CSV_V2, "2026-10-01");
+        assertThat(servicio.cargarIncluidoSiFalta()).isFalse();
+        assertThat(repo.findById("7501055300075")).map(CatalogoCodigo::getNombre).contains("Coca-Cola");
+        // Uno más nuevo (programa actualizado sin internet) sí
+        servicio.incluidoParaPruebas(CSV_V2, "2026-12-01");
+        assertThat(servicio.cargarIncluidoSiFalta()).isTrue();
+        assertThat(repo.findById("7501055300075")).map(CatalogoCodigo::getNombre).contains("Coca-Cola Nueva");
+    }
+
+    @Test
+    void analizarOpenFoodFactsEsPuro() {
+        assertThat(CatalogoCodigosService.analizarOpenFoodFacts("{\"status\":0}", "7501055300075")).isEmpty();
+        assertThat(CatalogoCodigosService.analizarOpenFoodFacts("{\"status\":1,\"product\":{\"product_name\":\"\"}}", "7501055300075")).isEmpty();
+        CatalogoCodigo f = CatalogoCodigosService.analizarOpenFoodFacts("{\"status\":1,\"product\":{\"product_name\":\"Leche entera\","
+                + "\"brands\":\"Lala\",\"quantity\":\"1,5 L\",\"categories_tags\":[\"en:beverages\",\"en:dairies\",\"en:milks\"],"
+                + "\"image_front_small_url\":\"https://otro-sitio.example/foto.jpg\"}}", "7501020515343").orElseThrow();
+        assertThat(f.getNombre()).isEqualTo("Leche entera");
+        assertThat(f.getCantidad()).isEqualTo(1.5);
+        assertThat(f.getUnidad()).isEqualTo("l");
+        assertThat(f.getCategoria()).as("lácteos gana sobre bebidas").isEqualTo("Lácteos");
+        assertThat(f.tieneImagen()).as("solo fotos de Open Food Facts").isFalse();
+        assertThat(CatalogoCodigosService.cantidadYUnidad("6 x 355 ml")).containsExactly("", "");
+        assertThat(CatalogoCodigosService.cantidadYUnidad("45g")).containsExactly("45", "g");
+        assertThat(CatalogoCodigosService.categoriaDeEtiquetas(java.util.List.of("en:something"))).isEmpty();
+    }
+
     @Test
     void reemplazarCatalogoDirectoCargaYAnota() {
         int n = servicio.reemplazarCatalogo(CSV_V2, "2030-01-01", "abc", LocalDateTime.of(2030, 1, 1, 12, 0));

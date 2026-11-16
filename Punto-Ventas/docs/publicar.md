@@ -38,6 +38,12 @@ cuando se sube una etiqueta `v*`. No hay que compilar nada a mano.
    **prelanzamiento**: solo la ven los negocios con clave de apoyo vigente y
    bandera `beta` (acceso anticipado). Las finales las ven todos.
 
+   **Cada `x.y.z` se usa en una sola etiqueta.** El instalador de Windows solo conoce
+   `x.y.z` (el sufijo se recorta) y su identificador de producto sale de ese número, así
+   que `v1.1.0-beta.1` seguida de `v1.1.0` no se podría instalar encima. Tras
+   `v1.1.0-beta.1`, la siguiente prueba es `v1.1.1-beta.2` y la final `v1.1.1` (o la que
+   siga). El flujo lo revisa y se detiene si el número ya lo usa otra etiqueta.
+
 ## Seguridad del flujo (lo que ya está y lo que falta en GitHub)
 
 - `permissions: contents: read` en todo el flujo; `contents: write` solo en el

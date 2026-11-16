@@ -8,8 +8,10 @@ import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.DetalleVenta;
 import me.eliassanchezfernandez.puntodeventa.model.PagoVenta;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
+import me.eliassanchezfernandez.puntodeventa.model.TipoIva;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.model.Venta;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoIva;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -254,5 +256,113 @@ class ConstructorCfdiTest {
         assertThat(ConstructorCfdi.anioDe(LocalDate.of(2026, 3, 7))).isEqualTo("2026");
         assertThatThrownBy(() -> ConstructorCfdi.global(List.of(), cfg, "01", "10", "2026", "5", TASA))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+    // ── IVA por producto: 16 %, 0 % y exento en el mismo ticket ──────────
+
+    private static DetalleVenta renglonCobrado(String codigo, String desc, TipoIva iva, double precio, double cantidad, double descuento) {
+        Producto p = new Producto();
+        p.setCodigoBarras(codigo);
+        p.setDescripcion(desc);
+        p.setPrecioVenta(precio);
+        p.setIva(iva);
+        DetalleVenta d = new DetalleVenta();
+        d.setProducto(p);
+        d.setPrecioVenta(precio);
+        d.setCantidad(cantidad);
+        d.setDescuento(descuento);
+        CalculoIva.aplicar(d, 0.16);   // lo que hace VentaService.cobrar
+        return d;
+    }
+
+    private static Venta ventaMixta() {
+        Venta v = new Venta();
+        v.setId(77L);
+        v.setTasaIva(0.16);
+        v.setFormaPago(Venta.FormaPago.EFECTIVO);
+        v.getDetalles().add(renglonCobrado("750001", "Refresco", TipoIva.TASA_16, 18, 2, 0));       // 36.00
+        v.getDetalles().add(renglonCobrado("750002", "Leche", TipoIva.TASA_0, 28.5, 1, 0));         // 28.50
+        v.getDetalles().add(renglonCobrado("750003", "Jabón", TipoIva.TIENDA, 25, 3, 15));          // 60.00
+        v.getDetalles().add(renglonCobrado("750004", "Revista", TipoIva.EXENTO, 45, 1, 0));         // 45.00
+        double total = v.getDetalles().stream().mapToDouble(DetalleVenta::getImporte).sum();
+        v.setTotal(total);
+        v.setIva(v.getDetalles().stream().mapToDouble(DetalleVenta::getIva).sum());
+        return v;
+    }
+
+    @Test
+    void facturaDeUnTicketMixtoLlevaUnTrasladoPorTasaYCuadraConElTicket() {
+        Venta v = ventaMixta();
+        ConfiguracionFiscal cfg = new ConfiguracionFiscal();
+        cfg.setEmisorCodigoPostal("78240");
+        ClienteFiscal cli = new ClienteFiscal();
+        cli.setRfc("GODE561231GR8"); cli.setNombre("JUAN PEREZ"); cli.setRegimenFiscal("612"); cli.setCodigoPostal("06600"); cli.setUsoCfdi("G01");
+
+        CfdiDocumento doc = ConstructorCfdi.paraVenta(v, cfg, cli, "G03", null, "1", TASA);
+        List<Concepto> c = doc.conceptos();
+        assertThat(c).hasSize(4);
+
+        CfdiDocumento.Impuesto refresco = c.get(0).impuestos().get(0);
+        assertThat(refresco.tipoFactor()).isEqualTo("Tasa");
+        assertThat(refresco.tasa().toPlainString()).isEqualTo("0.160000");
+        assertThat(refresco.base()).isEqualByComparingTo("31.03");
+        assertThat(refresco.importe()).isEqualByComparingTo("4.97");
+
+        CfdiDocumento.Impuesto leche = c.get(1).impuestos().get(0);
+        assertThat(leche.tipoFactor()).isEqualTo("Tasa");
+        assertThat(leche.tasa().toPlainString()).isEqualTo("0.000000");
+        assertThat(leche.base()).isEqualByComparingTo("28.50");
+        assertThat(leche.importe()).isEqualByComparingTo("0");
+        assertThat(c.get(1).total()).isEqualByComparingTo("28.50");
+
+        CfdiDocumento.Impuesto jabon = c.get(2).impuestos().get(0);
+        assertThat(jabon.tasa().toPlainString()).isEqualTo("0.160000");   // "usar el de la tienda" = 16 %
+        assertThat(c.get(2).descuento()).isNotNull();
+        assertThat(jabon.base()).isEqualByComparingTo("51.72");
+        assertThat(jabon.importe()).isEqualByComparingTo("8.28");
+
+        CfdiDocumento.Impuesto revista = c.get(3).impuestos().get(0);
+        assertThat(revista.esExento()).isTrue();
+        assertThat(revista.tipoFactor()).isEqualTo("Exento");
+        assertThat(revista.tasa()).isNull();
+        assertThat(revista.base()).isEqualByComparingTo("45.00");
+        assertThat(c.get(3).total()).isEqualByComparingTo("45.00");
+
+        // Totales: SubTotal − Descuento + Traslados = Total = lo que pagó el cliente; IVA = el del ticket
+        assertThat(doc.total()).isEqualByComparingTo("169.50");
+        assertThat(doc.subtotal().subtract(doc.descuento()).add(doc.totalImpuestos())).isEqualByComparingTo(doc.total());
+        assertThat(doc.totalImpuestos()).isEqualByComparingTo(BigDecimal.valueOf(v.getIva()).setScale(2, RoundingMode.HALF_UP));
+        assertThat(doc.totalImpuestos()).isEqualByComparingTo("13.25");
+    }
+
+    @Test
+    void facturaGlobalDeUnTicketMixtoFundeLasTasasEnUnConcepto() {
+        Venta v = ventaMixta();
+        v.setFolio("A-77");
+        Venta solo16 = new Venta(); solo16.setId(78L); solo16.setTotal(116.00); solo16.setTasaIva(0.16);
+        ConfiguracionFiscal cfg = new ConfiguracionFiscal();
+        cfg.setEmisorCodigoPostal("78240");
+
+        CfdiDocumento g = ConstructorCfdi.global(List.of(v, solo16), cfg, "01", "10", "2026", "9", TASA);
+        assertThat(g.conceptos()).hasSize(2);
+        Concepto mixto = g.conceptos().get(0);
+        assertThat(mixto.noIdentificacion()).isEqualTo("A-77");
+        assertThat(mixto.cantidad()).isEqualByComparingTo("1");
+        assertThat(mixto.impuestos()).hasSize(3);
+        assertThat(mixto.impuestos().get(0).tasa().toPlainString()).isEqualTo("0.160000");
+        assertThat(mixto.impuestos().get(0).base()).isEqualByComparingTo("82.75");
+        assertThat(mixto.impuestos().get(0).importe()).isEqualByComparingTo("13.25");
+        assertThat(mixto.impuestos().get(1).tasa().toPlainString()).isEqualTo("0.000000");
+        assertThat(mixto.impuestos().get(1).base()).isEqualByComparingTo("28.50");
+        assertThat(mixto.impuestos().get(2).esExento()).isTrue();
+        assertThat(mixto.impuestos().get(2).base()).isEqualByComparingTo("45.00");
+        assertThat(mixto.total()).isEqualByComparingTo("169.50");
+        // La suma de bases de los traslados es el importe del concepto (ya sin descuento)
+        BigDecimal bases = mixto.impuestos().stream().map(CfdiDocumento.Impuesto::base).reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertThat(bases).isEqualByComparingTo(mixto.base());
+        assertThat(mixto.base().add(mixto.totalImpuestos())).isEqualByComparingTo(mixto.total());
+
+        assertThat(g.conceptos().get(1).impuestos()).hasSize(1);
+        assertThat(g.total()).isEqualByComparingTo("285.50");
+        assertThat(g.subtotal().subtract(g.descuento()).add(g.totalImpuestos())).isEqualByComparingTo(g.total());
     }
 }

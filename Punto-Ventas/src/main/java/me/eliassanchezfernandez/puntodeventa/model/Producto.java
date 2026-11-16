@@ -7,9 +7,16 @@ import lombok.NoArgsConstructor;
 /**
  * Entidad JPA que representa un producto del catálogo.
  * Hibernate crea la tabla "productos" en SQLite automáticamente.
+ *
+ * {@code @DynamicUpdate}: el UPDATE lleva SOLO las columnas que cambiaron en esta sesión, no la fila
+ * completa. Con varias cajas, si una edita la descripción mientras otra vende (o da entrada), un UPDATE
+ * de fila completa pisaría la existencia (y cualquier otra columna) con el valor viejo que esa caja leyó;
+ * con columnas dinámicas cada caja escribe solo lo suyo. La existencia además se mueve con UPDATE
+ * atómicos (ProductoRepository), que nunca pasan por la entidad.
  */
 @Entity
 @Table(name = "productos")
+@org.hibernate.annotations.DynamicUpdate
 @Data
 @NoArgsConstructor
 public class Producto {
@@ -51,6 +58,20 @@ public class Producto {
     private Unidad unidad;
 
     /**
+     * Proveedor habitual (quien normalmente surte este producto). Opcional; se captura en
+     * Productos y, si está vacío, se toma de la primera entrada de mercancía con proveedor
+     * (nunca se pisa lo que eligió el usuario). LAZY: las listas de Ventas, el buscador F6 y
+     * la página móvil no lo necesitan; el catálogo de Productos lo trae con JOIN FETCH
+     * ({@code ProductoRepository.findAllConProveedorOrderByDescripcionAsc}). Fuera de equals /
+     * hashCode / toString para que un proxy sin cargar nunca dispare una consulta.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proveedor_id")
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
+    private Proveedor proveedor;
+
+    /**
      * Producto descontinuado = inactivo: no aparece en Ventas (PRD-09).
      * Nullable para las filas anteriores a este campo (null = activo).
      */
@@ -73,6 +94,16 @@ public class Producto {
     @Column(name = "objeto_imp", length = 2)
     private String objetoImp;
 
+    /**
+     * IVA del producto ({@link TipoIva}): 16 %, 0 % (básicos: tortilla, leche, huevo, frutas y
+     * verduras...), exento, o "usar el de la tienda" (la tasa de Configuración). Null en los
+     * productos anteriores a este campo = usar el de la tienda, así nada cambia hasta editarlos.
+     * El precio de venta YA incluye el impuesto: esto solo decide cómo se desglosa.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "iva", length = 10)
+    private TipoIva iva;
+
     // ── Inventario ───────────────────────────────────────────────────────
 
     @Column(name = "usa_inventario")
@@ -84,10 +115,27 @@ public class Producto {
     @Column(name = "cantidad_minima")
     private double cantidadMinima;
 
+    /**
+     * "Controlar caducidad": al darle entrada se puede anotar la fecha de caducidad y el
+     * producto aparece en "Por caducar" (CaducidadService). Null en los productos anteriores
+     * a este campo = no.
+     */
+    @Column(name = "controla_caducidad")
+    private Boolean controlaCaducidad;
+
     // ── Lógica de dominio ────────────────────────────────────────────────
 
     public boolean isActivo() {
         return activo == null || activo;
+    }
+
+    public boolean isControlaCaducidad() {
+        return controlaCaducidad != null && controlaCaducidad;
+    }
+
+    /** IVA del producto sin null: los productos sin IVA capturado usan el de la tienda */
+    public TipoIva getIvaOTienda() {
+        return TipoIva.oTienda(iva);
     }
 
     /**

@@ -126,7 +126,17 @@ demás cajas solo se configuran como en el punto 4.
   ("resta solo si alcanza"). Si dos cajas venden las últimas piezas a la vez,
   una lo logra y la otra recibe el aviso de existencia insuficiente (con la
   autorización de "vender sin existencia" sigue funcionando como siempre). El
-  cupo de una promoción "hasta agotar" se controla igual.
+  cupo de una promoción "hasta agotar" se controla igual. Cobrar, cancelar y
+  recibir órdenes tocan los productos siempre en el mismo orden (por id), así
+  dos cajas con los mismos artículos nunca se bloquean en cruz.
+- **Cancelaciones y órdenes de compra**: si dos cajas cancelan la misma venta (o
+  reciben la misma orden) a la vez, el cambio se hace con un `UPDATE`
+  condicionado a que siga activa (o pendiente): una lo logra y la otra recibe
+  "Esta venta ya fue cancelada en otra caja" sin devolver la mercancía otra vez
+  (ni meterla dos veces al inventario).
+- **Después de migrar**: al terminar la migración del archivo al servidor, esa
+  caja ya no cobra, cancela ni mueve inventario hasta reiniciarse (lo que
+  registrara iría al archivo viejo y se perdería).
 - **Usuarios, bloqueos y permisos**: están en el servidor, así que valen en
   todas las cajas. El ticket sin cobrar se conserva por cajero **y por caja**.
 - **Estadísticas**: en la pestaña "Cajeros y horas" aparece una tabla de ventas

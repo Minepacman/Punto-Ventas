@@ -116,7 +116,7 @@ public class BaseDatosService {
             } catch (SQLException ignorada) { /* se muestra 0 */ }
         }
         Map<String, Long> n = new LinkedHashMap<>();
-        n.put("Productos", productoRepo.count());
+        n.put("Productos", productoRepo.contarCatalogo());   // sin el producto del sistema "Producto común"
         n.put("Departamentos", departamentoRepo.count());
         n.put("Ventas", ventaRepo.count());
         n.put("Usuarios", cajeroRepo.count());

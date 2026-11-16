@@ -21,4 +21,14 @@ public class Departamento {
      */
     @Column(name = "clave_prod_serv", length = 8)
     private String claveProdServ;
+
+    /**
+     * IVA que se propone a los productos NUEVOS de este departamento (ej. "Frutas y
+     * verduras" → 0 %). Solo es un valor inicial: cada producto guarda el suyo y se
+     * puede cambiar; los productos ya existentes no se tocan. Null = sin propuesta
+     * (el producto nuevo queda en "usar el de la tienda").
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "iva_por_defecto", length = 10)
+    private TipoIva ivaPorDefecto;
 }

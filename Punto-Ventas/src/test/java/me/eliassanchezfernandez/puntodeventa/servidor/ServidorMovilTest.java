@@ -132,7 +132,10 @@ class ServidorMovilTest {
         assertThat(r.cruda().headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
         assertThat(r.cruda().headers().firstValue("Cache-Control")).hasValue("no-cache");   // se revalida con ETag
         String csp = r.cruda().headers().firstValue("Content-Security-Policy").orElseThrow();
-        assertThat(csp).contains("default-src 'none'").doesNotContain("http:").doesNotContain("https:");
+        // El único origen https permitido es la dirección segura de ESTA computadora (asistente de avisos)
+        String sinOrigenPropio = servidor.getPuertoHttps() == 0 ? csp
+                : csp.replace(" https://127.0.0.1:" + servidor.getPuertoHttps(), "");
+        assertThat(sinOrigenPropio).contains("default-src 'none'").doesNotContain("http:").doesNotContain("https:");
         // Los scripts: solo el de la página, identificado por su hash; nunca 'unsafe-inline'
         String scripts = java.util.Arrays.stream(csp.split(";")).map(String::trim)
                 .filter(d -> d.startsWith("script-src")).findFirst().orElseThrow();

@@ -18,13 +18,37 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> {
 
     Optional<Producto> findByCodigoBarras(String codigoBarras);
 
+    // Las consultas de catálogo excluyen el producto del sistema "Producto común" (model/ProductoComun):
+    // existe solo para que los renglones tecleados en Ventas tengan producto; no se lista, edita ni vende solo.
+    String SIN_PRODUCTO_COMUN = " p.codigoBarras <> '" + me.eliassanchezfernandez.puntodeventa.model.ProductoComun.CODIGO + "' ";
+
+    @Query("SELECT p FROM Producto p WHERE LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :texto, '%')) AND" + SIN_PRODUCTO_COMUN)
     List<Producto> findByDescripcionContainingIgnoreCase(String texto);
 
     /** Búsqueda libre: coincide por código de barras o por descripción */
+    @Query("SELECT p FROM Producto p WHERE (LOWER(p.codigoBarras) LIKE LOWER(CONCAT('%', :codigo, '%')) " +
+           "OR LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :descripcion, '%'))) AND" + SIN_PRODUCTO_COMUN)
     List<Producto> findByCodigoBarrasContainingIgnoreCaseOrDescripcionContainingIgnoreCase(
             String codigo, String descripcion);
 
+    @Query("SELECT p FROM Producto p WHERE" + SIN_PRODUCTO_COMUN + "ORDER BY p.descripcion ASC")
     List<Producto> findAllByOrderByDescripcionAsc();
+
+    /**
+     * Todos con su proveedor habitual ya cargado (es LAZY): una sola consulta para la tabla de
+     * Productos, sin una consulta por fila al mostrar la columna Proveedor.
+     */
+    @Query("SELECT p FROM Producto p LEFT JOIN FETCH p.proveedor WHERE" + SIN_PRODUCTO_COMUN + " ORDER BY p.descripcion ASC")
+    List<Producto> findAllConProveedorOrderByDescripcionAsc();
+
+    /** [proveedorId, productos activos que lo tienen como habitual]; una fila por proveedor */
+    @Query("SELECT p.proveedor.id, COUNT(p) FROM Producto p WHERE p.proveedor IS NOT NULL " +
+           "AND (p.activo IS NULL OR p.activo = true) GROUP BY p.proveedor.id")
+    List<Object[]> contarActivosPorProveedor();
+
+    /** Productos del catálogo (sin el producto del sistema), para saber si la tienda ya tiene alguno */
+    @Query("SELECT COUNT(p) FROM Producto p WHERE" + SIN_PRODUCTO_COMUN)
+    long contarCatalogo();
 
     /** Productos con inventario cuya existencia ya llegó (o bajó) al mínimo */
     @Query("SELECT p FROM Producto p WHERE p.usaInventario = true " +

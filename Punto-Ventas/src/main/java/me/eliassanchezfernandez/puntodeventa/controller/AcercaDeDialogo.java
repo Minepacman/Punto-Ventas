@@ -24,11 +24,13 @@ import me.eliassanchezfernandez.puntodeventa.service.ActualizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.DonadorService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
+import me.eliassanchezfernandez.puntodeventa.util.AbrirArchivo;
 import me.eliassanchezfernandez.puntodeventa.util.ClaveDonador;
 import me.eliassanchezfernandez.puntodeventa.util.DatosDonacionFirmados;
 import me.eliassanchezfernandez.puntodeventa.util.Donacion;
 import me.eliassanchezfernandez.puntodeventa.util.Marca;
 import me.eliassanchezfernandez.puntodeventa.util.PreferenciasActualizacion;
+import me.eliassanchezfernandez.puntodeventa.util.RegistroErrores;
 import me.eliassanchezfernandez.puntodeventa.util.RutasApp;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import me.eliassanchezfernandez.puntodeventa.util.VersionApp;
@@ -108,7 +110,11 @@ public class AcercaDeDialogo {
         marca.setOnAction(e -> mostrarTexto(owner, "Marca y términos adicionales (GPLv3 §7)", "/AVISOS-ADICIONALES.md", "/MARCA.md"));
         HBox botones = new HBox(10, terceros, marca);
         botones.setAlignment(Pos.CENTER_LEFT);
-        return new VBox(6, titulo, gratuito, estado, llave, botones);
+        Label datos = new Label("Catálogo de códigos de barras: " + me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService.ATRIBUCION
+                + " (" + me.eliassanchezfernandez.puntodeventa.service.CatalogoCodigosService.REPOSITORIO + ").");
+        datos.setWrapText(true);
+        datos.getStyleClass().add("hint");
+        return new VBox(6, titulo, gratuito, estado, llave, datos, botones);
     }
 
     /** Muestra uno o varios archivos de texto del jar, uno tras otro, en un cuadro de solo lectura */
@@ -281,11 +287,23 @@ public class AcercaDeDialogo {
         pista.setWrapText(true);
         pista.getStyleClass().add("hint");
         Label registro = new Label("Si hubo un error, el archivo con los detalles está en: "
-                + me.eliassanchezfernandez.puntodeventa.util.RegistroErrores.carpetaLogs());
+                + RegistroErrores.carpetaLogs());
         registro.setWrapText(true);
         registro.getStyleClass().add("hint");
-        caja.getChildren().addAll(pedir, pista, registro);
+        Button abrirRegistros = new Button("Abrir carpeta de registros");
+        abrirRegistros.setOnAction(e -> abrirCarpetaDeRegistros());
+        HBox acciones = new HBox(10, pedir, abrirRegistros);
+        acciones.setAlignment(Pos.CENTER_LEFT);
+        caja.getChildren().addAll(acciones, pista, registro);
         return caja;
+    }
+
+    /** Abre la carpeta de registros en el explorador del sistema (solo esa carpeta: {@link AbrirArchivo}); si no se puede, muestra la ruta */
+    private static void abrirCarpetaDeRegistros() {
+        java.nio.file.Path logs = RegistroErrores.carpetaLogs();
+        if (AbrirArchivo.abrirCarpeta(logs, java.util.List.of(logs))) return;
+        Ventanas.alerta(Alert.AlertType.INFORMATION, "Carpeta de registros",
+                "No se pudo abrir la carpeta con el explorador del sistema. Está en:\n" + logs);
     }
 
     private void pedirSoporte(Window owner, Donacion.Datos datos) {

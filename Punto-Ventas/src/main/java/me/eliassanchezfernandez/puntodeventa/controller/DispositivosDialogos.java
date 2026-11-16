@@ -12,27 +12,34 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import me.eliassanchezfernandez.puntodeventa.model.ConfiguracionDispositivos;
+import me.eliassanchezfernandez.puntodeventa.model.MovimientoCaja;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
-import me.eliassanchezfernandez.puntodeventa.service.Autorizacion;
-import me.eliassanchezfernandez.puntodeventa.service.AutorizacionService;
 import me.eliassanchezfernandez.puntodeventa.service.DispositivosService;
 import me.eliassanchezfernandez.puntodeventa.service.ImpresionService;
 import me.eliassanchezfernandez.puntodeventa.service.NegocioException;
-import me.eliassanchezfernandez.puntodeventa.service.PermisoRequeridoException;
 import me.eliassanchezfernandez.puntodeventa.service.SesionService;
 import me.eliassanchezfernandez.puntodeventa.terminal.DatosTarjeta;
+import me.eliassanchezfernandez.puntodeventa.util.CalculoCobro;
 import me.eliassanchezfernandez.puntodeventa.util.Moneda;
+import me.eliassanchezfernandez.puntodeventa.util.EtiquetaBeta;
+import me.eliassanchezfernandez.puntodeventa.util.FuncionBeta;
 import me.eliassanchezfernandez.puntodeventa.util.Ventanas;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -46,7 +53,6 @@ public class DispositivosDialogos {
     @Autowired private DispositivosService dispositivosService;
     @Autowired private ImpresionService impresionService;
     @Autowired private SesionService sesionService;
-    @Autowired private AutorizacionService autorizacionService;
 
     // ── Lector de códigos ─────────────────────────────────────────────────
 
@@ -105,8 +111,9 @@ public class DispositivosDialogos {
         info.getStyleClass().add("hint");
         Button abrir = new Button("Abrir cajón ahora");
         abrir.setOnAction(e -> abrirCajon(owner));
-        Label permiso = new Label("Abrirlo a mano exige el permiso \"" + Permiso.ABRIR_CAJON.getDescripcion()
-                + "\" (o la autorización de un administrador) y queda en la bitácora.");
+        Label permiso = new Label("Cada apertura del cajón queda en la bitácora (Configuración → Bitácora). Quien tiene el permiso \""
+                + Permiso.ABRIR_CAJON.getDescripcion() + "\" lo abre al instante desde Ventas; a quien no lo tiene se le pide el "
+                + "motivo y si entra o sale dinero (con el monto), y ese dinero se anota en el corte del turno.");
         permiso.setWrapText(true);
         permiso.setPrefWidth(420);
         permiso.getStyleClass().add("hint");
@@ -116,33 +123,162 @@ public class DispositivosDialogos {
     }
 
     /**
-     * Abre el cajón por el pulso de la impresora, con el permiso ABRIR_CAJON o la
-     * autorización de un administrador. El pulso se manda en el hilo de impresión.
+     * Abre el cajón por el pulso de la impresora. Con el permiso ABRIR_CAJON se abre
+     * al instante; sin él se pide el motivo y si entra o sale dinero (el servicio lo
+     * registra en el corte y en la bitácora). El pulso se manda en el hilo de impresión.
      */
     public void abrirCajon(Window owner) {
-        List<Autorizacion> auts = List.of();
-        for (int intento = 0; intento < 2; intento++) {
-            try {
-                impresionService.abrirCajonAsync(auts).whenComplete((res, error) -> Platform.runLater(() -> {
-                    if (error != null || res == null || res.esFallo()) {
-                        Ventanas.alerta(Alert.AlertType.WARNING, "Cajón de dinero",
-                                res != null ? res.mensaje() : "No se pudo abrir el cajón.");
-                    }
-                }));
-                return;
-            } catch (PermisoRequeridoException e) {
-                if (intento == 1 || sesionService.tienePermiso(Permiso.ABRIR_CAJON)) {
-                    Ventanas.alerta(Alert.AlertType.ERROR, "Cajón de dinero", e.getMessage());
-                    return;
-                }
-                Optional<Autorizacion> aut = Ventanas.pedirAutorizacion(autorizacionService, Permiso.ABRIR_CAJON);
-                if (aut.isEmpty()) return;
-                auts = List.of(aut.get());
-            } catch (NegocioException e) {
-                Ventanas.alerta(Alert.AlertType.ERROR, "Cajón de dinero", e.getMessage());
+        try {
+            if (sesionService.tienePermiso(Permiso.ABRIR_CAJON)) {
+                avisarResultado(impresionService.abrirCajonAsync(List.of()));
                 return;
             }
+            pedirMotivoApertura(owner);
+        } catch (NegocioException e) {           // incluye PermisoRequeridoException
+            Ventanas.alerta(Alert.AlertType.ERROR, "Cajón de dinero", e.getMessage());
         }
+    }
+
+    private static void avisarResultado(java.util.concurrent.CompletableFuture<ImpresionService.Resultado> futuro) {
+        futuro.whenComplete((res, error) -> Platform.runLater(() -> {
+            if (error != null || res == null || res.esFallo()) {
+                Ventanas.alerta(Alert.AlertType.WARNING, "Cajón de dinero",
+                        res != null ? res.mensaje() : "No se pudo abrir el cajón.");
+            }
+        }));
+    }
+
+    /**
+     * Diálogo para el cajero sin permiso: motivos rápidos de un clic, motivo en texto,
+     * "solo cambio de billetes / entra / sale" y el monto cuando se mueve dinero. Los
+     * errores del servicio salen en el mismo diálogo. Protegido contra el lector de
+     * códigos por {@link Ventanas#estilizar} (LectorEnModales).
+     */
+    private void pedirMotivoApertura(Window owner) {
+        TextField txtMotivo = new TextField();
+        txtMotivo.setPromptText("¿Para qué abres el cajón?");
+        txtMotivo.textProperty().addListener((o, a, b) -> {
+            if (b != null && b.length() > ImpresionService.MOTIVO_MAXIMO) txtMotivo.setText(b.substring(0, ImpresionService.MOTIVO_MAXIMO));
+        });
+
+        ToggleGroup grupoMov = new ToggleGroup();
+        Map<ImpresionService.MovimientoAlAbrir, RadioButton> radios = new EnumMap<>(ImpresionService.MovimientoAlAbrir.class);
+        VBox cajaMov = new VBox(6);
+        for (ImpresionService.MovimientoAlAbrir m : ImpresionService.MovimientoAlAbrir.values()) {
+            RadioButton rb = new RadioButton(m.getEtiqueta());
+            rb.setToggleGroup(grupoMov);
+            rb.setUserData(m);
+            radios.put(m, rb);
+            cajaMov.getChildren().add(rb);
+        }
+        radios.get(ImpresionService.MovimientoAlAbrir.SOLO_CAMBIO).setSelected(true);
+
+        Label lblMonto = new Label("Monto: " + Moneda.simbolo());
+        TextField txtMonto = new TextField();
+        txtMonto.setPromptText("0.00");
+        Runnable mostrarMonto = () -> {
+            boolean mueve = movimientoElegido(grupoMov).mueveDinero();
+            lblMonto.setVisible(mueve); lblMonto.setManaged(mueve);
+            txtMonto.setVisible(mueve); txtMonto.setManaged(mueve);
+        };
+        grupoMov.selectedToggleProperty().addListener((o, a, b) -> mostrarMonto.run());
+        mostrarMonto.run();
+
+        // Motivos rápidos: rellenan el texto y sugieren si entra o sale dinero
+        final ImpresionService.MotivoRapido[] rapidoElegido = { null };
+        FlowPane rapidos = new FlowPane(6, 6);
+        for (ImpresionService.MotivoRapido r : ImpresionService.MotivoRapido.values()) {
+            Button b = new Button(r.getEtiqueta());
+            b.getStyleClass().add("button-sm");
+            b.setFocusTraversable(false);
+            b.setOnAction(e -> {
+                rapidoElegido[0] = r;
+                if (r == ImpresionService.MotivoRapido.OTRO) {
+                    txtMotivo.clear();
+                } else {
+                    txtMotivo.setText(r.getEtiqueta());
+                }
+                if (r.getMovimiento() != null) radios.get(r.getMovimiento()).setSelected(true);
+                (r.getMovimiento() != null && r.getMovimiento().mueveDinero() ? txtMonto : txtMotivo).requestFocus();
+            });
+            rapidos.getChildren().add(b);
+        }
+
+        Label nota = new Label("El cajón se abre y queda anotado con tu usuario, el motivo y la hora. "
+                + "Si entra o sale dinero, también se anota en el corte de caja.");
+        nota.setWrapText(true);
+        nota.setPrefWidth(420);
+        nota.getStyleClass().add("hint");
+        Label error = new Label();
+        error.setWrapText(true);
+        error.getStyleClass().add("field-error-label");
+        error.setVisible(false);
+        error.setManaged(false);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(10));
+        grid.getColumnConstraints().addAll(new ColumnConstraints(90), new ColumnConstraints(330, 330, Double.MAX_VALUE));
+        int fila = 0;
+        grid.add(rapidos, 0, fila++, 2, 1);
+        grid.addRow(fila++, new Label("Motivo:"), txtMotivo);
+        grid.add(cajaMov, 0, fila++, 2, 1);
+        grid.addRow(fila++, lblMonto, txtMonto);
+        grid.add(nota, 0, fila++, 2, 1);
+        grid.add(error, 0, fila, 2, 1);
+
+        Dialog<ButtonType> dlg = new Dialog<>();
+        dlg.setTitle("Abrir el cajón de dinero");
+        dlg.setHeaderText("No tienes permiso para abrir el cajón sin motivo.\nIndica para qué lo abres y si entra o sale dinero.");
+        if (owner != null) dlg.initOwner(owner);
+        dlg.getDialogPane().setContent(grid);
+        Ventanas.estilizar(dlg);
+        ButtonType abrir = new ButtonType("Abrir cajón", ButtonBar.ButtonData.OK_DONE);
+        dlg.getDialogPane().getButtonTypes().addAll(abrir, ButtonType.CANCEL);
+        Button boton = (Button) dlg.getDialogPane().lookupButton(abrir);
+        boton.getStyleClass().add("button-primary");
+        boton.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            error.setVisible(false);
+            error.setManaged(false);
+            ImpresionService.MovimientoAlAbrir mov = movimientoElegido(grupoMov);
+            Double monto = null;
+            if (mov.mueveDinero()) {
+                try {
+                    monto = CalculoCobro.parsearNumero(txtMonto.getText());
+                    if (Double.isNaN(monto)) throw new NumberFormatException();
+                } catch (NumberFormatException e) {
+                    mostrarError(error, "Escribe el monto como número (ej: 200 o 1,250.50).");
+                    txtMonto.requestFocus();
+                    ev.consume();
+                    return;
+                }
+            }
+            MovimientoCaja.Categoria categoria = rapidoElegido[0] != null
+                    && txtMotivo.getText() != null && txtMotivo.getText().trim().equals(rapidoElegido[0].getEtiqueta())
+                    ? rapidoElegido[0].getCategoria() : null;
+            try {
+                avisarResultado(impresionService.abrirCajonConMotivoAsync(
+                        new ImpresionService.AperturaCajon(txtMotivo.getText(), mov, monto, categoria)));
+            } catch (NegocioException e) {
+                mostrarError(error, e.getMessage());
+                txtMotivo.requestFocus();
+                ev.consume();
+            }
+        });
+        Platform.runLater(txtMotivo::requestFocus);
+        dlg.showAndWait();
+    }
+
+    private static ImpresionService.MovimientoAlAbrir movimientoElegido(ToggleGroup grupo) {
+        return grupo.getSelectedToggle() == null ? ImpresionService.MovimientoAlAbrir.SOLO_CAMBIO
+                : (ImpresionService.MovimientoAlAbrir) grupo.getSelectedToggle().getUserData();
+    }
+
+    private static void mostrarError(Label error, String msg) {
+        error.setText(msg);
+        error.setVisible(true);
+        error.setManaged(true);
     }
 
     // ── Terminal bancaria ─────────────────────────────────────────────────
@@ -161,7 +297,7 @@ public class DispositivosDialogos {
         nota.setWrapText(true);
         nota.setPrefWidth(420);
         nota.getStyleClass().add("hint");
-        dialogoGuardar(owner, "Terminal bancaria", "Terminales con las que se cobra con tarjeta",
+        dialogoGuardar(owner, "Terminal bancaria", "Terminales con las que se cobra con tarjeta", FuncionBeta.TERMINAL_BANCARIA,
                 new VBox(10, new Label("Terminales (máximo " + DispositivosService.MAX_TERMINALES + "):"), lista, exigir, nota),
                 () -> dispositivosService.guardarTerminales(lista.getText(), exigir.isSelected()));
     }
@@ -239,6 +375,11 @@ public class DispositivosDialogos {
 
     /** Diálogo Guardar / Cancelar; si el servicio rechaza los datos el error sale en el mismo diálogo */
     private void dialogoGuardar(Window owner, String titulo, String encabezado, Node contenido, Runnable guardar) {
+        dialogoGuardar(owner, titulo, encabezado, null, contenido, guardar);
+    }
+
+    /** Igual, con la pastilla «Beta» en el encabezado si la función sigue en beta */
+    private void dialogoGuardar(Window owner, String titulo, String encabezado, FuncionBeta beta, Node contenido, Runnable guardar) {
         Label error = new Label();
         error.setWrapText(true);
         error.getStyleClass().add("field-error-label");
@@ -252,6 +393,7 @@ public class DispositivosDialogos {
         caja.setPadding(new Insets(10));
         dlg.getDialogPane().setContent(caja);
         Ventanas.estilizar(dlg);
+        EtiquetaBeta.marcar(dlg, beta);
         ButtonType guardarBtn = new ButtonType("Guardar", ButtonBar.ButtonData.OK_DONE);
         dlg.getDialogPane().getButtonTypes().addAll(guardarBtn, ButtonType.CANCEL);
         Button boton = (Button) dlg.getDialogPane().lookupButton(guardarBtn);

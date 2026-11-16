@@ -102,6 +102,7 @@ public class OrdenesCompraController implements Initializable {
     @FXML private Button btnGuardar, btnEnviada, btnRecibir, btnCancelarOrden, btnImprimir, btnCsv, btnXlsx, btnPdf;
 
     @Autowired private OrdenCompraService ordenCompraService;
+    @Autowired private CaducidadDialogos caducidadDialogos;
     @Autowired private ProveedorService proveedorService;
     @Autowired private ProductoService productoService;
     @Autowired private ImpresionService impresionService;
@@ -393,10 +394,14 @@ public class OrdenesCompraController implements Initializable {
                 actual.getId(), actual.getProveedor().getNombre(), actual.getLineas().size()))) {
             return;
         }
+        // Fechas de caducidad (opcionales) de los productos que las controlan
+        Optional<java.util.Map<Long, java.time.LocalDate>> caducidades =
+                caducidadDialogos.pedirFechasDeOrden(lblMensaje.getScene().getWindow(), actual.getLineas());
+        if (caducidades.isEmpty()) return;
         List<Autorizacion> auts = List.of();
         for (int intento = 0; intento < 2; intento++) {
             try {
-                OrdenCompra recibida = ordenCompraService.recibir(actual.getId(), auts);
+                OrdenCompra recibida = ordenCompraService.recibir(actual.getId(), auts, caducidades.get());
                 Long id = recibida.getId();
                 recargarOrdenes();
                 abrir(id);

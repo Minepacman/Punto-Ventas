@@ -105,6 +105,13 @@ public class Cajero {
     @Column(name = "recuperacion_generado")
     private LocalDateTime recuperacionGenerado;
 
+    /**
+     * Apariencia "solo para mí" de este usuario (JSON de util/apariencia/Apariencia);
+     * null = usa la de la tienda. Sirve p. ej. a un cajero que necesita letra más grande.
+     */
+    @Column(name = "apariencia", length = 2000)
+    private String apariencia;
+
     /** Permisos agregados a los del rol */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "cajero_permisos", joinColumns = @JoinColumn(name = "cajero_id"))

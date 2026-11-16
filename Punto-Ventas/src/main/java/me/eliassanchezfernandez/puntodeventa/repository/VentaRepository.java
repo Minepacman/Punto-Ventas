@@ -41,6 +41,39 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.id = :id")
     Optional<Venta> findConDetallesById(Long id);
 
+    /**
+     * Marca la venta como cancelada SOLO si sigue activa en la base de datos (UPDATE condicionado).
+     * Con varias cajas, dos pueden leer la misma venta "no cancelada" y cancelarla a la vez: la
+     * primera afecta 1 fila; la segunda 0 y debe detenerse sin devolver mercancía otra vez. En
+     * PostgreSQL el UPDATE además bloquea la fila hasta que la transacción termina, así la otra
+     * caja espera y luego ve el estado real. @return 1 si la marcó, 0 si ya estaba cancelada
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE Venta v SET v.cancelada = true, v.fechaCancelacion = :fecha, v.motivoCancelacion = :motivo, " +
+           "v.canceladaPorId = :quienId, v.canceladaPorNombre = :quienNombre, " +
+           "v.cancelacionAutorizadaPorId = :autorizoId, v.cancelacionAutorizadaPor = :autorizoNombre " +
+           "WHERE v.id = :id AND (v.cancelada IS NULL OR v.cancelada = false)")
+    int marcarCancelada(Long id, LocalDateTime fecha, String motivo, Long quienId, String quienNombre,
+                        Long autorizoId, String autorizoNombre);
+
+    // ── Devoluciones parciales (DevolucionService) ───────────────────────
+
+    /**
+     * Anota la devolución en la venta SOLO si sigue activa (no cancelada), y con ello bloquea su
+     * fila hasta que la transacción termina: dos cajas que devuelven de la misma venta (o una que
+     * devuelve mientras otra cancela) se forman en esta fila en lugar de cruzarse.
+     * @return 1 si la venta está activa, 0 si ya fue cancelada
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE Venta v SET v.fechaUltimaDevolucion = :fecha " +
+           "WHERE v.id = :id AND (v.cancelada IS NULL OR v.cancelada = false)")
+    int marcarDevolucion(Long id, LocalDateTime fecha);
+
+    /** Suma lo reembolsado al acumulado de la venta (atómico) */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @Query("UPDATE Venta v SET v.totalDevuelto = COALESCE(v.totalDevuelto, 0.0) + :monto WHERE v.id = :id")
+    int sumarDevuelto(Long id, double monto);
+
     /** Primera venta registrada (cancelada o no; para recalcular agregados desde el inicio) */
     Optional<Venta> findFirstByOrderByFechaAsc();
 
@@ -87,10 +120,11 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
     /**
      * Fechas de venta cuyos agregados cambiaron desde un momento dado: ventas
      * registradas después, o canceladas después (la cancelación mueve el día
-     * de la venta original, no el de la cancelación).
+     * de la venta original, no el de la cancelación; igual con las devoluciones parciales).
      */
     @Query("SELECT DISTINCT v.fecha FROM Venta v WHERE v.fecha >= :desde " +
-           "OR (v.fechaCancelacion IS NOT NULL AND v.fechaCancelacion >= :desde)")
+           "OR (v.fechaCancelacion IS NOT NULL AND v.fechaCancelacion >= :desde) " +
+           "OR (v.fechaUltimaDevolucion IS NOT NULL AND v.fechaUltimaDevolucion >= :desde)")
     List<LocalDateTime> findFechasAfectadasDesde(LocalDateTime desde);
 
     // ── Corte del día: totales calculados en SQL (sin cargar tickets ni renglones) ──
@@ -98,11 +132,46 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
 
     String FILTRO_CAJA = " AND (:caja IS NULL OR COALESCE(v.caja, 1) = :caja)";
 
+    /**
+     * Total de la venta menos lo reembolsado por devoluciones parciales. Lo usan los ANÁLISIS de
+     * ventas (Estadísticas, por cajero/hora/caja, hora pico): la devolución resta en el día de la
+     * venta. El corte NO: ahí la devolución cuenta el día en que se hizo (DevolucionRepository).
+     */
+    String NETO = "(v.total - COALESCE(v.totalDevuelto, 0.0))";
+
     /** [n, total, subtotal, iva] de las ventas ACTIVAS del rango (una sola fila) */
     @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0), COALESCE(SUM(COALESCE(v.subtotal, v.total)), 0), " +
            "COALESCE(SUM(COALESCE(v.iva, 0)), 0) FROM Venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
     List<Object[]> resumenActivas(LocalDateTime inicio, LocalDateTime fin, Integer caja);
+
+    /**
+     * Vista "Hoy" de Estadísticas: en UNA sola fila y una sola consulta,
+     * [n del día completo, total del día completo, n hasta el corte, total hasta el corte]
+     * de las ventas ACTIVAS de un día ({@code corte} es la hora de hoy llevada a ese día:
+     * así "ayer hasta las 15:00" se compara con "hoy hasta las 15:00"). Sin cargar tickets.
+     * Los totales son NETOS de devoluciones en el día de la venta ({@link #NETO}), como resumen_diario.
+     */
+    @Query("SELECT COUNT(v), COALESCE(SUM(" + NETO + "), 0), " +
+           "COALESCE(SUM(CASE WHEN v.fecha < :corte THEN 1 ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN v.fecha < :corte THEN " + NETO + " ELSE 0.0 END), 0) FROM Venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)")
+    List<Object[]> resumenActivasConCorte(LocalDateTime inicio, LocalDateTime fin, LocalDateTime corte);
+
+    /**
+     * [tasa, exento, importe CON IVA, iva] por tasa de IVA de los renglones de ventas ACTIVAS del rango
+     * (la base es importe − iva).
+     * Los renglones anteriores al IVA por producto (tasa e IVA en null) entran con la tasa de su
+     * venta y su IVA se desglosa aquí mismo (importe − importe / (1 + tasa)).
+     */
+    @Query("SELECT COALESCE(d.tasaIva, v.tasaIva, 0.16), COALESCE(d.ivaExento, false), " +
+           "SUM(d.precioVenta * d.cantidad - d.descuento), " +
+           "SUM(COALESCE(d.iva, (d.precioVenta * d.cantidad - d.descuento) " +
+           "    - (d.precioVenta * d.cantidad - d.descuento) / (1 + COALESCE(d.tasaIva, v.tasaIva, 0.16)))) " +
+           "FROM DetalleVenta d JOIN d.venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA +
+           " GROUP BY COALESCE(d.tasaIva, v.tasaIva, 0.16), COALESCE(d.ivaExento, false)")
+    List<Object[]> ivaPorTasa(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
     /** [n, total] de las ventas CANCELADAS del rango (una sola fila) */
     @Query("SELECT COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
@@ -131,6 +200,17 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            " GROUP BY dep.nombre ORDER BY SUM(d.precioVenta * d.cantidad - d.descuento) DESC")
     List<Object[]> importesPorDepartamento(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
+    /**
+     * [importe, costo] de los renglones de "producto común" (artículos fuera del catálogo tecleados en
+     * Ventas, model/ProductoComun) de las ventas activas: el corte los muestra aparte con su ganancia estimada.
+     */
+    @Query("SELECT COALESCE(SUM(d.precioVenta * d.cantidad - d.descuento), 0), " +
+           "COALESCE(SUM(COALESCE(d.costoUnitario, 0) * d.cantidad), 0) " +
+           "FROM DetalleVenta d JOIN d.venta v JOIN d.producto p " +
+           "WHERE p.codigoBarras = :codigoComun " +
+           "AND v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
+    List<Object[]> importeProductoComun(LocalDateTime inicio, LocalDateTime fin, Integer caja, String codigoComun);
+
     /** [terminal (null = sin datos), nº de pagos, monto] de los cobros con tarjeta de ventas activas */
     @Query("SELECT p.terminalNombre, COUNT(p), SUM(p.monto) FROM Venta v JOIN v.pagos p " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
@@ -145,14 +225,14 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
 
     // ── Reportes de Estadísticas: por cajero y por hora (ventas activas, leídas de la tabla de ventas) ──
 
-    /** [nombre del cajero (null = sin dato), nº de ventas, total] de las ventas ACTIVAS del rango */
-    @Query("SELECT v.cajeroNombre, COUNT(v), COALESCE(SUM(v.total), 0) FROM Venta v " +
+    /** [nombre del cajero (null = sin dato), nº de ventas, total neto de devoluciones] de las ventas ACTIVAS del rango */
+    @Query("SELECT v.cajeroNombre, COUNT(v), COALESCE(SUM(" + NETO + "), 0) FROM Venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA +
-           " GROUP BY v.cajeroNombre ORDER BY SUM(v.total) DESC")
+           " GROUP BY v.cajeroNombre ORDER BY SUM(" + NETO + ") DESC")
     List<Object[]> ventasPorCajero(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
-    /** [fecha, total] de cada venta ACTIVA del rango (solo dos columnas: ligero para agrupar por hora) */
-    @Query("SELECT v.fecha, v.total FROM Venta v " +
+    /** [fecha, total neto de devoluciones] de cada venta ACTIVA del rango (solo dos columnas: ligero para agrupar por hora) */
+    @Query("SELECT v.fecha, " + NETO + " FROM Venta v " +
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false)" + FILTRO_CAJA)
     List<Object[]> fechasYTotalesActivas(LocalDateTime inicio, LocalDateTime fin, Integer caja);
 
@@ -161,6 +241,12 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
            "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
            "GROUP BY COALESCE(v.caja, 1) ORDER BY COALESCE(v.caja, 1)")
     List<Object[]> ventasPorCaja(LocalDateTime inicio, LocalDateTime fin);
+
+    /** Igual que {@link #ventasPorCaja} pero con el total NETO de devoluciones (Estadísticas) */
+    @Query("SELECT COALESCE(v.caja, 1), COUNT(v), COALESCE(SUM(" + NETO + "), 0) FROM Venta v " +
+           "WHERE v.fecha >= :inicio AND v.fecha < :fin AND (v.cancelada IS NULL OR v.cancelada = false) " +
+           "GROUP BY COALESCE(v.caja, 1) ORDER BY COALESCE(v.caja, 1)")
+    List<Object[]> ventasNetasPorCaja(LocalDateTime inicio, LocalDateTime fin);
 
     /** Números de caja que han registrado ventas alguna vez (para los filtros de pantallas) */
     @Query("SELECT DISTINCT COALESCE(v.caja, 1) FROM Venta v ORDER BY COALESCE(v.caja, 1)")

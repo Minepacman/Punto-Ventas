@@ -86,6 +86,10 @@ public class RecuperacionService {
     @Autowired private SesionMovilService   sesionMovilService;
     @Autowired private ConexionService      conexionService;
     @Autowired private TransactionTemplate  transaccion;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.AuditoriaRepository auditoriaRepo;
+
+    /** Bitácora: a este administrador ya se le avisó del código heredado (el aviso sale una sola vez) */
+    public static final String ACCION_AVISO_HEREDADO = "AVISO_CODIGO_HEREDADO";
 
     private final SecureRandom aleatorio = new SecureRandom();
     private final LimitadorIntentos limitador = new LimitadorIntentos(Clock.systemUTC(), MAX_INTENTOS, VENTANA);
@@ -109,6 +113,24 @@ public class RecuperacionService {
     /** ¿Queda un código de la versión 1.0.3 o anterior (sin dueño, en configuracion)? */
     public boolean hayCodigoHeredado() {
         return configuracionService.isHayCodigoRecuperacion();
+    }
+
+    /**
+     * Aviso de una sola vez por administrador: si queda el código de 1.0.3 o anterior (sin dueño)
+     * y él no tiene uno propio, se le sugiere generar el suyo. Devuelve true la primera vez y
+     * deja la marca en la bitácora para no repetirlo. El código heredado sigue valiendo igual que
+     * antes (una vez y solo con un único administrador activo).
+     */
+    @Transactional
+    public boolean tomarAvisoCodigoHeredado() {
+        Cajero actual = sesionService.getCajeroActual();
+        if (actual == null || actual.getId() == null || !sesionService.esAdmin()) return false;
+        if (!hayCodigoHeredado() || hayCodigoPropio()) return false;
+        if (auditoriaRepo.existsByAccionAndUsuarioId(ACCION_AVISO_HEREDADO, actual.getId())) return false;
+        auditoriaService.registrar(actual, ACCION_AVISO_HEREDADO,
+                "Se le sugirió generar un código de recuperación propio (queda uno de una versión anterior, sin dueño)",
+                (Cajero) null);
+        return true;
     }
 
     // ── Generar y anular (administrador en sesión) ────────────────────────

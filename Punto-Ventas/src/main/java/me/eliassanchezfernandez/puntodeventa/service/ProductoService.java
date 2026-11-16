@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.service;
 
+import me.eliassanchezfernandez.puntodeventa.model.Caducidad;
 import me.eliassanchezfernandez.puntodeventa.model.Cajero;
 import me.eliassanchezfernandez.puntodeventa.model.Departamento;
 import me.eliassanchezfernandez.puntodeventa.model.HistorialPrecio;
@@ -7,6 +8,7 @@ import me.eliassanchezfernandez.puntodeventa.model.MovimientoInventario;
 import me.eliassanchezfernandez.puntodeventa.model.Permiso;
 import me.eliassanchezfernandez.puntodeventa.model.Producto;
 import me.eliassanchezfernandez.puntodeventa.model.Proveedor;
+import me.eliassanchezfernandez.puntodeventa.model.TipoIva;
 import me.eliassanchezfernandez.puntodeventa.model.Unidad;
 import me.eliassanchezfernandez.puntodeventa.repository.DepartamentoRepository;
 import me.eliassanchezfernandez.puntodeventa.repository.DetalleVentaRepository;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -55,12 +58,24 @@ public class ProductoService {
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.OrdenCompraRepository ordenCompraRepo;
     @Autowired private IdentidadCaja                  identidadCaja;
     @Autowired private me.eliassanchezfernandez.puntodeventa.repository.ProductoImagenRepository imagenRepo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.util.RutasApp rutas;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.repository.CaducidadRepository caducidadRepo;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
+    /** Todos los productos con su proveedor habitual cargado (una consulta; la tabla de Productos lo muestra) */
     public List<Producto> listarTodos() {
-        return productoRepo.findAllByOrderByDescripcionAsc();
+        return productoRepo.findAllConProveedorOrderByDescripcionAsc();
+    }
+
+    /** Cuántos productos activos tienen a cada proveedor como habitual (proveedorId → cuenta); una consulta */
+    public java.util.Map<Long, Long> productosActivosPorProveedor() {
+        java.util.Map<Long, Long> r = new java.util.HashMap<>();
+        for (Object[] f : productoRepo.contarActivosPorProveedor()) {
+            if (f[0] != null) r.put(((Number) f[0]).longValue(), ((Number) f[1]).longValue());
+        }
+        return r;
     }
 
     public List<Producto> buscarPorNombre(String texto) {
@@ -154,23 +169,41 @@ public class ProductoService {
     public Producto guardar(Producto producto) {
         sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
         validar(producto);
+        // El código del producto común es del sistema (Ctrl/Cmd+P en Ventas): no se da de alta ni se edita a mano
+        if (producto.getCodigoBarras() != null
+                && me.eliassanchezfernandez.puntodeventa.model.ProductoComun.CODIGO.equalsIgnoreCase(producto.getCodigoBarras().trim())) {
+            throw new NegocioException("Ese código está reservado para «Producto común» (Ctrl+P en Ventas). Usa otro código.");
+        }
         if (producto.getId() == null) {
             if (producto.getActivo() == null) producto.setActivo(true);
+            // IVA propuesto por el departamento (ej. "Frutas y verduras" → 0 %) solo en el alta y solo si
+            // no se capturó uno (ni siquiera "usar el de la tienda"); después cada producto conserva el suyo
+            if (producto.getIva() == null) producto.setIva(ivaPorDefectoDe(producto.getDepartamento()));
+            resolverProveedor(producto, null);
             // La existencia inicial es inventario que "aparece": exige el mismo permiso que una entrada
             if (producto.isUsaInventario() && producto.getCantidadActual() > 0) {
                 sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO);
             }
             Producto guardado = productoRepo.save(producto);
             if (guardado.isUsaInventario() && guardado.getCantidadActual() > 0) {
-                registrarMovimiento(guardado, MovimientoInventario.Tipo.ALTA_INICIAL,
+                // La existencia inicial queda ligada al proveedor habitual elegido (si lo hay)
+                Proveedor prov = guardado.getProveedor();
+                MovimientoInventario m = registrarMovimiento(guardado, MovimientoInventario.Tipo.ALTA_INICIAL,
                         guardado.getCantidadActual(), 0, guardado.getCantidadActual(),
-                        "Alta de producto", null, null, null);
+                        "Alta de producto", prov != null ? prov.getNombre() : null, null, null);
+                if (prov != null) {
+                    m.setProveedorId(prov.getId());
+                    movimientoRepo.save(m);
+                }
             }
             return guardado;
         }
 
         Producto enBd = productoRepo.findById(producto.getId())
                 .orElseThrow(() -> new NegocioException("El producto ya no existe."));
+        Proveedor proveedorAntes = enBd.getProveedor();
+        resolverProveedor(producto, enBd);
+        boolean cambiaProveedor = !mismoId(proveedorAntes, producto.getProveedor());
 
         // Precios: permiso + historial
         boolean cambiaPrecios = enBd.getPrecioVenta()   != producto.getPrecioVenta()
@@ -200,6 +233,12 @@ public class ProductoService {
             producto.setCantidadActual(0);
         }
         if (producto.getActivo() == null) producto.setActivo(enBd.isActivo());
+        // Quien no manda el IVA (importación, móvil) no lo borra: se conserva el que tenía
+        if (producto.getIva() == null) producto.setIva(enBd.getIva());
+        // Igual con "Controlar caducidad": quien no lo manda no lo apaga
+        if (producto.getControlaCaducidad() == null) producto.setControlaCaducidad(enBd.getControlaCaducidad());
+        TipoIva ivaAntes = enBd.getIvaOTienda();
+        boolean cambiaIva = ivaAntes != producto.getIvaOTienda();
 
         Producto guardado = productoRepo.save(producto);
 
@@ -213,7 +252,138 @@ public class ProductoService {
                     -existenciaAntes, existenciaAntes, 0,
                     "Dejó de usar inventario", null, null, null);
         }
+        if (cambiaProveedor) {
+            auditoriaService.registrar(sesionService.getCajeroActual(), "PRODUCTO_PROVEEDOR_CAMBIADO",
+                    guardado.getCodigoBarras() + " " + guardado.getDescripcion() + ": proveedor "
+                            + nombreProveedor(proveedorAntes) + " → " + nombreProveedor(guardado.getProveedor()), (Cajero) null);
+        }
+        if (cambiaIva) {
+            auditoriaService.registrar(sesionService.getCajeroActual(), ACCION_IVA_CAMBIADO,
+                    guardado.getCodigoBarras() + " " + guardado.getDescripcion() + ": "
+                            + ivaAntes.getEtiqueta() + " → " + guardado.getIvaOTienda().getEtiqueta(), (Cajero) null);
+        }
         return guardado;
+    }
+
+    // ── IVA de varios productos a la vez ─────────────────────────────────
+
+    /** Acción de bitácora al cambiar el IVA de uno o varios productos */
+    public static final String ACCION_IVA_CAMBIADO = "PRODUCTO_IVA_CAMBIADO";
+
+    /** Productos por UPDATE (SQLite y PostgreSQL aceptan listas IN mucho más grandes; esto es holgado) */
+    private static final int LOTE_IVA = 500;
+
+    /**
+     * Pone el mismo IVA a varios productos (Productos → "Cambiar IVA a los seleccionados…").
+     * EDITAR_PRODUCTOS, una sola transacción (o se cambian todos o ninguno) y un renglón de
+     * bitácora con cuántos cambiaron y cuáles. Los que ya tenían ese IVA no se tocan.
+     * {@link TipoIva#TIENDA} se guarda tal cual ("usar el de la tienda").
+     * El UPDATE solo escribe la columna iva: no pisa existencias que otra caja esté moviendo.
+     *
+     * @return cuántos productos cambiaron de IVA
+     */
+    @Transactional
+    public int cambiarIva(java.util.Collection<Long> productoIds, TipoIva nuevo) {
+        sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
+        return cambiarIvaSinPermiso(productoIds, nuevo, null);
+    }
+
+    /**
+     * Aplica el IVA que propone el departamento a TODOS sus productos (los ya existentes; los
+     * nuevos ya lo reciben al darse de alta). Sin propuesta = "usar el de la tienda".
+     * EDITAR_PRODUCTOS, una transacción, bitácora.
+     *
+     * @return cuántos productos cambiaron de IVA
+     */
+    @Transactional
+    public int aplicarIvaDelDepartamento(Long departamentoId) {
+        sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
+        Departamento d = departamentoRepo.findById(departamentoId)
+                .orElseThrow(() -> new NegocioException("El departamento ya no existe."));
+        TipoIva iva = TipoIva.oTienda(d.getIvaPorDefecto());
+        List<Long> ids = em.createQuery(
+                        "SELECT p.id FROM Producto p WHERE p.departamento.id = :d", Long.class)
+                .setParameter("d", departamentoId)
+                .getResultList();
+        return cambiarIvaSinPermiso(ids, iva, "departamento \"" + d.getNombre() + "\"");
+    }
+
+    private int cambiarIvaSinPermiso(java.util.Collection<Long> productoIds, TipoIva nuevo, String origen) {
+        if (nuevo == null) throw new NegocioException("Elige el IVA que se pondrá a los productos.");
+        if (productoIds == null || productoIds.isEmpty()) return 0;
+        List<Long> ids = productoIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+
+        // Leer primero (id, código, descripción, IVA) para saber cuáles cambian y anotarlos en la bitácora
+        List<Object[]> filas = new java.util.ArrayList<>();
+        for (int i = 0; i < ids.size(); i += LOTE_IVA) {
+            filas.addAll(em.createQuery(
+                            "SELECT p.id, p.codigoBarras, p.descripcion, p.iva FROM Producto p WHERE p.id IN :ids",
+                            Object[].class)
+                    .setParameter("ids", ids.subList(i, Math.min(ids.size(), i + LOTE_IVA)))
+                    .getResultList());
+        }
+        List<Long> aCambiar = new java.util.ArrayList<>();
+        java.util.Map<TipoIva, Integer> antes = new java.util.EnumMap<>(TipoIva.class);
+        StringBuilder cuales = new StringBuilder();
+        for (Object[] f : filas) {
+            TipoIva actual = TipoIva.oTienda((TipoIva) f[3]);
+            if (actual == nuevo) continue;
+            aCambiar.add((Long) f[0]);
+            antes.merge(actual, 1, Integer::sum);
+            if (cuales.length() < 600) {
+                if (cuales.length() > 0) cuales.append(", ");
+                cuales.append(f[1]).append(' ').append(f[2]);
+            }
+        }
+        if (aCambiar.isEmpty()) return 0;
+
+        // Que los productos ya cargados en esta sesión no escriban después su IVA viejo
+        em.flush();
+        for (int i = 0; i < aCambiar.size(); i += LOTE_IVA) {
+            em.createQuery("UPDATE Producto p SET p.iva = :iva WHERE p.id IN :ids")
+                    .setParameter("iva", nuevo)
+                    .setParameter("ids", aCambiar.subList(i, Math.min(aCambiar.size(), i + LOTE_IVA)))
+                    .executeUpdate();
+        }
+        em.clear();
+
+        StringBuilder detalle = new StringBuilder();
+        detalle.append(aCambiar.size()).append(aCambiar.size() == 1 ? " producto" : " productos")
+               .append(" → ").append(nuevo.getEtiqueta());
+        if (origen != null) detalle.append(" (IVA del ").append(origen).append(')');
+        detalle.append(". Antes: ");
+        antes.forEach((t, n) -> detalle.append(t.getEtiqueta()).append(" ×").append(n).append("; "));
+        detalle.append(cuales);
+        if (aCambiar.size() > 1 && cuales.length() >= 600) detalle.append(", …");
+        auditoriaService.registrar(sesionService.getCajeroActual(), ACCION_IVA_CAMBIADO, detalle.toString(), (Cajero) null);
+        return aCambiar.size();
+    }
+
+    /**
+     * Deja en el producto el proveedor habitual del catálogo (o null). Un proveedor desactivado
+     * solo se acepta si el producto ya lo tenía (al editar no se le obliga a cambiarlo); elegirlo
+     * de nuevo no, porque ya no surte.
+     */
+    private void resolverProveedor(Producto producto, Producto enBd) {
+        if (producto.getProveedor() == null) return;
+        Long id = producto.getProveedor().getId();
+        if (id == null) { producto.setProveedor(null); return; }
+        Proveedor prov = proveedorRepo.findById(id)
+                .orElseThrow(() -> new NegocioException("El proveedor ya no existe."));
+        boolean yaLoTenia = enBd != null && mismoId(enBd.getProveedor(), prov);
+        if (!prov.isActivo() && !yaLoTenia) {
+            throw new NegocioException("El proveedor \"" + prov.getNombre() + "\" está desactivado: elige otro o reactívalo en Proveedores.");
+        }
+        producto.setProveedor(prov);
+    }
+
+    private static boolean mismoId(Proveedor a, Proveedor b) {
+        if (a == null || b == null) return a == b;
+        return a.getId() != null && a.getId().equals(b.getId());
+    }
+
+    private static String nombreProveedor(Proveedor p) {
+        return p == null ? "ninguno" : p.getNombre();
     }
 
     /** Desactivar = descontinuar: deja de aparecer en Ventas (PRD-09) */
@@ -272,10 +442,22 @@ public class ProductoService {
     @Transactional
     public Producto registrarEntrada(Long productoId, double cantidad, String proveedor,
                                      double costoUnitario, Collection<Autorizacion> autorizaciones) {
+        return registrarEntrada(productoId, cantidad, proveedor, costoUnitario, autorizaciones, null, Caducidad.Origen.MANUAL);
+    }
+
+    /**
+     * Igual, con fecha de caducidad opcional ({@code caducaEl}, solo cuenta si el producto
+     * controla caducidad; ver {@link CaducidadService}).
+     */
+    @Transactional
+    public Producto registrarEntrada(Long productoId, double cantidad, String proveedor,
+                                     double costoUnitario, Collection<Autorizacion> autorizaciones,
+                                     LocalDate caducaEl, Caducidad.Origen origen) {
         if (proveedor == null || proveedor.isBlank()) {
             throw new NegocioException("Indica el proveedor de la entrada.");
         }
-        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones, true);
+        return aplicarEntrada(productoId, cantidad, proveedor.trim(), null, null, costoUnitario, autorizaciones, true,
+                caducaEl, origen);
     }
 
     /**
@@ -287,14 +469,22 @@ public class ProductoService {
     public Producto registrarEntradaDeProveedor(Long productoId, double cantidad, Long proveedorId,
                                                 String motivo, double costoUnitario,
                                                 Collection<Autorizacion> autorizaciones) {
+        return registrarEntradaDeProveedor(productoId, cantidad, proveedorId, motivo, costoUnitario, autorizaciones, null);
+    }
+
+    /** Igual, con fecha de caducidad opcional (ver {@link CaducidadService}) */
+    @Transactional
+    public Producto registrarEntradaDeProveedor(Long productoId, double cantidad, Long proveedorId,
+                                                String motivo, double costoUnitario,
+                                                Collection<Autorizacion> autorizaciones, LocalDate caducaEl) {
         if (proveedorId == null) throw new NegocioException("Elige el proveedor de la entrada.");
         Proveedor proveedor = proveedorRepo.findById(proveedorId)
                 .orElseThrow(() -> new NegocioException("El proveedor ya no existe."));
         if (!proveedor.isActivo()) {
             throw new NegocioException("El proveedor \"" + proveedor.getNombre() + "\" está desactivado.");
         }
-        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
-                costoUnitario, autorizaciones, true);
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
+                costoUnitario, autorizaciones, true, caducaEl, Caducidad.Origen.MANUAL);
     }
 
     /**
@@ -308,20 +498,47 @@ public class ProductoService {
     public Producto registrarEntradaDeOrden(Long productoId, double cantidad, Proveedor proveedor,
                                             String motivo, double costoUnitario,
                                             Collection<Autorizacion> autorizaciones) {
+        return registrarEntradaDeOrden(productoId, cantidad, proveedor, motivo, costoUnitario, autorizaciones, null);
+    }
+
+    /** Igual, con fecha de caducidad opcional (ver {@link CaducidadService}) */
+    @Transactional
+    public Producto registrarEntradaDeOrden(Long productoId, double cantidad, Proveedor proveedor,
+                                            String motivo, double costoUnitario,
+                                            Collection<Autorizacion> autorizaciones, LocalDate caducaEl) {
         if (proveedor == null) throw new NegocioException("La orden no tiene proveedor.");
-        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor.getId(), motivo,
-                costoUnitario, autorizaciones, false);
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
+                costoUnitario, autorizaciones, false, caducaEl, Caducidad.Origen.ORDEN);
     }
 
     /**
+     * Un renglón de un ticket de proveedor que se está registrando ({@code TicketProveedorService}).
+     * Como en las órdenes de compra, NO consume la autorización: una sola cubre todo el ticket y la
+     * consume el servicio del ticket al terminar.
+     */
+    @Transactional
+    public Producto registrarEntradaDeTicket(Long productoId, double cantidad, Proveedor proveedor,
+                                             String motivo, double costoUnitario,
+                                             Collection<Autorizacion> autorizaciones) {
+        if (proveedor == null) throw new NegocioException("Elige el proveedor del ticket.");
+        return aplicarEntrada(productoId, cantidad, proveedor.getNombre(), proveedor, motivo,
+                costoUnitario, autorizaciones, false, null, Caducidad.Origen.MANUAL);
+    }
+
+    /**
+     * @param proveedor proveedor del catálogo (null en entradas con el nombre escrito a mano). Si el
+     *        producto aún no tiene proveedor habitual, esta entrada se lo asigna; si ya tiene uno
+     *        (elegido por el usuario o por una entrada anterior) no se toca.
      * @param consumirAutorizacion true cuando esta entrada es la acción completa que se autorizó
      *        (la autorización de un solo uso se gasta aquí); false cuando forma parte de una
      *        operación mayor que la consumirá al final.
      */
-    private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Long proveedorId,
+    private Producto aplicarEntrada(Long productoId, double cantidad, String proveedorNombre, Proveedor proveedor,
                                     String motivo, double costoUnitario, Collection<Autorizacion> autorizaciones,
-                                    boolean consumirAutorizacion) {
+                                    boolean consumirAutorizacion, LocalDate caducaEl, Caducidad.Origen origen) {
+        Long proveedorId = proveedor != null ? proveedor.getId() : null;
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
         if (!Double.isFinite(cantidad) || cantidad <= 0) {
             throw new NegocioException("La cantidad a agregar debe ser mayor a cero.");
         }
@@ -334,10 +551,15 @@ public class ProductoService {
             throw new NegocioException("\"" + p.getDescripcion() + "\" está desactivado: actívalo en Productos antes de darle entrada.");
         }
         validarDecimales(p, cantidad);
+        // Fecha de caducidad: solo cuenta en productos que la controlan (en los demás se ignora)
+        LocalDate caduca = p.isControlaCaducidad() ? caducaEl : null;
+        CaducidadService.validarFecha(caduca, LocalDate.now());
         if (costoUnitario > 0 && Math.abs(costoUnitario - p.getPrecioCosto()) > 0.0001) {
             registrarCambioPrecio(p, "COSTO", p.getPrecioCosto(), costoUnitario);
             p.setPrecioCosto(costoUnitario);
         }
+        // Primera entrada con proveedor del catálogo: queda como proveedor habitual (solo si estaba vacío)
+        if (proveedor != null && p.getProveedor() == null) p.setProveedor(proveedor);
         productoRepo.save(p);
         // La existencia se suma EN la base (atómico): una venta simultánea en otra caja no se pierde
         productoRepo.sumar(p.getId(), cantidad);
@@ -352,6 +574,9 @@ public class ProductoService {
             m.setProveedorId(proveedorId);
             movimientoRepo.save(m);
         }
+        if (caduca != null) {
+            caducidadRepo.save(CaducidadService.nueva(guardado, cantidad, caduca, origen, m.getId(), LocalDateTime.now()));
+        }
         auditarSiAutorizado("ENTRADA_INVENTARIO", guardado, aut, consumirAutorizacion);
         return guardado;
     }
@@ -365,6 +590,7 @@ public class ProductoService {
     public Producto ajustarStock(Long productoId, double nuevaCantidad, String motivo,
                                  Collection<Autorizacion> autorizaciones) {
         sesionService.verificarPermiso(Permiso.AJUSTAR_INVENTARIO, autorizaciones);
+        if (rutas.migradaAlServidor()) throw new NegocioException(rutas.mensajeMigrada());
         if (!Double.isFinite(nuevaCantidad) || nuevaCantidad < 0) {
             throw new NegocioException("La existencia no puede ser negativa.");
         }
@@ -448,11 +674,24 @@ public class ProductoService {
         return departamentoRepo.findAllByOrderByNombreAsc();
     }
 
+    /** IVA que el departamento propone a sus productos nuevos; null si no tiene (o no hay departamento) */
+    public me.eliassanchezfernandez.puntodeventa.model.TipoIva ivaPorDefectoDe(Departamento depto) {
+        if (depto == null) return null;
+        if (depto.getIvaPorDefecto() == null && depto.getId() != null) {
+            // Puede venir sin cargar (solo el id, p. ej. desde la importación o el móvil)
+            return departamentoRepo.findById(depto.getId()).map(Departamento::getIvaPorDefecto).orElse(null);
+        }
+        return depto.getIvaPorDefecto();
+    }
+
     @Transactional
     public Departamento guardarDepartamento(Departamento d) {
         sesionService.verificarPermiso(Permiso.EDITAR_PRODUCTOS);
         if (d.getNombre() == null || d.getNombre().isBlank()) {
             throw new NegocioException("El nombre del departamento es obligatorio.");
+        }
+        if (d.getIvaPorDefecto() == me.eliassanchezfernandez.puntodeventa.model.TipoIva.TIENDA) {
+            d.setIvaPorDefecto(null);   // "usar el de la tienda" es lo mismo que no proponer nada
         }
         d.setNombre(d.getNombre().trim());
         departamentoRepo.findByNombreIgnoreCase(d.getNombre())
