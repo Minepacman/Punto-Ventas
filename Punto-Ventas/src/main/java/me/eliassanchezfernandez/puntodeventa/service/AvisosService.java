@@ -61,7 +61,8 @@ public class AvisosService {
         STOCK("Se está acabando"),
         HORA_PICO("Hora pico"),
         CADUCIDAD("Por caducar"),
-        GANANCIA("Ganancia baja");
+        GANANCIA("Ganancia baja"),
+        TICKETS("Tickets por revisar");
 
         private final String etiqueta;
         Tipo(String etiqueta) { this.etiqueta = etiqueta; }
@@ -110,6 +111,8 @@ public class AvisosService {
     @Autowired private Clock                reloj;
     @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService ticketProveedorService;
 
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService ticketsPorRevisar;
+
     private volatile Base cache;
 
     /** Olvida lo calculado: la próxima consulta vuelve a la base (pruebas y cambios que no pueden esperar) */
@@ -132,6 +135,8 @@ public class AvisosService {
         for (VisitaProveedor v : b.visitas()) lista.add(avisoProveedor(v, costos));
         avisosStock(b, lista);
         if (costos) avisosGanancia(lista);
+        Aviso tickets = avisoTicketsPorRevisar();
+        if (tickets != null) lista.add(tickets);
         Aviso cad = avisoCaducidad(b.caducidades(), b.diasCaducidad());
         if (cad != null) lista.add(cad);
         if (b.horaPico() != null && ahora.getHour() < b.horaPico().hasta()) lista.add(avisoHoraPico(b.horaPico()));
@@ -162,6 +167,20 @@ public class AvisosService {
             lista.add(new Aviso("ganancia-" + g.productoId(), Tipo.GANANCIA, 2, "sube", g.descripcion(), detalle,
                     Accion.inventario(null, g.descripcion())));
         }
+    }
+
+    /** Fotos de tickets mandadas desde el teléfono que esperan revisión en la computadora (fuera de la caché: al momento) */
+    private Aviso avisoTicketsPorRevisar() {
+        long n;
+        try {
+            n = ticketsPorRevisar.cuantosPendientes();
+        } catch (RuntimeException e) {
+            return null;
+        }
+        if (n <= 0) return null;
+        return new Aviso("tickets-por-revisar", Tipo.TICKETS, 2, "recibo",
+                n == 1 ? "1 ticket de proveedor por revisar" : n + " tickets de proveedor por revisar",
+                "Se mandaron desde el teléfono. En la computadora: Inventario → Por revisar.", null);
     }
 
     /** Hora pico de hoy (null si no hay patrón): la usa el programador de notificaciones para avisar 30 min antes */

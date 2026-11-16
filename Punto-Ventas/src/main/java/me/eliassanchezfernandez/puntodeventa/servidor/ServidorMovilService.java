@@ -115,6 +115,18 @@ import java.util.function.Supplier;
  *   GET  /api/tutorial                                (cualquier usuario) -> {visto}: recorrido móvil ya visto por ESTE usuario
  *   POST /api/tutorial/visto {visto: true|false}       (cualquier usuario) -> lo marca/reinicia (columna cajeros.tutorial_movil_visto)
  *
+ *   Leer ticket de proveedor (Beta; Inventario → «Leer ticket de proveedor»):
+ *   GET  /api/tickets-proveedor/estado               (cualquier usuario) -> ¿lee fotos esta PC?, permisos, proveedores, departamentos
+ *   POST /api/tickets-proveedor/leer  (image/jpeg|png|webp, ≤ 8 MB) -> 202 {id}: se lee en segundo plano (LecturasTicketMovil);
+ *                                                    409 SIN_LECTOR si la PC no lee fotos; 503 OCUPADO sin cupo
+ *   GET  /api/tickets-proveedor/lectura?id&ticket&proveedorId -> LEYENDO / ERROR / LISTO con la revisión (TicketProveedorService.preparar)
+ *   POST /api/tickets-proveedor/cancelar {id}
+ *   POST /api/tickets-proveedor/registrar {id, ticket, proveedorId, folio, fecha, registrarAunqueSeRepita, renglones}
+ *                                                    (AJUSTAR_INVENTARIO) -> TicketProveedorService.aplicar; total, texto y cuadre de la lectura guardada
+ *   POST /api/tickets-proveedor/pendiente {id, proveedorId?, nota?} | imagen ?nota= -> cola «por revisar» de la computadora
+ *   GET  /api/productos/buscar?q=                    (cualquier usuario) -> hasta 30 productos activos
+ *   POST /api/precios/actualizar {precios:[{productoId, precioVenta}]} (EDITAR_PRODUCTOS y CAMBIAR_PRECIOS)
+ *
  *   Notificaciones (Web Push; la página solo las ofrece abierta por HTTPS):
  *   GET  /api/push/clave                              (cualquier usuario) -> {clave}: clave pública VAPID de esta instalación
  *   POST /api/push/suscribir {endpoint, keys:{p256dh, auth}}  -> guarda la suscripción de ESTE teléfono para el usuario
@@ -138,7 +150,7 @@ import java.util.function.Supplier;
  * Cada endpoint de datos valida el token, relee al usuario de la BD y ejecuta el
  * servicio dentro de SesionService.ejecutarComo(usuarioMovil, ip, ...): los
  * servicios verifican permisos y auditan como el usuario MÓVIL, y la sesión de
- * escritorio ni se lee ni se modifica. El OCR de tickets sigue siendo un demo en la página.
+ * escritorio ni se lee ni se modifica.
  *
  * Seguridad: solo escucha si el ADMIN lo activó (por defecto apagado); límite
  * de intentos fallidos por IP además del bloqueo por usuario; cuerpos de
@@ -202,6 +214,9 @@ public class ServidorMovilService {
     @Autowired private CertificadosLocales  certificados;
     @Autowired private NotificacionesPushService pushService;
     @Autowired private me.eliassanchezfernandez.puntodeventa.service.ConsultasMovilService consultasMovil;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService ticketProveedorService;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService ticketsPorRevisar;
+    @Autowired private LecturasTicketMovil lecturasTicket;
 
     /** Altas de suscripción push por IP (una por teléfono; el límite frena a quien quiera llenar la tabla) */
     static final int MAX_SUSCRIPCIONES_POR_IP = 20;
@@ -687,6 +702,14 @@ public class ServidorMovilService {
                 case "/api/apariencia"      -> { exigir(metodo, "GET");  apariencia(ex); }
                 case "/api/apariencia/publica" -> { exigir(metodo, "GET"); aparienciaPublica(ex); }
                 case "/api/tutorial/visto"  -> { exigir(metodo, "POST"); tutorialVisto(ex); }
+                case "/api/tickets-proveedor/estado"    -> { exigir(metodo, "GET");  ticketsEstado(ex); }
+                case "/api/tickets-proveedor/leer"      -> { exigir(metodo, "POST"); ticketsLeer(ex); }
+                case "/api/tickets-proveedor/lectura"   -> { exigir(metodo, "GET");  ticketsLectura(ex); }
+                case "/api/tickets-proveedor/cancelar"  -> { exigir(metodo, "POST"); ticketsCancelar(ex); }
+                case "/api/tickets-proveedor/registrar" -> { exigir(metodo, "POST"); ticketsRegistrar(ex); }
+                case "/api/tickets-proveedor/pendiente" -> { exigir(metodo, "POST"); ticketsPendiente(ex); }
+                case "/api/productos/buscar"            -> { exigir(metodo, "GET");  productosBuscar(ex); }
+                case "/api/precios/actualizar"          -> { exigir(metodo, "POST"); preciosActualizar(ex); }
                 case "/api/push/clave"      -> { exigir(metodo, "GET");  pushClave(ex); }
                 case "/api/push/suscribir"  -> { exigir(metodo, "POST"); pushSuscribir(ex); }
                 case "/api/push/desuscribir" -> { exigir(metodo, "POST"); pushDesuscribir(ex); }
@@ -1222,6 +1245,8 @@ public class ServidorMovilService {
         // "Escanear ticket" sigue siendo una DEMO (las líneas son de ejemplo): apagada hasta tener OCR real.
         // Para probar la pantalla en desarrollo: cambiar a `ajustar`.
         secciones.put("escanearTicket", ESCANEAR_TICKET_HABILITADO && ajustar);
+        // «Leer ticket de proveedor» (Inventario): todos pueden leer y mandar a la computadora; registrar exige AJUSTAR_INVENTARIO
+        secciones.put("ticketsProveedor", true);
         secciones.put("configuracion", true);
         r.put("secciones", secciones);
         r.put("permanente", v.sesion().isPermanente());
@@ -2067,37 +2092,459 @@ public class ServidorMovilService {
         ex.getResponseBody().write(cuerpo);
     }
 
+    // ── Tickets de proveedor (foto → revisión → entrada de mercancía) ─────
+
+    /** Cuerpo de registrar (renglones de un ticket largo) y de actualizar precios */
+    static final int MAX_CUERPO_TICKET = 64 * 1024;
+    static final int MAX_RENGLONES_TICKET = 300;
+    static final int MAX_RESULTADOS_BUSQUEDA = 30;
+
+    /**
+     * Lo que la página necesita antes de empezar: si esta computadora puede leer fotos, qué puede hacer el
+     * usuario, cuántos tickets esperan en la computadora y las listas para elegir proveedor y departamento.
+     */
+    private void ticketsEstado(HttpExchange ex) throws IOException {
+        protegido(ex, null, cajero -> {
+            Map<String, Object> r = new LinkedHashMap<>();
+            boolean lector = ticketProveedorService.hayLectorDeFotos();
+            r.put("puedeLeerFotos", lector);
+            r.put("motivoSinLector", lector ? null
+                    : "Esta computadora todavía no puede leer fotos; mándala a la computadora o escribe el ticket allá.");
+            r.put("puedeRegistrar", cajero.tienePermiso(Permiso.AJUSTAR_INVENTARIO));
+            r.put("puedeCrearProductos", cajero.tienePermiso(Permiso.EDITAR_PRODUCTOS));
+            r.put("puedeCambiarPrecios", cajero.tienePermiso(Permiso.EDITAR_PRODUCTOS) && cajero.tienePermiso(Permiso.CAMBIAR_PRECIOS));
+            r.put("costosVisibles", proveedorService.puedeVerCostos());
+            r.put("porRevisar", ticketsPorRevisar.cuantosPendientes());
+            r.put("maxBytes", me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService.MAX_FOTO_BYTES);
+            List<Map<String, Object>> provs = new ArrayList<>();
+            for (Proveedor p : proveedorService.listarActivos()) provs.add(idNombre(p.getId(), p.getNombre()));
+            r.put("proveedores", provs);
+            List<Map<String, Object>> deptos = new ArrayList<>();
+            for (var d : productoService.listarDepartamentos()) deptos.add(idNombre(d.getId(), d.getNombre()));
+            r.put("departamentos", deptos);
+            Map<String, Object> margenes = new LinkedHashMap<>();
+            ticketProveedorService.margenesHabituales().forEach((k, m) -> margenes.put(String.valueOf(k), m));
+            r.put("margenes", margenes);
+            return r;
+        });
+    }
+
+    private static Map<String, Object> idNombre(Long id, String nombre) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", id);
+        m.put("nombre", nombre);
+        return m;
+    }
+
+    /** Foto del ticket (cuerpo binario image/jpeg|png|webp, hasta 8 MB) → 202 {id}: se lee en segundo plano */
+    private void ticketsLeer(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        if (!ticketProveedorService.hayLectorDeFotos()) {
+            error(ex, 409, "SIN_LECTOR", "Esta computadora todavía no puede leer fotos; mándala a la computadora o escribe el ticket allá.");
+            return;
+        }
+        byte[] foto = leerFoto(ex);
+        Cajero cajero = v.get().cajero();
+        LecturasTicketMovil.Lectura l;
+        try {
+            l = lecturasTicket.empezar(cajero, ipDe(ex), foto);
+        } catch (LecturasTicketMovil.SinCupo e) {
+            ex.getResponseHeaders().set("Retry-After", "2");
+            error(ex, 503, "OCUPADO", "La computadora está leyendo otro ticket. Intenta de nuevo en un momento.");
+            return;
+        }
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", l.id());
+        r.put("estado", l.estado().name());
+        responder(ex, 202, r);
+    }
+
+    /** Foto del cuerpo: tipo de imagen comprobado por sus primeros bytes, no por la cabecera */
+    private static byte[] leerFoto(HttpExchange ex) throws IOException {
+        String tipo = ex.getRequestHeaders().getFirst("Content-Type");
+        if (tipo == null || !tipo.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw new CuerpoInvalido(415, "Manda la foto como imagen JPG, PNG o WEBP.");
+        }
+        byte[] foto = leerAcotado(ex, me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService.MAX_FOTO_BYTES).toByteArray();
+        if (me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService.tipoDeImagen(foto) == null) {
+            throw new CuerpoInvalido(415, "El archivo no es una foto JPG, PNG o WEBP.");
+        }
+        return foto;
+    }
+
+    private LecturasTicketMovil.Lectura lecturaDe(Cajero cajero, Object id) {
+        if (!(id instanceof String s) || s.length() > 64) throw new CuerpoInvalido(400, "Lectura inválida.");
+        return lecturasTicket.de(s, cajero.getId())
+                .orElseThrow(() -> new NegocioException("Esa lectura ya no está en la computadora: toma la foto otra vez."));
+    }
+
+    /**
+     * Cómo va la lectura ?id=…; ya leída, la revisión del ticket ?ticket=n (una foto puede traer dos) con el
+     * proveedor reconocido o el elegido (?proveedorId=…). La revisión se arma en la computadora cada vez.
+     */
+    private void ticketsLectura(HttpExchange ex) throws IOException {
+        Map<String, String> q = parametros(ex);
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        LecturasTicketMovil.Lectura l = lecturaDe(v.get().cajero(), q.get("id"));
+        int ticket = entero(q.get("ticket"), 0, 0, 20, "ticket");
+        Long proveedorId = null;
+        if (q.get("proveedorId") != null && !q.get("proveedorId").isBlank()) {
+            proveedorId = (long) entero(q.get("proveedorId"), 0, 1, Integer.MAX_VALUE, "proveedorId");
+        }
+        if (l.estado() != LecturasTicketMovil.Estado.LISTO) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("id", l.id());
+            r.put("estado", l.estado().name());
+            r.put("segundos", l.segundos());
+            if (l.error() != null) r.put("error", l.error());
+            responder(ex, 200, r);
+            return;
+        }
+        Long prov = proveedorId;
+        protegido(ex, null, true, cajero -> mapaLectura(l, ticket, prov));
+    }
+
+    private Map<String, Object> mapaLectura(LecturasTicketMovil.Lectura l, int ticket, Long proveedorId) {
+        var lectura = l.resultado();
+        List<me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketLeido> tickets = lectura.tickets();
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", l.id());
+        r.put("estado", l.estado().name());
+        r.put("motor", lectura.origen());
+        r.put("tickets", tickets.size());
+        r.put("ticket", ticket);
+        r.put("registrados", new ArrayList<>(l.registrados));
+        r.put("enviadoAComputadora", l.pendienteId != null);
+        boolean vacio = tickets.isEmpty() || tickets.stream().allMatch(t -> t.getLineas().isEmpty());
+        r.put("vacio", vacio);
+        if (vacio) return r;
+        if (ticket >= tickets.size()) throw new CuerpoInvalido(400, "Ese ticket no está en la foto.");
+        var rev = ticketProveedorService.preparar(tickets.get(ticket), proveedorId);
+        var t = rev.ticket();
+        boolean costos = rev.costosVisibles();
+        r.put("proveedorId", rev.proveedorId());
+        r.put("proveedorNombre", rev.proveedorNombre());
+        r.put("motivoProveedor", rev.motivoProveedor());
+        r.put("nombreSugeridoNuevo", rev.nombreSugeridoNuevo());
+        r.put("folio", t.getFolio());
+        r.put("fecha", t.getFecha() == null ? null : t.getFecha().toString());
+        r.put("total", t.getTotal());
+        r.put("subtotal", t.getSubtotal());
+        r.put("descuento", t.getDescuento());
+        r.put("impuestos", t.getImpuestos());
+        r.put("cargos", t.getCargos());
+        r.put("avisoRepetido", rev.avisoRepetido());
+        r.put("costosVisibles", costos);
+        r.put("avisos", t.getAvisos());
+        var c = t.getCuadre();
+        if (c != null) {
+            Map<String, Object> cm = new LinkedHashMap<>();
+            cm.put("cuadra", c.cuadra());
+            cm.put("mensaje", c.mensaje());
+            cm.put("diferencia", c.diferencia());
+            cm.put("factor", c.factorCosto());
+            r.put("cuadre", cm);
+        }
+        List<Map<String, Object>> lineas = new ArrayList<>();
+        int i = 0;
+        for (var rr : rev.renglones()) {
+            var li = rr.linea();
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("indice", i++);
+            m.put("descripcion", li.getDescripcion());
+            m.put("codigoProveedor", li.getCodigoProveedor());
+            m.put("textoOriginal", li.getTextoOriginal());
+            m.put("cantidad", li.getCantidad());
+            m.put("unidad", li.getUnidad());
+            m.put("empaque", li.getEmpaque());
+            m.put("precioUnitario", li.getPrecioUnitario());
+            m.put("importe", li.getImporte());
+            m.put("estado", li.getEstado().name());
+            m.put("motivo", li.getMotivo());
+            m.put("producto", rr.elegida() == null ? null : mapaPropuesta(rr.elegida(), costos));
+            m.put("dudoso", rr.dudoso());
+            List<Map<String, Object>> cands = new ArrayList<>();
+            for (var p : rr.candidatos()) cands.add(mapaPropuesta(p, costos));
+            m.put("candidatos", cands);
+            m.put("piezasPorUnidad", rr.piezasPorUnidad());
+            m.put("preguntarEmpaque", rr.preguntarEmpaque());
+            if (costos) m.put("costoPorPieza", rr.costoPorPieza());
+            m.put("departamentoSugeridoId", rr.departamentoSugeridoId());
+            m.put("precioVentaSugerido", rr.precioVentaSugerido());
+            lineas.add(m);
+        }
+        r.put("lineas", lineas);
+        return r;
+    }
+
+    private static Map<String, Object> mapaPropuesta(me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.Propuesta p,
+                                                     boolean costos) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", p.productoId());
+        m.put("descripcion", p.descripcion());
+        m.put("origen", p.origen());
+        m.put("puntaje", Math.round(p.puntaje() * 100) / 100.0);
+        m.put("precioVenta", p.precioVenta());
+        if (costos) m.put("costoActual", p.costoActual());
+        m.put("departamentoId", p.departamentoId());
+        return m;
+    }
+
+    private void ticketsCancelar(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex);
+        Object id = cuerpo.get("id");
+        if (!(id instanceof String s) || s.length() > 64) throw new CuerpoInvalido(400, "Lectura inválida.");
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("ok", lecturasTicket.cancelar(s, v.get().cajero().getId()));
+        responder(ex, 200, r);
+    }
+
+    private static Long idOpcional(Object o, String campo) {
+        if (o == null) return null;
+        if (!(o instanceof Number n) || n.doubleValue() != Math.rint(n.doubleValue()) || n.longValue() <= 0) {
+            throw new CuerpoInvalido(400, "El campo " + campo + " es inválido.");
+        }
+        return n.longValue();
+    }
+
+    /**
+     * Registra el ticket leído como entrada de mercancía (AJUSTAR_INVENTARIO). Del teléfono solo se toma lo
+     * que el usuario decide por renglón (producto o producto nuevo, cantidad, piezas por unidad, importe);
+     * la descripción y la clave del proveedor (para aprender), el total, el texto y el reparto de impuestos y
+     * cargos salen de la lectura guardada en la computadora, y el cuadre se vuelve a calcular aquí.
+     */
+    private void ticketsRegistrar(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        if (!v.get().cajero().tienePermiso(Permiso.AJUSTAR_INVENTARIO)) { sinPermiso(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex, MAX_CUERPO_TICKET);
+        LecturasTicketMovil.Lectura l = lecturaDe(v.get().cajero(), cuerpo.get("id"));
+        if (l.estado() != LecturasTicketMovil.Estado.LISTO) throw new NegocioException("El ticket aún no se termina de leer.");
+        var tickets = l.resultado().tickets();
+        int ticket = cuerpo.get("ticket") == null ? 0 : (int) numero(cuerpo.get("ticket"), "ticket");
+        if (ticket < 0 || ticket >= tickets.size()) throw new CuerpoInvalido(400, "Ese ticket no está en la foto.");
+        if (l.registrados.contains(ticket)) throw new NegocioException("Este ticket ya se registró.");
+        var t = tickets.get(ticket);
+        Long proveedorId = idOpcional(cuerpo.get("proveedorId"), "proveedorId");
+        String folio = texto(cuerpo.get("folio"), 60).trim();
+        LocalDate fechaTicket = fechaOpcional(cuerpo.get("fecha"), "fecha");
+        boolean repetido = Boolean.TRUE.equals(cuerpo.get("registrarAunqueSeRepita"));
+        if (!(cuerpo.get("renglones") instanceof List<?> lista) || lista.isEmpty() || lista.size() > MAX_RENGLONES_TICKET) {
+            throw new CuerpoInvalido(400, "Faltan los renglones del ticket.");
+        }
+        List<me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.RenglonAplicar> renglones = new ArrayList<>();
+        java.util.Set<Integer> usados = new java.util.HashSet<>();
+        var cuadre = new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketLeido();
+        cuadre.setSubtotal(t.getSubtotal());
+        cuadre.setDescuento(t.getDescuento());
+        cuadre.setImpuestos(t.getImpuestos());
+        cuadre.setCargos(t.getCargos());
+        cuadre.setTotal(t.getTotal());
+        for (Object o : lista) {
+            if (!(o instanceof Map<?, ?> m)) throw new CuerpoInvalido(400, "Renglón inválido.");
+            double ind = numero(m.get("indice"), "indice");
+            if (ind != Math.rint(ind) || ind < 0 || ind >= t.getLineas().size() || !usados.add((int) ind)) {
+                throw new CuerpoInvalido(400, "Renglón inválido.");
+            }
+            var linea = t.getLineas().get((int) ind);
+            Long productoId = idOpcional(m.get("productoId"), "productoId");
+            me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.ProductoNuevo nuevo = null;
+            if (m.get("nuevo") != null) {
+                if (!(m.get("nuevo") instanceof Map<?, ?> n)) throw new CuerpoInvalido(400, "Producto nuevo inválido.");
+                nuevo = new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.ProductoNuevo(
+                        texto(n.get("descripcion"), 150).trim(), texto(n.get("codigoBarras"), 40).trim(),
+                        idOpcional(n.get("departamentoId"), "departamentoId"), numero(n.get("precioVenta"), "precioVenta"));
+                productoId = null;
+            }
+            double cantidad = numero(m.get("cantidad"), "cantidad");
+            double piezas = numero(m.get("piezasPorUnidad"), "piezasPorUnidad");
+            if (piezas != Math.rint(piezas) || piezas < 1 || piezas > 10000) throw new CuerpoInvalido(400, "Las piezas por unidad deben ser un número entero de 1 en adelante.");
+            double importe = numero(m.get("importe"), "importe");
+            renglones.add(new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.RenglonAplicar(
+                    linea.getCodigoProveedor(), linea.getDescripcion(), productoId, nuevo, cantidad, (int) piezas, importe, true));
+            var lc = new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.LineaTicket();
+            lc.setImporte(importe);
+            cuadre.getLineas().add(lc);
+        }
+        var c = me.eliassanchezfernandez.puntodeventa.ticketsproveedor.InterpreteTicket.cuadrar(cuadre);
+        double factor = c.cuadra() ? c.factorCosto() : 1.0;
+        var solicitud = new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.Solicitud(
+                proveedorId, folio, fechaTicket, t.getTotal(), factor,
+                "teléfono · " + l.resultado().origen(), t.getTexto(), renglones, repetido);
+        int idx = ticket;
+        protegido(ex, Permiso.AJUSTAR_INVENTARIO, true, cajero -> {
+            var res = ticketProveedorService.aplicar(solicitud, null);
+            l.registrados.add(idx);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("registroId", res.registroId());
+            r.put("renglones", res.renglones());
+            r.put("piezas", res.piezas());
+            if (res.costosVisibles()) r.put("totalRegistrado", res.totalRegistrado());
+            r.put("subieron", res.subieron().stream().map(ServidorMovilService::mapaCambioCosto).toList());
+            r.put("bajaron", res.bajaron().stream().map(ServidorMovilService::mapaCambioCosto).toList());
+            r.put("cambiosOcultos", res.cambiosOcultos());
+            r.put("productosNuevos", res.productosNuevos().size());
+            r.put("puedeCambiarPrecios", cajero.tienePermiso(Permiso.EDITAR_PRODUCTOS) && cajero.tienePermiso(Permiso.CAMBIAR_PRECIOS));
+            Integer siguiente = null;
+            for (int i = 0; i < l.resultado().tickets().size(); i++) {
+                if (!l.registrados.contains(i) && !l.resultado().tickets().get(i).getLineas().isEmpty()) { siguiente = i; break; }
+            }
+            r.put("siguiente", siguiente);
+            return r;
+        });
+    }
+
+    private static Map<String, Object> mapaCambioCosto(me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.CambioCosto c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("productoId", c.productoId());
+        m.put("descripcion", c.descripcion());
+        m.put("costoAntes", c.costoAntes());
+        m.put("costoAhora", c.costoAhora());
+        m.put("porcentaje", c.porcentaje());
+        m.put("precioVenta", c.precioVenta());
+        m.put("gananciaAntes", c.gananciaAntes());
+        m.put("gananciaAhora", c.gananciaAhora());
+        m.put("precioSugerido", c.precioSugerido());
+        return m;
+    }
+
+    /**
+     * «Mandar a la computadora para revisar». Con JSON {id, proveedorId?, nota?} manda la foto (y lo leído) de
+     * una lectura de este teléfono; con una imagen en el cuerpo (?nota=…) manda la foto sin leer (cuando esta
+     * computadora aún no lee fotos). Cualquier usuario con sesión.
+     */
+    private void ticketsPendiente(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        String tipo = ex.getRequestHeaders().getFirst("Content-Type");
+        if (tipo != null && tipo.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            String nota = parametros(ex).getOrDefault("nota", "");
+            if (nota.length() > 300) throw new CuerpoInvalido(400, "Nota demasiado larga.");
+            byte[] foto = leerFoto(ex);
+            protegido(ex, null, true, cajero -> {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("ok", true);
+                r.put("pendienteId", ticketsPorRevisar.encolar(foto, null, null, null, nota));
+                return r;
+            });
+            return;
+        }
+        Map<String, Object> cuerpo = leerJson(ex);
+        LecturasTicketMovil.Lectura l = lecturaDe(v.get().cajero(), cuerpo.get("id"));
+        Long proveedorId = idOpcional(cuerpo.get("proveedorId"), "proveedorId");
+        String nota = texto(cuerpo.get("nota"), 300);
+        protegido(ex, null, true, cajero -> {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            synchronized (l) {
+                if (l.pendienteId == null) {
+                    var res = l.estado() == LecturasTicketMovil.Estado.LISTO ? l.resultado() : null;
+                    l.pendienteId = ticketsPorRevisar.encolar(l.foto(), res == null ? null : res.ocr(),
+                            res == null ? null : res.origen(), proveedorId, nota);
+                }
+                r.put("pendienteId", l.pendienteId);
+            }
+            return r;
+        });
+    }
+
+    /** Buscador de productos para «cambiar producto» (activos, por nombre o código, hasta 30) */
+    private void productosBuscar(HttpExchange ex) throws IOException {
+        String q = parametros(ex).getOrDefault("q", "").trim();
+        if (q.length() > 60) throw new CuerpoInvalido(400, "Búsqueda demasiado larga.");
+        protegido(ex, null, true, cajero -> {
+            boolean costos = proveedorService.puedeVerCostos();
+            List<Producto> activos = productoService.listarTodos().stream()
+                    .filter(p -> p.isActivo() && !me.eliassanchezfernandez.puntodeventa.model.ProductoComun.es(p)).toList();
+            List<Map<String, Object>> lista = new ArrayList<>();
+            for (Producto p : ProductoService.filtrar(activos, q)) {
+                if (lista.size() >= MAX_RESULTADOS_BUSQUEDA) break;
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", p.getId());
+                m.put("descripcion", p.getDescripcion());
+                m.put("codigo", p.getCodigoBarras());
+                m.put("precioVenta", p.getPrecioVenta());
+                if (costos) m.put("costoActual", p.getPrecioCosto());
+                m.put("departamentoId", p.getDepartamento() == null ? null : p.getDepartamento().getId());
+                m.put("departamento", p.getDepartamento() == null ? "" : p.getDepartamento().getNombre());
+                lista.add(m);
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("productos", lista);
+            return r;
+        });
+    }
+
+    /** «Actualizar precios seleccionados» tras «Subieron de costo» (EDITAR_PRODUCTOS y CAMBIAR_PRECIOS) */
+    private void preciosActualizar(HttpExchange ex) throws IOException {
+        Optional<SesionValida> v = validarToken(ex);
+        if (v.isEmpty()) { sesionInvalida(ex); return; }
+        Cajero quien = v.get().cajero();
+        if (!quien.tienePermiso(Permiso.EDITAR_PRODUCTOS) || !quien.tienePermiso(Permiso.CAMBIAR_PRECIOS)) { sinPermiso(ex); return; }
+        Map<String, Object> cuerpo = leerJson(ex, MAX_CUERPO_TICKET);
+        if (!(cuerpo.get("precios") instanceof List<?> lista) || lista.size() > MAX_RENGLONES_TICKET) {
+            throw new CuerpoInvalido(400, "Faltan los precios.");
+        }
+        List<me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.NuevoPrecio> precios = new ArrayList<>();
+        for (Object o : lista) {
+            if (!(o instanceof Map<?, ?> m)) throw new CuerpoInvalido(400, "Precio inválido.");
+            Long id = idOpcional(m.get("productoId"), "productoId");
+            if (id == null) throw new CuerpoInvalido(400, "Precio inválido.");
+            precios.add(new me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketProveedorService.NuevoPrecio(id, numero(m.get("precioVenta"), "precioVenta")));
+        }
+        protegido(ex, Permiso.CAMBIAR_PRECIOS, cajero -> {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("ok", true);
+            r.put("actualizados", ticketProveedorService.actualizarPreciosVenta(precios));
+            return r;
+        });
+    }
+
     // ── Utilidades HTTP ───────────────────────────────────────────────────
 
     private Map<String, Object> leerJson(HttpExchange ex) throws IOException {
+        return leerJson(ex, MAX_CUERPO_BYTES);
+    }
+
+    private Map<String, Object> leerJson(HttpExchange ex, int max) throws IOException {
         String tipo = ex.getRequestHeaders().getFirst("Content-Type");
         if (tipo == null || !tipo.toLowerCase().startsWith("application/json")) {
             throw new CuerpoInvalido(415, "El contenido debe ser application/json.");
         }
-        String largo = ex.getRequestHeaders().getFirst("Content-Length");
-        if (largo != null) {
-            try {
-                if (Long.parseLong(largo.trim()) > MAX_CUERPO_BYTES) throw new CuerpoInvalido(413, "Solicitud demasiado grande.");
-            } catch (NumberFormatException e) {
-                throw new CuerpoInvalido(400, "Cabecera Content-Length inválida.");
-            }
-        }
-        // Lectura acotada: también protege cuando el cuerpo llega "chunked" sin Content-Length
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        byte[] tmp = new byte[1024];
-        try (InputStream in = ex.getRequestBody()) {
-            int n;
-            while ((n = in.read(tmp)) != -1) {
-                buf.write(tmp, 0, n);
-                if (buf.size() > MAX_CUERPO_BYTES) throw new CuerpoInvalido(413, "Solicitud demasiado grande.");
-            }
-        }
+        ByteArrayOutputStream buf = leerAcotado(ex, max);
         try {
             if (buf.size() == 0) return new LinkedHashMap<>();
             return json().readValue(buf.toByteArray(), new TypeReference<LinkedHashMap<String, Object>>() { });
         } catch (IOException e) {
             throw new CuerpoInvalido(400, "JSON inválido.");
         }
+    }
+
+    /** Cuerpo de hasta {@code max} bytes (también "chunked" sin Content-Length); más = 413 */
+    private static ByteArrayOutputStream leerAcotado(HttpExchange ex, int max) throws IOException {
+        String largo = ex.getRequestHeaders().getFirst("Content-Length");
+        if (largo != null) {
+            try {
+                if (Long.parseLong(largo.trim()) > max) throw new CuerpoInvalido(413, "Solicitud demasiado grande.");
+            } catch (NumberFormatException e) {
+                throw new CuerpoInvalido(400, "Cabecera Content-Length inválida.");
+            }
+        }
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] tmp = new byte[8192];
+        try (InputStream in = ex.getRequestBody()) {
+            int n;
+            while ((n = in.read(tmp)) != -1) {
+                buf.write(tmp, 0, n);
+                if (buf.size() > max) throw new CuerpoInvalido(413, "Solicitud demasiado grande.");
+            }
+        }
+        return buf;
     }
 
     /** Fecha AAAA-MM-DD opcional (null o "" = sin fecha) */

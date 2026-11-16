@@ -69,6 +69,7 @@ public class InventarioController implements Initializable {
     @FXML private Button    btnAplicar;
     @FXML private ToggleButton btnSoloBajos;
     @FXML private Button    btnPorCaducar;
+    @FXML private Button    btnPorRevisar;
     @FXML private Label     lblLotes;
     @FXML private VBox      vboxCaducidad;
     @FXML private DatePicker dpCaducidad;
@@ -90,6 +91,7 @@ public class InventarioController implements Initializable {
     @Autowired private CaducidadService    caducidadService;
     @Autowired private CaducidadDialogos   caducidadDialogos;
     @Autowired private LeerTicketDialogo   leerTicketDialogo;
+    @Autowired private me.eliassanchezfernandez.puntodeventa.ticketsproveedor.TicketsPorRevisarService ticketsPorRevisar;
 
     private final ObservableList<Producto> lista = FXCollections.observableArrayList();
     private Producto productoSeleccionado = null;
@@ -126,6 +128,7 @@ public class InventarioController implements Initializable {
                 : productoService.productosConInventario());
 
         actualizarBotonPorCaducar();
+        actualizarBotonPorRevisar();
 
         // Mantener el producto del formulario con datos frescos
         if (productoSeleccionado != null) {
@@ -174,6 +177,31 @@ public class InventarioController implements Initializable {
             btnPorCaducar.setText(n == 0 ? "Por caducar" : "Por caducar (" + n + ")");
         } catch (RuntimeException e) {
             btnPorCaducar.setText("Por caducar");
+        }
+    }
+
+    /** "Por revisar (2)": fotos de tickets mandadas desde el teléfono; oculto si no hay; un fallo aquí no estorba */
+    private void actualizarBotonPorRevisar() {
+        if (btnPorRevisar == null) return;
+        long n;
+        try {
+            n = ticketsPorRevisar.cuantosPendientes();
+        } catch (RuntimeException e) {
+            n = 0;
+        }
+        btnPorRevisar.setText("Por revisar (" + n + ")");
+        btnPorRevisar.setVisible(n > 0);
+        btnPorRevisar.setManaged(n > 0);
+    }
+
+    /** Elige uno de los tickets mandados desde el teléfono y lo abre en «Leer ticket» ya cargado */
+    @FXML void onPorRevisar() {
+        try {
+            if (leerTicketDialogo.mostrarPorRevisar(tablaInventario.getScene().getWindow())) recargar();
+            else actualizarBotonPorRevisar();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            alerta(Alert.AlertType.ERROR, "Por revisar", "No se pudo abrir la ventana: " + e.getMessage());
         }
     }
 

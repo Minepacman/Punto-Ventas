@@ -23,6 +23,10 @@
                     styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
             <Button fx:id="btnLeerTicket" text="Leer ticket" onAction="#onLeerTicket"><graphic><Icono nombre="camara"/></graphic>
                 <tooltip><Tooltip text="Leer el ticket del proveedor (foto o texto) y darle entrada a todo de una vez"/></tooltip></Button>
+            <!-- Fotos de tickets mandadas desde el teléfono; se oculta cuando no hay ninguna -->
+            <Button fx:id="btnPorRevisar" text="Por revisar" onAction="#onPorRevisar"
+                    visible="false" managed="false"><graphic><Icono nombre="recibo"/></graphic>
+                <tooltip><Tooltip text="Tickets de proveedor que se mandaron desde el teléfono para revisarlos aquí"/></tooltip></Button>
             <Button text="Ajustes"                onAction="#onAjustes"><graphic><Icono nombre="bascula"/></graphic>
                 <tooltip><Tooltip text="Corregir la existencia: conteo físico, merma, robo, caducidad..."/></tooltip></Button>
             <ToggleButton fx:id="btnSoloBajos" text="Productos bajos"
