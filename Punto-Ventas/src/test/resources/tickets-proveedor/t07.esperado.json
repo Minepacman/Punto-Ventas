@@ -1,0 +1,57 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Cervezas y Refrescos de Jalapa",
+      "folio": "9544-54744",
+      "fecha": "2026-11-13",
+      "lineas": [
+        {
+          "codigoProveedor": "0134020",
+          "descripcion": "DANONE FRESA 220G DS ASS",
+          "cantidad": 4,
+          "unidad": "ZA",
+          "empaque": null,
+          "precioUnitario": 15.5,
+          "descuento": 0.0,
+          "importe": 62.0
+        },
+        {
+          "codigoProveedor": "0171126",
+          "descripcion": "DANONE MANZANA 220G DS EVO",
+          "cantidad": 2,
+          "unidad": "ZA",
+          "empaque": null,
+          "precioUnitario": 15.5,
+          "descuento": 0.0,
+          "importe": 31.0
+        },
+        {
+          "codigoProveedor": "0171127",
+          "descripcion": "DANONE DURAZNO 220G DS",
+          "cantidad": 2,
+          "unidad": "ZA",
+          "empaque": null,
+          "precioUnitario": 15.5,
+          "descuento": 0.0,
+          "importe": 31.0
+        },
+        {
+          "codigoProveedor": "0180175",
+          "descripcion": "ACTIVIA CIRUELA PASA 225G",
+          "cantidad": 8,
+          "unidad": "ZA",
+          "empaque": null,
+          "precioUnitario": 16.0,
+          "descuento": 0.0,
+          "importe": 128.0
+        }
+      ],
+      "subtotal": 252.0,
+      "descuento": 0.0,
+      "impuestos": null,
+      "cargos": null,
+      "total": 252.0,
+      "notas": "Hoja carta girada; la orilla izquierda quedó cortada (ZA = PZA, código sin el 3 inicial)."
+    }
+  ]
+}

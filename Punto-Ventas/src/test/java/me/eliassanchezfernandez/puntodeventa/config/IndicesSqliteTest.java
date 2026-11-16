@@ -46,6 +46,18 @@ class IndicesSqliteTest {
         }
     }
 
+    @Test
+    void optimizarDejaEstadisticasParaElPlanificador() throws Exception {
+        try (Connection c = dataSource.getConnection()) {
+            IndicesSqlite.optimizar(c);
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT count(*) FROM sqlite_master WHERE name = 'sqlite_stat1'")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(1);
+            }
+        }
+    }
+
     private static String pragma(Statement st, String nombre) throws Exception {
         try (ResultSet rs = st.executeQuery("PRAGMA " + nombre)) {
             rs.next();

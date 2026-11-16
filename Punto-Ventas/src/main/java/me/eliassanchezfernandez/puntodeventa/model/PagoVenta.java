@@ -44,6 +44,37 @@ public class PagoVenta {
     @Column(name = "autorizacion", length = 20)
     private String autorizacion;
 
+    // ── Vale de compra de la tienda (VALE_COMPRA; nullable) ──────────────
+
+    /** Código del vale con que se pagó esta parte */
+    @Column(name = "vale_codigo", length = 20)
+    private String valeCodigo;
+
+    /** Lo que le quedó al vale después de esta compra (se imprime en el ticket) */
+    @Column(name = "vale_saldo")
+    private Double valeSaldo;
+
+    /** Pago con un vale de compra de la tienda (el servicio comprueba el código y el saldo) */
+    public static PagoVenta conVale(String codigo, double monto) {
+        PagoVenta p = new PagoVenta(Venta.FormaPago.VALE_COMPRA, monto);
+        p.setValeCodigo(codigo);
+        return p;
+    }
+
+    /**
+     * Pago "A cuenta" (fiado): cliente al que se le carga. No se guarda en esta tabla
+     * (la venta guarda el cliente); solo viaja de la pantalla al servicio.
+     */
+    @Transient
+    private Long clienteId;
+
+    /** Pago a cuenta del cliente indicado */
+    public static PagoVenta aCuenta(Long clienteId, double monto) {
+        PagoVenta p = new PagoVenta(Venta.FormaPago.CREDITO, monto);
+        p.setClienteId(clienteId);
+        return p;
+    }
+
     public PagoVenta(Venta.FormaPago formaPago, double monto) {
         this.formaPago = formaPago;
         this.monto = monto;

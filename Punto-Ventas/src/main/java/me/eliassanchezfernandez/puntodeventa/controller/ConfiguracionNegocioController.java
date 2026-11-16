@@ -31,6 +31,7 @@ public class ConfiguracionNegocioController implements Initializable {
     @FXML private TextField  txtDireccion;
     @FXML private TextField  txtIva;
     @FXML private TextField  txtPlazo;
+    @FXML private TextField  txtVigenciaVales;
 
     @Autowired private ConfiguracionService configuracionService;
 
@@ -41,22 +42,28 @@ public class ConfiguracionNegocioController implements Initializable {
         txtDireccion.setText(c.getDireccion() != null ? c.getDireccion() : "");
         txtIva.setText(formato(c.getTasaIva() * 100));
         txtPlazo.setText(String.valueOf(c.getPlazoCancelacionHoras()));
+        txtVigenciaVales.setText(String.valueOf(c.getValeVigenciaDiasOCero()));
     }
 
     @FXML
     private void onGuardar() {
         double iva;
         int plazo;
+        int vigencia;
         try {
             iva = Double.parseDouble(me.eliassanchezfernandez.puntodeventa.util.CalculoCobro.normalizarNumero(txtIva.getText()));
             plazo = Integer.parseInt(txtPlazo.getText().trim());
+            String v = txtVigenciaVales.getText() == null ? "" : txtVigenciaVales.getText().trim();
+            vigencia = v.isEmpty() ? 0 : Integer.parseInt(v);
         } catch (NumberFormatException e) {
             Ventanas.alerta(Alert.AlertType.WARNING, "Datos inválidos",
-                    "La tasa de IVA debe ser un número (ej: 16) y el plazo un entero en horas (ej: 48).");
+                    "La tasa de IVA debe ser un número (ej: 16), el plazo un entero en horas (ej: 48) "
+                    + "y la vigencia de los vales un entero en días (0 = no vencen).");
             return;
         }
         try {
             configuracionService.guardar(txtNombre.getText(), txtDireccion.getText(), iva, plazo);
+            configuracionService.guardarVigenciaVales(vigencia);
             Ventanas.alerta(Alert.AlertType.INFORMATION, "Configuración guardada",
                     "Los cambios se guardaron. El nuevo plazo de cancelación aplica solo a ventas futuras.");
             onCerrar();

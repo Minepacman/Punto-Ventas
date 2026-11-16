@@ -3,10 +3,15 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
+<?import atlantafx.base.controls.ToggleSwitch?>
+<?import me.eliassanchezfernandez.puntodeventa.controller.SelectorUbicacion?>
 
 <!--
     configuracion_clima.fxml  –  Ubicación del negocio y clima
     Controlador: ConfiguracionClimaController.java
+
+    La ubicación se elige con SelectorUbicacion (detectar por internet, buscar la ciudad o, en
+    Opciones avanzadas, coordenadas a mano). El clima es un interruptor.
 -->
 <BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ConfiguracionClimaController"
@@ -14,41 +19,29 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox styleClass="form-panel" spacing="14">
-                <padding><Insets topRightBottomLeft="24"/></padding>
+            <VBox styleClass="form-panel" spacing="12">
+                <padding><Insets top="18" right="22" bottom="16" left="22"/></padding>
 
-                <Label text="Ubicación del negocio" styleClass="form-section-title"/>
-                <Separator/>
-
-                <VBox spacing="4">
-                    <Label text="Ciudad (solo para mostrarla)" styleClass="field-label"/>
-                    <TextField fx:id="txtCiudad" promptText="ej: Ciudad de México"/>
-                </VBox>
-
-                <HBox spacing="12">
-                    <VBox spacing="4" HBox.hgrow="ALWAYS">
-                        <Label text="Latitud" styleClass="field-label"/>
-                        <TextField fx:id="txtLatitud" promptText="ej: 19.4326"/>
-                    </VBox>
-                    <VBox spacing="4" HBox.hgrow="ALWAYS">
-                        <Label text="Longitud" styleClass="field-label"/>
-                        <TextField fx:id="txtLongitud" promptText="ej: -99.1332"/>
-                    </VBox>
-                </HBox>
-                <Label text="Las coordenadas se obtienen en cualquier mapa en línea (clic derecho sobre la tienda). Con dos decimales basta: solo se necesita la zona, no la dirección exacta."
+                <Label text="¿Dónde está tu negocio?" styleClass="form-section-title"/>
+                <Label text="Con la ciudad, el programa sabe el clima de tu zona y lo relaciona con tus ventas para sugerir mejor. Solo se usa la zona, nunca la dirección exacta."
                        wrapText="true" styleClass="hint"/>
+
+                <SelectorUbicacion fx:id="selectorUbicacion"/>
 
                 <Separator/>
                 <Label text="Clima" styleClass="form-section-title"/>
 
-                <VBox spacing="2">
-                    <CheckBox fx:id="chkClimaActivo" text="Activar clima"/>
-                    <Label text="Cada hora se consulta la temperatura y la condición del tiempo (servicio gratuito Open-Meteo) para relacionarlas con las ventas y mejorar las sugerencias. Apagado hasta que captures las coordenadas."
-                           wrapText="true" styleClass="hint"/>
-                </VBox>
+                <HBox styleClass="fila-interruptor">
+                    <ToggleSwitch fx:id="swClima"/>
+                    <VBox spacing="1" HBox.hgrow="ALWAYS">
+                        <Label text="Actualizar el clima cada 30 minutos" styleClass="interruptor-titulo"/>
+                        <Label text="Temperatura y condición del tiempo de tu zona (servicio gratuito Open-Meteo). Se enciende solo cuando ya hay ubicación."
+                               wrapText="true" styleClass="hint"/>
+                    </VBox>
+                </HBox>
 
-                <HBox styleClass="callout callout-info" alignment="CENTER_LEFT">
-                    <Label text="Privacidad: al servicio de clima solo se envían la latitud y la longitud. Ninguna venta, producto ni dato del negocio sale de este equipo. Sin internet, el programa funciona igual y solo muestra «Sin datos de clima»."
+                <HBox styleClass="callout, callout-info" alignment="CENTER_LEFT">
+                    <Label text="Privacidad: al servicio de clima solo se envían las coordenadas de la zona. Ninguna venta, producto ni dato del negocio sale de este equipo. Sin internet el programa funciona igual y muestra «Sin datos de clima»."
                            wrapText="true" HBox.hgrow="ALWAYS"/>
                 </HBox>
 
@@ -57,7 +50,7 @@
                     <Label fx:id="lblEstado" text="" wrapText="true" styleClass="hint" HBox.hgrow="ALWAYS"/>
                 </HBox>
 
-                <Region minHeight="8"/>
+                <Region minHeight="4"/>
 
                 <HBox spacing="12">
                     <Button text="Guardar" onAction="#onGuardar" styleClass="button-primary"

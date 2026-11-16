@@ -5,30 +5,33 @@
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
 
-
-<BorderPane xmlns:fx="http://javafx.com/fxml"
+<!--
+    clientes.fxml  –  Clientes con cuenta (fiado); pestaña oculta mientras FuncionesOcultas.FIADO_HABILITADO = false
+    Controlador: ClientesController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
             fx:controller="me.eliassanchezfernandez.puntodeventa.controller.ClientesController">
 
     <top>
         <VBox>
-            <HBox styleClass="section-toolbar" spacing="8">
+            <HBox styleClass="section-toolbar" spacing="8" alignment="CENTER_LEFT">
                 <padding><Insets topRightBottomLeft="10"/></padding>
-                <Button text="Estado de Cuenta" onAction="#onEstadoCuenta"/>
-                <Button text="+ Nuevo Cliente"  onAction="#onNuevoCliente"
-                        styleClass="button-success"/>
-                <Button text="Modificar"       onAction="#onModificar"><graphic><Icono nombre="editar"/></graphic></Button>
-                <Button text="Eliminar"        onAction="#onEliminar"
-                        styleClass="button-danger"><graphic><Icono nombre="eliminar"/></graphic></Button>
+                <Button text="Registrar abono" onAction="#onAbono" styleClass="button-primary"><graphic><Icono nombre="efectivo"/></graphic></Button>
+                <Button text="Estado de cuenta" onAction="#onEstadoCuenta"><graphic><Icono nombre="documento"/></graphic></Button>
+                <Button text="Nuevo cliente" onAction="#onNuevoCliente" styleClass="button-success"><graphic><Icono nombre="mas"/></graphic></Button>
+                <Button text="Modificar" onAction="#onModificar"><graphic><Icono nombre="editar"/></graphic></Button>
+                <Button text="Ajustar saldo" onAction="#onAjustar"><graphic><Icono nombre="llave"/></graphic></Button>
                 <Region HBox.hgrow="ALWAYS"/>
-                <Button text="Reporte de Saldos" onAction="#onReporteSaldos"/>
+                <Button text="Exportar" onAction="#onExportar"><graphic><Icono nombre="documento"/></graphic></Button>
             </HBox>
 
-            <!-- Barra de búsqueda -->
             <HBox spacing="8" alignment="CENTER_LEFT" styleClass="search-row">
                 <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
                 <Label><graphic><Icono nombre="buscar"/></graphic></Label>
-                <TextField fx:id="txtBuscar" promptText="Buscar por nombre o número..."
-                           HBox.hgrow="ALWAYS" onKeyReleased="#onBuscar"/>
+                <TextField fx:id="txtBuscar" promptText="Buscar por nombre o teléfono..." HBox.hgrow="ALWAYS"/>
+                <CheckBox fx:id="chkSoloDeudores" text="Solo los que deben" onAction="#onFiltro"/>
+                <CheckBox fx:id="chkInactivos" text="Mostrar desactivados" onAction="#onFiltro"/>
+                <Label fx:id="lblTotal" text="" styleClass="badge"/>
             </HBox>
         </VBox>
     </top>
@@ -36,13 +39,22 @@
     <center>
         <TableView fx:id="tablaClientes">
             <columns>
-                <TableColumn fx:id="colId"       text="#"              prefWidth="60"/>
-                <TableColumn fx:id="colNombre"   text="Nombre"         prefWidth="250"/>
-                <TableColumn fx:id="colTelefono" text="Teléfono"       prefWidth="130"/>
-                <TableColumn fx:id="colLimite"   text="Límite Crédito" prefWidth="130"/>
-                <TableColumn fx:id="colSaldo"    text="Saldo Deuda"    prefWidth="130"/>
+                <TableColumn fx:id="colNombre"     text="Nombre"      prefWidth="230"/>
+                <TableColumn fx:id="colTelefono"   text="Teléfono"    prefWidth="120"/>
+                <TableColumn fx:id="colSaldo"      text="Debe"        prefWidth="110" styleClass="align-right"/>
+                <TableColumn fx:id="colLimite"     text="Límite"      prefWidth="110" styleClass="align-right"/>
+                <TableColumn fx:id="colDisponible" text="Puede fiársele" prefWidth="120" styleClass="align-right"/>
+                <TableColumn fx:id="colEstado"     text="Estado"      prefWidth="90"/>
+                <TableColumn fx:id="colNota"       text="Nota"        prefWidth="220"/>
             </columns>
         </TableView>
     </center>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <padding><Insets top="6" right="10" bottom="8" left="10"/></padding>
+            <Label text="Doble clic en un cliente: estado de cuenta. Las ventas a cuenta se anotan al cobrar (F12 → A cuenta, F6 elige el cliente)." styleClass="hint" wrapText="true"/>
+        </HBox>
+    </bottom>
 
 </BorderPane>

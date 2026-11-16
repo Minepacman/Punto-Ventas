@@ -240,7 +240,7 @@ class ServidorMovilDatosTest {
         assertThat(enviar("GET", "/api/ventas?desde=ayer&hasta=" + hoy, null, t).estado()).isEqualTo(400);
         assertThat(enviar("GET", "/api/ventas?desde=" + hoy + "&hasta=" + hoy.minusDays(1), null, t).estado()).isEqualTo(400);
         assertThat(enviar("GET", "/api/ventas?desde=%25ZZ", null, t).estado()).isEqualTo(400);
-        assertThat(ServidorMovilService.MAX_VENTAS).isEqualTo(500);
+        assertThat(ServidorMovilService.MAX_VENTAS).isEqualTo(100);
     }
 
     // ── Inventario ────────────────────────────────────────────────────────

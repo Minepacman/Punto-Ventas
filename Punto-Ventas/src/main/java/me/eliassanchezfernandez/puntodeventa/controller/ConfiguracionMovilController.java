@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.controller;
 
+import atlantafx.base.controls.ToggleSwitch;
 import javafx.animation.PauseTransition;
 import javafx.collections.FXCollections;
 import javafx.util.Duration;
@@ -22,6 +23,7 @@ import javafx.scene.Scene;
 import javafx.scene.image.ImageView;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import me.eliassanchezfernandez.puntodeventa.util.Iconos;
 import javafx.scene.text.TextAlignment;
 import javafx.scene.transform.Scale;
 import javafx.stage.FileChooser;
@@ -52,15 +54,19 @@ import java.util.List;
 import java.util.ResourceBundle;
 
 /**
- * Configuración → Acceso móvil (solo ADMIN): enciende o apaga el servidor web
- * para teléfonos EN VIVO, define el puerto, muestra las direcciones de la red
- * local y lista las sesiones móviles abiertas para cerrarlas.
+ * Configuración → Acceso móvil (solo ADMIN). En este orden: el código QR grande
+ * con la dirección, el interruptor "Permitir acceso desde teléfonos" (enciende o
+ * apaga el servidor EN VIVO, sin botón Aplicar), los teléfonos conectados (con
+ * "Cerrar") y, plegadas, las opciones avanzadas (nombre .local, puerto fijo,
+ * todas las direcciones), que sí se guardan con su propio botón Aplicar.
  */
 @Component
 @Scope("prototype")
 public class ConfiguracionMovilController implements Initializable {
 
-    /** Instrucciones para el personal; van en pantalla y en la hoja impresa */
+    /** Una sola línea en pantalla, bajo el QR */
+    static final String INSTRUCCION_QR = "Escanéalo con la cámara del teléfono conectado al Wi-Fi de la tienda.";
+    /** Instrucciones para el personal en la hoja impresa */
     static final String[] PASOS_QR = {
             "1. Conecta el teléfono al Wi-Fi de la tienda.",
             "2. Abre la cámara y apunta al código.",
@@ -68,7 +74,7 @@ public class ConfiguracionMovilController implements Initializable {
             "Úsalo solo en el Wi-Fi del negocio (con contraseña), nunca en el de los clientes ni en redes públicas: "
                     + "la conexión no va cifrada."
     };
-    private static final int QR_PANTALLA_PX = 300;   // ≈ 8 cm en pantalla: se lee a 50 cm
+    private static final int QR_PANTALLA_PX = 210;   // ≈ 5.5 cm en pantalla: se lee a 40 cm y deja ver el interruptor sin desplazar a 1024×768
     private static final int QR_IMPRESION_PX = 360;  // puntos de impresión (≈ 12.7 cm a 72 dpi)
 
     /** URL cuyo QR se muestra cuando hay varias direcciones (se conserva al refrescar) */
@@ -77,7 +83,7 @@ public class ConfiguracionMovilController implements Initializable {
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     @FXML private BorderPane raiz;
-    @FXML private CheckBox   chkActivo;
+    @FXML private ToggleSwitch swActivo;
     @FXML private TextField  txtPuerto;
     @FXML private CheckBox   chkPuertoManual;
     @FXML private TextField  txtNombre;
@@ -88,6 +94,21 @@ public class ConfiguracionMovilController implements Initializable {
     @FXML private Label      lblEstado;
     @FXML private VBox       cajaUrls;
     @FXML private VBox       cajaQr;
+    @FXML private VBox       cajaQrCertificado;
+    @FXML private Label      lblHuella;
+    @FXML private Label      lblHuellaCompleta;
+    @FXML private Label      lblHttpsEstado;
+    @FXML private CheckBox   chkHttpsManual;
+    @FXML private TextField  txtPuertoHttps;
+    @FXML private TableView<AccesoMovilService.TelefonoPush> tablaPush;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushUsuario;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushDispositivo;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushEntrega;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, String> colPushEstado;
+    @FXML private TableColumn<AccesoMovilService.TelefonoPush, AccesoMovilService.TelefonoPush> colPushAccion;
+    private static final int QR_CERTIFICADO_PX = 150;
+    /** URL de la guía del certificado elegida cuando hay varias redes */
+    private String urlCertificadoElegida;
     @FXML private TableView<SesionInfo> tablaSesiones;
     @FXML private TableColumn<SesionInfo, String> colUsuario;
     @FXML private TableColumn<SesionInfo, String> colCreada;
@@ -95,6 +116,7 @@ public class ConfiguracionMovilController implements Initializable {
     @FXML private TableColumn<SesionInfo, String> colUso;
     @FXML private TableColumn<SesionInfo, String> colIp;
     @FXML private TableColumn<SesionInfo, SesionInfo> colAccion;
+    @FXML private TableColumn<SesionInfo, SesionInfo> colAvisos;
 
     @Autowired private AccesoMovilService accesoMovilService;
 
@@ -117,17 +139,60 @@ public class ConfiguracionMovilController implements Initializable {
                 setGraphic(cerrar);
             }
         });
+        colAvisos.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
+        colAvisos.setCellFactory(col -> new TableCell<>() {
+            private final Label estado = new Label();
+            private final Button prueba = new Button("Enviar prueba");
+            private final HBox caja = new HBox(8, estado, prueba);
+            { caja.setAlignment(Pos.CENTER_LEFT); prueba.getStyleClass().add("small"); }
+            @Override protected void updateItem(SesionInfo item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setGraphic(null); return; }
+                estado.setText(AccesoMovilService.estadoAvisos(item.avisos()));
+                estado.getStyleClass().removeAll("text-success", "hint");
+                estado.getStyleClass().add(item.avisos() != null && item.avisos().isActiva() ? "text-success" : "hint");
+                prueba.setVisible(item.avisos() != null);
+                prueba.setManaged(item.avisos() != null);
+                prueba.setOnAction(e -> onEnviarPrueba(item, prueba));
+                setGraphic(caja);
+            }
+        });
         tablaSesiones.setPlaceholder(new Label("No hay sesiones móviles abiertas."));
 
+        colPushUsuario.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().usuario()));
+        colPushDispositivo.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(c.getValue().dispositivo()));
+        colPushEntrega.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(
+                c.getValue().suscripcion().getUltimoOk() == null ? "Ninguna aún" : local(c.getValue().suscripcion().getUltimoOk())));
+        colPushEstado.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(estadoPush(c.getValue().suscripcion())));
+        colPushAccion.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
+        colPushAccion.setCellFactory(col -> new TableCell<>() {
+            private final Button quitar = new Button("Quitar");
+            @Override protected void updateItem(AccesoMovilService.TelefonoPush item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) { setGraphic(null); return; }
+                quitar.setOnAction(e -> onQuitarTelefono(item));
+                setGraphic(quitar);
+            }
+        });
+        tablaPush.setPlaceholder(new Label("Ningún teléfono tiene notificaciones activadas."));
+
         Configuracion c = accesoMovilService.obtenerConfiguracion();
-        chkActivo.setSelected(accesoMovilService.servidorActivo() || c.isMovilActivo());
+        swActivo.setSelected(accesoMovilService.servidorActivo() || c.isMovilActivo());
         txtPuerto.setText(String.valueOf(c.getMovilPuerto()));
         chkPuertoManual.setSelected(c.isMovilPuertoManual());
+        chkHttpsManual.setSelected(c.isMovilPuertoHttpsManual());
+        txtPuertoHttps.setText(c.getMovilPuertoHttps() == null ? String.valueOf(c.getMovilPuerto() + 1) : String.valueOf(c.getMovilPuertoHttps()));
         txtNombre.setText(c.getMovilNombre() == null ? "" : c.getMovilNombre());
         chkQrLocal.setSelected(c.isMovilQrLocal());
+        // El interruptor aplica al momento (sin botón): un cambio hecho desde el código no vuelve a aplicar
+        swActivo.selectedProperty().addListener((obs, antes, ahora) -> { if (!ajustandoInterruptor) onAplicar(); });
         refrescar();
     }
 
+    /** true mientras el código mueve el interruptor (p. ej. al fallar el encendido) */
+    private boolean ajustandoInterruptor;
+
+    /** Enciende/apaga según el interruptor y guarda las opciones avanzadas tal como están */
     @FXML
     private void onAplicar() {
         boolean manual = chkPuertoManual.isSelected();
@@ -140,13 +205,28 @@ public class ConfiguracionMovilController implements Initializable {
                 return;
             }
         }
+        Integer puertoHttps = null;
+        if (chkHttpsManual.isSelected()) {
+            try {
+                puertoHttps = Integer.parseInt(txtPuertoHttps.getText().trim());
+            } catch (NumberFormatException e) {
+                Ventanas.alerta(Alert.AlertType.ERROR, "Puerto inválido", "El puerto HTTPS debe ser un número entero.");
+                return;
+            }
+        }
         try {
             accesoMovilService.guardarOpciones(manual, txtNombre.getText(), chkQrLocal.isSelected());
-            if (manual) accesoMovilService.configurar(chkActivo.isSelected(), puerto);
-            else accesoMovilService.configurarAutomatico(chkActivo.isSelected());
+            accesoMovilService.guardarPuertoHttps(puertoHttps);
+            if (manual) accesoMovilService.configurar(swActivo.isSelected(), puerto);
+            else accesoMovilService.configurarAutomatico(swActivo.isSelected());
         } catch (NegocioException e) {
             Ventanas.alerta(Alert.AlertType.ERROR, "Acceso móvil", e.getMessage());
-            chkActivo.setSelected(accesoMovilService.servidorActivo());
+        }
+        ajustandoInterruptor = true;
+        try {
+            swActivo.setSelected(accesoMovilService.servidorActivo());
+        } finally {
+            ajustandoInterruptor = false;
         }
         refrescar();
     }
@@ -189,6 +269,70 @@ public class ConfiguracionMovilController implements Initializable {
     }
 
     @FXML
+    private void onRegenerarCertificado() {
+        if (!Ventanas.confirmar("Regenerar certificado",
+                "Se creará un certificado nuevo para la conexión segura. TODOS los teléfonos que ya lo instalaron tendrán que "
+                + "instalar el nuevo (volver a escanear el código de «Notificaciones en el teléfono») y, mientras no lo hagan, "
+                + "no recibirán notificaciones. La dirección normal (sin candado) sigue funcionando. ¿Continuar?")) return;
+        try {
+            accesoMovilService.regenerarCertificado();
+        } catch (NegocioException | IllegalStateException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Regenerar certificado", e.getMessage());
+        }
+        refrescar();
+    }
+
+    private void onQuitarTelefono(AccesoMovilService.TelefonoPush t) {
+        if (!Ventanas.confirmar("Quitar notificaciones", "El teléfono de " + t.usuario() + " dejará de recibir notificaciones. ¿Continuar?")) return;
+        try {
+            accesoMovilService.quitarTelefono(t.suscripcion().getId());
+        } catch (NegocioException e) {
+            Ventanas.alerta(Alert.AlertType.ERROR, "Acceso móvil", e.getMessage());
+        }
+        refrescar();
+    }
+
+    /** Aviso de prueba a ese teléfono; sale a internet, así que corre fuera del hilo de la pantalla */
+    private void onEnviarPrueba(SesionInfo info, Button boton) {
+        if (info.avisos() == null) return;
+        Long id = info.avisos().getId();
+        boton.setDisable(true);
+        boton.setText("Enviando…");
+        Thread t = new Thread(() -> {
+            String titulo = "Aviso de prueba";
+            String mensaje;
+            Alert.AlertType tipo;
+            try {
+                var r = accesoMovilService.enviarPrueba(id);
+                tipo = r.ok() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
+                mensaje = r.ok() ? "Enviado al teléfono de " + info.usuario() + ". Debe aparecer en unos segundos."
+                        : "No se pudo enviar: " + r.detalle() + "\n\nRevisa que esta computadora tenga internet.";
+            } catch (RuntimeException e) {
+                tipo = Alert.AlertType.ERROR;
+                mensaje = e.getMessage();
+            }
+            Alert.AlertType tipoFinal = tipo;
+            String mensajeFinal = mensaje;
+            javafx.application.Platform.runLater(() -> {
+                boton.setDisable(false);
+                boton.setText("Enviar prueba");
+                Ventanas.alerta(tipoFinal, titulo, mensajeFinal);
+                if (raiz.getScene() != null) refrescar();
+            });
+        }, "aviso-prueba-telefono");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static String estadoPush(me.eliassanchezfernandez.puntodeventa.model.SuscripcionPush s) {
+        if (!s.isActiva()) return "En pausa (lo apagó el usuario)";
+        if (s.getUltimoError() != null && (s.getUltimoOk() == null || s.getUltimoError().isAfter(s.getUltimoOk()))) {
+            return "Último envío falló" + (s.getErrorDetalle() == null ? "" : ": " + s.getErrorDetalle());
+        }
+        return "Activas";
+    }
+
+    @FXML
     private void onCerrar() {
         ((Stage) raiz.getScene().getWindow()).close();
     }
@@ -207,15 +351,15 @@ public class ConfiguracionMovilController implements Initializable {
         }
         boolean activo = accesoMovilService.servidorActivo();
         int puerto = activo ? accesoMovilService.puertoEnUso() : cfg.getMovilPuerto();
-        lblEstado.setText(activo ? "Servidor ENCENDIDO en el puerto " + puerto : "Servidor apagado");
-        lblEstado.getStyleClass().removeAll("badge", "badge-success", "hint");
-        if (activo) lblEstado.getStyleClass().addAll("badge", "badge-success");
-        else lblEstado.getStyleClass().add("hint");
+        lblEstado.setText(activo ? "Encendido: los teléfonos ya pueden entrar (puerto " + puerto + ")."
+                : "Apagado: ningún teléfono puede entrar.");
+        lblEstado.getStyleClass().removeAll("text-success", "hint");
+        lblEstado.getStyleClass().add(activo ? "text-success" : "hint");
 
         cajaUrls.getChildren().clear();
         List<String> urls = accesoMovilService.urlsLan(puerto);
         if (!activo) {
-            cajaUrls.getChildren().add(hint("Enciende el servidor para ver la dirección que debes abrir en el teléfono."));
+            cajaUrls.getChildren().add(hint("Enciende «Permitir acceso desde teléfonos» para ver las direcciones."));
         } else if (urls.isEmpty()) {
             cajaUrls.getChildren().add(hint("No se encontró una red local. Conecta esta computadora al Wi-Fi."));
         } else {
@@ -260,11 +404,84 @@ public class ConfiguracionMovilController implements Initializable {
             lblNombreEstado.setText(nombreCfg != null ? "El nombre local se publica cuando el servidor está encendido." : "");
         }
         pintarQr(activo, urlsQr);
+        pintarCertificado(activo, puerto);
         try {
             tablaSesiones.setItems(FXCollections.observableArrayList(accesoMovilService.sesionesActivas()));
         } catch (NegocioException e) {
             tablaSesiones.setItems(FXCollections.observableArrayList());
         }
+        try {
+            tablaPush.setItems(FXCollections.observableArrayList(accesoMovilService.telefonosConNotificaciones()));
+        } catch (NegocioException e) {
+            tablaPush.setItems(FXCollections.observableArrayList());
+        }
+    }
+
+    // ── Certificado y notificaciones ──────────────────────────────────────
+
+    private void pintarCertificado(boolean activo, int puertoHttp) {
+        cajaQrCertificado.getChildren().clear();
+        try {
+            lblHuella.setText(accesoMovilService.huellaCorta());
+            lblHuellaCompleta.setText("SHA-256 completa: " + accesoMovilService.huellaCompleta());
+        } catch (RuntimeException e) {
+            lblHuella.setText("");
+            lblHuellaCompleta.setText("No se pudo leer el certificado: " + e.getMessage());
+        }
+        if (!activo) {
+            lblHttpsEstado.setText("Enciende «Permitir acceso desde teléfonos» para ver el código.");
+            cajaQrCertificado.getChildren().add(hintCentrado("Acceso apagado", QR_CERTIFICADO_PX));
+            return;
+        }
+        boolean https = accesoMovilService.httpsActivo();
+        lblHttpsEstado.setText(https
+                ? "Listo para activar avisos (conexión segura en el puerto " + accesoMovilService.puertoHttps() + ")."
+                : "Los avisos no están disponibles: la conexión segura no pudo abrirse (puerto ocupado). Revisa el puerto HTTPS en Opciones avanzadas.");
+        lblHttpsEstado.getStyleClass().removeAll("text-success", "hint");
+        lblHttpsEstado.getStyleClass().add(https ? "text-success" : "hint");
+        List<String> urls = accesoMovilService.urlsAvisos(puertoHttp);
+        if (urls.isEmpty()) {
+            cajaQrCertificado.getChildren().add(hintCentrado("Sin red local", QR_CERTIFICADO_PX));
+            return;
+        }
+        String url = urls.contains(urlCertificadoElegida) ? urlCertificadoElegida : urls.get(0);
+        urlCertificadoElegida = url;
+        if (urls.size() > 1) {
+            ComboBox<String> selector = new ComboBox<>(FXCollections.observableArrayList(urls));
+            selector.setValue(url);
+            selector.setOnAction(e -> { urlCertificadoElegida = selector.getValue(); pintarCertificado(true, puertoHttp); });
+            cajaQrCertificado.getChildren().add(selector);
+        }
+        ImageView vista = new ImageView(CodigoQr.imagen(url, CodigoQr.escalaPara(url, QR_CERTIFICADO_PX * 2)));
+        vista.setFitWidth(QR_CERTIFICADO_PX);
+        vista.setFitHeight(QR_CERTIFICADO_PX);
+        vista.setSmooth(false);
+        vista.setPreserveRatio(true);
+        VBox marco = new VBox(vista);
+        marco.getStyleClass().add("qr-marco");
+        marco.setMaxWidth(QR_CERTIFICADO_PX + 24);
+        Label etiqueta = new Label(url);
+        etiqueta.getStyleClass().add("qr-url");
+        etiqueta.setWrapText(true);
+        etiqueta.setMaxWidth(QR_CERTIFICADO_PX + 60);
+        Button copiar = new Button("Copiar", Iconos.de("portapapeles"));
+        copiar.setOnAction(e -> {
+            ClipboardContent cc = new ClipboardContent();
+            cc.putString(url);
+            Clipboard.getSystemClipboard().setContent(cc);
+        });
+        cajaQrCertificado.getChildren().addAll(marco, etiqueta, copiar);
+    }
+
+    private static Label hintCentrado(String texto, int ancho) {
+        Label l = hint(texto);
+        l.getStyleClass().add("qr-marco-vacio");
+        l.setTextAlignment(TextAlignment.CENTER);
+        l.setAlignment(Pos.CENTER);
+        l.setMinSize(ancho, ancho * 0.5);
+        l.setPrefSize(ancho, ancho * 0.5);
+        l.setMaxWidth(ancho);
+        return l;
     }
 
     // ── Código QR ─────────────────────────────────────────────────────────
@@ -273,24 +490,18 @@ public class ConfiguracionMovilController implements Initializable {
         cajaQr.getChildren().clear();
         if (!activo || urls.isEmpty()) {
             Label aviso = new Label(activo
-                    ? "No hay una dirección de red para mostrar el código"
-                    : "Activa el acceso móvil para ver el código");
-            aviso.getStyleClass().add("hint");
+                    ? "No se encontró una red local. Conecta esta computadora al Wi-Fi de la tienda."
+                    : "Enciende «Permitir acceso desde teléfonos» (abajo) para ver el código.");
+            aviso.getStyleClass().addAll("hint", "qr-marco-vacio");
             aviso.setWrapText(true);
+            aviso.setTextAlignment(TextAlignment.CENTER);
             aviso.setAlignment(Pos.CENTER);
-            aviso.setMinSize(QR_PANTALLA_PX, QR_PANTALLA_PX);
-            aviso.setPrefSize(QR_PANTALLA_PX, QR_PANTALLA_PX);
-            aviso.setStyle("-fx-border-color: #bbbbbb; -fx-border-style: dashed; -fx-padding: 16;");
+            aviso.setMinSize(QR_PANTALLA_PX, QR_PANTALLA_PX * 0.6);
+            aviso.setPrefSize(QR_PANTALLA_PX, QR_PANTALLA_PX * 0.6);
+            aviso.setMaxWidth(QR_PANTALLA_PX);
             cajaQr.getChildren().add(aviso);
-            Button imprimir = new Button("Imprimir QR");
-            Button guardar = new Button("Guardar imagen");
-            imprimir.setDisable(true);
-            guardar.setDisable(true);
-            cajaQr.getChildren().add(new HBox(8, imprimir, guardar));
-            cajaQr.setDisable(true);
             return;
         }
-        cajaQr.setDisable(false);
         String url = urls.contains(urlQrElegida) ? urlQrElegida : urls.get(0);
         urlQrElegida = url;
 
@@ -301,9 +512,11 @@ public class ConfiguracionMovilController implements Initializable {
                 urlQrElegida = selector.getValue();
                 pintarQr(true, urls);
             });
-            Label ayuda = new Label("Hay varias redes. Elige la del Wi-Fi de la tienda:");
+            Label ayuda = new Label("Esta computadora tiene varias redes. Elige la del Wi-Fi de la tienda:");
             ayuda.getStyleClass().add("hint");
-            cajaQr.getChildren().addAll(ayuda, selector);
+            HBox fila = new HBox(8, ayuda, selector);
+            fila.setAlignment(Pos.CENTER);
+            cajaQr.getChildren().add(fila);
         }
 
         ImageView vista = new ImageView(CodigoQr.imagen(url, CodigoQr.escalaPara(url, QR_PANTALLA_PX * 2)));
@@ -311,19 +524,28 @@ public class ConfiguracionMovilController implements Initializable {
         vista.setFitHeight(QR_PANTALLA_PX);
         vista.setSmooth(false);
         vista.setPreserveRatio(true);
+        VBox marco = new VBox(vista);
+        marco.getStyleClass().add("qr-marco");
+        marco.setMaxWidth(QR_PANTALLA_PX + 24);
         Label etiquetaUrl = new Label(url);
-        etiquetaUrl.setFont(Font.font(null, FontWeight.BOLD, 16));
-        VBox pasos = new VBox(2);
-        for (String paso : PASOS_QR) {
-            Label l = new Label(paso);
-            l.setWrapText(true);
-            pasos.getChildren().add(l);
-        }
-        Button imprimir = new Button("Imprimir QR");
+        etiquetaUrl.getStyleClass().add("qr-url");
+        Label instruccion = new Label(INSTRUCCION_QR);
+        instruccion.getStyleClass().add("hint");
+        instruccion.setWrapText(true);
+        instruccion.setTextAlignment(TextAlignment.CENTER);
+        Button copiar = new Button("Copiar dirección", Iconos.de("portapapeles"));
+        copiar.setOnAction(e -> {
+            ClipboardContent cc = new ClipboardContent();
+            cc.putString(url);
+            Clipboard.getSystemClipboard().setContent(cc);
+        });
+        Button imprimir = new Button("Imprimir QR", Iconos.de("impresora"));
         imprimir.setOnAction(e -> onImprimirQr(url));
-        Button guardar = new Button("Guardar imagen");
+        Button guardar = new Button("Guardar imagen", Iconos.de("imagen"));
         guardar.setOnAction(e -> onGuardarQr(url));
-        cajaQr.getChildren().addAll(vista, etiquetaUrl, pasos, new HBox(8, imprimir, guardar));
+        HBox botones = new HBox(8, imprimir, guardar, copiar);
+        botones.setAlignment(Pos.CENTER);
+        cajaQr.getChildren().addAll(marco, etiquetaUrl, instruccion, botones);
     }
 
     /** Hoja de una página: título, QR grande, dirección e instrucciones */

@@ -30,10 +30,10 @@
     <bottom>
         <HBox fx:id="barraLogin" alignment="CENTER_LEFT" spacing="12" styleClass="status-bar">
             <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
-            <CheckBox fx:id="chkMostrarEnLogin" text="Mostrar la lista de usuarios en el inicio de sesión" onAction="#onMostrarEnLogin"/>
+            <CheckBox fx:id="chkMostrarEnLogin" text="Mostrar la lista de usuarios en el inicio de sesión" onAction="#onMostrarEnLogin" wrapText="true"/>
             <Region HBox.hgrow="ALWAYS"/>
-            <Label fx:id="lblCodigoEstado" text=""/>
-            <Button fx:id="btnCodigoRecuperacion" text="Código de recuperación…" onAction="#onCodigoRecuperacion"><graphic><Icono nombre="llave"/></graphic></Button>
+            <Label fx:id="lblCodigoEstado" text="" wrapText="true"/>
+            <Button fx:id="btnCodigoRecuperacion" text="Código de recuperación…" onAction="#onCodigoRecuperacion" minWidth="-Infinity"><graphic><Icono nombre="llave"/></graphic></Button>
         </HBox>
     </bottom>
 
@@ -51,39 +51,41 @@
                 </columns>
             </TableView>
 
-            <!-- Formulario -->
+            <!-- Formulario: campos en dos columnas y Guardar siempre a la vista (cabe en 1024×768) -->
+            <BorderPane>
+            <center>
             <ScrollPane fitToWidth="true">
-                <VBox fx:id="vboxFormulario" styleClass="form-panel" spacing="12">
-                    <padding><Insets topRightBottomLeft="16"/></padding>
+                <VBox fx:id="vboxFormulario" styleClass="form-panel" spacing="8">
+                    <padding><Insets top="12" right="16" bottom="10" left="16"/></padding>
 
                     <Label fx:id="lblTituloForm" text="NUEVO USUARIO" styleClass="form-section-title"/>
-                    <Separator/>
 
-                    <VBox spacing="4">
-                        <Label text="Usuario (para iniciar sesión) *" styleClass="field-label"/>
-                        <TextField fx:id="txtUsuario" promptText="ej: maria"/>
-                    </VBox>
+                    <HBox spacing="10">
+                        <VBox spacing="4" HBox.hgrow="ALWAYS" minWidth="0" prefWidth="200">
+                            <Label text="Usuario (para iniciar sesión) *" styleClass="field-label"/>
+                            <TextField fx:id="txtUsuario" promptText="ej: maria"/>
+                        </VBox>
+                        <VBox spacing="4" HBox.hgrow="ALWAYS" minWidth="0" prefWidth="200">
+                            <Label text="Nombre completo *" styleClass="field-label"/>
+                            <TextField fx:id="txtNombre" promptText="ej: María López"/>
+                        </VBox>
+                    </HBox>
 
-                    <VBox spacing="4">
-                        <Label text="Nombre completo *" styleClass="field-label"/>
-                        <TextField fx:id="txtNombre" promptText="ej: María López"/>
-                    </VBox>
-
-                    <VBox spacing="4">
-                        <Label text="Contraseña" styleClass="field-label"/>
-                        <PasswordField fx:id="txtContrasena"/>
-                        <Label fx:id="lblAyudaContrasena" text="" wrapText="true"
-                               styleClass="hint"/>
-                    </VBox>
-
-                    <VBox spacing="4">
-                        <Label text="Rol *" styleClass="field-label"/>
-                        <ComboBox fx:id="comboRol" maxWidth="Infinity"/>
-                        <Label text="Administrador: todo. Gerente: edita productos y desactiva usuarios. Cajero: ventas e inventario básico. Los permisos de abajo ajustan lo que el rol permite."
-                               wrapText="true" styleClass="hint"/>
-                    </VBox>
-
-                    <CheckBox fx:id="chkActivo" text="Usuario activo (puede iniciar sesión)"/>
+                    <HBox spacing="10">
+                        <VBox spacing="4" HBox.hgrow="ALWAYS" minWidth="0" prefWidth="200">
+                            <Label text="Contraseña" styleClass="field-label"/>
+                            <PasswordField fx:id="txtContrasena"/>
+                            <Label fx:id="lblAyudaContrasena" text="" wrapText="true"
+                                   styleClass="hint"/>
+                        </VBox>
+                        <VBox spacing="4" HBox.hgrow="ALWAYS" minWidth="0" prefWidth="200">
+                            <Label text="Rol *" styleClass="field-label"/>
+                            <ComboBox fx:id="comboRol" maxWidth="Infinity"/>
+                            <CheckBox fx:id="chkActivo" text="Usuario activo (puede iniciar sesión)" wrapText="true"/>
+                        </VBox>
+                    </HBox>
+                    <Label text="Administrador: todo. Gerente: edita productos y desactiva usuarios. Cajero: ventas e inventario básico. Los permisos de abajo ajustan lo que el rol permite."
+                           wrapText="true" styleClass="hint"/>
 
                     <Separator/>
 
@@ -93,17 +95,19 @@
                         <Button fx:id="btnPermisosDelRol" text="Los del rol" onAction="#onPermisosDelRol" styleClass="button-ghost"/>
                     </HBox>
                     <VBox fx:id="vboxPermisos" spacing="6"/>
-
-                    <Region minHeight="8"/>
-
-                    <HBox spacing="12">
-                        <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar"
-                                styleClass="button-success"
-                                HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="38"><graphic><Icono nombre="listo"/></graphic></Button>
-                        <Button text="Cerrar" onAction="#onCerrar" prefHeight="38"/>
-                    </HBox>
                 </VBox>
             </ScrollPane>
+            </center>
+            <bottom>
+                <HBox spacing="12">
+                    <padding><Insets top="8" right="16" bottom="10" left="16"/></padding>
+                    <Button fx:id="btnGuardar" text="Guardar" onAction="#onGuardar"
+                            styleClass="button-success"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" prefHeight="36"><graphic><Icono nombre="listo"/></graphic></Button>
+                    <Button text="Cerrar" onAction="#onCerrar" prefHeight="36"/>
+                </HBox>
+            </bottom>
+            </BorderPane>
 
         </SplitPane>
     </center>

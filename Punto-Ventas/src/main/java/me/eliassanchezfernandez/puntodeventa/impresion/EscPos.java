@@ -101,6 +101,21 @@ public final class EscPos {
         return this;
     }
 
+    /**
+     * Código de barras CODE128 (juego B: letras y números) con su texto debajo:
+     * GS h 80 (alto), GS w 2 (ancho de barra), GS H 2 (texto abajo), GS k 73 n {B datos.
+     */
+    public EscPos codigoBarras(String valor) {
+        byte[] datos = valor.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        int n = datos.length + 2;
+        salida.writeBytes(new byte[] { GS, 'h', 80 });
+        salida.writeBytes(new byte[] { GS, 'w', 2 });
+        salida.writeBytes(new byte[] { GS, 'H', 2 });
+        salida.writeBytes(new byte[] { GS, 'k', 73, (byte) n, '{', 'B' });
+        salida.writeBytes(datos);
+        return this;
+    }
+
     public EscPos abrirCajon() {
         salida.writeBytes(ABRIR_CAJON);
         return this;
@@ -117,6 +132,10 @@ public final class EscPos {
         EscPos e = new EscPos(codePage).inicializar();
         for (DocumentoImpresion.Linea l : doc.lineas()) {
             e.alinear(l.alineacion());
+            if (l.esCodigoBarras()) {
+                e.codigoBarras(l.codigoBarras()).salto();
+                continue;
+            }
             if (l.negrita()) e.negrita(true);
             if (l.grande()) e.grande(true);
             e.texto(l.texto()).salto();

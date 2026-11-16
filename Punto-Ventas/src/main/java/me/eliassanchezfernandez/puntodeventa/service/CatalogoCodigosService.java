@@ -52,18 +52,27 @@ import java.util.zip.GZIPInputStream;
  * ({@code github.com/Minepacman/codigos-barras-mx}: Open Food Facts y hermanos,
  * ODbL; mostrar siempre {@link #ATRIBUCION} donde se usen sus datos).
  *
- * Dos caminos para una ficha ({@link #buscar}):
+ * Cadena de consulta de una ficha ({@link #consultar}), de lo más barato a lo más caro:
  *  1. la copia LOCAL (tabla {@code catalogo_codigos}, ~25 000 filas) que este
  *     servicio descarga completa y reemplaza cuando el {@code version.json}
  *     del repositorio trae otro sha256 ({@link #actualizar});
- *  2. si no está y el administrador no lo apagó ({@code Configuracion.codigosEnLinea}),
+ *  2. el catálogo INCLUIDO en el programa ({@value #RECURSO_INCLUIDO}, ~0.7 MB
+ *     comprimido): mientras la tabla no se haya llenado se lee en flujo; la revisión
+ *     de fondo lo carga a la tabla la primera vez ({@link #cargarIncluidoSiFalta}),
+ *     así una caja sin internet tiene el catálogo completo desde el primer día;
+ *  3. si no está y el administrador no lo apagó ({@code Configuracion.codigosEnLinea}),
  *     un fragmento de la API estática ({@code api/v1/<3 últimos dígitos>.json},
- *     ~6-50 KB) desde jsDelivr o raw.githubusercontent; lo que se encuentra se
- *     guarda en la tabla local para la próxima vez.
+ *     ~6-50 KB) desde jsDelivr o raw.githubusercontent;
+ *  4. como último recurso la API de Open Food Facts ({@value #URL_OPEN_FOOD_FACTS}),
+ *     con el código de 13 dígitos y, si empieza con 0, también como UPC de 12.
+ * Lo hallado en 2-4 se guarda en la tabla local para la próxima vez. Cada petición de
+ * consulta espera a lo más {@link #TIEMPO_CONSULTA} (3 s); sin red se responde
+ * {@link Resultado#SIN_CONEXION} (el formulario dice "Sin internet: escribe los datos").
  *
  * Seguridad de red (igual que ActualizacionService): solo https a los hosts
- * fijos de {@link #URL_VERSION}, {@link #URL_CSV_PRIMARIA}, {@link #URL_CSV_RESPALDO}
- * y {@link #URL_FRAGMENTO_PRIMARIA}/{@link #URL_FRAGMENTO_RESPALDO}; sin
+ * fijos de {@link #URL_VERSION}, {@link #URL_CSV_PRIMARIA}, {@link #URL_CSV_RESPALDO},
+ * {@link #URL_FRAGMENTO_PRIMARIA}/{@link #URL_FRAGMENTO_RESPALDO} y
+ * {@link #URL_OPEN_FOOD_FACTS}; sin
  * redirecciones; tiempos de espera cortos; respuestas acotadas en bytes; el CSV
  * se acepta solo si su SHA-256 coincide con el anunciado en version.json. La
  * imagen del producto NO la baja este servicio: la URL se entrega al formulario,
@@ -92,11 +101,21 @@ public class CatalogoCodigosService {
     /** Se completa con el fragmento ("075") + ".json" */
     public static final String URL_FRAGMENTO_PRIMARIA = "https://cdn.jsdelivr.net/gh/Minepacman/codigos-barras-mx@main/api/v1/";
     public static final String URL_FRAGMENTO_RESPALDO = "https://raw.githubusercontent.com/Minepacman/codigos-barras-mx/main/api/v1/";
+    /** Se completa con el código + ".json" + {@link #CAMPOS_OPEN_FOOD_FACTS} */
+    public static final String URL_OPEN_FOOD_FACTS = "https://world.openfoodfacts.org/api/v2/product/";
+    static final String CAMPOS_OPEN_FOOD_FACTS = "?fields=code,product_name,product_name_es,brands,quantity,image_front_small_url,categories_tags";
+    /** Catálogo que viaja en el jar (mismo CSV que publica el repositorio, comprimido) y su version.json */
+    public static final String RECURSO_INCLUIDO = "/catalogo/catalogo-mx.csv.gz";
+    public static final String RECURSO_VERSION_INCLUIDA = "/catalogo/version.json";
 
     public static final int VERSION_MAXIMO = 64 * 1024;
     /** El CSV pesa ~3.5 MB (comprimido ~0.7 MB); margen para que crezca */
     public static final int CSV_MAXIMO = 24 * 1024 * 1024;
     public static final int FRAGMENTO_MAXIMO = 512 * 1024;
+    /** Una ficha de Open Food Facts con solo los campos pedidos pesa ~1 KB */
+    public static final int OPEN_FOOD_FACTS_MAXIMO = 256 * 1024;
+    /** Espera máxima de cada petición al consultar UN código desde el formulario (conexión y respuesta) */
+    public static final Duration TIEMPO_CONSULTA = Duration.ofSeconds(3);
     public static final Duration TIEMPO_CONEXION = Duration.ofSeconds(6);
     public static final Duration TIEMPO_CORTO = Duration.ofSeconds(8);
     /** 3.5 MB (0.7 comprimido) en una conexión lenta */
@@ -107,10 +126,35 @@ public class CatalogoCodigosService {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    public enum Origen { LOCAL, EN_LINEA }
+    /** De dónde salió la ficha: tabla local, catálogo incluido en el programa, fragmento en línea u Open Food Facts */
+    public enum Origen { LOCAL, INCLUIDO, EN_LINEA, OPEN_FOOD_FACTS }
 
     /** Ficha encontrada y de dónde salió */
     public record Ficha(CatalogoCodigo datos, Origen origen) { }
+
+    /** Qué pasó al consultar un código */
+    public enum Resultado {
+        ENCONTRADO,
+        /** Ninguna fuente lo tiene (o la consulta en internet está apagada y no está en la copia local) */
+        NO_ENCONTRADO,
+        /** No está en la copia local y no se pudo llegar a internet */
+        SIN_CONEXION,
+        /** No es un código de barras comercial (código interno, dígito de control malo, vacío) */
+        NO_ES_CODIGO
+    }
+
+    /** Resultado de {@link #consultar}: la ficha solo viene con {@link Resultado#ENCONTRADO} */
+    public record Consulta(Resultado resultado, Ficha ficha) {
+        static Consulta encontrado(CatalogoCodigo datos, Origen origen) {
+            return new Consulta(Resultado.ENCONTRADO, new Ficha(datos, origen));
+        }
+        static Consulta de(Resultado r) {
+            return new Consulta(r, null);
+        }
+        public Optional<Ficha> fichaOpcional() {
+            return Optional.ofNullable(ficha);
+        }
+    }
 
     public enum EstadoActualizacion { ACTUALIZADO, YA_AL_DIA, SIN_CONEXION, RECHAZADO }
 
@@ -154,13 +198,24 @@ public class CatalogoCodigosService {
     private volatile String urlCsvRespaldo = URL_CSV_RESPALDO;
     private volatile String urlFragmentoPrimaria = URL_FRAGMENTO_PRIMARIA;
     private volatile String urlFragmentoRespaldo = URL_FRAGMENTO_RESPALDO;
+    private volatile String urlOpenFoodFacts = URL_OPEN_FOOD_FACTS;
     private volatile boolean permitirHttpParaPruebas = false;
+    /** Catálogo incluido: CSV comprimido y su versión (null = no hay; las pruebas lo cambian) */
+    private volatile java.util.function.Supplier<InputStream> fuenteIncluida =
+            () -> CatalogoCodigosService.class.getResourceAsStream(RECURSO_INCLUIDO);
+    private volatile VersionIncluida versionIncluida;
+    private volatile boolean versionIncluidaLeida;
+
+    /** fecha y sha256 del CSV incluido (del version.json que viaja con él) */
+    public record VersionIncluida(String fecha, String sha256) { }
 
     /** Códigos consultados en línea sin resultado en esta sesión: no se vuelve a pedir el mismo fragmento */
     private final Map<String, Long> sinResultadoEnLinea = new ConcurrentHashMap<>();
     private static final long SIN_RESULTADO_VIGENCIA_MS = Duration.ofHours(6).toMillis();
 
     private volatile HttpClient http;
+    /** Cliente de las consultas sueltas: conexión de 3 s como máximo */
+    private volatile HttpClient httpConsulta;
     private volatile Thread hiloRevision;
 
     private HttpClient http() {
@@ -180,52 +235,107 @@ public class CatalogoCodigosService {
         return h;
     }
 
+    private HttpClient httpConsulta() {
+        HttpClient h = httpConsulta;
+        if (h == null) {
+            synchronized (this) {
+                h = httpConsulta;
+                if (h == null) {
+                    h = HttpClient.newBuilder()
+                            .connectTimeout(TIEMPO_CONSULTA)
+                            .followRedirects(HttpClient.Redirect.NEVER)
+                            .build();
+                    httpConsulta = h;
+                }
+            }
+        }
+        return h;
+    }
+
     // ── Consulta ──────────────────────────────────────────────────────────
 
     /**
-     * Ficha del código tal como lo tecleó o escaneó el usuario: primero la tabla local y, si
-     * no está y la consulta en línea está permitida, un fragmento de la API (bloquea unos
-     * segundos a lo más: llamar fuera del hilo de JavaFX). Vacío si el código no es un GTIN
-     * válido, no está en ninguna parte o no hay internet. Nunca lanza.
+     * Ficha del código tal como lo tecleó o escaneó el usuario (vacío si no hay). Bloquea unos
+     * segundos a lo más: llamar fuera del hilo de JavaFX. Nunca lanza. Ver {@link #consultar}.
      */
     public Optional<Ficha> buscar(String codigoCapturado) {
+        return consultar(codigoCapturado).fichaOpcional();
+    }
+
+    /**
+     * Recorre la cadena local → incluido → fragmento en línea → Open Food Facts y dice qué pasó.
+     * Bloquea a lo más unos segundos (cada petición ≤ {@link #TIEMPO_CONSULTA}); llamar fuera del
+     * hilo de JavaFX. Nunca lanza. Si el hilo se interrumpe (el usuario cambió el código) deja de
+     * consultar y responde NO_ENCONTRADO.
+     */
+    public Consulta consultar(String codigoCapturado) {
         Optional<String> normalizado = CodigoBarras.normalizar(codigoCapturado);
-        if (normalizado.isEmpty()) return Optional.empty();
+        if (normalizado.isEmpty()) return Consulta.de(Resultado.NO_ES_CODIGO);
         String codigo = normalizado.get();
         try {
             Optional<CatalogoCodigo> local = buscarLocal(codigo);
-            if (local.isPresent()) return Optional.of(new Ficha(local.get(), Origen.LOCAL));
+            if (local.isPresent()) return Consulta.encontrado(local.get(), Origen.LOCAL);
         } catch (RuntimeException e) {
-            // Tabla aún inexistente (instalado sin subir la versión) o base ocupada: se sigue en línea
+            // Tabla aún inexistente (instalado sin subir la versión) o base ocupada: se sigue
             System.err.println("Catálogo de códigos (local): " + e.getMessage());
         }
-        if (!isEnLinea()) return Optional.empty();
+        // Mientras la tabla no tenga el catálogo completo se lee el que viaja en el programa
+        if (!catalogoCompletoCargado()) {
+            Optional<CatalogoCodigo> incluido = buscarEnIncluido(codigo);
+            if (incluido.isPresent()) {
+                guardarSinFallar(incluido.get());
+                return Consulta.encontrado(incluido.get(), Origen.INCLUIDO);
+            }
+        }
+        if (!isEnLinea()) return Consulta.de(Resultado.NO_ENCONTRADO);
         Long sin = sinResultadoEnLinea.get(codigo);
-        if (sin != null && System.currentTimeMillis() - sin < SIN_RESULTADO_VIGENCIA_MS) return Optional.empty();
-        Optional<CatalogoCodigo> remoto = buscarEnLinea(codigo);
-        if (remoto.isEmpty()) {
-            sinResultadoEnLinea.put(codigo, System.currentTimeMillis());
-            return Optional.empty();
+        if (sin != null && System.currentTimeMillis() - sin < SIN_RESULTADO_VIGENCIA_MS) return Consulta.de(Resultado.NO_ENCONTRADO);
+
+        Remoto fragmento = buscarEnLinea(codigo);
+        if (fragmento.ficha() != null) {
+            guardarSinFallar(fragmento.ficha());
+            return Consulta.encontrado(fragmento.ficha(), Origen.EN_LINEA);
         }
-        try {
-            guardarEncontrado(remoto.get());
-        } catch (RuntimeException e) {
-            System.err.println("Catálogo de códigos: no se pudo guardar la ficha en línea: " + e.getMessage());
+        if (Thread.currentThread().isInterrupted()) return Consulta.de(Resultado.NO_ENCONTRADO);
+        // Sin red hacia GitHub/jsDelivr: no se insiste con otro host (cada intento son hasta 3 s)
+        if (fragmento.sinRed() && !fragmento.respondio()) return Consulta.de(Resultado.SIN_CONEXION);
+
+        Remoto off = buscarEnOpenFoodFacts(codigo);
+        if (off.ficha() != null) {
+            guardarSinFallar(off.ficha());
+            return Consulta.encontrado(off.ficha(), Origen.OPEN_FOOD_FACTS);
         }
-        return Optional.of(new Ficha(remoto.get(), Origen.EN_LINEA));
+        if (Thread.currentThread().isInterrupted()) return Consulta.de(Resultado.NO_ENCONTRADO);
+        if (!fragmento.respondio() && !off.respondio() && (fragmento.sinRed() || off.sinRed())) {
+            return Consulta.de(Resultado.SIN_CONEXION);
+        }
+        // Solo se recuerda "no está" cuando las fuentes contestaron de verdad
+        if (fragmento.respondio() && off.respondio()) sinResultadoEnLinea.put(codigo, System.currentTimeMillis());
+        return Consulta.de(Resultado.NO_ENCONTRADO);
     }
 
-    /** Lo mismo en un hilo demonio propio; el que llama decide cómo mostrarlo */
+    /** Lo mismo que {@link #buscar} en un hilo demonio propio; el que llama decide cómo mostrarlo */
     public CompletableFuture<Optional<Ficha>> buscarEnSegundoPlano(String codigoCapturado) {
-        CompletableFuture<Optional<Ficha>> futuro = new CompletableFuture<>();
+        return consultarEnSegundoPlano(codigoCapturado).thenApply(Consulta::fichaOpcional);
+    }
+
+    /**
+     * {@link #consultar} en un hilo demonio propio. Cancelar el futuro interrumpe la consulta
+     * (deja de esperar a la red); el futuro siempre termina.
+     */
+    public CompletableFuture<Consulta> consultarEnSegundoPlano(String codigoCapturado) {
+        CompletableFuture<Consulta> futuro = new CompletableFuture<>();
         Thread t = new Thread(() -> {
             try {
-                futuro.complete(buscar(codigoCapturado));
+                futuro.complete(consultar(codigoCapturado));
             } catch (Throwable e) {
-                futuro.complete(Optional.empty());
+                futuro.complete(Consulta.de(Resultado.NO_ENCONTRADO));
             }
         }, "catalogo-codigos-buscar");
         t.setDaemon(true);
+        futuro.whenComplete((r, e) -> {
+            if (futuro.isCancelled()) t.interrupt();
+        });
         t.start();
         return futuro;
     }
@@ -241,6 +351,14 @@ public class CatalogoCodigosService {
         repo.save(ficha);
     }
 
+    private void guardarSinFallar(CatalogoCodigo ficha) {
+        try {
+            guardarEncontrado(ficha);
+        } catch (RuntimeException e) {
+            System.err.println("Catálogo de códigos: no se pudo guardar la ficha: " + e.getMessage());
+        }
+    }
+
     /** ¿Se permite salir a internet (fragmentos y catálogo completo)? null en la configuración = sí */
     public boolean isEnLinea() {
         try {
@@ -250,21 +368,218 @@ public class CatalogoCodigosService {
         }
     }
 
-    /** Pide el fragmento al CDN (y al respaldo si falla) y saca el código; vacío si no está o no hay red */
-    Optional<CatalogoCodigo> buscarEnLinea(String codigo) {
+    /** ¿La tabla ya tiene un catálogo completo (incluido o descargado)? Si no, se consulta el incluido */
+    private boolean catalogoCompletoCargado() {
+        try {
+            return configuracionService.obtener().getCatalogoCodigosVersion() != null && hayFilas();
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Respuesta de una fuente en línea: la ficha (o null), si algún servidor contestó y si faltó la red */
+    record Remoto(CatalogoCodigo ficha, boolean respondio, boolean sinRed) { }
+
+    /** Pide el fragmento al CDN (y al respaldo si falla) y saca el código */
+    Remoto buscarEnLinea(String codigo) {
         String nombre = CodigoBarras.fragmento(codigo) + ".json";
+        boolean respondio = false;
+        boolean sinRed = false;
         for (String base : List.of(urlFragmentoPrimaria, urlFragmentoRespaldo)) {
             try {
-                byte[] json = descargar(base + nombre, FRAGMENTO_MAXIMO, "application/json", TIEMPO_CORTO);
-                return analizarFragmento(new String(json, StandardCharsets.UTF_8), codigo);
-            } catch (IOException | RuntimeException e) {
-                // siguiente host
+                byte[] json = descargar(httpConsulta(), base + nombre, FRAGMENTO_MAXIMO, "application/json", TIEMPO_CONSULTA);
+                return new Remoto(analizarFragmento(new String(json, StandardCharsets.UTF_8), codigo).orElse(null), true, sinRed);
+            } catch (RespuestaHttp e) {
+                respondio = true;          // el servidor contestó con un error: se prueba el otro
+            } catch (IOException e) {
+                sinRed = true;             // sin conexión, DNS o tiempo agotado
+            } catch (RuntimeException e) {
+                respondio = true;          // JSON inválido o demasiado grande
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return Optional.empty();
+                return new Remoto(null, respondio, sinRed);
             }
         }
-        return Optional.empty();
+        return new Remoto(null, respondio, sinRed);
+    }
+
+    /**
+     * Último recurso: la API pública de Open Food Facts. Primero el código de 13 dígitos y, si
+     * empieza con 0 (UPC-A), también con 12. Un 404 o {@code status: 0} = no está.
+     */
+    Remoto buscarEnOpenFoodFacts(String codigo) {
+        boolean respondio = false;
+        List<String> variantes = codigo.length() == 13 && codigo.charAt(0) == '0'
+                ? List.of(codigo, codigo.substring(1)) : List.of(codigo);
+        for (String v : variantes) {
+            try {
+                byte[] json = descargar(httpConsulta(), urlOpenFoodFacts + v + ".json" + CAMPOS_OPEN_FOOD_FACTS,
+                        OPEN_FOOD_FACTS_MAXIMO, "application/json", TIEMPO_CONSULTA);
+                respondio = true;
+                Optional<CatalogoCodigo> f = analizarOpenFoodFacts(new String(json, StandardCharsets.UTF_8), codigo);
+                if (f.isPresent()) return new Remoto(f.get(), true, false);
+            } catch (RespuestaHttp e) {
+                respondio = true;          // 404 = no lo tienen
+            } catch (IOException e) {
+                return new Remoto(null, respondio, true);
+            } catch (RuntimeException e) {
+                respondio = true;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return new Remoto(null, respondio, false);
+            }
+        }
+        return new Remoto(null, respondio, false);
+    }
+
+    /**
+     * Análisis puro de la respuesta de Open Food Facts
+     * ({@code {"status":1,"product":{product_name, brands, quantity, image_front_small_url, categories_tags}}}).
+     * La ficha queda con el código normalizado del catálogo y fuente "off".
+     */
+    public static Optional<CatalogoCodigo> analizarOpenFoodFacts(String json, String codigo) {
+        JsonNode raiz;
+        try {
+            raiz = JSON.readTree(json);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("JSON inválido", e);
+        }
+        if (raiz == null || !raiz.isObject() || raiz.path("status").asInt(0) != 1) return Optional.empty();
+        JsonNode p = raiz.get("product");
+        if (p == null || !p.isObject()) return Optional.empty();
+        String nombre = texto(p, "product_name_es");
+        if (nombre.isBlank()) nombre = texto(p, "product_name");
+        String marca = texto(p, "brands");
+        int coma = marca.indexOf(',');
+        if (coma >= 0) marca = marca.substring(0, coma);
+        String contenido = texto(p, "quantity");
+        String[] cantidadUnidad = cantidadYUnidad(contenido);
+        String imagen = texto(p, "image_front_small_url");
+        if (!imagen.startsWith("https://images.openfoodfacts.org/")) imagen = "";
+        java.util.List<String> etiquetas = new ArrayList<>();
+        p.path("categories_tags").forEach(n -> etiquetas.add(n.asText("")));
+        return fichaDeCampos(codigo, nombre, marca, cantidadUnidad[0], cantidadUnidad[1], contenido,
+                categoriaDeEtiquetas(etiquetas), imagen, "off", "");
+    }
+
+    /** "600 ml" → {"600", "ml"}; "1,5 L" → {"1.5", "l"}; "6 x 355 ml" o basura → {"", ""} */
+    static String[] cantidadYUnidad(String contenido) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^\\s*(\\d+(?:[.,]\\d+)?)\\s*(kg|mg|g|ml|cl|l|oz|lb|pz)\\.?\\s*$", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(contenido == null ? "" : contenido);
+        if (!m.matches()) return new String[] {"", ""};
+        return new String[] {m.group(1).replace(',', '.'), m.group(2).toLowerCase(Locale.ROOT)};
+    }
+
+    /** Etiquetas de categoría de Open Food Facts → categoría del catálogo (las mismas que usa codigos-barras-mx) */
+    static final List<Map.Entry<String, List<String>>> CATEGORIAS_OFF = List.of(
+            Map.entry("Mascotas", List.of("en:pet-food", "en:dog-food", "en:cat-food", "en:dog-foods", "en:cat-foods")),
+            Map.entry("Bebés", List.of("en:baby-foods", "en:baby-milks", "en:infant-formulas")),
+            Map.entry("Congelados", List.of("en:frozen-foods", "en:ice-creams", "en:frozen-desserts")),
+            Map.entry("Lácteos", List.of("en:dairies", "en:milks", "en:cheeses", "en:yogurts", "en:creams")),
+            Map.entry("Carnes y embutidos", List.of("en:meats", "en:prepared-meats", "en:sausages", "en:hams")),
+            Map.entry("Enlatados", List.of("en:canned-foods", "en:canned-vegetables", "en:canned-fishes")),
+            Map.entry("Panadería", List.of("en:breads", "en:pastries", "en:biscuits-and-cakes", "en:biscuits", "en:cakes")),
+            Map.entry("Dulces", List.of("en:confectioneries", "en:candies", "en:chocolates", "en:chewing-gum", "en:lollipops")),
+            Map.entry("Botanas", List.of("en:salty-snacks", "en:crisps", "en:chips-and-fries", "en:appetizers", "en:popcorn")),
+            Map.entry("Bebidas", List.of("en:beverages", "en:waters", "en:sodas", "en:juices")),
+            Map.entry("Abarrotes", List.of("en:cereals-and-potatoes", "en:pastas", "en:rices", "en:legumes", "en:sauces",
+                    "en:condiments", "en:fats", "en:sugars", "en:salts", "en:coffees", "en:breakfast-cereals")));
+
+    static String categoriaDeEtiquetas(List<String> etiquetas) {
+        if (etiquetas == null || etiquetas.isEmpty()) return "";
+        for (Map.Entry<String, List<String>> c : CATEGORIAS_OFF) {
+            for (String e : c.getValue()) {
+                if (etiquetas.contains(e)) return c.getKey();
+            }
+        }
+        return "";
+    }
+
+    // ── Catálogo incluido en el programa ──────────────────────────────────
+
+    /** version.json del catálogo incluido (null si esta compilación no lo trae) */
+    public VersionIncluida versionIncluida() {
+        if (!versionIncluidaLeida) {
+            VersionIncluida v = null;
+            try (InputStream in = CatalogoCodigosService.class.getResourceAsStream(RECURSO_VERSION_INCLUIDA)) {
+                if (in != null) {
+                    JsonNode n = JSON.readTree(in);
+                    String fecha = n.path("fecha").asText("").trim();
+                    String sha = n.path("archivos").path("catalogo-mx.csv").path("sha256").asText("").trim().toLowerCase(Locale.ROOT);
+                    if (!fecha.isEmpty() && sha.length() == 64) v = new VersionIncluida(fecha, sha);
+                }
+            } catch (IOException | RuntimeException e) {
+                v = null;
+            }
+            versionIncluida = v;
+            versionIncluidaLeida = true;
+        }
+        return versionIncluida;
+    }
+
+    /** Busca un código leyendo en flujo el CSV incluido (~0.2 s); se detiene al encontrarlo */
+    Optional<CatalogoCodigo> buscarEnIncluido(String codigo) {
+        java.util.function.Supplier<InputStream> fuente = fuenteIncluida;
+        if (fuente == null) return Optional.empty();
+        CatalogoCodigo[] hallado = new CatalogoCodigo[1];
+        try (InputStream crudo = fuente.get()) {
+            if (crudo == null) return Optional.empty();
+            try (java.io.Reader r = new InputStreamReader(new GZIPInputStream(crudo, 64 * 1024), StandardCharsets.UTF_8)) {
+                CatalogoCsv.leer(r, fila -> {
+                    if (Thread.currentThread().isInterrupted()) throw new Detener();
+                    if (codigo.equals(fila.getCodigo())) {
+                        hallado[0] = fila;
+                        throw new Detener();
+                    }
+                });
+            }
+        } catch (Detener listo) {
+            // encontrado o interrumpido
+        } catch (IOException | RuntimeException e) {
+            System.err.println("Catálogo de códigos (incluido): " + e.getMessage());
+        }
+        return Optional.ofNullable(hallado[0]);
+    }
+
+    /** Corta la lectura en flujo del CSV incluido */
+    private static final class Detener extends RuntimeException {
+        Detener() { super(null, null, false, false); }
+    }
+
+    /**
+     * Carga el catálogo incluido a la tabla si nunca se ha cargado uno o si el incluido es más
+     * nuevo que el que hay (p. ej. tras actualizar el programa sin internet). Conserva la fecha
+     * de la última revisión en línea, así la revisión semanal sigue su curso. Nunca lanza.
+     * @return true si cargó
+     */
+    public boolean cargarIncluidoSiFalta() {
+        try {
+            VersionIncluida v = versionIncluida();
+            java.util.function.Supplier<InputStream> fuente = fuenteIncluida;
+            if (v == null || fuente == null) return false;
+            Configuracion c = configuracionService.obtener();
+            String actual = c.getCatalogoCodigosVersion();
+            if (actual != null && hayFilas()
+                    && (actual.compareTo(v.fecha()) >= 0 || v.sha256().equalsIgnoreCase(c.getCatalogoCodigosSha256()))) {
+                return false;
+            }
+            byte[] csv;
+            try (InputStream crudo = fuente.get()) {
+                if (crudo == null) return false;
+                csv = new GZIPInputStream(crudo, 64 * 1024).readAllBytes();
+            }
+            if (!v.sha256().equals(sha256(csv))) {
+                System.err.println("Catálogo de códigos (incluido): el sha256 no coincide; no se carga.");
+                return false;
+            }
+            reemplazarCatalogo(new String(csv, StandardCharsets.UTF_8), v.fecha(), v.sha256(),
+                    LocalDateTime.now(reloj), c.getCatalogoCodigosRevisado());
+            return true;
+        } catch (IOException | RuntimeException e) {
+            System.err.println("Catálogo de códigos (incluido): " + e.getMessage());
+            return false;
+        }
     }
 
     /** Análisis puro del fragmento {@code {"<codigo>": {nombre, marca, ...}, ...}} */
@@ -278,12 +593,18 @@ public class CatalogoCodigosService {
         if (raiz == null || !raiz.isObject()) return Optional.empty();
         JsonNode n = raiz.get(codigo);
         if (n == null || !n.isObject()) return Optional.empty();
-        // Se reutiliza el mismo recorte/validación del CSV: una sola fila con el mismo encabezado
+        return fichaDeCampos(codigo, texto(n, "nombre"), texto(n, "marca"), texto(n, "cantidad"), texto(n, "unidad"),
+                texto(n, "contenido"), texto(n, "categoria"), texto(n, "imagen"), texto(n, "fuente"), texto(n, "actualizado"));
+    }
+
+    /** Se reutiliza el mismo recorte/validación del CSV: una sola fila con el mismo encabezado */
+    private static Optional<CatalogoCodigo> fichaDeCampos(String codigo, String nombre, String marca, String cantidad,
+                                                          String unidad, String contenido, String categoria,
+                                                          String imagen, String fuente, String actualizado) {
         String csv = "codigo,nombre,marca,cantidad,unidad,contenido,categoria,imagen,fuente,actualizado\n"
-                + String.join(",", comillas(codigo), comillas(texto(n, "nombre")), comillas(texto(n, "marca")),
-                comillas(texto(n, "cantidad")), comillas(texto(n, "unidad")), comillas(texto(n, "contenido")),
-                comillas(texto(n, "categoria")), comillas(texto(n, "imagen")), comillas(texto(n, "fuente")),
-                comillas(texto(n, "actualizado"))) + "\n";
+                + String.join(",", comillas(codigo), comillas(nombre), comillas(marca), comillas(cantidad),
+                comillas(unidad), comillas(contenido), comillas(categoria), comillas(imagen), comillas(fuente),
+                comillas(actualizado)) + "\n";
         try {
             List<CatalogoCodigo> filas = CatalogoCsv.leer(new StringReader(csv));
             return filas.isEmpty() ? Optional.empty() : Optional.of(filas.get(0));
@@ -351,6 +672,7 @@ public class CatalogoCodigosService {
             } catch (InterruptedException e) {
                 return;
             }
+            cargarIncluidoSiFalta();   // primera vez (o programa más nuevo que la copia): sin internet
             actualizarSiToca();
         }, "catalogo-codigos-semanal");
         t.setDaemon(true);
@@ -389,7 +711,7 @@ public class CatalogoCodigosService {
         LocalDateTime ahora = LocalDateTime.now(reloj);
         JsonNode version;
         try {
-            byte[] bytes = descargar(urlVersion, VERSION_MAXIMO, "application/json", TIEMPO_CORTO);
+            byte[] bytes = descargar(http(), urlVersion, VERSION_MAXIMO, "application/json", TIEMPO_CORTO);
             version = JSON.readTree(bytes);
         } catch (IOException | RuntimeException e) {
             return ResultadoActualizacion.sinConexion(mensaje(e));
@@ -415,7 +737,7 @@ public class CatalogoCodigosService {
         String ultimoError = "";
         for (String url : List.of(urlCsvPrimaria, urlCsvRespaldo)) {
             try {
-                csv = descargar(url, CSV_MAXIMO, "text/csv, text/plain", TIEMPO_CSV);
+                csv = descargar(http(), url, CSV_MAXIMO, "text/csv, text/plain", TIEMPO_CSV);
                 break;
             } catch (IOException | RuntimeException e) {
                 ultimoError = mensaje(e);
@@ -458,8 +780,14 @@ public class CatalogoCodigosService {
      * pruebas y para una futura importación desde archivo. Devuelve las filas cargadas.
      */
     public int reemplazarCatalogo(String csv, String version, String sha256, LocalDateTime cuando) {
+        return reemplazarCatalogo(csv, version, sha256, cuando, cuando);
+    }
+
+    /** Igual, pero anotando aparte la fecha de la última revisión en línea (el catálogo incluido conserva la anterior) */
+    int reemplazarCatalogo(String csv, String version, String sha256, LocalDateTime cuando, LocalDateTime revisado) {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         Integer cargadas = tx.execute(estado -> {
+            em.flush();   // fichas guardadas por JPA en esta misma transacción: antes del DELETE, no después
             Connection con = DataSourceUtils.getConnection(dataSource);
             try {
                 try (Statement st = con.createStatement()) {
@@ -483,7 +811,7 @@ public class CatalogoCodigosService {
                 }
                 em.flush();
                 em.clear();   // por si alguna ficha vieja quedó en la sesión de JPA
-                configuracionService.guardarEstadoCatalogoCodigos(version, sha256, total[0], cuando);
+                configuracionService.guardarEstadoCatalogoCodigos(version, sha256, total[0], cuando, revisado);
                 return total[0];
             } catch (SQLException | IOException e) {
                 throw new NegocioException(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
@@ -518,8 +846,17 @@ public class CatalogoCodigosService {
 
     // ── Red ───────────────────────────────────────────────────────────────
 
+    /** El servidor contestó, pero no con 200 (404 = no está) */
+    static final class RespuestaHttp extends IOException {
+        final int estado;
+        RespuestaHttp(int estado) {
+            super("El servidor respondió " + estado);
+            this.estado = estado;
+        }
+    }
+
     /** GET acotado, sin redirecciones; acepta gzip y lo descomprime (el CSV baja a ~0.7 MB) */
-    private byte[] descargar(String url, int maximoBytes, String accept, Duration espera) throws IOException, InterruptedException {
+    private byte[] descargar(HttpClient cliente, String url, int maximoBytes, String accept, Duration espera) throws IOException, InterruptedException {
         if (!url.startsWith("https://") && !(permitirHttpParaPruebas && url.startsWith("http://127.0.0.1"))) {
             throw new IOException("Solo se consulta por HTTPS.");
         }
@@ -529,19 +866,19 @@ public class CatalogoCodigosService {
                 .header("Accept-Encoding", "gzip")
                 .header("User-Agent", VersionApp.agenteUsuario())
                 .GET().build();
-        HttpResponse<InputStream> resp = http().send(req, HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> resp = cliente.send(req, HttpResponse.BodyHandlers.ofInputStream());
         try (InputStream crudo = resp.body()) {
-            if (resp.statusCode() != 200) throw new IOException("El servidor respondió " + resp.statusCode());
-            resp.headers().firstValueAsLong("Content-Length").ifPresent(n -> {
-                if (n > maximoBytes) throw new IllegalStateException("La respuesta es demasiado grande.");
-            });
+            if (resp.statusCode() != 200) throw new RespuestaHttp(resp.statusCode());
+            if (resp.headers().firstValueAsLong("Content-Length").orElse(0) > maximoBytes) {
+                throw new RespuestaHttp(413);   // demasiado grande: cuenta como respuesta, no como falta de red
+            }
             boolean gzip = resp.headers().firstValue("Content-Encoding").map(v -> v.toLowerCase(Locale.ROOT).contains("gzip")).orElse(false);
             InputStream in = gzip ? new GZIPInputStream(crudo, 64 * 1024) : crudo;
             ByteArrayOutputStream buf = new ByteArrayOutputStream(Math.min(maximoBytes, 1 << 20));
             byte[] tmp = new byte[64 * 1024];
             int n;
             while ((n = in.read(tmp)) != -1) {
-                if (buf.size() + n > maximoBytes) throw new IOException("La respuesta es demasiado grande.");
+                if (buf.size() + n > maximoBytes) throw new RespuestaHttp(413);
                 buf.write(tmp, 0, n);
             }
             return buf.toByteArray();
@@ -571,7 +908,34 @@ public class CatalogoCodigosService {
         urlCsvRespaldo = b == null ? URL_CSV_RESPALDO : b + "respaldo/catalogo-mx.csv";
         urlFragmentoPrimaria = b == null ? URL_FRAGMENTO_PRIMARIA : b + "api/";
         urlFragmentoRespaldo = b == null ? URL_FRAGMENTO_RESPALDO : b + "api-respaldo/";
+        urlOpenFoodFacts = b == null ? URL_OPEN_FOOD_FACTS : b + "off/";
+        // Con el servidor de prueba no se usa el catálogo incluido real (tiene miles de códigos reales)
+        fuenteIncluida = b == null ? () -> CatalogoCodigosService.class.getResourceAsStream(RECURSO_INCLUIDO) : null;
+        versionIncluidaLeida = b != null;
+        versionIncluida = null;
         sinResultadoEnLinea.clear();
+    }
+
+    /** Solo pruebas: un catálogo incluido de mentira (CSV sin comprimir; null = ninguno) */
+    void incluidoParaPruebas(String csv, String fecha) {
+        if (csv == null) {
+            fuenteIncluida = null;
+            versionIncluida = null;
+        } else {
+            byte[] gz;
+            try {
+                ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                try (java.util.zip.GZIPOutputStream out = new java.util.zip.GZIPOutputStream(buf)) {
+                    out.write(csv.getBytes(StandardCharsets.UTF_8));
+                }
+                gz = buf.toByteArray();
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+            fuenteIncluida = () -> new java.io.ByteArrayInputStream(gz);
+            versionIncluida = new VersionIncluida(fecha, sha256(csv.getBytes(StandardCharsets.UTF_8)));
+        }
+        versionIncluidaLeida = true;
     }
 
     /** Solo pruebas */

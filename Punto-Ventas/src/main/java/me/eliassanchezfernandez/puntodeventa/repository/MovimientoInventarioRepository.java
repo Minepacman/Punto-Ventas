@@ -46,6 +46,16 @@ public interface MovimientoInventarioRepository extends JpaRepository<Movimiento
     boolean existsByProveedorId(Long proveedorId);
 
     /**
+     * Entradas con proveedor del catálogo y costo capturado desde una fecha:
+     * [proveedorId, fecha, cantidad, costoUnitario]. Sirven para estimar la "nota"
+     * (cuánto se le compra en cada visita); una entrada sin costo no dice nada del gasto.
+     */
+    @Query("SELECT m.proveedorId, m.fecha, m.cantidad, m.costoUnitario FROM MovimientoInventario m " +
+           "WHERE m.tipo = :tipo AND m.proveedorId IS NOT NULL AND m.costoUnitario IS NOT NULL " +
+           "AND m.costoUnitario > 0 AND m.fecha >= :desde")
+    List<Object[]> entradasConCostoDesde(MovimientoInventario.Tipo tipo, LocalDateTime desde);
+
+    /**
      * Todas las entradas con proveedor, de la más reciente a la más antigua: [productoId,
      * proveedorId (puede ser null), proveedor (texto)]. Quien la lee se queda con la primera
      * fila de cada producto cuyo proveedor exista en el catálogo (una entrada "No indicado

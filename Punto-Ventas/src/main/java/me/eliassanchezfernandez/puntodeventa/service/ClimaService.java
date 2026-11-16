@@ -47,7 +47,7 @@ public class ClimaService {
     public static final double FRIO_HASTA = 15.0;
     public static final double CALOR_DESDE = 25.0;
     /** Un registro más viejo que esto ya no se considera "clima actual" */
-    static final int VIGENCIA_HORAS = 3;
+    public static final int VIGENCIA_HORAS = 3;
 
     public static final String DESPEJADO = "Despejado";
     public static final String NUBLADO   = "Nublado";
@@ -70,13 +70,34 @@ public class ClimaService {
     @Value("${app.estadisticas.jobs:true}")
     private boolean trabajosActivos;
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(4))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    /**
+     * Se crea al primer uso (como en ActualizacionService): construirlo inicializa SSL y un ejecutor, ~100 ms
+     * medidos al crear el bean en CADA arranque, antes del login, aunque el clima esté apagado (rendimiento-1.0.5.md).
+     */
+    private volatile HttpClient http;
+
+    private HttpClient http() {
+        HttpClient h = http;
+        if (h == null) {
+            synchronized (this) {
+                h = http;
+                if (h == null) {
+                    h = HttpClient.newBuilder()
+                            .connectTimeout(Duration.ofSeconds(4))
+                            .followRedirects(HttpClient.Redirect.NORMAL)
+                            .build();
+                    http = h;
+                }
+            }
+        }
+        return h;
+    }
 
     /** Último problema al consultar (para mostrarlo en Configuración); null si la última consulta salió bien */
     private volatile String ultimoError;
+
+    /** Quien quiera enterarse de que hay un registro nuevo o cambió la configuración (el clima de la cabecera) */
+    private final java.util.List<Runnable> oyentes = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     // ── Mapeos (funciones puras) ─────────────────────────────────────────
 
@@ -178,7 +199,7 @@ public class ClimaService {
                 .header("Accept", "application/json")
                 .GET().build();
         try {
-            HttpResponse<java.io.InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<java.io.InputStream> resp = http().send(req, HttpResponse.BodyHandlers.ofInputStream());
             try (java.io.InputStream cuerpo = resp.body()) {
                 if (resp.statusCode() != 200) {
                     throw new IOException("El servicio de clima respondió " + resp.statusCode() + ".");
@@ -215,7 +236,9 @@ public class ClimaService {
         if (!c.isClimaActivo()) return Optional.empty();
         try {
             Lectura l = consultar(c.getLatitud(), c.getLongitud());
-            return Optional.of(self.guardar(l, LocalDateTime.now(reloj)));
+            ClimaRegistro r = self.guardar(l, LocalDateTime.now(reloj));
+            notificarCambio();     // ya confirmado en la base: quien lo lea verá el registro nuevo
+            return Optional.of(r);
         } catch (IOException | RuntimeException e) {
             System.err.println("Clima: sin datos (" + e.getMessage() + "). La aplicación sigue sin clima.");
             return Optional.empty();
@@ -242,6 +265,11 @@ public class ClimaService {
         return climaRepo.findFirstByOrderByFechaHoraDesc().filter(r -> !r.getFechaHora().isBefore(limite));
     }
 
+    /** Último registro guardado, por viejo que sea (la cabecera lo muestra atenuado si pasó la vigencia) */
+    public Optional<ClimaRegistro> ultimo() {
+        return climaRepo.findFirstByOrderByFechaHoraDesc();
+    }
+
     /** Clima registrado para la hora dada */
     public Optional<ClimaRegistro> climaDe(LocalDateTime fechaHora) {
         return climaRepo.findByFechaHora(fechaHora.truncatedTo(ChronoUnit.HOURS));
@@ -251,14 +279,45 @@ public class ClimaService {
         return configuracion().isClimaActivo();
     }
 
+    /** Ciudad configurada (puede ser null) para el tooltip de la cabecera */
+    public String ciudad() {
+        return configuracion().getCiudad();
+    }
+
+    // ── Oyentes (sin hilo propio: se avisa en el hilo que guardó) ────────
+
+    /** Avisar cuando haya un registro nuevo o cambie la configuración del clima. Quitar con {@link #quitarOyente}. */
+    public void alCambiar(Runnable oyente) {
+        if (oyente != null) oyentes.add(oyente);
+    }
+
+    public void quitarOyente(Runnable oyente) {
+        oyentes.remove(oyente);
+    }
+
+    /** Lo llama registrarAhora tras guardar y Configuración al cambiar ubicación/clima. Un oyente que falla no afecta a los demás. */
+    public void notificarCambio() {
+        for (Runnable o : oyentes) {
+            try {
+                o.run();
+            } catch (RuntimeException e) {
+                System.err.println("Clima: un oyente falló (" + e.getMessage() + ").");
+            }
+        }
+    }
+
     public Optional<String> ultimoError() {
         return Optional.ofNullable(ultimoError);
     }
 
     // ── Trabajos programados ─────────────────────────────────────────────
 
-    /** Cada hora, a los 5 minutos, mientras el clima esté activo */
-    @Scheduled(cron = "0 5 * * * *")
+    /**
+     * Cada 30 minutos en punto (7:00, 7:30, 8:00…), mientras el clima esté activo. La lectura de la
+     * media hora reemplaza la de su hora (un registro por hora: {@link #guardar}), así la cabecera se
+     * mantiene al día y las estadísticas siguen asociando las ventas por hora.
+     */
+    @Scheduled(cron = "0 0,30 * * * *")
     public void trabajoHorario() {
         if (!trabajosActivos) return;
         self.registrarAhora();

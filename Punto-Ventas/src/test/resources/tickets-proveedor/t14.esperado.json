@@ -1,0 +1,97 @@
+{
+  "tickets": [
+    {
+      "proveedor": "Lala",
+      "folio": "4229-2794109",
+      "fecha": "2026-09-11",
+      "lineas": [
+        {
+          "codigoProveedor": "021442",
+          "descripcion": "UHT Lala 100 Vainilla 330ml Pet",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 23.7,
+          "descuento": null,
+          "importe": 23.7
+        },
+        {
+          "codigoProveedor": "021441",
+          "descripcion": "UHT Lala 100 Fresa 330ml Pet",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 23.7,
+          "descuento": null,
+          "importe": 23.7
+        },
+        {
+          "codigoProveedor": "020422",
+          "descripcion": "UHT Cafe con Lala Latte Desl 330ml Tpr is",
+          "cantidad": 1,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 22.4,
+          "descuento": null,
+          "importe": 22.4
+        },
+        {
+          "codigoProveedor": "025927",
+          "descripcion": "Nutriyoghurt Beb NuezCereal 450 gr CN",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 16.0,
+          "descuento": null,
+          "importe": 32.0
+        },
+        {
+          "codigoProveedor": "025928",
+          "descripcion": "Nutriyoghurt Beb FresaCereal 450 gr CN",
+          "cantidad": 2,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 16.0,
+          "descuento": null,
+          "importe": 32.0
+        },
+        {
+          "codigoProveedor": "023429",
+          "descripcion": "Yog Lala Beb Fresa-Mora 220 gr",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 14.4,
+          "descuento": null,
+          "importe": 43.2
+        },
+        {
+          "codigoProveedor": "023427",
+          "descripcion": "Yog Lala Beb Mango 220 gr",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 14.4,
+          "descuento": null,
+          "importe": 43.2
+        },
+        {
+          "codigoProveedor": "023445",
+          "descripcion": "Yog Lala Beb Pina-Coco 220 gr",
+          "cantidad": 3,
+          "unidad": null,
+          "empaque": null,
+          "precioUnitario": 14.4,
+          "descuento": null,
+          "importe": 43.2
+        }
+      ],
+      "subtotal": 263.4,
+      "descuento": 0.0,
+      "impuestos": 0.0,
+      "cargos": null,
+      "total": 263.4,
+      "notas": "Descripción partida en dos renglones (Tpr / is)."
+    }
+  ]
+}

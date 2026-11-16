@@ -15,8 +15,8 @@
 
     <center>
         <ScrollPane fitToWidth="true">
-            <VBox styleClass="form-panel" spacing="14">
-                <padding><Insets topRightBottomLeft="24"/></padding>
+            <VBox styleClass="form-panel" spacing="10">
+                <padding><Insets top="18" right="22" bottom="16" left="22"/></padding>
 
                 <Label text="Datos del negocio" styleClass="form-section-title"/>
                 <Separator/>
@@ -37,7 +37,7 @@
                 <VBox spacing="4">
                     <Label text="Tasa de IVA (%)" styleClass="field-label"/>
                     <TextField fx:id="txtIva" promptText="16"/>
-                    <Label text="Todos los precios de venta YA incluyen IVA; la tasa solo se usa para desglosarlo en el historial y el corte."
+                    <Label text="Todos los precios de venta YA incluyen IVA; la tasa solo se usa para desglosarlo en el ticket, el historial, el corte y la factura. Es la tasa de los productos con IVA «Usar el de la tienda». En Productos puedes marcar cada producto (o proponerlo por departamento) como IVA 16 %, IVA 0 % (básicos: tortilla, leche, huevo, frutas y verduras, carne, pan…) o exento."
                            wrapText="true" styleClass="hint"/>
                 </VBox>
 
@@ -51,7 +51,17 @@
                            wrapText="true" styleClass="hint"/>
                 </VBox>
 
-                <Region minHeight="8"/>
+                <Separator/>
+                <Label text="Vales de compra (devoluciones)" styleClass="form-section-title"/>
+
+                <VBox spacing="4">
+                    <Label text="Los vales vencen después de (días)" styleClass="field-label"/>
+                    <TextField fx:id="txtVigenciaVales" promptText="0"/>
+                    <Label text="Escribe 0 para que los vales no venzan. Aplica a los vales que se entreguen de hoy en adelante."
+                           wrapText="true" styleClass="hint"/>
+                </VBox>
+
+                <Region minHeight="4"/>
 
                 <HBox spacing="12">
                     <Button text="Guardar" onAction="#onGuardar" styleClass="button-success"

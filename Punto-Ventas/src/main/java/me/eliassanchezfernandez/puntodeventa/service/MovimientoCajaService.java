@@ -66,7 +66,51 @@ public class MovimientoCajaService {
 
     @Transactional
     public MovimientoCaja registrar(Solicitud s, Collection<Autorizacion> autorizaciones) {
+        if (s != null && s.categoria() != null && !s.categoria().isManual()) {
+            throw new NegocioException("«" + s.categoria().getEtiqueta() + "» se registra desde la pantalla de Clientes.");
+        }
         sesionService.verificarPermiso(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
+        Autorizacion aut = sesionService.autorizacionUsada(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
+        MovimientoCaja guardado = guardar(s, aut, null);
+        if (aut != null) aut.consumir();
+        return guardado;
+    }
+
+    /**
+     * Movimiento que un cajero SIN el permiso de abrir el cajón declara al abrirlo
+     * ("sale $200, retiro"). No exige MOVIMIENTOS_CAJA ni autorización: el dueño
+     * prefiere que el cajero diga qué hizo y quede constancia a que no quede nada.
+     * El concepto se marca como declarado al abrir el cajón para distinguirlo en el
+     * corte y en la bitácora. Solo lo usa {@link ImpresionService}.
+     */
+    @Transactional
+    public MovimientoCaja registrarAlAbrirCajon(Tipo tipo, Categoria categoria, double monto, String motivo) {
+        String concepto = motivo == null ? "" : motivo.trim();
+        return guardar(new Solicitud(tipo, categoria, monto, concepto, null, null, null), null, "Al abrir el cajón: ");
+    }
+
+    /**
+     * Entrada de efectivo por el abono de un cliente a su cuenta (fiado). No exige
+     * MOVIMIENTOS_CAJA: recibir un pago es trabajo normal de la caja; el dinero entra al
+     * cajón y cuenta en el efectivo esperado del corte. Solo lo usa {@link CuentaClienteService}.
+     */
+    @Transactional
+    public MovimientoCaja registrarAbonoCliente(double monto, String concepto) {
+        return guardar(new Solicitud(Tipo.ENTRADA, Categoria.ABONO_CLIENTE, monto, concepto, null, null, null), null, null);
+    }
+
+    /**
+     * Reembolso en efectivo de una devolución de artículos: salida de caja «Devolución al cliente»
+     * ligada a la venta. No exige MOVIMIENTOS_CAJA: {@link DevolucionService} ya verificó
+     * DEVOLVER_VENTAS (o la autorización, que queda anotada aquí) dentro de la misma transacción.
+     */
+    @Transactional
+    MovimientoCaja registrarReembolsoDeDevolucion(Long ventaId, double monto, String concepto, Autorizacion aut) {
+        return guardar(Solicitud.devolucion(ventaId, monto, concepto), aut, null);
+    }
+
+    /** Valida y guarda; {@code prefijoConcepto} (opcional) antecede al concepto final */
+    private MovimientoCaja guardar(Solicitud s, Autorizacion aut, String prefijoConcepto) {
         Cajero quien = sesionService.requerirSesion();
         if (s == null || s.tipo() == null || s.categoria() == null) {
             throw new NegocioException("Indica si es entrada o salida y para qué es.");
@@ -99,6 +143,7 @@ public class MovimientoCajaService {
                 throw new NegocioException("Escribe el motivo del movimiento (por ejemplo «Pago de luz»).");
             }
         }
+        if (prefijoConcepto != null) concepto = prefijoConcepto + concepto;
         if (concepto.length() > 250) concepto = concepto.substring(0, 250);
 
         int caja = cajaService.cajaActual();
@@ -120,7 +165,6 @@ public class MovimientoCajaService {
         m.setVentaId(s.ventaId());
         m.setEfectivoAntes(VentaService.redondear(antes));
         m.setEfectivoDespues(VentaService.redondear(antes + m.getMontoConSigno()));
-        Autorizacion aut = sesionService.autorizacionUsada(Permiso.MOVIMIENTOS_CAJA, autorizaciones);
         if (aut != null && aut.administrador() != null) {
             m.setAutorizadoPorId(aut.administrador().getId());
             m.setAutorizadoPor(aut.nombreAdministrador());
@@ -131,7 +175,6 @@ public class MovimientoCajaService {
                 s.categoria().getEtiqueta(), Moneda.formato(m.getMonto()), concepto,
                 m.getProveedorNombre() != null ? " [" + m.getProveedorNombre() + "]" : "",
                 Moneda.formato(m.getEfectivoAntes()), Moneda.formato(m.getEfectivoDespues())), aut);
-        if (aut != null) aut.consumir();
         return guardado;
     }
 

@@ -1,0 +1,27 @@
+Cervezas y Refrescos de Jalapa SA de CV
+CRJ010101AB1
+CARRETERA FEDERAL XALAPA-VERACRUZ          KM 11
+FRACC LOS     EMILIANO      VERACRUZ       C.P. 91634
+GIRASOLES     ZAPATA
+Tel: (000) 000 00 00
+iente: CLI000001 CLIENTE EJEMPLO                          Dir: 3
+ABARROTES EJEMPLO
+irección: Col. EJEMPLO Calle EJEMPLO
+CALLE EJEMPLO 1 CP. 00000
+eparto: 2300-REPARTIDOR EJEMPLO                  Rep. 569681
+edido: 9544-54744 COPIA        Prev.: 569544     Liq: 14/11/2026
+roducto Descripción                           Desc.    Importe
+ZA  4    $ $15.50                                  Folios Desc:
+0134020 DANONE FRESA 220G DS ASS              $0.00     $62.00
+ZA  2    $ $15.50                                  Folios Desc:
+0171126 DANONE MANZANA 220G DS EVO            $0.00     $31.00
+ZA  2    $ $15.50                                  Folios Desc:
+0171127 DANONE DURAZNO 220G DS                $0.00     $31.00
+ZA  8    $ $16.00                                  Folios Desc:
+0180175 ACTIVIA CIRUELA PASA 225G             $0.00    $128.00
+ondición:  Contado                  Cantidad:          16
+eferencia:                          Importe:      $252.00
+orma Pago:  Efectivo                Desc/Bonific:    $0.00
+nvase Ret:  0     Reja Ret:  0      Total a pagar: $252.00
+CLIENTE                         REPARTIDOR
+a y hora de impresión:   13/11/2026 10:06:32 p. m.

@@ -71,6 +71,7 @@ public final class PantallaConexion {
         RadioButton rbVarias = new RadioButton("Varias cajas: este equipo se conecta a un servidor PostgreSQL de la tienda");
         rbUna.setToggleGroup(grupo);
         rbVarias.setToggleGroup(grupo);
+        EtiquetaBeta.marcar(rbVarias, FuncionBeta.VARIAS_CAJAS);
         rbUna.setSelected(true);
         rbUna.setWrapText(true);
         rbVarias.setWrapText(true);

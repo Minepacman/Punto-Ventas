@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import me.eliassanchezfernandez.puntodeventa.util.Icono?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<!--
+    bitacora.fxml  –  Bitácora de acciones sensibles (solo administrador):
+    aperturas del cajón, entradas/salidas de efectivo, cancelaciones, autorizaciones,
+    cambios de usuarios y configuración, intentos fallidos de login...
+    Controlador: BitacoraController.java
+-->
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:id="raiz"
+            fx:controller="me.eliassanchezfernandez.puntodeventa.controller.BitacoraController"
+            stylesheets="@../css/app.css">
+
+    <top>
+        <!-- Dos renglones: periodo y acciones arriba, filtros abajo. Los textos nunca se recortan
+             con «…»: el primero pasa a otro renglón si no cabe y en el segundo se angosta el campo de filtro -->
+        <VBox styleClass="section-toolbar" spacing="8">
+        <padding><Insets topRightBottomLeft="10"/></padding>
+        <FlowPane styleClass="barra-acciones">
+            <Label text="Desde:"/>
+            <DatePicker fx:id="dpDesde" prefWidth="140"/>
+            <Label text="Hasta:"/>
+            <DatePicker fx:id="dpHasta" prefWidth="140"/>
+            <Button text="Buscar" onAction="#onBuscar" styleClass="button-primary"><graphic><Icono nombre="buscar"/></graphic></Button>
+            <Separator orientation="VERTICAL"/>
+            <Button text="Exportar…" onAction="#onExportar"><graphic><Icono nombre="subir"/></graphic></Button>
+            <Button text="Cerrar" onAction="#onCerrar"><graphic><Icono nombre="cerrar"/></graphic>
+                <tooltip><Tooltip text="Cerrar esta ventana (Esc)"/></tooltip></Button>
+        </FlowPane>
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <Label text="Acción:" minWidth="-Infinity"/>
+            <ComboBox fx:id="cmbAccion" prefWidth="210" minWidth="120"/>
+            <ToggleButton fx:id="tgCajon" text="Solo cajón" onAction="#onSoloCajon" minWidth="-Infinity"><graphic><Icono nombre="efectivo"/></graphic></ToggleButton>
+            <TextField fx:id="txtFiltro" promptText="Filtrar por usuario o detalle..." HBox.hgrow="ALWAYS"/>
+        </HBox>
+        </VBox>
+    </top>
+
+    <center>
+        <TableView fx:id="tabla">
+            <columns>
+                <TableColumn fx:id="colFecha"    text="Fecha y hora" prefWidth="135"/>
+                <TableColumn fx:id="colUsuario"  text="Usuario"      prefWidth="150"/>
+                <TableColumn fx:id="colAccion"   text="Acción"       prefWidth="190"/>
+                <TableColumn fx:id="colDetalle"  text="Detalle"      prefWidth="420"/>
+                <TableColumn fx:id="colAutorizo" text="Autorizó"     prefWidth="140"/>
+            </columns>
+        </TableView>
+    </center>
+
+    <bottom>
+        <HBox styleClass="ticket-footer" spacing="16" alignment="CENTER_LEFT">
+            <padding><Insets top="8" right="12" bottom="8" left="12"/></padding>
+            <Label fx:id="lblResumen" text="0 registro(s)" styleClass="text-bold"/>
+            <Label fx:id="lblNota" text="" styleClass="hint" wrapText="true" HBox.hgrow="ALWAYS"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

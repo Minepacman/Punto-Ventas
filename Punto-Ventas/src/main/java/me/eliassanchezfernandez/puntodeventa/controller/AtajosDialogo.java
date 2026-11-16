@@ -37,7 +37,7 @@ public final class AtajosDialogo {
         Ventanas.estilizar(dlg);
 
         List<Fila> filas = new ArrayList<>();
-        for (Atajo a : Atajo.values()) {
+        for (Atajo a : Atajo.disponibles()) {
             String donde = a.getAmbito() == Atajo.Ambito.GLOBAL ? "General" : "Ventas";
             String accion = a.getDescripcion() + (a.getNota() != null ? "  (" + a.getNota() + ")" : "");
             String permiso = a.getPermiso() == null ? "" : a.getPermiso().getDescripcion() + " o autorización";

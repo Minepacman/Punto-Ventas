@@ -4,6 +4,7 @@
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.*?>
 <?import javafx.geometry.Insets?>
+<?import me.eliassanchezfernandez.puntodeventa.controller.SelectorUbicacion?>
 
 <!--
     asistente_inicial.fxml  –  Asistente de primera vez del administrador
@@ -41,27 +42,12 @@
                 </HBox>
 
                 <!-- ── Ubicación ──────────────────────────────── -->
-                <Label text="3. Ubicación del negocio (para el clima, opcional)" styleClass="form-section-title"/>
-                <Label text="Con la ubicación, el programa registra el clima cada hora y lo relaciona con tus ventas para mejorar las sugerencias. Solo se envían las coordenadas; nada más sale de este equipo."
+                <Label text="3. ¿Dónde está tu negocio? (para el clima, opcional)" styleClass="form-section-title"/>
+                <Label text="Con la ciudad, el programa consulta el clima cada 30 minutos y lo relaciona con tus ventas para mejorar las sugerencias. Solo se usa la zona; nada de la tienda sale de este equipo. Puedes omitir este paso."
                        styleClass="hint" wrapText="true"/>
-                <HBox spacing="8" alignment="CENTER_LEFT">
-                    <TextField fx:id="txtCiudad" promptText="Ciudad, ej: Puebla" HBox.hgrow="ALWAYS" onAction="#onBuscarCiudad"/>
-                    <Button fx:id="btnBuscar" text="Buscar" onAction="#onBuscarCiudad"/>
-                </HBox>
-                <ComboBox fx:id="cmbLugares" promptText="Elige tu ciudad" maxWidth="Infinity"/>
-                <HBox spacing="12">
-                    <VBox spacing="4" HBox.hgrow="ALWAYS">
-                        <Label text="Latitud" styleClass="field-label"/>
-                        <TextField fx:id="txtLatitud" promptText="ej: 19.4326"/>
-                    </VBox>
-                    <VBox spacing="4" HBox.hgrow="ALWAYS">
-                        <Label text="Longitud" styleClass="field-label"/>
-                        <TextField fx:id="txtLongitud" promptText="ej: -99.1332"/>
-                    </VBox>
-                </HBox>
-                <CheckBox fx:id="chkClima" text="Registrar el clima cada hora (requiere internet)"/>
-                <Label fx:id="lblEstadoUbicacion" text="Busca tu ciudad o deja los campos vacíos para omitir este paso."
-                       styleClass="hint" wrapText="true"/>
+                <!-- Detectar por internet, buscar la ciudad o (Opciones avanzadas) coordenadas a mano -->
+                <SelectorUbicacion fx:id="selectorUbicacion"/>
+                <CheckBox fx:id="chkClima" text="Consultar el clima cada 30 minutos (requiere internet)"/>
 
                 <Label fx:id="lblError" text="" styleClass="field-error-label" wrapText="true" visible="false" managed="false"/>
             </VBox>

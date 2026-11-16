@@ -54,15 +54,19 @@ public final class Navegador {
     public static boolean abrir(String url) {
         if (!esSegura(url)) return false;
         Optional<List<String>> cmd = comando(System.getProperty("os.name"), url.trim());
-        if (cmd.isEmpty()) return false;
+        return cmd.isPresent() && ejecutar(cmd.get());
+    }
+
+    /** Lanza el comando (argumentos separados, sin shell) y descarta su salida. También lo usa {@link AbrirArchivo}. */
+    static boolean ejecutar(List<String> comando) {
         try {
-            Process p = new ProcessBuilder(cmd.get())
+            Process p = new ProcessBuilder(comando)
                     .redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                     .start();
             p.getOutputStream().close();
             return true;
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
             return false;
         }
     }

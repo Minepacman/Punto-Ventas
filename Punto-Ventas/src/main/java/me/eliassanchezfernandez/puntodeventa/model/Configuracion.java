@@ -44,6 +44,14 @@ public class Configuracion {
     @Column(name = "plazo_cancelacion_horas", nullable = false)
     private int plazoCancelacionHoras = Venta.PLAZO_CANCELACION_HORAS_POR_DEFECTO;
 
+    /** Días que dura un vale de compra (devoluciones) desde que se entrega; null o 0 = no vence */
+    @Column(name = "vale_vigencia_dias")
+    private Integer valeVigenciaDias;
+
+    public int getValeVigenciaDiasOCero() {
+        return valeVigenciaDias == null || valeVigenciaDias < 0 ? 0 : valeVigenciaDias;
+    }
+
     // ── Opciones habilitadas ─────────────────────────────────────────────
 
     /** Pedir el fondo de caja al primer inicio de sesión del día (CRT-02) */
@@ -144,7 +152,7 @@ public class Configuracion {
     @Column(name = "ciudad", length = 100)
     private String ciudad;
 
-    /** Consultar el clima cada hora (apagado hasta que haya coordenadas) */
+    /** Consultar el clima cada 30 minutos en punto (apagado hasta que haya coordenadas) */
     @Column(name = "clima_activo")
     private Boolean climaActivo;
 
@@ -191,6 +199,20 @@ public class Configuracion {
     /** El QR codifica el nombre .local en vez de la IP (null = IP) */
     @Column(name = "movil_qr_local")
     private Boolean movilQrLocal;
+
+    /** Puerto fijo del servidor HTTPS del acceso móvil (notificaciones); null = automático (puerto HTTP + 1) */
+    @Column(name = "movil_puerto_https")
+    private Integer movilPuertoHttps;
+
+    // ── Apariencia ───────────────────────────────────────────────────────
+
+    /**
+     * Apariencia de toda la tienda (tema, color, iconos, letra, vidrio) en JSON
+     * (util/apariencia/Apariencia). null = la de fábrica. La página móvil la lee
+     * de /api/apariencia. Los tickets impresos no la usan.
+     */
+    @Column(name = "apariencia", length = 2000)
+    private String apariencia;
 
     // ── Inicio de sesión ─────────────────────────────────────────────────
 
@@ -275,6 +297,18 @@ public class Configuracion {
 
     public boolean isCodigosEnLinea() { return codigosEnLinea == null || codigosEnLinea; }
 
+    // ── Caducidades ──────────────────────────────────────────────────────
+
+    /** Días de anticipación de "Por caducar" y del aviso de caducidades (null = {@link #DIAS_AVISO_CADUCIDAD_POR_DEFECTO}) */
+    @Column(name = "dias_aviso_caducidad")
+    private Integer diasAvisoCaducidad;
+
+    public static final int DIAS_AVISO_CADUCIDAD_POR_DEFECTO = 7;
+
+    public int getDiasAvisoCaducidad() {
+        return diasAvisoCaducidad == null || diasAvisoCaducidad <= 0 ? DIAS_AVISO_CADUCIDAD_POR_DEFECTO : diasAvisoCaducidad;
+    }
+
     public boolean isActualizacionesAuto() { return actualizacionesAuto == null || actualizacionesAuto; }
     public boolean tieneClaveDonador()     { return claveDonador != null && !claveDonador.isBlank(); }
 
@@ -287,6 +321,8 @@ public class Configuracion {
     public boolean isMovilPuertoGuardado() { return movilPuerto != null; }
 
     public boolean isMovilActivo() { return movilActivo != null && movilActivo; }
+    /** true si el administrador fijó el puerto HTTPS a mano */
+    public boolean isMovilPuertoHttpsManual() { return movilPuertoHttps != null; }
     public int getMovilPuerto()    { return movilPuerto != null ? movilPuerto : MOVIL_PUERTO_POR_DEFECTO; }
 
     public static final int TICKET_ANCHO_POR_DEFECTO = 80;
@@ -331,6 +367,7 @@ public class Configuracion {
             case TRANSFERENCIA -> isPagoTransferencia();
             case VALES         -> isPagoVales();
             case CREDITO       -> false;
+            case VALE_COMPRA   -> false;   // vale de la tienda: tiene su propio campo en la ventana de cobro
         };
     }
 

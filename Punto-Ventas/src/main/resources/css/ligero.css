@@ -1,0 +1,19 @@
+/*
+ * Modo ligero (util/ModoLigero): para computadoras lentas o sin tarjeta de video.
+ * Va después de app.css y de la hoja de Apariencia en cada escena.
+ *  - Sin sombras: con el dibujo por software cada sombra gaussiana se recalcula con el procesador.
+ *  - Sin animaciones de paneles plegables ni de pestañas.
+ * El efecto vidrio lo quita AplicadorApariencia (no llega a generarse).
+ */
+* {
+    -fx-effect: null !important;
+}
+
+.titled-pane {
+    -fx-animated: false;
+}
+
+.tab-pane {
+    -fx-open-tab-animation: NONE;
+    -fx-close-tab-animation: NONE;
+}

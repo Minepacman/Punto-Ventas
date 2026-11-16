@@ -511,6 +511,22 @@ INV-11  Quién ajusta inventario (NUEVA, abierta)
         Estado vs. lo deseado: Sin definir.
         Fuente: controller/MainController.java, controller/InventarioController.java
 
+INV-12  Caducidades (versión sencilla, NUEVA)
+        Regla: cada producto puede tener "Controlar caducidad" (Productos). Al
+        darle entrada (Inventario, orden de compra recibida o teléfono) se puede
+        anotar "Caduca el" (opcional; no se acepta una fecha que ya pasó). No es
+        inventario por lote: las ventas no saben de fechas. Lo que queda de cada
+        fecha se ESTIMA con la existencia actual, asignándola primero a lo que
+        caduca más tarde (se supone que se vende primero lo que caduca primero).
+        "Por caducar" (Inventario, y filtro en el teléfono) muestra lo que vence
+        en los próximos N días (7 por defecto, configurable con AJUSTAR_INVENTARIO)
+        o ya venció (en rojo). Acciones con AJUSTAR_INVENTARIO o autorización:
+        "Retirar" (merma con motivo "Caducado") y "Ya no queda" (deja de contar
+        sin mover el inventario). Aviso "N productos caducan esta semana" en la
+        campana del teléfono y como notificación una vez al día desde las 9:00
+        (tipo "Por caducar", apagable por teléfono; respeta horas de silencio).
+        Fuente: service/CaducidadService.java, model/Caducidad.java
+
 Preguntas para definir (Inventario):
   - INV-05: el dueño respondió "Puede, para la auditoria". ¿El motivo del ajuste
     es OBLIGATORIO u opcional? ¿Qué lista de motivos?
@@ -610,12 +626,13 @@ VEN-09  Pago con tarjeta
 
 VEN-10  Venta a crédito
         Regla deseada: sin definir (las preguntas de Clientes no se respondieron).
-        Estado actual: Implementado de forma incompleta y RIESGOSA: cualquier
-        cajero puede elegir "Crédito" y la venta se registra como cobrada SIN
-        cliente, sin límite y sin generar deuda.
-        Estado vs. lo deseado: Sin definir. Recomendación: decidir pronto, o
-        quitar "Crédito" de la lista mientras no exista el módulo de clientes.
-        Fuente: model/Venta.java, controller/VentasController.java
+        Estado actual (2026-11-15): "A cuenta (fiado)" en la ventana de cobro,
+        sola o en pago dividido, SIEMPRE ligada a un cliente (F6 lo elige o lo da
+        de alta con solo el nombre). Exige VENDER_A_CREDITO (gerente por defecto)
+        o autorización. Ver CLI-03.
+        Estado vs. lo deseado: Propuesta implementada; el dueño la confirma.
+        Fuente: service/VentaService.java, service/CuentaClienteService.java,
+                controller/CobroDialogo.java
 
 VEN-11  Registro de la venta al cobrar
         Regla deseada: sin definir por el dueño; se mantiene: se guarda fecha y
@@ -689,6 +706,23 @@ VEN-19  Plazo de cancelación no retroactivo (NUEVA)
         Estado actual: No implementado.
         Estado vs. lo deseado: Pendiente de implementar.
         Fuente: (no existe)
+
+VEN-20  Producto común (artículo fuera del catálogo) (NUEVA)
+        Regla deseada: en Ventas, Ctrl/Cmd+P (botón "Sin código") agrega algo que
+        no está en el inventario tecleando nombre (por defecto "Producto común"),
+        precio unitario y cantidad (admite decimales para kilos). Lo puede hacer
+        cualquier cajero que venda. No toca inventario, no entra a promociones ni a
+        mayoreo (sí admite descuento manual) y para el corte se estima una ganancia
+        del 20 % sobre lo cobrado (costo registrado = 80 % del importe). El ticket,
+        el historial, el celular y la factura muestran el nombre tecleado; en la
+        factura va con la clave genérica 01010101 y unidad Pieza (Kilogramo si la
+        cantidad trae decimales). El corte muestra aparte "Incluye $X de productos
+        comunes con ganancia estimada del 20 %".
+        Estado actual: Implementado. Todos esos renglones apuntan a un producto del
+        sistema oculto (código reservado PRODUCTO-COMUN) y el nombre/precio quedan
+        en el renglón (detalle_ventas.descripcion / precio_venta / costo_unitario).
+        Fuente: model/ProductoComun, VentaService.crearDetalleProductoComun,
+        ProductoComunDialogo, Atajo.PRODUCTO_COMUN
 
 Preguntas para definir (Ventas):
   - VEN-04: si todos los precios ya incluyen IVA, ¿qué elige exactamente el
@@ -920,6 +954,39 @@ CRT-11  Quién ve las ganancias (NUEVA)
         configurable (USR-16) para dárselo a quien el administrador decida.
         Fuente: controller/MainController.java, controller/CorteController.java
 
+CRT-12  Devoluciones en el corte y en los reportes (NUEVA)
+        Regla: ningún reporte cuenta como vendido lo que el cliente devolvió. Lo
+        único que cambia es EN QUÉ DÍA se resta:
+        - Caja (corte de turno o del día, corte impreso, "Vendido hoy" en
+          Ventas): la devolución resta el día en que se hizo, en la caja que
+          reembolsó, porque ese día salió el dinero. Las ventas se muestran
+          cobradas y aparte "Devoluciones −$X" y "Ventas netas". Subtotal, IVA,
+          IVA por tasa y ventas por departamento ya son NETOS (venta del periodo
+          menos lo devuelto en el periodo) con la nota "(incluye −$X de
+          devoluciones)" en pantalla y "incluye devoluciones -$X" en el impreso.
+          Un departamento con devoluciones y sin ventas en el periodo sale en
+          negativo. La ganancia resta lo reembolsado menos el costo de lo que
+          regresó al anaquel (lo de merma se pierde completo).
+        - Análisis de ventas (Estadísticas: Hoy y sus comparaciones, semana/mes/
+          año, por franja, por cajero, por hora, por caja, por clima, productos
+          más vendidos; hora pico de los avisos; Estadísticas, ventas y ganancia
+          del celular; recomendaciones "se compran juntos", productos por clima y
+          sugerencias en Ventas; exportaciones de esas tablas): la devolución
+          resta en el día de la VENTA, como si esas piezas nunca se hubieran
+          vendido (cantidad vendida − devuelta por renglón; un renglón devuelto
+          completo no cuenta). El número de tickets no cambia. La ganancia del
+          celular resta lo reembolsado y el costo de las piezas devueltas.
+        - Historial de ventas: cada venta muestra su total cobrado y, si tuvo
+          devoluciones, "Devoluciones: −$X (neto $Y)"; el resumen de abajo
+          también da el neto.
+        Al devolver se marca la venta (fecha de última devolución), así los
+        agregados del día de esa venta se recalculan en la siguiente
+        actualización; la canasta y el clima se rehacen completos cada vez.
+        Estado actual: Implementado.
+        Fuente: VentaService.resumenCompletoEntre, DevolucionRepository,
+        VentaRepository.NETO, AgregadosService.cantidadNeta, EstadisticasService,
+        ConsultasMovilService, TicketService.documentoCorte
+
 Preguntas para definir (Corte):
   - CRT-09/CRT-11: ¿quién puede HACER el corte (no solo ver la ganancia)? ¿Un
     cajero puede hacer su propio corte por cajero sin ver ganancias?
@@ -936,29 +1003,49 @@ Preguntas para definir (Corte):
 
 
 ================================================================================
-7. CLIENTES Y CRÉDITO (CLI) - SIN RESPUESTAS DEL DUEÑO
+7. CLIENTES Y CRÉDITO (CLI) - SIN RESPUESTAS DEL DUEÑO (propuesta implementada)
 ================================================================================
 
 CLI-01  Datos del cliente
         Regla deseada: sin definir por el dueño.
-        Estado actual: Parcial: solo existe la estructura de datos (nombre
-        obligatorio, teléfono, límite de crédito, saldo de deuda).
-        Estado vs. lo deseado: Sin definir.
-        Fuente: model/Cliente.java
+        Estado actual: nombre (obligatorio, sin repetir aunque cambien mayúsculas
+        o acentos), teléfono, nota, límite de crédito (vacío/0 = sin límite) y
+        activo. Un cliente desactivado ya no compra a cuenta pero conserva su
+        deuda y puede abonar. Alta/edición: VENDER_A_CREDITO o autorización;
+        cambiar el límite de un cliente existente: AJUSTAR_CREDITO (solo admin
+        por defecto) o autorización. Nunca se borran.
+        Estado vs. lo deseado: Propuesta; el dueño la confirma.
+        Fuente: model/Cliente.java, service/CuentaClienteService.java
 
-CLI-02  Pantalla de Clientes
-        Regla deseada: sin definir por el dueño.
-        Estado actual: No implementado: todos los botones de F2 avisan "no
-        disponible en esta versión".
-        Estado vs. lo deseado: Sin definir.
-        Fuente: controller/ClientesController.java
+CLI-02  Pantalla de Clientes (F2)
+        Estado actual: lista con lo que debe cada uno, límite y lo que aún se le
+        puede fiar; total por cobrar; Registrar abono, Estado de cuenta (imprimir
+        y exportar), Nuevo/Modificar y Ajustar saldo. En el celular, la sección
+        "Fiado" (Quién me debe) es solo de consulta (VENDER_A_CREDITO).
+        Fuente: controller/ClientesController.java, servidor/ServidorMovilService.java
 
 CLI-03  Venta a crédito ligada a cliente, límite y abonos
-        Regla deseada: sin definir por el dueño.
-        Estado actual: No implementado. Ver VEN-10: hoy se puede registrar una
-        venta "a crédito" sin cliente.
-        Estado vs. lo deseado: Sin definir.
-        Fuente: model/Venta.java, model/Cliente.java
+        Estado actual: cada cambio de saldo es un renglón del libro
+        cuenta_cliente_movimientos (cargo por venta, abono, ajuste, cancelación,
+        devolución) y, en la misma transacción, un UPDATE atómico del saldo del
+        cliente: el saldo es la suma del libro. Rebasar el límite exige
+        AJUSTAR_CREDITO o autorización de un solo uso (queda en la bitácora);
+        con varias cajas el límite se revisa en la base y no se rebasa dos
+        veces. Abonos: cualquier usuario con sesión; en efectivo entran al cajón
+        como "Abono de cliente (fiado)" y cuentan en el corte; con tarjeta o
+        transferencia solo bajan la deuda. Un abono no puede pasar de la deuda.
+        Cancelar una venta a cuenta quita de la cuenta lo pendiente de esa venta
+        (si ya había abonado, queda saldo a favor). Devolver artículos de una
+        venta a cuenta (o con pago mixto) baja primero lo que siga pendiente de
+        esa venta en la cuenta del cliente (renglón "Devolución") y solo el resto
+        se entrega en efectivo (salida "Devolución al cliente"); el comprobante y
+        el corte dicen cuánto fue a la cuenta. Con devoluciones la venta ya no se
+        cancela (se devuelve lo que falta). Ajustes con motivo:
+        AJUSTAR_CREDITO. El ticket dice "A cuenta de <cliente> · Saldo: $X".
+        Corte: "Vendido a cuenta (fiado, no entra al cajón)" y los abonos del
+        periodo; el efectivo esperado solo suma lo cobrado en efectivo.
+        Estado vs. lo deseado: Propuesta; el dueño la confirma.
+        Fuente: model/CuentaClienteMovimiento.java, service/CuentaClienteService.java
 
 CLI-04  Plazos, intereses y eliminación de clientes con deuda
         Regla deseada: sin definir por el dueño.
@@ -1149,7 +1236,7 @@ RESUMEN: NÚMERO DE REGLAS POR SECCIÓN
   1. Usuarios, roles e inicio de sesión (USR) .... 19  (4 nuevas: USR-16 a USR-19)
   2. Productos y departamentos (PRD) ............. 17  (2 nuevas: PRD-16, PRD-17)
   3. Inventario (INV) ............................ 11  (1 nueva: INV-11)
-  4. Ventas (VEN) ................................ 19  (2 nuevas: VEN-18, VEN-19)
+  4. Ventas (VEN) ................................ 20  (3 nuevas: VEN-18, VEN-19, VEN-20)
   5. Promociones (PRO) ........................... 10  (1 nueva: PRO-10)
   6. Fondo y corte de caja (CRT) ................. 11  (2 nuevas: CRT-10, CRT-11)
   7. Clientes y crédito (CLI) ..................... 4

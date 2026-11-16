@@ -1,0 +1,22 @@
+Factura: 202609150103698
+15/09/26 12:35 p.
+DISTRIBUIDORA DE DULCES
+Y CHICLES RAMIREZ
+CARRETERA FEDERAL XALAPA-PEROTE
+
+A:
+CLIENTE EJEMPLO
+ENTREGA MIERCOLES
+CEL:0000000000 :
+-----------------------------------
+1    TUTSI 40PZS 138.00    138.00
+1    MZ CHOCO GT 126.00    126.00
+-----------------------------------
+ (0%)                  0.00 MXN
+Total:               264.00 MXN
+Forma de pago: Factura
+
+FIRMA CLIENTE
+
+GRACIAS POR SU COMPRA
+VENDEDOR : VENDEDOR EJEMPLO

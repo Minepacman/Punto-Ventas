@@ -1,5 +1,6 @@
 package me.eliassanchezfernandez.puntodeventa.config;
 
+import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import me.eliassanchezfernandez.puntodeventa.util.ConexionLocal;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -28,6 +29,14 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
     public static final int POOL_POSTGRESQL = 5;
     /** Propiedad de sqlite-jdbc que fija el BEGIN que abre cada transacción (DEFERRED/IMMEDIATE/EXCLUSIVE) */
     public static final String TRANSACTION_MODE = "transaction_mode";
+    /** Tamaño que HikariCP pone por su cuenta (10 en HikariCP 6) */
+    private static final int POOL_POR_DEFECTO_HIKARI = new HikariConfig().getMaximumPoolSize();
+    /** mmap_size de SQLite: 64 MB con Java de 64 bits, 0 (lectura normal) con Java de 32 bits */
+    static final String MMAP_BYTES = mmapPara(System.getProperty("sun.arch.data.model"));
+
+    static String mmapPara(String bitsJvm) {
+        return "32".equals(bitsJvm) ? "0" : "67108864";
+    }
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
@@ -39,7 +48,9 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
 
     /** Punto de entrada reutilizable (también desde las pruebas) */
     public static void ajustar(HikariDataSource ds, PerfilBaseDatos perfil) {
-        if (ds.getMaximumPoolSize() <= 0) {
+        // HikariCP 5 dejaba -1 si nadie lo fijaba; HikariCP 6 (Spring Boot 3.4+) ya trae 10. Se toma como "no
+        // fijado" cualquiera de los dos; un 10 puesto a mano también se cambiaría (en un POS no tiene caso).
+        if (ds.getMaximumPoolSize() <= 0 || ds.getMaximumPoolSize() == POOL_POR_DEFECTO_HIKARI) {
             ds.setMaximumPoolSize(perfil.esPostgresql() ? POOL_POSTGRESQL : POOL_SQLITE);
         }
         if (ds.getMinimumIdle() < 0) ds.setMinimumIdle(1);
@@ -60,8 +71,10 @@ public class AjustesPoolPorDialecto implements BeanPostProcessor {
             propiedadSiFalta(ds, "journal_size_limit", "33554432");
             propiedadSiFalta(ds, "cache_size", "-8000");
             propiedadSiFalta(ds, "temp_store", "MEMORY");
-            // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro
-            propiedadSiFalta(ds, "mmap_size", "67108864");
+            // Lectura por mapeo de memoria (hasta 64 MB): menos llamadas al sistema en un disco duro.
+            // Con Java de 32 bits no: cada conexión del pool mapea su propia ventana y el proceso entero
+            // (memoria de Java, archivo de arranque rápido, JavaFX) cabe en 2 GB de direcciones.
+            propiedadSiFalta(ds, "mmap_size", MMAP_BYTES);
             propiedadSiFalta(ds, "foreign_keys", "true");
             // Las conexiones físicas las crea FuenteConexionesSqlite (ConexionSqlite: BEGIN según la
             // transacción y recuperación si el BEGIN falla por BUSY)

@@ -50,9 +50,11 @@ class MigracionPostgresTest extends BasePostgresTest {
                     + "VALUES (1, 'admin', 'Administrador', '$2a$10$abcdefghijklmnopqrstuv', 'ADMIN', 1, 0)");
             st.execute("INSERT INTO cajero_permisos (cajero_id, permiso) VALUES (1, 'VER_GANANCIAS')");
             st.execute("INSERT INTO departamentos (id, nombre) VALUES (1, 'Abarrotes')");
+            // proveedor habitual: la llave foránea obliga a copiar proveedores ANTES que productos
+            st.execute("INSERT INTO proveedores (id, nombre, activo, creado_en) VALUES (7, 'Coca-Cola FEMSA', 1, " + System.currentTimeMillis() + ")");
             st.execute("INSERT INTO productos (id, codigo_barras, descripcion, tipo_venta, precio_costo, precio_venta, precio_mayoreo, "
-                    + "departamento_id, activo, usa_inventario, cantidad_actual, cantidad_minima) "
-                    + "VALUES (1, '7501', 'Refresco', 'UNIDAD', 10, 18, 16, 1, 1, 1, 24.5, 6)");
+                    + "departamento_id, proveedor_id, activo, usa_inventario, cantidad_actual, cantidad_minima) "
+                    + "VALUES (1, '7501', 'Refresco', 'UNIDAD', 10, 18, 16, 1, 7, 1, 1, 24.5, 6)");
             st.execute("INSERT INTO productos (id, codigo_barras, descripcion, tipo_venta, precio_costo, precio_venta, precio_mayoreo, "
                     + "activo, usa_inventario, cantidad_actual, cantidad_minima) "
                     + "VALUES (2, '7502', 'Jamón', 'GRANEL', 80, 120, 0, 1, 1, 3.25, 1)");
@@ -102,7 +104,7 @@ class MigracionPostgresTest extends BasePostgresTest {
         MigracionServidorService.Resultado r = migracion.copiar("jdbc:sqlite:" + bd, destino, avances::add);
 
         assertThat(r.tablas()).isGreaterThanOrEqualTo(20);
-        assertThat(r.filas()).isEqualTo(13);
+        assertThat(r.filas()).isEqualTo(14);
         assertThat(r.omitidas()).isEmpty();
         assertThat(avances).isNotEmpty();
         assertThat(avances.get(avances.size() - 1).mensaje()).contains("terminada");
@@ -132,6 +134,14 @@ class MigracionPostgresTest extends BasePostgresTest {
                 assertThat(rs.getBoolean(2)).isTrue();
                 assertThat(rs.getBoolean(3)).isTrue();
             }
+            // El proveedor habitual viaja con el producto (y proveedores se copió antes: la FK lo exige)
+            try (ResultSet rs = st.executeQuery("SELECT p.proveedor_id, v.nombre FROM productos p JOIN proveedores v ON v.id = p.proveedor_id WHERE p.id = 1")) {
+                assertThat(rs.next()).isTrue();
+                assertThat(rs.getLong(1)).isEqualTo(7);
+                assertThat(rs.getString(2)).isEqualTo("Coca-Cola FEMSA");
+            }
+            assertThat(avances.stream().map(MigracionServidorService.Progreso::tabla).toList())
+                    .containsSubsequence("proveedores", "productos");
             try (ResultSet rs = st.executeQuery("SELECT fecha = current_date FROM fondos_caja WHERE id = 1")) {
                 rs.next();
                 assertThat(rs.getBoolean(1)).isTrue();

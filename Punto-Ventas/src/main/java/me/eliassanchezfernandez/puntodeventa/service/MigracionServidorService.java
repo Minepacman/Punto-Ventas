@@ -103,6 +103,10 @@ public class MigracionServidorService {
 
         ConexionLocal nueva = destino.copia();
         nueva.setModo(PerfilBaseDatos.POSTGRESQL);
+        // Desde este instante la caja queda bloqueada para cobrar y mover inventario hasta reiniciar: el
+        // programa sigue conectado al archivo local y lo que se registrara aquí no llegaría al servidor.
+        // Se marca ANTES de guardar la configuración: aunque guardarla falle, los datos ya están en el servidor.
+        rutas.marcarMigradaAlServidor(nueva.descripcionServidor());
         ConexionLocal actual = conexionService.actual();
         if (nueva.getCajaNumero() <= 0) nueva.setCajaNumero(actual.getCajaNumero());
         nueva.setAdminHash(admin.getContrasenaHash());
